@@ -269,6 +269,19 @@ function useLoadBoardOrders(
     return () => clearInterval(intervalId);
   }, [fetchOrders]);
 
+  // Listen for orderCreated event to refresh immediately
+  useEffect(() => {
+    const handleOrderCreated = () => {
+      console.log('Order created event received, refreshing load board...');
+      fetchOrders();
+    };
+
+    window.addEventListener('orderCreated', handleOrderCreated);
+    return () => {
+      window.removeEventListener('orderCreated', handleOrderCreated);
+    };
+  }, [fetchOrders]);
+
   const sortOrders = (ordersToSort: Order[]): Order[] => {
     // Sort function for each field
     const sortFunctions = {

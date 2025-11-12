@@ -569,6 +569,19 @@ export default function LoadBoardMap() {
     return () => clearInterval(interval);
   }, []);
 
+  // Listen for orderCreated event to refresh immediately
+  useEffect(() => {
+    const handleOrderCreated = () => {
+      console.log('Order created event received, refreshing load board map...');
+      fetchOrders();
+    };
+
+    window.addEventListener('orderCreated', handleOrderCreated);
+    return () => {
+      window.removeEventListener('orderCreated', handleOrderCreated);
+    };
+  }, []);
+
   async function fetchDrivers() {
     try {
       const response = await fetch('/api/drivers');

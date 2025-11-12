@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { hash } from 'bcrypt'
+import { randomBytes } from 'crypto'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -73,6 +74,12 @@ export async function POST(request: Request) {
     const username = base.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
     console.log('Derived username:', username)
 
+    // Generate a random password hash for drivers (they don't need to log in)
+    // Use a random string that will never be guessed
+    const randomPassword = randomBytes(32).toString('hex')
+    const passwordHash = await hash(randomPassword, 10)
+    console.log('Generated password hash for driver')
+
     // Start a transaction since we need to insert into two tables
     await client.query('BEGIN')
     console.log('Transaction started for driver creation')
@@ -88,10 +95,10 @@ export async function POST(request: Request) {
         try {
           console.log(`Attempting to create user with username: ${finalUsername} (try ${tries + 1}/3)`)
           const userResult = await client.query(
-            `INSERT INTO users (username, full_name, role, is_active, created_at, updated_at)
-             VALUES ($1, $2, 'driver', true, now(), now())
+            `INSERT INTO users (username, password_hash, full_name, role, is_active, created_at, updated_at)
+             VALUES ($1, $2, $3, 'driver', true, now(), now())
              RETURNING id`,
-            [finalUsername, name || null]
+            [finalUsername, passwordHash, name || null]
           )
           userId = userResult.rows[0].id
           console.log('User created with ID:', userId)

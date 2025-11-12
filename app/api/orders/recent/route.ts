@@ -213,9 +213,14 @@ export async function GET(request: NextRequest) {
         WHERE order_id = o.id
         GROUP BY order_id
       ) ol ON true
+      WHERE 
+        -- Only show unassigned orders for the load board
+        o.status = 'unassigned'
       ORDER BY 
+        -- Show rush orders first, then by pickup date
+        o.is_rush DESC,
+        o.pickup_date ASC,
         o.created_at DESC
-      LIMIT 20
     `;
 
     console.log('Fetching orders with detailed skid and vinyl data...');
