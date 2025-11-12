@@ -569,6 +569,37 @@ export default function LoadBoardMap() {
     }
   };
 
+  // Check for new orders using localStorage (works across page navigations)
+  useEffect(() => {
+    const checkForNewOrders = () => {
+      const lastOrderTimestamp = localStorage.getItem('lastOrderCreated');
+      const lastCheckTimestamp = localStorage.getItem('lastOrdersCheckMap');
+      
+      if (lastOrderTimestamp && lastCheckTimestamp) {
+        const orderTime = parseInt(lastOrderTimestamp, 10);
+        const checkTime = parseInt(lastCheckTimestamp, 10);
+        
+        // If a new order was created after our last check, refresh
+        if (orderTime > checkTime) {
+          console.log('New order detected via localStorage in map, refreshing...');
+          fetchOrders();
+          localStorage.setItem('lastOrdersCheckMap', Date.now().toString());
+        }
+      } else if (lastOrderTimestamp) {
+        // First time checking, just update the check timestamp
+        localStorage.setItem('lastOrdersCheckMap', Date.now().toString());
+      }
+    };
+
+    // Check immediately on mount
+    checkForNewOrders();
+    
+    // Check every 2 seconds for new orders
+    const checkInterval = setInterval(checkForNewOrders, 2000);
+    
+    return () => clearInterval(checkInterval);
+  }, []);
+
   useEffect(() => {
     fetchOrders();
     fetchDrivers();
@@ -576,12 +607,14 @@ export default function LoadBoardMap() {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for orderCreated event to refresh immediately
+  // Listen for orderCreated event to refresh immediately (works if on same page)
   useEffect(() => {
     const handleOrderCreated = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('Order created event received, refreshing load board map...', customEvent.detail);
       fetchOrders();
+      // Update localStorage timestamp
+      localStorage.setItem('lastOrderCreated', Date.now().toString());
     };
 
     window.addEventListener('orderCreated', handleOrderCreated);

@@ -278,10 +278,14 @@ export default function OrderEntryPage() {
 
       const result = await response.json();
       
-      // Dispatch event to notify of new order
+      // Dispatch event to notify of new order (works if load board is on same page)
       window.dispatchEvent(new CustomEvent('orderCreated', { 
         detail: { orderId: result.orderId }
       }));
+      
+      // Store timestamp in localStorage (works across page navigations)
+      localStorage.setItem('lastOrderCreated', Date.now().toString());
+      console.log('Order created, timestamp stored in localStorage');
       
       toast.success('Order created successfully!');
       
