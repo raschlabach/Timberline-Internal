@@ -45,6 +45,21 @@ export async function GET(request: NextRequest) {
         FROM vinyl
         GROUP BY order_id
       ),
+      hand_bundles_summary AS (
+        SELECT 
+          order_id,
+          COUNT(*) as hand_bundles_count,
+          json_agg(
+            json_build_object(
+              'id', id::text,
+              'quantity', quantity,
+              'description', description
+            )
+          ) as hand_bundles_data
+        FROM freight_items
+        WHERE type = 'hand_bundle'
+        GROUP BY order_id
+      ),
       pickup_assignments AS (
         SELECT 
           toa.order_id,
@@ -76,6 +91,7 @@ export async function GET(request: NextRequest) {
       )
       SELECT 
         o.id, 
+        COALESCE(u.full_name, 'System') as creator,
         -- Pickup customer details
         json_build_object(
           'id', pc.id,
@@ -86,7 +102,9 @@ export async function GET(request: NextRequest) {
             NULLIF(pl.state, '')
           ),
           'phone', COALESCE(pc.phone_number_1, ''),
-          'phone2', COALESCE(pc.phone_number_2, '')
+          'phone2', COALESCE(pc.phone_number_2, ''),
+          'lat', pl.latitude,
+          'lng', pl.longitude
         ) as "pickupCustomer",
         -- Delivery customer details
         json_build_object(
@@ -98,7 +116,9 @@ export async function GET(request: NextRequest) {
             NULLIF(dl.state, '')
           ),
           'phone', COALESCE(dc.phone_number_1, ''),
-          'phone2', COALESCE(dc.phone_number_2, '')
+          'phone2', COALESCE(dc.phone_number_2, ''),
+          'lat', dl.latitude,
+          'lng', dl.longitude
         ) as "deliveryCustomer",
         -- Paying customer details (if exists)
         CASE WHEN pay.id IS NOT NULL THEN
@@ -114,8 +134,10 @@ export async function GET(request: NextRequest) {
           WHEN f.square_footage > 0 THEN f.square_footage
           ELSE COALESCE(ss.total_skid_footage, 0) + COALESCE(vs.total_vinyl_footage, 0)
         END as footage,
+        COALESCE(hbs.hand_bundles_count, 0) as "handBundles",
         COALESCE(ss.skids_data, '[]'::json) as "skidsData",
         COALESCE(vs.vinyl_data, '[]'::json) as "vinylData",
+        COALESCE(hbs.hand_bundles_data, '[]'::json) as "handBundlesData",
         -- Assignment details
         CASE WHEN pa.truckload_id IS NOT NULL THEN
           json_build_object(
@@ -142,6 +164,7 @@ export async function GET(request: NextRequest) {
         COALESCE(o.needs_attention, false) as "needsAttention",
         o.comments,
         o.freight_quote as "freightQuote",
+        o.status,
         -- Filters
         json_build_object(
           'ohioToIndiana', COALESCE(o.oh_to_in, false),
@@ -157,6 +180,8 @@ export async function GET(request: NextRequest) {
         o.created_at
       FROM 
         orders o
+      -- Join with users for creator
+      LEFT JOIN users u ON o.created_by = u.id
       -- Join with customers and locations for pickup
       LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
       LEFT JOIN locations pl ON pc.location_id = pl.id
@@ -168,6 +193,7 @@ export async function GET(request: NextRequest) {
       -- Join with freight data
       LEFT JOIN skids_summary ss ON o.id = ss.order_id
       LEFT JOIN vinyl_summary vs ON o.id = vs.order_id
+      LEFT JOIN hand_bundles_summary hbs ON o.id = hbs.order_id
       LEFT JOIN footage f ON o.id = f.order_id
       -- Join with assignments
       LEFT JOIN pickup_assignments pa ON o.id = pa.order_id

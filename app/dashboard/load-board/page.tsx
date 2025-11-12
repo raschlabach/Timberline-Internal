@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
 import { LoadBoardOrders } from '@/components/orders/load-board-orders';
 
 export default function LoadBoardPage() {
@@ -32,13 +31,7 @@ export default function LoadBoardPage() {
   if (status === 'authenticated') {
     return (
       <div className="py-4 px-2">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Load Board</h1>
-        </div>
-        
-        <Card className="p-2">
-          <LoadBoardOrders />
-        </Card>
+        <LoadBoardOrders showSortDropdown={true} />
       </div>
     );
   }

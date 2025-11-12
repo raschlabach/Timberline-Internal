@@ -1,262 +1,172 @@
 import { Pool } from 'pg'
+import type { PoolClient, QueryResult } from 'pg'
 
-// Parse connection string to explicit config
+import fs from 'fs'
+import path from 'path'
+
+const isProduction = process.env.NODE_ENV === 'production'
+const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+
+const PREVIEW_URL = process.env.DB_CONNECTION_STRING_PREVIEW || process.env.DATABASE_URL || ''
+const MAIN_URL = process.env.DB_CONNECTION_STRING_MAIN || process.env.DATABASE_URL || ''
+const RAW_URL = isProduction ? (MAIN_URL || PREVIEW_URL) : (PREVIEW_URL || MAIN_URL)
+const HAS_CONNECTION_STRING = Boolean(RAW_URL)
+
+if (!HAS_CONNECTION_STRING && !isBuildPhase) {
+  throw new Error('Missing DB envs. Set DB_CONNECTION_STRING_PREVIEW and/or DB_CONNECTION_STRING_MAIN or DATABASE_URL.')
+}
+
+if (!process.env.DATABASE_URL && RAW_URL) {
+  process.env.DATABASE_URL = RAW_URL
+}
+
 function parseConnectionString(connectionString: string) {
-  try {
-    const url = new URL(connectionString)
-    return {
-      user: url.username,
-      password: url.password,
-      host: url.hostname,
-      port: Number(url.port) || 5432,
-      database: url.pathname.slice(1),
-      ssl: true
-    }
-  } catch (error) {
-    console.error('Error parsing connection string:', error)
-    throw error
+  const url = new URL(connectionString)
+  return {
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    host: url.hostname,
+    port: Number(url.port) || 5432,
+    database: url.pathname.slice(1),
+    ssl: { rejectUnauthorized: true },
   }
 }
 
-// Database configuration
-const config = {
-  preview: parseConnectionString("postgresql://neondb_owner:npg_D5hj1egPlAok@ep-proud-glitter-a85pbrz6-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"),
-  main: parseConnectionString("postgresql://neondb_owner:npg_D5hj1egPlAok@ep-calm-frog-a8qxyo8o-pooler.eastus2.azure.neon.tech/neondb?sslmode=require")
-}
+const connectionConfig = HAS_CONNECTION_STRING ? parseConnectionString(RAW_URL) : null
 
-// Determine which database branch to use based on environment
-const isProduction = process.env.NODE_ENV === 'production'
-const branch = isProduction ? 'main' : 'preview'
-
-console.log(`Using database branch: ${branch}`);
-console.log('Database config:', {
-  host: config[branch].host,
-  port: config[branch].port,
-  database: config[branch].database,
-  user: config[branch].user,
-  // password is masked for security
-  ssl: config[branch].ssl
-});
-
-// Connection pool settings
 const CONNECTION_TIMEOUT_MS = 10000
 const IDLE_TIMEOUT_MS = 30000
 const MAX_POOL_SIZE = 20
-const CONNECTION_RETRY_ATTEMPTS = 3
-const CONNECTION_RETRY_DELAY_MS = 1000
 
-// Create a connection pool with enhanced settings
 let pool: Pool | null = null
+let migrationsRun = false
 
-// Migration SQL
-const MIGRATIONS = [
-  `
-  -- Fix stack columns in trailer_layout_items
-  ALTER TABLE trailer_layout_items
-  DROP CONSTRAINT IF EXISTS fk_trailer_layout_items_stack;
-
-  ALTER TABLE trailer_layout_items
-  DROP CONSTRAINT IF EXISTS check_stack_position;
-
-  ALTER TABLE trailer_layout_items
-  DROP CONSTRAINT IF EXISTS check_stack_id_vinyl;
-
-  -- Ensure the columns exist with correct types
-  ALTER TABLE trailer_layout_items
-  DROP COLUMN IF EXISTS stack_id;
-
-  ALTER TABLE trailer_layout_items
-  DROP COLUMN IF EXISTS stack_position;
-
-  ALTER TABLE trailer_layout_items
-  ADD COLUMN stack_id INTEGER,
-  ADD COLUMN stack_position INTEGER;
-
-  -- Add index for stack-related queries
-  DROP INDEX IF EXISTS idx_layout_items_stack;
-  CREATE INDEX idx_layout_items_stack ON trailer_layout_items(stack_id, stack_position);
-
-  -- Add constraint to ensure stack_position is positive when present
-  ALTER TABLE trailer_layout_items
-  ADD CONSTRAINT check_stack_position 
-  CHECK (stack_position IS NULL OR stack_position > 0);
-
-  -- Add constraint to ensure stack_id and stack_position are used together
-  ALTER TABLE trailer_layout_items
-  ADD CONSTRAINT check_stack_consistency
-  CHECK (
-      (stack_id IS NULL AND stack_position IS NULL) OR
-      (stack_id IS NOT NULL AND stack_position IS NOT NULL)
-  );
-  `
-]
-
-async function runMigrations(pool: Pool) {
-  try {
-    console.log('Running database migrations...')
-    for (const migration of MIGRATIONS) {
-      await pool.query(migration)
-    }
-    console.log('Database migrations completed successfully')
-  } catch (error) {
-    console.error('Error running migrations:', error)
-    throw error
+export async function runMigrations() {
+  if (migrationsRun) return
+  const pool = createPool()
+  if (!pool) {
+    if (isBuildPhase) return
+    throw new Error('Database pool not available for migrations.')
   }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL UNIQUE,
+      applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      status VARCHAR(50) NOT NULL DEFAULT 'success',
+      error_message TEXT
+    );
+  `)
+  const { rows: applied } = await pool.query('SELECT name, status FROM migrations')
+  const appliedSet = new Set(applied.filter(m => m.status === 'success').map(m => m.name))
+
+  const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+  const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort()
+
+  for (const file of files) {
+    if (appliedSet.has(file)) continue
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8')
+    await pool.query('BEGIN')
+    try {
+      await pool.query(sql)
+      await pool.query('INSERT INTO migrations (name, status) VALUES ($1, $2)', [file, 'success'])
+      await pool.query('COMMIT')
+    } catch (e: any) {
+      await pool.query('ROLLBACK')
+      await pool.query('INSERT INTO migrations (name, status, error_message) VALUES ($1, $2, $3)', [file, 'failed', e?.message ?? String(e)])
+      throw e
+    }
+  }
+  migrationsRun = true
 }
 
 function createPool() {
-  if (pool) return pool;
-
-  try {
-    const branchConfig = config[branch]
-    if (!branchConfig) {
-      throw new Error(`No configuration found for branch: ${branch}`)
+  if (pool) return pool
+  if (!connectionConfig) {
+    if (!isBuildPhase) {
+      throw new Error('Database connection configuration unavailable.')
     }
-
-    pool = new Pool({
-      ...branchConfig,
-      connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
-      idleTimeoutMillis: IDLE_TIMEOUT_MS,
-      max: MAX_POOL_SIZE,
-      // Force SSL mode
-      ssl: {
-        rejectUnauthorized: true
-      }
-    })
-    
-    // Handle pool errors
-    pool.on('error', (err) => {
-      console.error('Unexpected error on idle client', err)
-      // Reset pool on error
-      pool = null
-    })
-
-    // Add connection logging
-    pool.on('connect', () => {
-      console.log('New database connection established')
-    })
-
-    pool.on('acquire', () => {
-      console.log('Client acquired from pool')
-    })
-
-    pool.on('remove', () => {
-      console.log('Client removed from pool')
-    })
-
-    // Run migrations
-    runMigrations(pool).catch(error => {
-      console.error('Failed to run migrations:', error)
-      pool = null
-      throw error
-    })
-
-    return pool
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error(`Error initializing database pool for ${branch} branch:`, errorMessage)
-    throw new Error(`Database connection error: ${errorMessage}`)
+    return null
   }
+
+  pool = new Pool({
+    ...connectionConfig,
+    connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
+    idleTimeoutMillis: IDLE_TIMEOUT_MS,
+    max: MAX_POOL_SIZE,
+  })
+  pool.on('error', (err) => {
+    console.error('Idle client error', err)
+    pool = null
+  })
+  return pool
 }
 
-/**
- * Execute a SQL query on the database with retry logic
- */
-export async function query(text: string, params: any[] = [], retryCount = 0) {
-  const MAX_RETRIES = 2
+export async function query(text: string, params: any[] = [], retry = 0): Promise<QueryResult<any>> {
   const start = Date.now()
-  
   try {
-    const currentPool = createPool()
-    if (!currentPool) {
+    const p = createPool()
+    if (!p) {
+      if (isBuildPhase) {
+        console.warn('Database query skipped during build phase', { text: text.slice(0, 60) })
+        const lower = text.toLowerCase()
+        const isCountQuery = lower.includes('count(')
+        const stubRows = isCountQuery ? [{ count: '0' }] : []
+        const stubRowCount = isCountQuery ? 1 : 0
+        return {
+          rows: stubRows,
+          rowCount: stubRowCount,
+          command: 'SKIPPED',
+          fields: [],
+        } as unknown as QueryResult<any>
+      }
       throw new Error('Database pool not initialized')
     }
-    
-    const res = await currentPool.query(text, params)
-    const duration = Date.now() - start
-    
-    // Only log if query took longer than 100ms for performance monitoring
-    if (duration > 100) {
-      console.log('Slow query detected', { 
-        text: text.substring(0, 50) + (text.length > 50 ? '...' : ''), 
-        duration, 
-        rows: res.rowCount 
-      })
-    }
-    
+    const res = await p.query(text, params)
+    const dur = Date.now() - start
+    if (dur > 100) console.log('Slow query', { text: text.slice(0, 60), dur, rows: res.rowCount })
     return res
-  } catch (error: any) {
-    const duration = Date.now() - start
-    
-    // Retry on connection errors, but not on syntax or constraint errors
-    const isConnectionError = error.code === 'ECONNREFUSED' || 
-                             error.code === 'ETIMEDOUT' || 
-                             error.code === '08006' || // connection_failure
-                             error.code === '08001';   // unable_to_connect
-    
-    if (isConnectionError && retryCount < MAX_RETRIES) {
-      console.warn(`Database connection error, retrying (${retryCount + 1}/${MAX_RETRIES})...`)
-      // Reset pool on connection error
+  } catch (err: any) {
+    const transient = ['ECONNREFUSED','ETIMEDOUT','08006','08001'].includes(err?.code)
+    if (transient && retry < 2) {
       pool = null
-      // Exponential backoff
-      const delay = Math.pow(2, retryCount) * 500
-      await new Promise(resolve => setTimeout(resolve, delay))
-      return query(text, params, retryCount + 1)
+      await new Promise(r => setTimeout(r, Math.pow(2, retry) * 500))
+      return query(text, params, retry + 1)
     }
-    
-    console.error('Error executing query', { 
-      text: text.substring(0, 100), 
-      error: error.message,
-      duration,
-      code: error.code,
-      detail: error.detail,
-      hint: error.hint,
-      position: error.position
-    })
-    throw error
+    throw err
   }
 }
 
-/**
- * Get a client from the pool for transactions
- */
 export async function getClient() {
-  const currentPool = createPool()
-  if (!currentPool) {
+  const p = createPool()
+  if (!p) {
+    if (isBuildPhase) {
+      throw new Error('Database client unavailable during build phase.')
+    }
     throw new Error('Database pool not initialized')
   }
-  
-  try {
-    const client = await currentPool.connect()
-    return client
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('Error getting database client:', errorMessage)
-    throw new Error(`Failed to get database client: ${errorMessage}`)
-  }
+  return p.connect()
 }
 
-/**
- * Convenient wrapper for transactions
- */
-export async function withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
-  const currentPool = createPool()
-  if (!currentPool) {
+export async function withTransaction<T>(cb: (client: PoolClient) => Promise<T>): Promise<T> {
+  const p = createPool()
+  if (!p) {
+    if (isBuildPhase) {
+      throw new Error('Transactions are unavailable during build phase.')
+    }
     throw new Error('Database pool not initialized')
   }
-  
-  const client = await currentPool.connect()
-  
+  const client = await p.connect()
   try {
     await client.query('BEGIN')
-    const result = await callback(client)
+    const result = await cb(client)
     await client.query('COMMIT')
     return result
-  } catch (error) {
+  } catch (e) {
     await client.query('ROLLBACK')
-    console.error('Transaction error:', error)
-    throw error
+    throw e
   } finally {
     client.release()
   }
-} 
+}
+

@@ -18,11 +18,6 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
   const [length, setLength] = useState<string>(skid.length.toString());
   const [footage, setFootage] = useState<number>(skid.footage);
   
-  // Keep track of previous values to prevent unnecessary updates
-  const prevWidthRef = useRef<string>(width);
-  const prevLengthRef = useRef<string>(length);
-  const skipUpdateRef = useRef<boolean>(true);
-  
   // Memoize the update function to avoid recreating it on every render
   const updateParent = useCallback((widthVal: number, lengthVal: number, calculatedFootage: number) => {
     onUpdate({
@@ -35,31 +30,16 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
 
   // Calculate footage when width or length changes
   useEffect(() => {
-    // Skip the initial render update
-    if (skipUpdateRef.current) {
-      skipUpdateRef.current = false;
-      return;
-    }
-    
-    // Only recalculate if width or length actually changed
-    if (width === prevWidthRef.current && length === prevLengthRef.current) {
-      return;
-    }
-    
-    // Update prev refs
-    prevWidthRef.current = width;
-    prevLengthRef.current = length;
-    
     const widthVal = parseFloat(width) || 0;
     const lengthVal = parseFloat(length) || 0;
     const calculatedFootage = widthVal * lengthVal;
     
     setFootage(calculatedFootage);
     
-    // Debounce the update to parent
+    // Update parent with a short debounce for better performance
     const timeoutId = setTimeout(() => {
       updateParent(widthVal, lengthVal, calculatedFootage);
-    }, 300);
+    }, 150);
     
     return () => clearTimeout(timeoutId);
   }, [width, length, updateParent]);
@@ -87,9 +67,9 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
   };
 
   return (
-    <div className="grid grid-cols-12 gap-2 items-center mb-2">
+    <div className="grid grid-cols-12 gap-2 items-center mb-1">
       <div className="col-span-2 flex items-center">
-        <span className="font-medium mr-2">{skid.type === 'skid' ? 'Skid' : 'Vinyl'} {skid.number}:</span>
+        <span className="font-medium mr-2 text-sm">{skid.type === 'skid' ? 'Skid' : 'Vinyl'} {skid.number}:</span>
       </div>
       
       <div className="col-span-3">
@@ -125,7 +105,7 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
       </div>
       
       <div className="col-span-2">
-        <span className="text-gray-700">{footage.toFixed(2)} ft²</span>
+        <span className="text-gray-700 text-sm">{footage.toFixed(2)} ft²</span>
       </div>
       
       <div className="col-span-1 flex justify-end space-x-1">

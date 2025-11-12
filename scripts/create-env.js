@@ -51,16 +51,21 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=${secret}
 
 # Database Configuration
-# These are loaded from database/config.js, but could also be set here
-# DB_CONNECTION_STRING_PREVIEW=postgres://user:password@hostname:port/dbname
-# DB_CONNECTION_STRING_MAIN=postgres://user:password@hostname:port/dbname
+# Copy these from your Neon.tech dashboard and replace with your actual connection strings
+DB_CONNECTION_STRING_PREVIEW=postgresql://neondb_owner:npg_D5hj1egPlAok@ep-proud-glitter-a85pbrz6-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+DB_CONNECTION_STRING_MAIN=postgresql://neondb_owner:npg_D5hj1egPlAok@ep-calm-frog-a8qxyo8o-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
 
 # Google Maps API Key (for place autocomplete)
+# Get this from Google Cloud Console: https://console.cloud.google.com/
 # NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+
+# Environment
+NODE_ENV=development
 `;
     
     fs.writeFileSync(envPath, envContent);
-    console.log(`Created .env.local with a new NEXTAUTH_SECRET`);
+    console.log(`Created .env.local with database connection strings and NEXTAUTH_SECRET`);
+    console.log(`⚠️  IMPORTANT: Update the database connection strings with your actual Neon.tech credentials`);
   }
 }
 

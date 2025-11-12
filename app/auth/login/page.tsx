@@ -1,4 +1,5 @@
 import { Metadata } from "next"
+import { Suspense } from "react"
 import LoginForm from "./login-form"
 import { Truck } from "lucide-react"
 
@@ -6,6 +7,8 @@ export const metadata: Metadata = {
   title: "Login - Timberline Logistics",
   description: "Log in to your Timberline Logistics Dashboard account",
 }
+
+export const dynamic = "force-dynamic"
 
 export default function LoginPage() {
   return (
@@ -24,7 +27,9 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <LoginForm />
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
         </div>
       </div>
     </div>

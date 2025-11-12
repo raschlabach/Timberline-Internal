@@ -110,4 +110,184 @@
 
 .has-comments {
   @apply bg-blue-50 border-blue-200;
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Hide dashboard sidebar and header when printing */
+  aside {
+    display: none !important;
+  }
+  
+  header {
+    display: none !important;
+  }
+  
+  /* Reset padding and margins for print */
+  body {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  /* Remove all height constraints in print - allow content to expand fully */
+  html,
+  body,
+  #__next,
+  [id="__next"],
+  main,
+  div[class*="flex"],
+  div[class*="h-full"],
+  div[class*="h-screen"] {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  
+  /* Remove scroll areas completely in print */
+  [data-radix-scroll-area-viewport],
+  [data-radix-scroll-area-root],
+  [class*="ScrollArea"] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    display: block !important;
+  }
+  
+  /* Remove flex constraints that limit height */
+  [class*="flex-1"],
+  [class*="flex-col"] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  
+  /* Card and container adjustments for print */
+  [class*="Card"],
+  [class*="card"] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    page-break-inside: auto;
+    display: block !important;
+  }
+  
+  /* Ensure print view container expands fully */
+  .print\:block,
+  .print-invoice-content {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+  
+  /* Force all parent containers to expand in print */
+  .print-invoice-content,
+  .print-invoice-content * {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  
+  /* Exception: keep table cells at natural height */
+  .print-invoice-content table td,
+  .print-invoice-content table th {
+    height: auto !important;
+  }
+  
+  /* Invoice page print styles - multi-page support */
+  table.print-table {
+    page-break-inside: auto;
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: auto;
+  }
+  
+  table.print-table thead {
+    display: table-header-group;
+  }
+  
+  table.print-table thead tr {
+    page-break-after: avoid;
+    page-break-inside: avoid;
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  
+  table.print-table tbody {
+    display: table-row-group;
+  }
+  
+  table.print-table tbody tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+    break-inside: avoid;
+    break-after: auto;
+  }
+  
+  table.print-table td,
+  table.print-table th {
+    padding: 4px 8px;
+    vertical-align: top;
+  }
+  
+  table.print-table td {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    overflow: visible;
+    word-wrap: break-word;
+  }
+  
+  /* Prevent breaking within individual items */
+  .print-item-group {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  /* Allow sections to break across pages */
+  .print-allow-break {
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+  
+  .print-allow-break > * {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Try to keep summary sections together */
+  .print-keep-together {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  /* Section spacing */
+  .print-section {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  
+  /* Ensure proper spacing for print */
+  .print\:block {
+    display: block !important;
+  }
 } 

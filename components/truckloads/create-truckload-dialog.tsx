@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { format, startOfWeek } from 'date-fns'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,12 +13,15 @@ import { Truck } from 'lucide-react'
 
 interface Driver {
   id: number
-  fullName: string
+  full_name: string
   color: string
 }
 
 interface CreateTruckloadDialogProps {
   onTruckloadCreated?: () => void
+  isOpen?: boolean
+  onClose?: () => void
+  selectedDriverId?: number | null
 }
 
 interface FormData {
@@ -34,12 +37,18 @@ interface FormData {
   estimatedDuration: number
 }
 
-export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDialogProps) {
+export function CreateTruckloadDialog({ 
+  onTruckloadCreated,
+  isOpen,
+  onClose,
+  selectedDriverId
+}: CreateTruckloadDialogProps) {
   const [drivers, setDrivers] = useState<Driver[]>([])
+  const [nextBolNumber, setNextBolNumber] = useState<string>("")
   const today = new Date()
   const sundayOfCurrentWeek = startOfWeek(today, { weekStartsOn: 0 })
   const [formData, setFormData] = useState<FormData>({
-    driverId: "",
+    driverId: selectedDriverId?.toString() || "",
     trailerNumber: "",
     billOfLadingNumber: "",
     description: "",
@@ -51,9 +60,17 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
     estimatedDuration: 0,
   })
 
-  // Fetch drivers on component mount
+  // Update form data when selectedDriverId changes
+  useEffect(() => {
+    if (selectedDriverId) {
+      setFormData(prev => ({ ...prev, driverId: selectedDriverId.toString() }));
+    }
+  }, [selectedDriverId]);
+
+  // Fetch drivers and next BOL number on component mount
   useEffect(() => {
     fetchDrivers()
+    fetchNextBolNumber()
   }, [])
 
   async function fetchDrivers() {
@@ -65,6 +82,19 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
       }
     } catch (error) {
       toast.error('Failed to fetch drivers')
+    }
+  }
+
+  async function fetchNextBolNumber() {
+    try {
+      const response = await fetch('/api/truckloads/next-bol')
+      const data = await response.json()
+      if (data.success) {
+        setNextBolNumber(data.bolNumber)
+        setFormData(prev => ({ ...prev, billOfLadingNumber: data.bolNumber }))
+      }
+    } catch (error) {
+      console.error('Failed to fetch next BOL number:', error)
     }
   }
 
@@ -80,6 +110,7 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
           startDate: `${formData.startDate}T${formData.startTime}:00`,
           endDate: `${formData.endDate}T${formData.endTime}:00`,
           trailerNumber: formData.trailerNumber || null,
+          billOfLadingNumber: formData.billOfLadingNumber,
           description: formData.description
         })
       })
@@ -113,16 +144,12 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
       totalMileage: 0,
       estimatedDuration: 0,
     })
+    // Fetch the next BOL number for the new form
+    fetchNextBolNumber()
   }
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button size="default">
-          <Truck className="mr-2 h-4 w-4" />
-          Create Truckload
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Create New Truckload</DialogTitle>
@@ -134,6 +161,7 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
             <Select 
               value={formData.driverId} 
               onValueChange={(value) => setFormData({ ...formData, driverId: value })}
+              disabled={!!selectedDriverId}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a driver" />
@@ -149,7 +177,7 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
                         className="w-3 h-3 rounded-full" 
                         style={{ backgroundColor: driver.color }}
                       />
-                      <span>{driver.fullName}</span>
+                      <span>{driver.full_name}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -212,6 +240,21 @@ export function CreateTruckloadDialog({ onTruckloadCreated }: CreateTruckloadDia
               onChange={(e) => setFormData({ ...formData, trailerNumber: e.target.value })}
               placeholder="Enter trailer number"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="billOfLadingNumber">Bill of Lading Number</Label>
+            <Input
+              type="text"
+              id="billOfLadingNumber"
+              value={formData.billOfLadingNumber}
+              onChange={(e) => setFormData({ ...formData, billOfLadingNumber: e.target.value })}
+              placeholder="Auto-generated BOL number (e.g., 250901)"
+              className="bg-gray-50"
+            />
+            <p className="text-sm text-gray-500">
+              This number will be auto-generated but can be edited if needed
+            </p>
           </div>
 
           <div className="space-y-2">

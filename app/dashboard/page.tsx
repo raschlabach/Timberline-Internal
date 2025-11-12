@@ -51,12 +51,6 @@ export default function DashboardPage() {
           />
           
           <QuickActionButton 
-            icon={<Truck className="h-5 w-5" />}
-            label="Create Truckload" 
-            href="/dashboard/trucking/new" 
-          />
-          
-          <QuickActionButton 
             icon={<List className="h-5 w-5" />}
             label="View Load Board" 
             href="/dashboard/load-board" 

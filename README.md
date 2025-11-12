@@ -21,6 +21,8 @@ This dashboard provides a complete solution for Dispatchers, Admins, and Truck D
   - `main`: Production database
   - `preview`: Testing/staging database
 
+> **Credential Hygiene:** Rotate any existing Neon database passwords and configure fresh Preview/Main connection strings via environment variables (`DB_CONNECTION_STRING_PREVIEW`, `DB_CONNECTION_STRING_MAIN`). Never commit raw credentials to the repository.
+
 ## Setup Instructions
 
 ### Prerequisites
@@ -40,9 +42,19 @@ See the [database README](database/README.md) for more details.
 
 ### Development Environment
 
+**Quick Setup (Recommended):**
+```bash
+npm run setup
+```
+
+**Manual Setup:**
 1. Install dependencies: `npm install`
-2. Start the development server: `npm run dev`
-3. Open [http://localhost:3000](http://localhost:3000) in your browser
+2. Create environment file: `npm run create-env`
+3. Update `.env.local` with your actual credentials
+4. Apply database schema: `npm run db:apply-preview`
+5. Create admin user: `npm run create-admin`
+6. Start the development server: `npm run dev`
+7. Open [http://localhost:3000](http://localhost:3000) in your browser
 
 ## Core Features
 

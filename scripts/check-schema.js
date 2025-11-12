@@ -1,66 +1,57 @@
 const { Pool } = require('pg');
-const config = require('../database/config');
 
-const branch = process.argv[2] || 'preview';
-if (!['preview', 'main'].includes(branch)) {
-  console.error('Invalid branch. Use "preview" or "main"');
-  process.exit(1);
-}
-
-console.log(`Checking schema in ${branch} branch...`);
-
-const pool = new Pool({
-  ...config[branch],
-  ssl: true
-});
+const config = {
+  preview: {
+    user: 'neondb_owner',
+    password: 'npg_D5hj1egPlAok',
+    host: 'ep-proud-glitter-a85pbrz6-pooler.eastus2.azure.neon.tech',
+    port: 5432,
+    database: 'neondb',
+    ssl: {
+      rejectUnauthorized: true
+    }
+  }
+};
 
 async function checkSchema() {
-  const client = await pool.connect();
+  const pool = new Pool(config.preview);
+  
   try {
-    // Check if tables exist
-    const tables = ['order_presets', 'preset_skids', 'preset_links'];
-    for (const table of tables) {
-      console.log(`\nChecking table: ${table}`);
-      const result = await client.query(`
-        SELECT column_name, data_type, is_nullable
-        FROM information_schema.columns
-        WHERE table_name = $1
-        ORDER BY ordinal_position;
-      `, [table]);
-      
-      if (result.rows.length === 0) {
-        console.error(`Table ${table} does not exist!`);
-      } else {
-        console.log('Columns:');
-        result.rows.forEach(row => {
-          console.log(`  ${row.column_name}: ${row.data_type} (${row.is_nullable === 'YES' ? 'nullable' : 'not null'})`);
-        });
-      }
-
-      // Check for indexes
-      const indexResult = await client.query(`
-        SELECT indexname, indexdef
-        FROM pg_indexes
-        WHERE tablename = $1;
-      `, [table]);
-
-      console.log('\nIndexes:');
-      indexResult.rows.forEach(row => {
-        console.log(`  ${row.indexname}: ${row.indexdef}`);
-      });
-    }
-
-    // Check for sample data
-    const dataResult = await client.query('SELECT COUNT(*) FROM order_presets');
-    console.log('\nData count:', dataResult.rows[0].count);
-
+    console.log('Checking trailer_layouts table...');
+    
+    // Check trailer_layouts table
+    const layoutTable = await pool.query(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'trailer_layouts' 
+      ORDER BY ordinal_position
+    `);
+    
+    console.log('trailer_layouts columns:');
+    layoutTable.rows.forEach(col => {
+      console.log(`- ${col.column_name}: ${col.data_type} (nullable: ${col.is_nullable})`);
+    });
+    
+    console.log('\nChecking trailer_layout_items table...');
+    
+    // Check trailer_layout_items table
+    const itemsTable = await pool.query(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'trailer_layout_items' 
+      ORDER BY ordinal_position
+    `);
+    
+    console.log('trailer_layout_items columns:');
+    itemsTable.rows.forEach(col => {
+      console.log(`- ${col.column_name}: ${col.data_type} (nullable: ${col.is_nullable})`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Error checking schema:', error.message);
   } finally {
-    client.release();
     await pool.end();
   }
 }
 
-checkSchema().catch(error => {
-  console.error('Error checking schema:', error);
-  process.exit(1);
-}); 
+checkSchema(); 

@@ -45,10 +45,10 @@ export function CustomerEditModal({
   
   // Check if Google Maps API key is available
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-  const isGoogleMapsAvailable = !!googleMapsApiKey
+  const isGoogleMapsAvailable = !!googleMapsApiKey && googleMapsApiKey.length > 20 // Ensure key is valid length
   
   console.log("Google Maps API Key available:", !!googleMapsApiKey)
-  console.log("Google Maps API Key:", googleMapsApiKey)
+  console.log("Google Maps API Key length:", googleMapsApiKey?.length || 0)
   
   // Add error handling for Google Maps script loading
   useEffect(() => {
@@ -77,6 +77,21 @@ export function CustomerEditModal({
     setErrors({})
     setAddressSelection(null)
   }, [customer, isOpen])
+  
+  // Add a function to validate the Google Maps API key
+  const validateGoogleMapsApiKey = () => {
+    if (!googleMapsApiKey) {
+      console.error("Google Maps API key is missing");
+      return false;
+    }
+    
+    if (googleMapsApiKey.length < 20) {
+      console.error("Google Maps API key appears to be invalid (too short)");
+      return false;
+    }
+    
+    return true;
+  }
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -318,7 +333,7 @@ export function CustomerEditModal({
               Address <span className="text-amber-500">◆</span>
             </label>
             
-            {isGoogleMapsAvailable ? (
+            {isGoogleMapsAvailable && validateGoogleMapsApiKey() ? (
               <div className="space-y-2">
                 <GooglePlacesWrapper apiKey={googleMapsApiKey} isOpen={isOpen}>
                   <GooglePlacesAutocomplete

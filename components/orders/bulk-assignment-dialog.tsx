@@ -1,0 +1,331 @@
+"use client"
+
+import { useState, useEffect } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { format } from 'date-fns'
+import { toast } from 'sonner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { TruckloadSummary } from '@/types/truckloads'
+import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
+
+interface PoolItem {
+  orderId: number
+  assignmentTypes: ('pickup' | 'delivery')[]
+  pickupCustomer: {
+    id: number
+    name: string
+  }
+  deliveryCustomer: {
+    id: number
+    name: string
+  }
+  footage: number
+}
+
+interface BulkAssignmentDialogProps {
+  isOpen: boolean
+  onClose: () => void
+  poolItems: PoolItem[]
+  onAssignmentComplete: () => void
+}
+
+export function BulkAssignmentDialog({ 
+  isOpen, 
+  onClose, 
+  poolItems,
+  onAssignmentComplete
+}: BulkAssignmentDialogProps) {
+  const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([])
+  const [truckloads, setTruckloads] = useState<TruckloadSummary[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [truckloadView, setTruckloadView] = useState<TruckloadView>('current')
+
+  useEffect(() => {
+    if (isOpen) {
+      setTruckloadView('current')
+      setSelectedTruckloadId(null)
+      fetchData()
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    setTruckloads(filterAndSortTruckloads(allTruckloads, truckloadView))
+  }, [allTruckloads, truckloadView])
+
+  useEffect(() => {
+    if (selectedTruckloadId && !truckloads.some(function hasSelection(truckload) {
+      return truckload.id === selectedTruckloadId
+    })) {
+      setSelectedTruckloadId(null)
+    }
+  }, [truckloads, selectedTruckloadId])
+
+  function handleTruckloadViewChange(nextValue: string): void {
+    const view = nextValue === 'completed' ? 'completed' : 'current'
+    setTruckloadView(view)
+  }
+
+  function handleTruckloadSelection(truckloadId: number): void {
+    setSelectedTruckloadId(truckloadId)
+  }
+
+  async function fetchData(): Promise<void> {
+    setIsLoading(true)
+    try {
+      const [truckloadsResponse, driversResponse] = await Promise.all([
+        fetch('/api/truckloads'),
+        fetch('/api/drivers')
+      ])
+
+      if (!truckloadsResponse.ok) throw new Error('Failed to fetch truckloads')
+      if (!driversResponse.ok) throw new Error('Failed to fetch drivers')
+
+      const [truckloadsData, driversData] = await Promise.all([
+        truckloadsResponse.json(),
+        driversResponse.json()
+      ])
+
+      if (!truckloadsData.success) throw new Error('Failed to fetch truckloads')
+      if (!driversData.success) throw new Error('Failed to fetch drivers')
+
+      const driverOptions = (driversData.drivers as ApiDriver[]).map(function mapDriver(driver) {
+        return mapDriverOption(driver)
+      })
+      setDrivers(driverOptions)
+
+      const mappedTruckloads = truckloadsData.truckloads.map(function mapData(truckload: ApiTruckload) {
+        return mapTruckloadSummary(truckload)
+      })
+
+      setAllTruckloads(mappedTruckloads)
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      toast.error('Failed to load truckloads and drivers')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleAssign(): Promise<void> {
+    if (!selectedTruckloadId) {
+      toast.error('Please select a truckload')
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      // Assign each item in the pool
+      for (const item of poolItems) {
+        for (const assignmentType of item.assignmentTypes) {
+          const response = await fetch('/api/truckloads/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: item.orderId,
+              truckloadId: selectedTruckloadId,
+              assignmentType
+            })
+          })
+
+          if (!response.ok) {
+            throw new Error(`Failed to assign order ${item.orderId} ${assignmentType}`)
+          }
+        }
+      }
+
+      toast.success('All orders assigned successfully')
+      onAssignmentComplete()
+      onClose()
+    } catch (error) {
+      console.error('Error assigning orders:', error)
+      toast.error('Failed to assign orders')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Group truckloads by driver
+  const truckloadsByDriver = drivers.reduce((acc, driver) => {
+    acc[driver.fullName] = {
+      driverName: driver.fullName,
+      driverColor: driver.color,
+      truckloads: truckloads.filter(function filterDriverTruckloads(t) {
+        return t.driverName === driver.fullName
+      })
+    }
+    return acc
+  }, {} as Record<string, { driverName: string; driverColor: string; truckloads: TruckloadSummary[] }>)
+
+  const unassignedTruckloads = truckloads.filter(function filterUnassignedTruckloads(truckload) {
+    return !truckload.driverName
+  })
+
+  // Convert to array and sort by driver name
+  const driverColumns = [
+    ...Object.values(truckloadsByDriver).sort((a, b) => a.driverName.localeCompare(b.driverName)),
+    ...(unassignedTruckloads.length > 0
+      ? [{
+          driverName: 'Unassigned',
+          driverColor: '#9ca3af',
+          truckloads: unassignedTruckloads
+        }]
+      : [])
+  ]
+
+  // Calculate total assignments
+  const totalAssignments = poolItems.reduce((sum, item) => sum + item.assignmentTypes.length, 0)
+  const pickupCount = poolItems.reduce((sum, item) => sum + (item.assignmentTypes.includes('pickup') ? 1 : 0), 0)
+  const deliveryCount = poolItems.reduce((sum, item) => sum + (item.assignmentTypes.includes('delivery') ? 1 : 0), 0)
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] flex flex-col" style={{ width: '95vw', maxWidth: 'none' }}>
+        <DialogHeader>
+          <DialogTitle>Bulk Assign Orders to Truckload</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4 flex-1 overflow-hidden">
+          {/* Assignment Summary */}
+          <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+            <Label className="text-lg font-semibold">Assignment Summary</Label>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Total Assignments:</span>
+                <span className="ml-2 font-semibold">{totalAssignments}</span>
+              </div>
+              <div>
+                <span className="text-red-600">Pickups:</span>
+                <span className="ml-2 font-semibold">{pickupCount}</span>
+              </div>
+              <div>
+                <span className="text-gray-900">Deliveries:</span>
+                <span className="ml-2 font-semibold">{deliveryCount}</span>
+              </div>
+            </div>
+            
+            <ScrollArea className="h-24 mt-3">
+              <div className="space-y-1">
+                {poolItems.map((item, index) => (
+                  <div key={`${item.orderId}-${index}`} className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Order {item.orderId}</span>
+                      <div className="flex gap-1">
+                        {item.assignmentTypes.map(type => (
+                          <Badge
+                            key={type}
+                            variant={type === 'pickup' ? 'destructive' : 'default'}
+                            className="text-xs"
+                          >
+                            {type === 'pickup' ? 'Pickup' : 'Delivery'}
+                          </Badge>
+                        ))}
+                      </div>
+                      <span className="text-gray-500">
+                        ({item.assignmentTypes.includes('pickup') ? item.pickupCustomer.name : item.deliveryCustomer.name})
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Truckload Selection */}
+          <div className="space-y-2 flex-1 overflow-hidden">
+            <div className="flex items-center justify-between gap-4">
+              <Label className="text-lg font-semibold">Select Truckload</Label>
+              <Tabs value={truckloadView} onValueChange={handleTruckloadViewChange}>
+                <TabsList>
+                  <TabsTrigger value="current">Current</TabsTrigger>
+                  <TabsTrigger value="completed">Completed</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <ScrollArea className="h-full">
+              <div className="flex gap-4 p-4">
+                {driverColumns.map((driver) => (
+                  <div 
+                    key={driver.driverName} 
+                    className="w-[300px] flex-shrink-0"
+                    style={{ minWidth: '300px' }}
+                  >
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div 
+                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: driver.driverColor }}
+                          />
+                          <span className="font-medium truncate">{driver.driverName}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {driver.truckloads.map((truckload) => (
+                            <div
+                              key={truckload.id}
+                              className={`
+                                p-3 rounded-lg border cursor-pointer transition-colors
+                                ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5' : 'hover:bg-gray-50'}
+                              `}
+                              onClick={() => handleTruckloadSelection(truckload.id)}
+                            >
+                              <div className="mt-1 text-sm text-gray-600">
+                                {format(new Date(truckload.startDate), 'MMM d')} - {format(new Date(truckload.endDate), 'MMM d, yyyy')}
+                              </div>
+                              {truckload.trailerNumber && (
+                                <div className="mt-1 text-sm">
+                                  Trailer: <span className="font-medium">{truckload.trailerNumber}</span>
+                                </div>
+                              )}
+                              <div className="mt-2 text-sm line-clamp-2">
+                                {truckload.description}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                                <div className="whitespace-nowrap">
+                                  <span className="text-red-600">Pickup:</span> {truckload.pickupFootage} ft²
+                                </div>
+                                <div className="whitespace-nowrap">
+                                  <span>Delivery:</span> {truckload.deliveryFootage} ft²
+                                </div>
+                                {truckload.transferFootage > 0 && (
+                                  <div className="whitespace-nowrap">
+                                    <span className="text-blue-600">Transfer:</span> {truckload.transferFootage} ft²
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {driver.truckloads.length === 0 && (
+                            <p className="text-sm text-gray-500 text-center py-4">
+                              No truckloads assigned
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleAssign} disabled={!selectedTruckloadId || isLoading}>
+            {isLoading ? 'Assigning...' : `Assign All (${totalAssignments})`}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

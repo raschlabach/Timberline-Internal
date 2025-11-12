@@ -1,4 +1,4 @@
-import { dbQuery } from '@/lib/db'
+import { query } from '@/lib/db'
 import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/truckloads/[id]/layout/route'
 
@@ -16,8 +16,7 @@ jest.mock('@/lib/db', () => {
     connect: jest.fn()
   }
   return {
-    dbQuery: mockQuery,
-    getPool: jest.fn(() => ({ query: mockQuery })),
+    query: mockQuery,
     getClient: jest.fn(() => Promise.resolve(mockClient))
   }
 })
@@ -59,7 +58,7 @@ describe('Truckload Layout API', () => {
         }
       ]
 
-      ;(dbQuery as jest.Mock).mockResolvedValueOnce({ rows: mockRows })
+      ;(query as jest.Mock).mockResolvedValueOnce({ rows: mockRows })
 
       const request = new NextRequest('http://localhost:3000/api/truckloads/1/layout')
       const response = await GET(request, { params: { id: '1' } })
@@ -86,7 +85,7 @@ describe('Truckload Layout API', () => {
         .mockResolvedValueOnce({ rows: [] }) // COMMIT
 
       // Update the mock implementation
-      jest.spyOn(require('@/lib/db'), 'dbQuery').mockImplementation(mockQuery)
+      jest.spyOn(require('@/lib/db'), 'query').mockImplementation(mockQuery)
 
       const layout = {
         layout: [
@@ -151,7 +150,7 @@ describe('Truckload Layout API', () => {
         .mockResolvedValueOnce({ rows: [] }) // COMMIT
 
       // Update the mock implementation
-      jest.spyOn(require('@/lib/db'), 'dbQuery').mockImplementation(mockQuery)
+      jest.spyOn(require('@/lib/db'), 'query').mockImplementation(mockQuery)
 
       const layout = {
         layout: [

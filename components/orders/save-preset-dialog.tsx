@@ -1,27 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { OrderFormState } from "@/types/orders";
 import { CreatePresetRequest } from "@/types/presets";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
-// Predefined colors for presets
-const PRESET_COLORS = [
-  { value: "#EF4444", label: "Red" },
-  { value: "#F97316", label: "Orange" },
-  { value: "#EAB308", label: "Yellow" },
-  { value: "#22C55E", label: "Green" },
-  { value: "#3B82F6", label: "Blue" },
-  { value: "#6366F1", label: "Indigo" },
-  { value: "#A855F7", label: "Purple" },
-  { value: "#EC4899", label: "Pink" }
-] as const;
-
-type PresetColor = typeof PRESET_COLORS[number]["value"];
 
 interface SavePresetDialogProps {
   isOpen: boolean;
@@ -31,12 +19,19 @@ interface SavePresetDialogProps {
 
 export function SavePresetDialog({ isOpen, onClose, formState }: SavePresetDialogProps) {
   const [name, setName] = useState("");
-  const [color, setColor] = useState<PresetColor>(PRESET_COLORS[0].value);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Reset form state when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setName("");
+      setIsSaving(false);
+    }
+  }, [isOpen]);
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("Please enter a name for the preset");
+      toast.error("Please enter a name for the preset");
       return;
     }
 
@@ -45,7 +40,7 @@ export function SavePresetDialog({ isOpen, onClose, formState }: SavePresetDialo
     try {
       const presetData: CreatePresetRequest = {
         name: name.trim(),
-        color,
+        color: '#808080', // Default gray color
         pickupCustomer: formState.pickupCustomer,
         deliveryCustomer: formState.deliveryCustomer,
         payingCustomer: formState.payingCustomer,
@@ -53,12 +48,15 @@ export function SavePresetDialog({ isOpen, onClose, formState }: SavePresetDialo
         freightType: formState.freightType,
         skidsVinyl: formState.skidsVinyl,
         footage: formState.footage,
+        handBundles: formState.handBundles,
         comments: formState.comments,
         freightQuote: formState.freightQuote,
         statusFlags: formState.statusFlags,
         links: formState.links
       };
 
+      console.log('Sending preset data:', presetData);
+      
       const response = await fetch("/api/presets", {
         method: "POST",
         headers: {
@@ -67,25 +65,41 @@ export function SavePresetDialog({ isOpen, onClose, formState }: SavePresetDialo
         body: JSON.stringify(presetData),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
-        throw new Error("Failed to save preset");
+        let errorMessage = "Failed to save preset";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       
+      if (!result.success) {
+        throw new Error(result.message || "Failed to save preset");
+      }
+      
       // Dispatch event to notify of new preset
       window.dispatchEvent(new CustomEvent('presetCreated', { 
-        detail: { presetId: result.id }
+        detail: { presetId: result.preset?.id }
       }));
+
+      toast.success("Preset saved successfully!");
 
       // Reset form and close dialog
       setName("");
-      setColor(PRESET_COLORS[0].value);
       onClose();
 
     } catch (error) {
       console.error("Error saving preset:", error);
-      alert("Failed to save preset. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to save preset. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -96,6 +110,9 @@ export function SavePresetDialog({ isOpen, onClose, formState }: SavePresetDialo
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Save as Preset</DialogTitle>
+          <DialogDescription>
+            Save the current order form data as a reusable preset for faster order entry.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -107,26 +124,6 @@ export function SavePresetDialog({ isOpen, onClose, formState }: SavePresetDialo
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter a name for this preset"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Color</Label>
-            <div className="grid grid-cols-8 gap-2">
-              {PRESET_COLORS.map((presetColor) => (
-                <button
-                  key={presetColor.value}
-                  type="button"
-                  className={cn(
-                    "w-8 h-8 rounded-full transition-all",
-                    "hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2",
-                    color === presetColor.value ? "ring-2 ring-offset-2 ring-black" : ""
-                  )}
-                  style={{ backgroundColor: presetColor.value }}
-                  onClick={() => setColor(presetColor.value)}
-                  title={presetColor.label}
-                />
-              ))}
-            </div>
           </div>
         </div>
 

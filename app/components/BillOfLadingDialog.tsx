@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
 
 interface FreightItem {
@@ -34,7 +34,31 @@ interface BillOfLadingDialogProps {
 
 export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps) {
   const printRef = useRef<HTMLDivElement>(null);
-  const [items, setItems] = useState<FreightItem[]>(order.items);
+  
+  // Group items by description and sum packages
+  const groupedItems = useMemo(() => {
+    const groups: { [key: string]: FreightItem } = {};
+    
+    order.items.forEach(item => {
+      const key = item.description || '';
+      if (groups[key]) {
+        // If description exists, add packages and combine weight/charges
+        groups[key] = {
+          ...groups[key],
+          packages: groups[key].packages + item.packages,
+          weight: groups[key].weight + item.weight,
+          charges: groups[key].charges + item.charges
+        };
+      } else {
+        // New description, add it
+        groups[key] = { ...item };
+      }
+    });
+    
+    return Object.values(groups);
+  }, [order.items]);
+  
+  const [items, setItems] = useState<FreightItem[]>(groupedItems);
   const [signatures, setSignatures] = useState({
     pickedUpBy: "",
     pickedUpDate: "",
@@ -44,8 +68,13 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
     receivedDate: "",
   });
   
-  // Add empty rows to make 10 total rows
-  const emptyRows = Math.max(0, 10 - items.length);
+  // Update items when order changes (re-group if needed)
+  useEffect(() => {
+    setItems(groupedItems);
+  }, [groupedItems]);
+  
+  // Add empty rows to make 8 total rows (reduced for single page fit)
+  const emptyRows = Math.max(0, 8 - items.length);
   const allItems = [
     ...items,
     ...Array(emptyRows).fill({ packages: 0, description: "", weight: 0, charges: 0 })
@@ -76,7 +105,7 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
     pageStyle: `
       @page {
         size: letter;
-        margin: 0.5in;
+        margin: 0.25in;
       }
       @media print {
         body {
@@ -85,6 +114,9 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
         }
         .print\\:hidden {
           display: none !important;
+        }
+        * {
+          box-sizing: border-box;
         }
       }
     `,
@@ -103,37 +135,37 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
       <DialogContent className="max-w-[52rem] w-auto h-auto">
         <div 
           ref={printRef} 
-          className="bg-white w-full h-full flex flex-col relative z-0"
+          className="bg-white w-full flex flex-col relative z-0"
           style={{
             width: '8.5in',
-            minHeight: '11in',
-            padding: '0.4in',
+            padding: '0.25in',
             margin: '0 auto',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            fontSize: '12px'
           }}
         >
           {/* Title Section */}
-          <div className="text-center mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h1 className="text-3xl font-bold">Straight Bill of Lading</h1>
-              <p className="text-base font-bold">{new Date().toLocaleDateString('en-US', { 
+          <div className="text-center mb-3">
+            <div className="flex justify-between items-center mb-2">
+              <h1 className="text-2xl font-bold">Straight Bill of Lading</h1>
+              <p className="text-sm font-bold">{new Date().toLocaleDateString('en-US', { 
                 month: '2-digit',
                 day: '2-digit',
                 year: 'numeric'
               })}</p>
             </div>
             <div className="flex justify-between items-start">
-              <div className="text-left text-base">
-                <p className="font-bold text-lg mb-1">Timberline Trucking</p>
-                <p>1361 County Road 102</p>
-                <p>Sugarcreek, OH 44681</p>
-                <p className="mt-1">Phone: 330-852-3022</p>
+              <div className="text-left text-sm">
+                <p className="font-bold text-base mb-0.5">Timberline Trucking</p>
+                <p className="text-xs">1361 County Road 102</p>
+                <p className="text-xs">Sugarcreek, OH 44681</p>
+                <p className="mt-0.5 text-xs">Phone: 330-852-3022</p>
               </div>
               <div className="flex items-center">
-                <span className="font-bold mr-2 text-lg">#</span>
+                <span className="font-bold mr-2 text-base">#</span>
                 <Input 
                   placeholder="Enter BOL #" 
-                  className="w-48 text-base"
+                  className="w-40 text-sm h-7"
                   defaultValue={order.id}
                 />
               </div>
@@ -141,75 +173,75 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
           </div>
 
           {/* Shipper and Consignee Section */}
-          <div className="grid grid-cols-2 gap-6 mb-8">
-            <div className="border-2 border-gray-800 p-4">
-              <h2 className="font-bold text-lg mb-3">FROM: SHIPPER</h2>
-              <div className="space-y-1 text-base min-w-[280px]">
-                <p className="font-semibold mb-2">{order.shipper.name}</p>
-                <p className="text-base break-words">{order.shipper.address}</p>
-                <div className="mt-3 pt-2 border-t border-gray-200">
-                  <p>Phone: {order.shipper.phone}</p>
-                  {order.shipper.phone2 && <p>Phone 2: {order.shipper.phone2}</p>}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="border-2 border-gray-800 p-2">
+              <h2 className="font-bold text-sm mb-1.5">FROM: SHIPPER</h2>
+              <div className="space-y-0.5 text-xs min-w-[240px]">
+                <p className="font-semibold mb-1 text-sm">{order.shipper.name}</p>
+                <p className="text-xs break-words">{order.shipper.address}</p>
+                <div className="mt-1.5 pt-1 border-t border-gray-200">
+                  <p className="text-xs">Phone: {order.shipper.phone}</p>
+                  {order.shipper.phone2 && <p className="text-xs">Phone 2: {order.shipper.phone2}</p>}
                 </div>
               </div>
             </div>
-            <div className="border-2 border-gray-800 p-4">
-              <h2 className="font-bold text-lg mb-3">TO: CONSIGNEE</h2>
-              <div className="space-y-1 text-base min-w-[280px]">
-                <p className="font-semibold mb-2">{order.consignee.name}</p>
-                <p className="text-base break-words">{order.consignee.address}</p>
-                <div className="mt-3 pt-2 border-t border-gray-200">
-                  <p>Phone: {order.consignee.phone}</p>
-                  {order.consignee.phone2 && <p>Phone 2: {order.consignee.phone2}</p>}
+            <div className="border-2 border-gray-800 p-2">
+              <h2 className="font-bold text-sm mb-1.5">TO: CONSIGNEE</h2>
+              <div className="space-y-0.5 text-xs min-w-[240px]">
+                <p className="font-semibold mb-1 text-sm">{order.consignee.name}</p>
+                <p className="text-xs break-words">{order.consignee.address}</p>
+                <div className="mt-1.5 pt-1 border-t border-gray-200">
+                  <p className="text-xs">Phone: {order.consignee.phone}</p>
+                  {order.consignee.phone2 && <p className="text-xs">Phone 2: {order.consignee.phone2}</p>}
                 </div>
               </div>
             </div>
           </div>
 
           {/* Items Table */}
-          <div className="flex-1">
+          <div className="mb-2">
             <Table>
               <TableHeader>
                 <TableRow className="border-t-2 border-x-2 border-gray-800">
-                  <TableHead className="text-base font-bold py-3 text-black">Number of Packages</TableHead>
-                  <TableHead className="text-base font-bold py-3 text-black">Description</TableHead>
-                  <TableHead className="text-base font-bold py-3 text-black">Weight</TableHead>
-                  <TableHead className="text-base font-bold py-3 text-black">Total Charges</TableHead>
+                  <TableHead className="text-xs font-bold py-1.5 px-1 text-black">Number of Packages</TableHead>
+                  <TableHead className="text-xs font-bold py-1.5 px-1 text-black">Description</TableHead>
+                  <TableHead className="text-xs font-bold py-1.5 px-1 text-black">Weight</TableHead>
+                  <TableHead className="text-xs font-bold py-1.5 px-1 text-black">Total Charges</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {allItems.map((item, index) => (
                   <TableRow key={index} className="border-x-2 border-gray-800">
-                    <TableCell className="text-base py-3 px-2">
+                    <TableCell className="text-xs py-1 px-1">
                       <Input
                         type="number"
                         value={item.packages || ""}
                         onChange={(e) => handleItemChange(index, "packages", e.target.value)}
-                        className="border-0 p-0 h-auto text-base"
+                        className="border-0 p-0 h-5 text-xs"
                       />
                     </TableCell>
-                    <TableCell className="text-base py-3 px-2">
+                    <TableCell className="text-xs py-1 px-1">
                       <Input
                         type="text"
                         value={item.description || ""}
                         onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                        className="border-0 p-0 h-auto text-base"
+                        className="border-0 p-0 h-5 text-xs"
                       />
                     </TableCell>
-                    <TableCell className="text-base py-3 px-2">
+                    <TableCell className="text-xs py-1 px-1">
                       <Input
                         type="number"
                         value={item.weight || ""}
                         onChange={(e) => handleItemChange(index, "weight", e.target.value)}
-                        className="border-0 p-0 h-auto text-base"
+                        className="border-0 p-0 h-5 text-xs"
                       />
                     </TableCell>
-                    <TableCell className="text-base py-3 px-2">
+                    <TableCell className="text-xs py-1 px-1">
                       <Input
                         type="number"
                         value={item.charges || ""}
                         onChange={(e) => handleItemChange(index, "charges", e.target.value)}
-                        className="border-0 p-0 h-auto text-base"
+                        className="border-0 p-0 h-5 text-xs"
                         prefix="$"
                       />
                     </TableCell>
@@ -219,22 +251,19 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
             </Table>
           </div>
 
-          {/* Spacer to push signatures to bottom */}
-          <div className="flex-grow min-h-[1in]" />
-
           {/* Signature Section */}
-          <div className="flex flex-col gap-4 w-72 mt-4">
+          <div className="flex flex-col gap-2 w-64 mt-auto">
             <div>
-              <div className="border-b-2 border-black pt-6">
+              <div className="border-b-2 border-black pt-3">
                 <Input
                   type="text"
                   value={signatures.pickedUpBy}
                   onChange={(e) => handleSignatureChange("pickedUpBy", e.target.value)}
                   placeholder="Picked Up By"
-                  className="border-0 p-0 h-auto text-base font-bold"
+                  className="border-0 p-0 h-auto text-sm font-bold"
                 />
               </div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-0.5">
                 <Input
                   type="text"
                   value={signatures.pickedUpDate}
@@ -245,16 +274,16 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
               </div>
             </div>
             <div>
-              <div className="border-b-2 border-black pt-6">
+              <div className="border-b-2 border-black pt-3">
                 <Input
                   type="text"
                   value={signatures.deliveredBy}
                   onChange={(e) => handleSignatureChange("deliveredBy", e.target.value)}
                   placeholder="Delivered By"
-                  className="border-0 p-0 h-auto text-base font-bold"
+                  className="border-0 p-0 h-auto text-sm font-bold"
                 />
               </div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-0.5">
                 <Input
                   type="text"
                   value={signatures.deliveredDate}
@@ -265,16 +294,16 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
               </div>
             </div>
             <div>
-              <div className="border-b-2 border-black pt-6">
+              <div className="border-b-2 border-black pt-3">
                 <Input
                   type="text"
                   value={signatures.receivedBy}
                   onChange={(e) => handleSignatureChange("receivedBy", e.target.value)}
                   placeholder="Received By"
-                  className="border-0 p-0 h-auto text-base font-bold"
+                  className="border-0 p-0 h-auto text-sm font-bold"
                 />
               </div>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-0.5">
                 <Input
                   type="text"
                   value={signatures.receivedDate}

@@ -37,6 +37,15 @@ export interface SkidData {
   length: number;
   footage: number;
   type: 'skid' | 'vinyl';
+  isPickedUp?: boolean;
+  isDelivered?: boolean;
+}
+
+// Hand bundle data type
+export interface HandBundleData {
+  id: string;
+  quantity: number;
+  description: string;
 }
 
 // Order data type
@@ -48,8 +57,10 @@ export interface OrderData {
   skids: number;
   vinyl: number;
   footage: number;
+  handBundles: number;
   skidsData: SkidData[];
   vinylData: SkidData[];
+  handBundlesData: HandBundleData[];
   pickupDate: string;
   isRushOrder: boolean;
   needsAttention: boolean;

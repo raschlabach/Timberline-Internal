@@ -1,6 +1,0 @@
-{
-  "/api/truckloads/[id]/orders/route": "app/api/truckloads/[id]/orders/route.js",
-  "/api/truckloads/[id]/layout/route": "app/api/truckloads/[id]/layout/route.js",
-  "/dashboard/trucking/[id]/page": "app/dashboard/trucking/[id]/page.js",
-  "/dashboard/trucking/page": "app/dashboard/trucking/page.js"
-}

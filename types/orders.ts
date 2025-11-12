@@ -23,6 +23,13 @@ export interface SkidData {
   type: 'skid' | 'vinyl';
 }
 
+// Hand bundle types
+export interface HandBundleData {
+  id: string;
+  quantity: number;
+  description: string;
+}
+
 // Order link types
 export interface OrderLink {
   id: string;
@@ -45,6 +52,11 @@ export interface SkidsVinylEntryProps {
 export interface FootageEntryProps {
   footage: number;
   onUpdate: (footage: number) => void;
+}
+
+export interface HandBundleEntryProps {
+  handBundles: HandBundleData[];
+  onUpdate: (handBundles: HandBundleData[]) => void;
 }
 
 export interface DatePickerProps {
@@ -90,6 +102,7 @@ export interface OrderFormState {
   freightType: 'skidsVinyl' | 'footage';
   skidsVinyl: SkidData[];
   footage: number;
+  handBundles: HandBundleData[];
   pickupDate: Date | null;
   comments: string;
   freightQuote: string;

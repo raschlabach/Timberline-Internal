@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Search, Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Customer } from '@/types/shared';
 
 interface CustomerSelectorProps {
@@ -126,64 +127,79 @@ export function CustomerSelector({
             </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[400px]" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput 
-              placeholder={`Search ${label.toLowerCase()} by name, city, or address...`}
-              className="h-9"
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-            />
-            <CommandList>
-              <CommandEmpty>
+        <PopoverContent className="p-0 w-[450px]" align="start">
+          <div className="flex flex-col">
+            {/* Search Input */}
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder={`Search ${label.toLowerCase()}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                />
+              </div>
+            </div>
+            
+            {/* Customer List */}
+            <ScrollArea className="h-[400px] w-full">
+              <div className="pr-2">
                 {isLoading ? (
-                  <div className="py-6 text-center">
-                    <div className="animate-spin h-5 w-5 border-2 border-gray-300 rounded-full border-t-blue-600 mx-auto"></div>
-                    <p className="text-sm text-gray-500 mt-2">Loading customers...</p>
-                  </div>
-                ) : error ? (
-                  <div className="py-6 text-center text-red-500">
-                    <p className="text-sm">{error}</p>
-                    <button
-                      className="text-xs text-blue-500 mt-2 hover:underline"
-                      onClick={() => fetchCustomers()}
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center">
-                    <p className="text-sm text-gray-500">No customers found</p>
+                <div className="py-6 text-center">
+                  <div className="animate-spin h-5 w-5 border-2 border-gray-300 rounded-full border-t-blue-600 mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">Loading customers...</p>
+                </div>
+              ) : error ? (
+                <div className="py-6 text-center text-red-500">
+                  <p className="text-sm">{error}</p>
+                  <button
+                    className="text-xs text-blue-500 mt-2 hover:underline"
+                    onClick={() => fetchCustomers()}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : filteredCustomers.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-sm text-gray-500">
+                    {searchQuery ? 'No customers found' : 'No customers available'}
+                  </p>
+                  {searchQuery && (
                     <p className="text-xs text-gray-400 mt-1">Try a different search term</p>
-                  </div>
-                )}
-              </CommandEmpty>
-              {!isLoading && filteredCustomers.length > 0 && (
-                <CommandGroup heading="Customers">
+                  )}
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
                   {filteredCustomers.slice(0, 100).map((customer) => (
                     <div 
                       key={customer.id}
                       onClick={() => selectCustomer(customer)}
-                      className="flex items-center justify-between py-2 px-2 cursor-pointer hover:bg-accent rounded-sm"
+                      className="flex items-center justify-between py-2 px-3 cursor-pointer hover:bg-slate-50 transition-colors"
                     >
-                      <div>
-                        <p className="font-medium">{customer.customer_name}</p>
-                        <p className="text-xs text-muted-foreground">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-slate-900 truncate">
+                          {customer.customer_name}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">
                           {[customer.address, customer.city, customer.state].filter(Boolean).join(', ')}
                         </p>
                       </div>
-                      {selectedCustomer?.id === customer.id && <Check className="h-4 w-4 text-primary" />}
+                      {selectedCustomer?.id === customer.id && (
+                        <Check className="h-4 w-4 text-primary flex-shrink-0 ml-2" />
+                      )}
                     </div>
                   ))}
                   {filteredCustomers.length > 100 && (
-                    <div className="py-2 px-2 text-xs text-gray-500 text-center border-t">
+                    <div className="py-2 px-3 text-xs text-slate-500 text-center border-t bg-slate-50">
                       Showing first 100 results. Refine your search to see more.
                     </div>
                   )}
-                </CommandGroup>
+                </div>
               )}
-            </CommandList>
-          </Command>
+              </div>
+            </ScrollArea>
+          </div>
         </PopoverContent>
       </Popover>
     </div>

@@ -2,6 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { query } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { getServerSession } from 'next-auth';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -71,19 +72,30 @@ export const authOptions: NextAuthOptions = {
     }
   },
   pages: {
-    signIn: '/auth/signin',
+    signIn: '/auth/login',
     error: '/auth/error',
   }
 };
 
-// Basic auth helper for development
+// Proper authentication helper using NextAuth
 export async function getSession() {
-  // TODO: Implement proper authentication
-  return {
-    user: {
-      id: 1,
-      name: 'Development User',
-      email: 'dev@example.com'
-    }
-  };
+  return await getServerSession(authOptions);
+}
+
+// Helper function to get current user
+export async function getCurrentUser() {
+  const session = await getSession();
+  return session?.user || null;
+}
+
+// Helper function to check if user is authenticated
+export async function isAuthenticated() {
+  const session = await getSession();
+  return !!session?.user;
+}
+
+// Helper function to check user role
+export async function hasRole(requiredRole: string) {
+  const session = await getSession();
+  return session?.user?.role === requiredRole;
 } 

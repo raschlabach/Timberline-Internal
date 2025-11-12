@@ -20,11 +20,60 @@ export async function GET(request: NextRequest) {
           c.phone_number_1, 
           c.phone_number_2, 
           c.notes,
-          c.quotes
+          c.quotes,
+          -- Order counts
+          COALESCE(current_orders.current_count, 0) as current_orders,
+          COALESCE(total_orders.total_count, 0) as total_orders
         FROM 
           customers c
         JOIN 
           locations l ON c.location_id = l.id
+        LEFT JOIN (
+          -- Count current/active orders (unassigned, assigned, in_progress)
+          SELECT 
+            customer_id,
+            SUM(order_count) as current_count
+          FROM (
+            SELECT 
+              pickup_customer_id as customer_id,
+              COUNT(*) as order_count
+            FROM orders 
+            WHERE status IN ('unassigned', 'assigned', 'in_progress')
+            GROUP BY pickup_customer_id
+            
+            UNION ALL
+            
+            SELECT 
+              delivery_customer_id as customer_id,
+              COUNT(*) as order_count
+            FROM orders 
+            WHERE status IN ('unassigned', 'assigned', 'in_progress')
+            GROUP BY delivery_customer_id
+          ) current_union
+          GROUP BY customer_id
+        ) current_orders ON c.id = current_orders.customer_id
+        LEFT JOIN (
+          -- Count total orders (all statuses)
+          SELECT 
+            customer_id,
+            SUM(order_count) as total_count
+          FROM (
+            SELECT 
+              pickup_customer_id as customer_id,
+              COUNT(*) as order_count
+            FROM orders 
+            GROUP BY pickup_customer_id
+            
+            UNION ALL
+            
+            SELECT 
+              delivery_customer_id as customer_id,
+              COUNT(*) as order_count
+            FROM orders 
+            GROUP BY delivery_customer_id
+          ) total_union
+          GROUP BY customer_id
+        ) total_orders ON c.id = total_orders.customer_id
         ORDER BY 
           c.customer_name ASC`
       ),

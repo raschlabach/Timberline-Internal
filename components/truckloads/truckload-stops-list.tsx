@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -13,7 +14,11 @@ import {
   Info, 
   FileText,
   MessageSquare,
-  Zap
+  Zap,
+  GripVertical,
+  MoreVertical,
+  X,
+  ArrowRightLeft
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -23,8 +28,33 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { BillOfLadingDialog } from "@/app/components/BillOfLadingDialog"
 import { OrderInfoDialog } from "@/components/orders/order-info-dialog"
+import { TransferStopDialog } from "@/components/truckloads/transfer-stop-dialog"
+import { toast } from "sonner"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  rectIntersection
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface TruckloadStop {
   id: number
@@ -49,8 +79,14 @@ interface TruckloadStop {
   skids: number
   vinyl: number
   footage: number
+  hand_bundles: number
   skids_data: any[]
   vinyl_data: any[]
+  hand_bundles_data: Array<{
+    id: string
+    quantity: number
+    description: string
+  }>
   pickup_date: string
   is_rush: boolean
   needs_attention: boolean
@@ -61,14 +97,722 @@ interface TruckloadStop {
 
 interface TruckloadStopsListProps {
   truckloadId: number
+  onStopsUpdate?: () => void // Callback to notify parent of changes
 }
 
-export function TruckloadStopsList({ truckloadId }: TruckloadStopsListProps) {
+interface SortableStopProps {
+  stop: TruckloadStop
+  onOrderInfoClick: (orderId: number) => void
+  onStopUpdate: () => void
+  truckloadId: number
+}
+
+interface GroupedStop {
+  groupKey: string // customer ID + assignment type
+  customerId: number
+  assignmentType: 'pickup' | 'delivery'
+  customerName: string
+  customerAddress: string
+  sequenceNumber: number
+  stops: TruckloadStop[]
+}
+
+interface SortableGroupedStopProps {
+  groupedStop: GroupedStop
+  onOrderInfoClick: (orderId: number) => void
+  onStopUpdate: () => void
+  truckloadId: number
+}
+
+function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId }: SortableGroupedStopProps) {
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
+  const [isUnassigning, setIsUnassigning] = useState(false)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ 
+    id: `group-${groupedStop.groupKey}`
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+    zIndex: isDragging ? 1 : 0
+  }
+
+  async function handleUnassign(stop: TruckloadStop) {
+    if (!confirm('Are you sure you want to unassign this stop?')) {
+      return
+    }
+
+    setIsUnassigning(true)
+
+    try {
+      const response = await fetch(`/api/truckloads/${truckloadId}/unassign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: stop.id,
+          assignmentType: stop.assignment_type
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to unassign stop')
+      }
+
+      toast.success('Stop unassigned successfully')
+      onStopUpdate()
+    } catch (error) {
+      console.error('Error unassigning stop:', error)
+      toast.error('Failed to unassign stop')
+    } finally {
+      setIsUnassigning(false)
+    }
+  }
+
+  return (
+    <>
+      <Card 
+        ref={setNodeRef}
+        style={style}
+        className="py-1.5 px-3 relative"
+      >
+        <div className="absolute top-0 left-0 h-full w-1.5" 
+          style={{ 
+            backgroundColor: groupedStop.assignmentType === 'pickup' ? '#ef4444' : '#000000'
+          }} 
+        />
+        
+        <div className="pl-2.5">
+          {/* Individual stops within the group - styled exactly like normal stops */}
+          <div>
+            {groupedStop.stops.map((stop, index) => (
+              <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-2 pt-2 border-t border-gray-200" : ""}>
+                {/* Header row with sequence, type, flags and date */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      {index === 0 && (
+                        <button
+                          className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded"
+                          {...attributes}
+                          {...listeners}
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                        </button>
+                      )}
+                      <span className="font-medium text-sm">#{stop.sequence_number}</span>
+                    </div>
+                    <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5">
+                      {stop.assignment_type === 'pickup' ? (
+                        <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                      ) : (
+                        <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                      )}
+                    </Badge>
+                    {stop.is_transfer_order && (
+                      <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200">
+                        Transfer
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <div className="text-xs text-gray-500 mr-1">
+                      {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
+                    </div>
+                    {stop.is_rush && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="p-0.5">
+                            <Zap className="h-3.5 w-3.5 text-yellow-500" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Rush Order</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {stop.needs_attention && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="p-0.5">
+                            <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Needs Attention</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {stop.comments && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="p-0.5">
+                            <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{stop.comments}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                          onClick={() => onOrderInfoClick(stop.id)}
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Order Details</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <BillOfLadingDialog 
+                      order={{
+                        id: stop.id.toString(),
+                        shipper: {
+                          name: stop.pickup_customer.name,
+                          address: stop.pickup_customer.address,
+                          phone: stop.pickup_customer.phone || '',
+                          phone2: stop.pickup_customer.phone2 || ''
+                        },
+                        consignee: {
+                          name: stop.delivery_customer.name,
+                          address: stop.delivery_customer.address,
+                          phone: stop.delivery_customer.phone || '',
+                          phone2: stop.delivery_customer.phone2 || ''
+                        },
+                        items: [
+                          ...(stop.skids_data || []).map(skid => ({
+                            packages: skid.quantity || 0,
+                            description: `Skid ${skid.width}x${skid.length}`,
+                            weight: 0,
+                            charges: 0
+                          })),
+                          ...(stop.vinyl_data || []).map(vinyl => ({
+                            packages: vinyl.quantity || 0,
+                            description: `Vinyl ${vinyl.width}x${vinyl.length}`,
+                            weight: 0,
+                            charges: 0
+                          })),
+                          ...(stop.hand_bundles_data || []).map(handBundle => ({
+                            packages: handBundle.quantity || 0,
+                            description: handBundle.description || 'Hand Bundle',
+                            weight: 0,
+                            charges: 0
+                          }))
+                        ]
+                      }} 
+                    >
+                      <Button 
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </Button>
+                    </BillOfLadingDialog>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-600"
+                          onClick={() => handleUnassign(stop)}
+                          disabled={isUnassigning}
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          {isUnassigning ? 'Unassigning...' : 'Unassign Stop'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setIsTransferDialogOpen(true)}
+                        >
+                          <ArrowRightLeft className="h-4 w-4 mr-2" />
+                          Transfer Stop
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                {/* Locations row */}
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  <div>
+                    <div className="text-xs text-gray-500 leading-tight">
+                      {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
+                    </div>
+                    <div className={`truncate leading-tight ${
+                      stop.assignment_type === 'pickup' 
+                        ? 'text-base font-bold' 
+                        : 'text-sm font-medium text-gray-700'
+                    }`}>
+                      {stop.pickup_customer.name}
+                    </div>
+                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 leading-tight">
+                      {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
+                    </div>
+                    <div className={`truncate leading-tight ${
+                      stop.assignment_type === 'delivery' 
+                        ? 'text-base font-bold' 
+                        : 'text-sm font-medium text-gray-700'
+                    }`}>
+                      {stop.delivery_customer.name}
+                    </div>
+                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 leading-tight">Freight Info</div>
+                    <div className="flex flex-col gap-0.5 text-xs">
+                      {stop.footage > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">Total Ft:</span>
+                          <span className="font-medium">{Math.round(stop.footage)}</span>
+                        </div>
+                      )}
+                      {stop.skids > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">Skids:</span>
+                          <span className="font-medium">{stop.skids}</span>
+                          {stop.skids_data?.length > 0 && (
+                            <span className="text-gray-600">
+                              ({stop.skids_data.map(skid => `${skid.quantity} ${skid.width}x${skid.length}`).join(' - ')})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {stop.vinyl > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">Vinyl:</span>
+                          <span className="font-medium">{stop.vinyl}</span>
+                          {stop.vinyl_data?.length > 0 && (
+                            <span className="text-gray-600">
+                              ({stop.vinyl_data.map(vinyl => `${vinyl.quantity} ${vinyl.width}x${vinyl.length}`).join(' - ')})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {stop.hand_bundles > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">HB:</span>
+                          <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
+                          {stop.hand_bundles_data?.length > 0 && (
+                            <span className="text-gray-600">
+                              ({stop.hand_bundles_data.map(bundle => `${bundle.quantity} ${bundle.description}`).join(' - ')})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <TransferStopDialog
+        isOpen={isTransferDialogOpen}
+        onClose={() => setIsTransferDialogOpen(false)}
+        onTransferComplete={onStopUpdate}
+        currentTruckloadId={truckloadId}
+        orderId={groupedStop.stops[0]?.id || 0}
+        assignmentType={groupedStop.assignmentType}
+      />
+    </>
+  )
+}
+
+function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: SortableStopProps) {
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
+  const [isUnassigning, setIsUnassigning] = useState(false)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ 
+    id: `${stop.id}-${stop.assignment_type}`
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+    zIndex: isDragging ? 1 : 0
+  }
+
+  async function handleUnassign() {
+    if (!confirm('Are you sure you want to unassign this stop?')) {
+      return
+    }
+
+    setIsUnassigning(true)
+
+    try {
+      const response = await fetch(`/api/truckloads/${truckloadId}/unassign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: stop.id,
+          assignmentType: stop.assignment_type
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to unassign stop')
+      }
+
+      toast.success('Stop unassigned successfully')
+      onStopUpdate()
+    } catch (error) {
+      console.error('Error unassigning stop:', error)
+      toast.error('Failed to unassign stop')
+    } finally {
+      setIsUnassigning(false)
+    }
+  }
+
+  return (
+    <>
+      <Card 
+        ref={setNodeRef}
+        style={style}
+        className="py-1.5 px-3 relative"
+      >
+        <div className="absolute top-0 left-0 h-full w-1.5" 
+          style={{ 
+            backgroundColor: stop.assignment_type === 'pickup' ? '#ef4444' : '#000000'
+          }} 
+        />
+        
+        <div className="pl-2.5">
+          {/* Header row with sequence, type, flags and date */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-1 flex-wrap">
+              <div className="flex items-center gap-1">
+                <button
+                  className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded"
+                  {...attributes}
+                  {...listeners}
+                >
+                  <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                </button>
+                <span className="font-medium text-sm">#{stop.sequence_number}</span>
+              </div>
+              <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5">
+                {stop.assignment_type === 'pickup' ? (
+                  <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                ) : (
+                  <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                )}
+              </Badge>
+              {stop.is_transfer_order && (
+                <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200">
+                  Transfer
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-0.5">
+              <div className="text-xs text-gray-500 mr-1">
+                {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
+              </div>
+              {stop.is_rush && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="p-0.5">
+                      <Zap className="h-3.5 w-3.5 text-yellow-500" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Rush Order</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {stop.needs_attention && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="p-0.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Needs Attention</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {stop.comments && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="p-0.5">
+                      <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{stop.comments}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                    onClick={() => onOrderInfoClick(stop.id)}
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Order Details</p>
+                </TooltipContent>
+              </Tooltip>
+              <BillOfLadingDialog 
+                order={{
+                  id: stop.id.toString(),
+                  shipper: {
+                    name: stop.pickup_customer.name,
+                    address: stop.pickup_customer.address,
+                    phone: stop.pickup_customer.phone || '',
+                    phone2: stop.pickup_customer.phone2 || ''
+                  },
+                  consignee: {
+                    name: stop.delivery_customer.name,
+                    address: stop.delivery_customer.address,
+                    phone: stop.delivery_customer.phone || '',
+                    phone2: stop.delivery_customer.phone2 || ''
+                  },
+                  items: [
+                    ...(stop.skids_data || []).map(skid => ({
+                      packages: skid.quantity || 0,
+                      description: `Skid ${skid.width}x${skid.length}`,
+                      weight: 0,
+                      charges: 0
+                    })),
+                    ...(stop.vinyl_data || []).map(vinyl => ({
+                      packages: vinyl.quantity || 0,
+                      description: `Vinyl ${vinyl.width}x${vinyl.length}`,
+                      weight: 0,
+                      charges: 0
+                    })),
+                    ...(stop.hand_bundles_data || []).map(handBundle => ({
+                      packages: handBundle.quantity || 0,
+                      description: handBundle.description || 'Hand Bundle',
+                      weight: 0,
+                      charges: 0
+                    }))
+                  ]
+                }} 
+              >
+                <Button 
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                </Button>
+              </BillOfLadingDialog>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                  >
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    onClick={handleUnassign}
+                    disabled={isUnassigning}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    {isUnassigning ? 'Unassigning...' : 'Unassign Stop'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setIsTransferDialogOpen(true)}
+                  >
+                    <ArrowRightLeft className="h-4 w-4 mr-2" />
+                    Transfer Stop
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {/* Locations row */}
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            <div>
+              <div className="text-xs text-gray-500 leading-tight">
+                {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
+              </div>
+              <div className={`truncate leading-tight ${
+                stop.assignment_type === 'pickup' 
+                  ? 'text-base font-bold' 
+                  : 'text-sm font-medium text-gray-700'
+              }`}>
+                {stop.pickup_customer.name}
+              </div>
+              <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 leading-tight">
+                {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
+              </div>
+              <div className={`truncate leading-tight ${
+                stop.assignment_type === 'delivery' 
+                  ? 'text-base font-bold' 
+                  : 'text-sm font-medium text-gray-700'
+              }`}>
+                {stop.delivery_customer.name}
+              </div>
+              <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 leading-tight">Freight Info</div>
+              <div className="flex flex-col gap-0.5 text-xs">
+                {stop.footage > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Total Ft:</span>
+                    <span className="font-medium">{Math.round(stop.footage)}</span>
+                  </div>
+                )}
+                {stop.skids > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Skids:</span>
+                    <span className="font-medium">{stop.skids}</span>
+                    {stop.skids_data?.length > 0 && (
+                      <span className="text-gray-600">
+                        ({stop.skids_data.map(skid => `${skid.quantity} ${skid.width}x${skid.length}`).join(' - ')})
+                      </span>
+                    )}
+                  </div>
+                )}
+                {stop.vinyl > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Vinyl:</span>
+                    <span className="font-medium">{stop.vinyl}</span>
+                    {stop.vinyl_data?.length > 0 && (
+                      <span className="text-gray-600">
+                        ({stop.vinyl_data.map(vinyl => `${vinyl.quantity} ${vinyl.width}x${vinyl.length}`).join(' - ')})
+                      </span>
+                    )}
+                  </div>
+                )}
+                {stop.hand_bundles > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">HB:</span>
+                    <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
+                    {stop.hand_bundles_data?.length > 0 && (
+                      <span className="text-gray-600">
+                        ({stop.hand_bundles_data.map(bundle => `${bundle.quantity} ${bundle.description}`).join(' - ')})
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <TransferStopDialog
+        isOpen={isTransferDialogOpen}
+        onClose={() => setIsTransferDialogOpen(false)}
+        onTransferComplete={onStopUpdate}
+        currentTruckloadId={truckloadId}
+        orderId={stop.id}
+        assignmentType={stop.assignment_type}
+      />
+    </>
+  )
+}
+
+// Function to group stops by customer ID and assignment type
+function groupStopsByCustomer(stops: TruckloadStop[]): GroupedStop[] {
+  const groups = new Map<string, GroupedStop>()
+  
+  stops.forEach(stop => {
+    const customerId = stop.assignment_type === 'pickup' 
+      ? stop.pickup_customer.id 
+      : stop.delivery_customer.id
+    
+    const groupKey = `${customerId}-${stop.assignment_type}`
+    
+    if (groups.has(groupKey)) {
+      // Add to existing group
+      const existingGroup = groups.get(groupKey)!
+      existingGroup.stops.push(stop)
+    } else {
+      // Create new group
+      const customer = stop.assignment_type === 'pickup' 
+        ? stop.pickup_customer 
+        : stop.delivery_customer
+      
+      groups.set(groupKey, {
+        groupKey,
+        customerId,
+        assignmentType: stop.assignment_type,
+        customerName: customer.name,
+        customerAddress: customer.address,
+        sequenceNumber: stop.sequence_number,
+        stops: [stop]
+      })
+    }
+  })
+  
+  // Convert to array and sort by sequence number (descending)
+  return Array.from(groups.values()).sort((a, b) => b.sequenceNumber - a.sequenceNumber)
+}
+
+export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStopsListProps) {
+  const queryClient = useQueryClient()
   const [stops, setStops] = useState<TruckloadStop[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
   const [isOrderInfoOpen, setIsOrderInfoOpen] = useState(false)
+  const [isReordering, setIsReordering] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   async function fetchStops() {
     try {
@@ -81,7 +825,9 @@ export function TruckloadStopsList({ truckloadId }: TruckloadStopsListProps) {
       if (!data.success) {
         throw new Error(data.error || "Failed to fetch stops")
       }
-      setStops(data.orders)
+      // Sort stops by sequence_number in descending order
+      const sortedStopsList = data.orders.sort((a: TruckloadStop, b: TruckloadStop) => b.sequence_number - a.sequence_number)
+      setStops(sortedStopsList)
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
       console.error("Error fetching stops:", err)
@@ -113,6 +859,174 @@ export function TruckloadStopsList({ truckloadId }: TruckloadStopsListProps) {
     }
   }
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    if (over && active.id !== over.id) {
+      setIsReordering(true)
+      
+      console.log('🔄 Drag and drop event:', { active: active.id, over: over.id })
+      
+      // Handle grouped stops - check if it's a group ID
+      const isActiveGroup = String(active.id).startsWith('group-')
+      const isOverGroup = String(over.id).startsWith('group-')
+      
+      if (isActiveGroup && isOverGroup) {
+        // Both are groups - handle group reordering
+        const activeGroupKey = String(active.id).replace('group-', '')
+        const overGroupKey = String(over.id).replace('group-', '')
+        
+        console.log('🔍 Group reordering:', { activeGroupKey, overGroupKey })
+        
+        const groupedStops = groupStopsByCustomer(stops)
+        const activeGroupIndex = groupedStops.findIndex(g => g.groupKey === activeGroupKey)
+        const overGroupIndex = groupedStops.findIndex(g => g.groupKey === overGroupKey)
+        
+        if (activeGroupIndex === -1 || overGroupIndex === -1) {
+          console.error('Could not find group indices')
+          setIsReordering(false)
+          return
+        }
+        
+        // Move the group
+        const newGroupedStops = [...groupedStops]
+        const [movedGroup] = newGroupedStops.splice(activeGroupIndex, 1)
+        newGroupedStops.splice(overGroupIndex, 0, movedGroup)
+        
+        // Update sequence numbers for all stops in all groups
+        const updatedStops: TruckloadStop[] = []
+        newGroupedStops.forEach((group, groupIndex) => {
+          const newSequenceNumber = newGroupedStops.length - groupIndex
+          group.stops.forEach(stop => {
+            updatedStops.push({
+              ...stop,
+              sequence_number: newSequenceNumber
+            })
+          })
+        })
+        
+        console.log('🔍 Updated stops with new sequence numbers:', updatedStops.map(s => ({ id: s.id, type: s.assignment_type, seq: s.sequence_number })))
+        
+        // Update sequence numbers in the database
+        try {
+          const response = await fetch(`/api/truckloads/${truckloadId}/reorder`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              orders: updatedStops.map(stop => ({
+                id: stop.id,
+                assignment_type: stop.assignment_type,
+                sequence_number: stop.sequence_number
+              }))
+            })
+          })
+          
+          if (!response.ok) {
+            throw new Error('Failed to update stop order')
+          }
+          
+          const data = await response.json()
+          if (!data.success) {
+            throw new Error(data.error || 'Failed to update stop order')
+          }
+
+          // Update local state with the new sequence numbers
+          setStops(updatedStops)
+          
+          // Invalidate the truckload-stops query to refresh the left side panel
+          queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
+          
+          // Also notify the parent component if callback is provided
+          if (onStopsUpdate) {
+            onStopsUpdate()
+          }
+          
+        } catch (error) {
+          console.error('Error updating stop order:', error)
+          // Revert to original order if update fails
+          fetchStops()
+        } finally {
+          setIsReordering(false)
+        }
+      } else {
+        // Handle individual stop reordering (fallback for non-grouped stops)
+        const [activeId, activeType] = String(active.id).split('-')
+        const [overId, overType] = String(over.id).split('-')
+        
+        console.log('🔍 Parsed IDs:', { activeId, activeType, overId, overType })
+        
+        const oldIndex = stops.findIndex(stop => 
+          stop.id === Number(activeId) && stop.assignment_type === activeType
+        )
+        const newIndex = stops.findIndex(stop => 
+          stop.id === Number(overId) && stop.assignment_type === overType
+        )
+        
+        console.log('🔍 Found indices:', { oldIndex, newIndex })
+        
+        // Implement proper insertion logic instead of simple swapping
+        const newStops = [...stops]
+        const [movedStop] = newStops.splice(oldIndex, 1)
+        newStops.splice(newIndex, 0, movedStop)
+        
+        // Calculate the correct sequence numbers based on the new visual order
+        const updatedStops = newStops.map((stop: TruckloadStop, index: number) => {
+          const newSequenceNumber = newStops.length - index
+          return {
+            ...stop,
+            sequence_number: newSequenceNumber
+          }
+        })
+        
+        // Update sequence numbers in the database
+        try {
+          const response = await fetch(`/api/truckloads/${truckloadId}/reorder`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              orders: updatedStops.map(stop => ({
+                id: stop.id,
+                assignment_type: stop.assignment_type,
+                sequence_number: stop.sequence_number
+              }))
+            })
+          })
+          
+          if (!response.ok) {
+            throw new Error('Failed to update stop order')
+          }
+          
+          const data = await response.json()
+          if (!data.success) {
+            throw new Error(data.error || 'Failed to update stop order')
+          }
+
+          // Update local state with the new sequence numbers
+          setStops(updatedStops)
+          
+          // Invalidate the truckload-stops query to refresh the left side panel
+          queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
+          
+          // Also notify the parent component if callback is provided
+          if (onStopsUpdate) {
+            onStopsUpdate()
+          }
+          
+        } catch (error) {
+          console.error('Error updating stop order:', error)
+          // Revert to original order if update fails
+          fetchStops()
+        } finally {
+          setIsReordering(false)
+        }
+      }
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-1.5">
@@ -141,231 +1055,41 @@ export function TruckloadStopsList({ truckloadId }: TruckloadStopsListProps) {
     )
   }
 
+  // Group stops by customer
+  const groupedStops = groupStopsByCustomer(stops)
+
   return (
     <TooltipProvider>
       <ScrollArea className="h-full pr-2">
-        <div className="space-y-2.5">
-          {stops.map((stop) => (
-            <Card key={`${stop.id}-${stop.assignment_type}`} className="py-2.5 px-3 relative">
-              <div className="absolute top-0 left-0 h-full w-1.5" 
-                style={{ 
-                  backgroundColor: stop.assignment_type === 'pickup' ? '#ef4444' : '#000000'
-                }} 
-              />
-              
-              <div className="pl-2.5">
-                {/* Header row with sequence, type, flags and date */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-medium text-base">#{stop.sequence_number}</span>
-                    <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-sm h-6 px-2">
-                      {stop.assignment_type === 'pickup' ? (
-                        <><ArrowUp className="h-3.5 w-3.5 mr-0.5" /> Pickup</>
-                      ) : (
-                        <><ArrowDown className="h-3.5 w-3.5 mr-0.5" /> Delivery</>
-                      )}
-                    </Badge>
-                    {stop.is_transfer_order && (
-                      <Badge variant="outline" className="text-sm h-6 px-2 bg-blue-50 text-blue-800 border-blue-200">
-                        Transfer
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
-                  </div>
-                </div>
-
-                {/* Locations row */}
-                <div className="grid grid-cols-2 gap-2 mt-1.5">
-                  <div>
-                    <div className="text-sm text-gray-500 leading-tight">
-                      {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
-                    </div>
-                    <div className={`truncate leading-tight ${
-                      stop.assignment_type === 'pickup' 
-                        ? 'text-lg font-bold' 
-                        : 'text-base font-medium text-gray-700'
-                    }`}>
-                      {stop.pickup_customer.name}
-                    </div>
-                    <div className="text-sm text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 leading-tight">
-                      {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
-                    </div>
-                    <div className={`truncate leading-tight ${
-                      stop.assignment_type === 'delivery' 
-                        ? 'text-lg font-bold' 
-                        : 'text-base font-medium text-gray-700'
-                    }`}>
-                      {stop.delivery_customer.name}
-                    </div>
-                    <div className="text-sm text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
-                  </div>
-                </div>
-
-                {/* Bottom section with freight info and action icons */}
-                <div className="flex justify-between items-center mt-1.5">
-                  {/* Freight info */}
-                  <div className="flex items-center gap-3 text-sm">
-                    {stop.footage > 0 && (
-                      <div>
-                        <span className="text-gray-500">Ft:</span> {Math.round(stop.footage)}
-                      </div>
-                    )}
-                    {stop.skids > 0 && (
-                      <div>
-                        <span className="text-gray-500">Skids:</span> {stop.skids}
-                      </div>
-                    )}
-                    {stop.vinyl > 0 && (
-                      <div>
-                        <span className="text-gray-500">Vinyl:</span> {stop.vinyl}
-                      </div>
-                    )}
-                    {stop.is_transfer_order && (
-                      <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200">
-                        Transfer
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Action Icons */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Rush Icon */}
-                    {stop.is_rush && (
-                      <div className="relative group">
-                        <Button 
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
-                        >
-                          <Zap className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                          <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                            Rush Order
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Attention Icon */}
-                    {stop.needs_attention && (
-                      <div className="relative group">
-                        <Button 
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800"
-                        >
-                          <AlertCircle className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                          <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                            Needs Attention
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Comments Icon */}
-                    {stop.comments && (
-                      <div className="relative group">
-                        <Button 
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                          <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded max-w-xs break-words">
-                            {stop.comments}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Bill of Lading Icon */}
-                    <div className="relative group">
-                      <BillOfLadingDialog 
-                        order={{
-                          id: stop.id.toString(),
-                          shipper: {
-                            name: stop.pickup_customer.name,
-                            address: stop.pickup_customer.address,
-                            phone: stop.pickup_customer.phone || '',
-                            phone2: stop.pickup_customer.phone2 || ''
-                          },
-                          consignee: {
-                            name: stop.delivery_customer.name,
-                            address: stop.delivery_customer.address,
-                            phone: stop.delivery_customer.phone || '',
-                            phone2: stop.delivery_customer.phone2 || ''
-                          },
-                          items: [
-                            ...(stop.skids_data || []).map(skid => ({
-                              packages: skid.quantity || 0,
-                              description: `Skid ${skid.width}x${skid.length}`,
-                              weight: 0,
-                              charges: 0
-                            })),
-                            ...(stop.vinyl_data || []).map(vinyl => ({
-                              packages: vinyl.quantity || 0,
-                              description: `Vinyl ${vinyl.width}x${vinyl.length}`,
-                              weight: 0,
-                              charges: 0
-                            }))
-                          ]
-                        }} 
-                      >
-                        <Button 
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
-                        >
-                          <FileText className="h-4.5 w-4.5" />
-                        </Button>
-                      </BillOfLadingDialog>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                        <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                          Bill of Lading
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Info Icon */}
-                    <div className="relative group">
-                      <Button 
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
-                        onClick={() => handleOrderInfoClick(stop.id)}
-                      >
-                        <Info className="h-4.5 w-4.5" />
-                      </Button>
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                        <div className="bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                          View Order Details
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={rectIntersection}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={groupedStops.map(group => `group-${group.groupKey}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-2.5">
+              {groupedStops.map((group) => (
+                <SortableGroupedStop
+                  key={`group-${group.groupKey}-${group.sequenceNumber}`}
+                  groupedStop={group}
+                  onOrderInfoClick={handleOrderInfoClick}
+                  onStopUpdate={fetchStops}
+                  truckloadId={truckloadId}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </ScrollArea>
 
-      {/* Order Info Dialog */}
       {selectedOrderId && (
         <OrderInfoDialog
+          orderId={selectedOrderId}
           isOpen={isOrderInfoOpen}
           onClose={handleOrderInfoClose}
-          orderId={selectedOrderId}
           onOrderUpdate={handleOrderUpdate}
         />
       )}

@@ -65,23 +65,25 @@ const handler = NextAuth({
   debug: process.env.NODE_ENV !== "production",
   callbacks: {
     async jwt({ token, user }) {
-      // Include additional user details in the JWT
       if (user) {
         console.log("JWT callback - user found:", user.username)
         token.id = user.id
         token.username = user.username
-        token.role = user.role
+        token.role = ((user as any).role as string) as 'admin' | 'user' | 'driver'
       }
       return token
     },
     async session({ session, token }) {
-      // Make user details available in the session
-      if (session.user) {
-        console.log("Session callback - updating session for user:", token.username)
-        session.user.id = token.id as string
-        session.user.username = token.username as string
-        session.user.role = token.role as string
-      }
+      const allowed = ['admin', 'user', 'driver'] as const
+      type Role = typeof allowed[number]
+
+      const incoming = String((token as any).role ?? '')
+      const role: Role = (allowed as readonly string[]).includes(incoming) ? (incoming as Role) : 'user'
+
+      ;(session.user as any).id = token.id as string
+      ;(session.user as any).username = token.username as string
+      ;(session.user as any).role = role
+
       return session
     },
     async redirect({ url, baseUrl }) {

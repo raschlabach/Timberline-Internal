@@ -1,4 +1,4 @@
-import { Customer, OrderLink } from './orders';
+import { Customer, OrderLink, HandBundleData } from './orders';
 import { SkidData } from './shared';
 
 // Simplified Customer type for presets
@@ -27,6 +27,7 @@ export interface OrderPreset {
   freightType: 'skidsVinyl' | 'footage';
   skidsVinyl: SkidData[];
   footage: number;
+  handBundles: HandBundleData[];
   comments: string;
   freightQuote: string;
   statusFlags: {
@@ -34,6 +35,7 @@ export interface OrderPreset {
     needsAttention: boolean;
   };
   links: OrderLink[];
+  isFavorite: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +58,7 @@ export interface CreatePresetRequest {
   freightType: 'skidsVinyl' | 'footage';
   skidsVinyl: SkidData[];
   footage: number;
+  handBundles: HandBundleData[];
   comments: string;
   freightQuote: string;
   statusFlags: {

@@ -1,16 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { CustomerSelector } from '@/components/orders/customer-selector';
 import { FilterToggle } from '@/components/orders/filter-toggle';
 import { SkidsVinylEntry } from '@/components/orders/skids-vinyl-entry';
 import { FootageEntry } from '@/components/orders/footage-entry';
+import { HandBundleEntry } from '@/components/orders/hand-bundle-entry';
 import { DatePicker } from '@/components/orders/date-picker';
 import { StatusFlags } from '@/components/orders/status-flags';
 import { OrderLinks } from '@/components/orders/order-links';
@@ -22,17 +26,21 @@ import {
   OrderFormState, 
   OrderLink, 
   SkidData,
+  HandBundleData,
   FilterToggleProps,
   SkidsVinylEntryProps,
   FootageEntryProps,
+  HandBundleEntryProps,
   DatePickerProps,
   StatusFlagsProps,
   SkidEntryRowProps,
   CustomerSelectorProps
 } from '@/types/orders';
 import { OrderCustomer, convertToOrderCustomer } from "@/types/shared";
+import { ChevronDown } from "lucide-react";
 
 export default function OrderEntryPage() {
+  const router = useRouter();
   const [formState, setFormState] = useState<OrderFormState>({
     pickupCustomer: null,
     deliveryCustomer: null,
@@ -49,6 +57,7 @@ export default function OrderEntryPage() {
     freightType: 'skidsVinyl',
     skidsVinyl: [],
     footage: 0,
+    handBundles: [],
     pickupDate: null,
     comments: '',
     freightQuote: '',
@@ -60,12 +69,59 @@ export default function OrderEntryPage() {
   });
 
   const [isPresetDialogOpen, setIsPresetDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<'presets' | 'recent'>('presets');
+  const [isHandBundlesOpen, setIsHandBundlesOpen] = useState(false);
+
+  // Auto-open hand bundles section when hand bundles are added
+  useEffect(() => {
+    if (formState.handBundles.length > 0 && !isHandBundlesOpen) {
+      setIsHandBundlesOpen(true);
+    }
+  }, [formState.handBundles.length, isHandBundlesOpen]);
+
+  // Validation function
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formState.pickupCustomer) {
+      errors.pickupCustomer = 'Pickup Customer is required';
+    }
+    
+    if (!formState.deliveryCustomer) {
+      errors.deliveryCustomer = 'Delivery Customer is required';
+    }
+    
+    if (formState.freightType === 'skidsVinyl' && formState.skidsVinyl.length === 0) {
+      errors.freight = 'Please add at least one skid or vinyl item';
+    }
+    
+    if (formState.freightType === 'footage' && formState.footage <= 0) {
+      errors.footage = 'Please enter a valid footage amount';
+    }
+    
+    if (!formState.pickupDate) {
+      errors.pickupDate = 'Pickup Date is required';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleCustomerSelect = (type: 'pickupCustomer' | 'deliveryCustomer' | 'payingCustomer', customer: Customer | null) => {
     setFormState(prev => ({
       ...prev,
       [type]: customer
     }));
+    // Clear validation error for this field
+    if (validationErrors[type]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[type];
+        return newErrors;
+      });
+    }
   };
 
   const handleFilterChange = useCallback((filter: keyof OrderFormState['filters'], checked: boolean): void => {
@@ -90,12 +146,35 @@ export default function OrderEntryPage() {
       ...prev,
       skidsVinyl: skids
     }));
-  }, []);
+    // Clear freight validation error
+    if (validationErrors.freight) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.freight;
+        return newErrors;
+      });
+    }
+  }, [validationErrors.freight]);
 
   const handleFootageChange = useCallback((footage: number): void => {
     setFormState(prev => ({
       ...prev,
       footage
+    }));
+    // Clear footage validation error
+    if (validationErrors.footage) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.footage;
+        return newErrors;
+      });
+    }
+  }, [validationErrors.footage]);
+
+  const handleHandBundlesChange = useCallback((handBundles: HandBundleData[]): void => {
+    setFormState(prev => ({
+      ...prev,
+      handBundles
     }));
   }, []);
 
@@ -104,7 +183,15 @@ export default function OrderEntryPage() {
       ...prev,
       pickupDate: date
     }));
-  }, []);
+    // Clear pickup date validation error
+    if (validationErrors.pickupDate) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.pickupDate;
+        return newErrors;
+      });
+    }
+  }, [validationErrors.pickupDate]);
 
   const handleCommentsChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>): void => {
     setFormState(prev => ({
@@ -150,32 +237,17 @@ export default function OrderEntryPage() {
 
   // Handle form submission
   const handleSubmit = async () => {
-    // Validate required fields
-    if (!formState.pickupCustomer) {
-      alert('Pickup Customer is required');
-      return;
-    }
+    // Clear previous validation errors
+    setValidationErrors({});
     
-    if (!formState.deliveryCustomer) {
-      alert('Delivery Customer is required');
-      return;
-    }
-    
-    if (formState.freightType === 'skidsVinyl' && formState.skidsVinyl.length === 0) {
-      alert('Please add at least one skid or vinyl item');
-      return;
-    }
-    
-    if (formState.freightType === 'footage' && formState.footage <= 0) {
-      alert('Please enter a valid footage amount');
-      return;
-    }
-    
-    if (!formState.pickupDate) {
-      alert('Pickup Date is required');
+    // Validate form
+    if (!validateForm()) {
+      toast.error('Please fix the validation errors before submitting');
       return;
     }
 
+    setIsSubmitting(true);
+    
     try {
       const response = await fetch('/api/orders', {
         method: 'POST',
@@ -190,6 +262,7 @@ export default function OrderEntryPage() {
           freightType: formState.freightType,
           skidsVinyl: formState.skidsVinyl,
           footage: formState.footage,
+          handBundles: formState.handBundles,
           pickupDate: formState.pickupDate,
           comments: formState.comments,
           freightQuote: formState.freightQuote ? parseFloat(formState.freightQuote) : null,
@@ -210,94 +283,148 @@ export default function OrderEntryPage() {
         detail: { orderId: result.orderId }
       }));
       
-      alert('Order created successfully!');
+      toast.success('Order created successfully!');
       
       // Clear the form by resetting to initial state
-      setFormState({
-        pickupCustomer: null,
-        deliveryCustomer: null,
-        payingCustomer: null,
-        filters: {
-          ohioToIndiana: false,
-          backhaul: false,
-          localFlatbed: false,
-          rrOrder: false,
-          localSemi: false,
-          middlefield: false,
-          paNy: false,
-        },
-        freightType: 'skidsVinyl',
-        skidsVinyl: [],
-        footage: 0,
-        pickupDate: null,
-        comments: '',
-        freightQuote: '',
-        statusFlags: {
-          rushOrder: false,
-          needsAttention: false,
-        },
-        links: []
-      });
+      resetForm();
 
-      // TODO: Redirect to the order details page
-      // router.push(`/dashboard/orders/${result.orderId}`);
+      // Stay on the order entry page for continued order creation
       
     } catch (error) {
       console.error('Error creating order:', error);
-      alert(error instanceof Error ? error.message : 'Failed to create order');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create order';
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  // Reusable form reset function
+  const resetForm = useCallback(() => {
+    const initialState: OrderFormState = {
+      pickupCustomer: null,
+      deliveryCustomer: null,
+      payingCustomer: null,
+      filters: {
+        ohioToIndiana: false,
+        backhaul: false,
+        localFlatbed: false,
+        rrOrder: false,
+        localSemi: false,
+        middlefield: false,
+        paNy: false,
+      },
+      freightType: 'skidsVinyl' as const,
+      skidsVinyl: [],
+      footage: 0,
+      handBundles: [],
+      pickupDate: null,
+      comments: '',
+      freightQuote: '',
+      statusFlags: {
+        rushOrder: false,
+        needsAttention: false,
+      },
+      links: []
+    };
+    setFormState(initialState);
+    setValidationErrors({});
+    setIsHandBundlesOpen(false);
+  }, []);
 
   // Clear the form
   const handleClear = () => {
     if (confirm('Are you sure you want to clear all fields?')) {
       console.log('Clearing form state...');
-      const initialState: OrderFormState = {
-        pickupCustomer: null,
-        deliveryCustomer: null,
-        payingCustomer: null,
-        filters: {
-          ohioToIndiana: false,
-          backhaul: false,
-          localFlatbed: false,
-          rrOrder: false,
-          localSemi: false,
-          middlefield: false,
-          paNy: false,
-        },
-        freightType: 'skidsVinyl' as const,
-        skidsVinyl: [],
-        footage: 0,
-        pickupDate: null,
-        comments: '',
-        freightQuote: '',
-        statusFlags: {
-          rushOrder: false,
-          needsAttention: false,
-        },
-        links: []
-      };
-      console.log('Setting form state to:', initialState);
-      setFormState(initialState);
+      resetForm();
     }
   };
 
   // Add this handler function before the return statement
   const handleLoadRecentOrder = (orderState: Partial<OrderFormState>) => {
-    setFormState(prev => ({
-      ...prev,
+    // Clear the form and load new data in a single state update
+    const initialState: OrderFormState = {
+      pickupCustomer: null,
+      deliveryCustomer: null,
+      payingCustomer: null,
+      filters: {
+        ohioToIndiana: false,
+        backhaul: false,
+        localFlatbed: false,
+        rrOrder: false,
+        localSemi: false,
+        middlefield: false,
+        paNy: false,
+      },
+      freightType: 'skidsVinyl' as const,
+      skidsVinyl: [],
+      footage: 0,
+      handBundles: [],
+      pickupDate: null,
+      comments: '',
+      freightQuote: '',
+      statusFlags: {
+        rushOrder: false,
+        needsAttention: false,
+      },
+      links: []
+    };
+    
+    setFormState({
+      ...initialState,
       ...orderState,
+      // Explicitly override fields that might be undefined in orderState
+      comments: typeof orderState.comments === 'string' ? orderState.comments : '',
+      freightQuote: typeof orderState.freightQuote === 'string' ? orderState.freightQuote : '',
+      footage: typeof orderState.footage === 'number' ? orderState.footage : 0,
+      skidsVinyl: Array.isArray(orderState.skidsVinyl) ? orderState.skidsVinyl : [],
       pickupDate: null // Reset pickup date as requested
-    }));
+    });
+    setValidationErrors({});
   };
 
   // Handle loading a preset
   const handleLoadPreset = (presetState: Partial<OrderFormState>) => {
-    setFormState(prev => ({
-      ...prev,
+    console.log('Loading preset with comments:', presetState.comments, 'Type:', typeof presetState.comments);
+    // Clear the form and load new data in a single state update
+    const initialState: OrderFormState = {
+      pickupCustomer: null,
+      deliveryCustomer: null,
+      payingCustomer: null,
+      filters: {
+        ohioToIndiana: false,
+        backhaul: false,
+        localFlatbed: false,
+        rrOrder: false,
+        localSemi: false,
+        middlefield: false,
+        paNy: false,
+      },
+      freightType: 'skidsVinyl' as const,
+      skidsVinyl: [],
+      footage: 0,
+      handBundles: [],
+      pickupDate: null,
+      comments: '',
+      freightQuote: '',
+      statusFlags: {
+        rushOrder: false,
+        needsAttention: false,
+      },
+      links: []
+    };
+    
+    setFormState({
+      ...initialState,
       ...presetState,
+      // Explicitly override fields that might be undefined in presetState
+      comments: typeof presetState.comments === 'string' ? presetState.comments : '',
+      freightQuote: typeof presetState.freightQuote === 'string' ? presetState.freightQuote : '',
+      footage: typeof presetState.footage === 'number' ? presetState.footage : 0,
+      skidsVinyl: Array.isArray(presetState.skidsVinyl) ? presetState.skidsVinyl : [],
       pickupDate: null // Reset pickup date as requested
-    }));
+    });
+    setValidationErrors({});
   };
 
   return (
@@ -308,53 +435,72 @@ export default function OrderEntryPage() {
         {/* Main Form Section - Takes up 6/12 of the page on large screens */}
         <div className="lg:col-span-6">
           {/* Form wrapper with visual styling */}
-          <div className="border-2 border-slate-200 rounded-xl p-4 bg-slate-50 space-y-6 relative">
-            <div className="absolute top-0 right-0 bg-primary text-white px-3 py-1 rounded-bl-lg rounded-tr-lg font-medium text-sm">
+          <form 
+            className="border-2 border-slate-200 rounded-xl p-3 bg-slate-50 space-y-3 relative"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            aria-label="Order Entry Form"
+          >
+            <div className="absolute top-0 right-0 bg-primary text-white px-3 py-1 rounded-bl-lg rounded-tr-lg font-medium text-sm" aria-hidden="true">
               ORDER FORM
             </div>
             
             {/* Section 1: Customer Selection */}
             <Card className="shadow-sm">
-              <CardHeader className="bg-slate-100 border-b">
-                <CardTitle className="flex items-center">
-                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-6 h-6 text-sm mr-2">1</span>
+              <CardHeader className="bg-slate-100 border-b py-3">
+                <CardTitle className="flex items-center text-sm">
+                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-5 h-5 text-xs mr-2" aria-hidden="true">1</span>
                   Customer Selection
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-4">
+              <CardContent className="pt-3">
+                <div className="space-y-2">
                   <div>
-                    <Label className="mb-2 block font-medium">
-                      Pickup Customer <span className="text-red-500">*</span>
+                    <Label htmlFor="pickup-customer" className="mb-1 block font-medium text-sm">
+                      Pickup Customer <span className="text-red-500" aria-label="required">*</span>
                     </Label>
-                    <CustomerSelector 
-                      label="Pickup Customer"
-                      required={true}
-                      selectedCustomer={formState.pickupCustomer}
-                      onSelectCustomer={(customer) => handleCustomerSelect('pickupCustomer', customer)}
-                    />
+                    <div id="pickup-customer">
+                      <CustomerSelector 
+                        label="Pickup Customer"
+                        required={true}
+                        selectedCustomer={formState.pickupCustomer}
+                        onSelectCustomer={(customer) => handleCustomerSelect('pickupCustomer', customer)}
+                      />
+                    </div>
+                    {validationErrors.pickupCustomer && (
+                      <p className="text-sm text-red-500 mt-1" role="alert" aria-live="polite">{validationErrors.pickupCustomer}</p>
+                    )}
                   </div>
                   
                   <div>
-                    <Label className="mb-2 block font-medium">
-                      Delivery Customer <span className="text-red-500">*</span>
+                    <Label htmlFor="delivery-customer" className="mb-1 block font-medium text-sm">
+                      Delivery Customer <span className="text-red-500" aria-label="required">*</span>
                     </Label>
-                    <CustomerSelector 
-                      label="Delivery Customer"
-                      required={true}
-                      selectedCustomer={formState.deliveryCustomer}
-                      onSelectCustomer={(customer) => handleCustomerSelect('deliveryCustomer', customer)}
-                    />
+                    <div id="delivery-customer">
+                      <CustomerSelector 
+                        label="Delivery Customer"
+                        required={true}
+                        selectedCustomer={formState.deliveryCustomer}
+                        onSelectCustomer={(customer) => handleCustomerSelect('deliveryCustomer', customer)}
+                      />
+                    </div>
+                    {validationErrors.deliveryCustomer && (
+                      <p className="text-sm text-red-500 mt-1" role="alert" aria-live="polite">{validationErrors.deliveryCustomer}</p>
+                    )}
                   </div>
                   
                   <div>
-                    <Label className="mb-2 block font-medium">Paying Customer</Label>
-                    <CustomerSelector 
-                      label="Paying Customer"
-                      required={false}
-                      selectedCustomer={formState.payingCustomer}
-                      onSelectCustomer={(customer) => handleCustomerSelect('payingCustomer', customer)}
-                    />
+                    <Label htmlFor="paying-customer" className="mb-1 block font-medium text-sm">Paying Customer</Label>
+                    <div id="paying-customer">
+                      <CustomerSelector 
+                        label="Paying Customer"
+                        required={false}
+                        selectedCustomer={formState.payingCustomer}
+                        onSelectCustomer={(customer) => handleCustomerSelect('payingCustomer', customer)}
+                      />
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -362,14 +508,14 @@ export default function OrderEntryPage() {
             
             {/* Section 2: Load Filters */}
             <Card className="shadow-sm">
-              <CardHeader className="bg-slate-100 border-b">
-                <CardTitle className="flex items-center">
-                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-6 h-6 text-sm mr-2">2</span>
+              <CardHeader className="bg-slate-100 border-b py-3">
+                <CardTitle className="flex items-center text-sm">
+                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-5 h-5 text-xs mr-2" aria-hidden="true">2</span>
                   Load Filters
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <CardContent className="pt-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <FilterToggle 
                     label="OH -> In" 
                     checked={formState.filters.ohioToIndiana} 
@@ -411,19 +557,19 @@ export default function OrderEntryPage() {
             
             {/* Section 3: Freight Entry */}
             <Card className="shadow-sm">
-              <CardHeader className="bg-slate-100 border-b">
-                <CardTitle className="flex items-center">
-                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-6 h-6 text-sm mr-2">3</span>
+              <CardHeader className="bg-slate-100 border-b py-3">
+                <CardTitle className="flex items-center text-sm">
+                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-5 h-5 text-xs mr-2" aria-hidden="true">3</span>
                   Freight Entry
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
+              <CardContent className="pt-3">
                 <Tabs 
                   defaultValue="skidsVinyl" 
                   value={formState.freightType}
                   onValueChange={(value) => handleFreightTypeChange(value as 'skidsVinyl' | 'footage')}
                 >
-                  <TabsList className="mb-4">
+                  <TabsList className="mb-2">
                     <TabsTrigger value="skidsVinyl">Skids / Vinyl</TabsTrigger>
                     <TabsTrigger value="footage">Footage</TabsTrigger>
                   </TabsList>
@@ -433,6 +579,9 @@ export default function OrderEntryPage() {
                       skidsVinyl={formState.skidsVinyl}
                       onUpdate={handleSkidsVinylChange}
                     />
+                    {validationErrors.freight && (
+                      <p className="text-sm text-red-500 mt-2" role="alert" aria-live="polite">{validationErrors.freight}</p>
+                    )}
                   </TabsContent>
                   
                   <TabsContent value="footage">
@@ -440,44 +589,85 @@ export default function OrderEntryPage() {
                       footage={formState.footage}
                       onUpdate={handleFootageChange}
                     />
+                    {validationErrors.footage && (
+                      <p className="text-sm text-red-500 mt-2" role="alert" aria-live="polite">{validationErrors.footage}</p>
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
             
-            {/* Section 4: Order Details */}
+            {/* Section 4: Hand Bundles */}
             <Card className="shadow-sm">
-              <CardHeader className="bg-slate-100 border-b">
-                <CardTitle className="flex items-center">
-                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-6 h-6 text-sm mr-2">4</span>
+              <Collapsible open={isHandBundlesOpen} onOpenChange={setIsHandBundlesOpen}>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="bg-slate-100 border-b py-3 cursor-pointer hover:bg-slate-200 transition-colors">
+                    <CardTitle className="flex items-center justify-between text-sm">
+                      <div className="flex items-center">
+                        <span className="flex items-center justify-center bg-primary text-white rounded-full w-5 h-5 text-xs mr-2" aria-hidden="true">4</span>
+                        Hand Bundles
+                        {formState.handBundles.length > 0 && (
+                          <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {formState.handBundles.length}
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${isHandBundlesOpen ? 'rotate-180' : ''}`} />
+                    </CardTitle>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-3">
+                    <p className="text-sm text-gray-600 mb-3">
+                      Add small hand bundles that don't count toward footage but need to be remembered.
+                    </p>
+                    <HandBundleEntry 
+                      handBundles={formState.handBundles}
+                      onUpdate={handleHandBundlesChange}
+                    />
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
+            
+            {/* Section 5: Order Details */}
+            <Card className="shadow-sm">
+              <CardHeader className="bg-slate-100 border-b py-3">
+                <CardTitle className="flex items-center text-sm">
+                  <span className="flex items-center justify-center bg-primary text-white rounded-full w-5 h-5 text-xs mr-2" aria-hidden="true">5</span>
                   Order Details
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-4">
+              <CardContent className="pt-3">
+                <div className="space-y-3">
                   <div>
-                    <Label className="mb-2 block font-medium">
-                      Pickup Date <span className="text-red-500">*</span>
+                    <Label htmlFor="pickup-date" className="mb-1 block font-medium text-sm">
+                      Pickup Date <span className="text-red-500" aria-label="required">*</span>
                     </Label>
-                    <DatePicker 
-                      date={formState.pickupDate}
-                      onSelect={handlePickupDateChange}
-                    />
+                    <div id="pickup-date">
+                      <DatePicker 
+                        date={formState.pickupDate}
+                        onSelect={handlePickupDateChange}
+                      />
+                    </div>
+                    {validationErrors.pickupDate && (
+                      <p className="text-sm text-red-500 mt-1" role="alert" aria-live="polite">{validationErrors.pickupDate}</p>
+                    )}
                   </div>
                   
                   <div>
-                    <Label htmlFor="comments" className="mb-2 block font-medium">Comments</Label>
+                    <Label htmlFor="comments" className="mb-1 block font-medium text-sm">Comments</Label>
                     <Textarea
                       id="comments"
                       placeholder="Enter any special instructions or notes about this order"
                       value={formState.comments}
                       onChange={handleCommentsChange}
-                      className="min-h-[100px]"
+                      className="min-h-[80px] text-sm"
                     />
                   </div>
                   
                   <div>
-                    <Label htmlFor="freightQuote" className="mb-2 block font-medium">Freight Quote</Label>
+                    <Label htmlFor="freightQuote" className="mb-1 block font-medium text-sm">Freight Quote</Label>
                     <div className="flex items-center">
                       <span className="mr-2">$</span>
                       <Input
@@ -500,7 +690,7 @@ export default function OrderEntryPage() {
                   </div>
                   
                   <div>
-                    <Label className="mb-2 block font-medium">Order Status</Label>
+                    <Label className="mb-1 block font-medium text-sm">Order Status</Label>
                     <StatusFlags
                       rushOrder={formState.statusFlags.rushOrder}
                       needsAttention={formState.statusFlags.needsAttention}
@@ -512,46 +702,78 @@ export default function OrderEntryPage() {
               </CardContent>
             </Card>
             
-            {/* Section 5: Action Buttons */}
-            <div className="flex justify-end space-x-4 pt-2">
-              <Button variant="outline" onClick={handleClear}>Clear</Button>
+            {/* Section 6: Action Buttons */}
+            <div className="flex justify-end space-x-3 pt-1">
               <Button 
+                type="button"
+                variant="outline" 
+                onClick={handleClear}
+                disabled={isSubmitting}
+              >
+                Clear
+              </Button>
+              <Button 
+                type="button"
                 variant="outline" 
                 onClick={() => setIsPresetDialogOpen(true)}
+                disabled={isSubmitting}
               >
                 Save as Preset
               </Button>
-              <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90">
-                Create Order
+              <Button 
+                type="submit"
+                onClick={handleSubmit} 
+                className="bg-primary hover:bg-primary/90"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Creating Order...' : 'Create Order'}
               </Button>
             </div>
             
-            <div className="text-xs text-slate-500 pt-2 text-center">
-              <span className="text-red-500">*</span> Required fields
+            <div className="text-xs text-slate-500 pt-1 text-center">
+              <span className="text-red-500" aria-label="required">*</span> Required fields
             </div>
-          </div>
+          </form>
         </div>
         
-        {/* Saved Presets Section - Takes up 3/12 of the page */}
-        <div className="lg:col-span-3">
-          <Card className="shadow-md border border-slate-200">
-            <CardHeader className="bg-slate-100 border-b">
-              <CardTitle>Saved Presets</CardTitle>
+        {/* Presets & Recent Orders Section - Takes up 6/12 of the page */}
+        <div className="lg:col-span-6">
+          <Card className="shadow-md border border-slate-200 h-[calc(100vh-8rem)] flex flex-col">
+            <CardHeader className="bg-slate-100 border-b flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <CardTitle>
+                  {activeTab === 'presets' ? 'Saved Presets' : 'Recent Orders'}
+                </CardTitle>
+                <div className="flex bg-slate-200 rounded-lg p-1">
+                  <button
+                    onClick={() => setActiveTab('presets')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'presets'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Presets
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('recent')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'recent'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Recent
+                  </button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="p-0">
-              <PresetsList onSelectPreset={handleLoadPreset} />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Orders Section - Takes up 3/12 of the page */}
-        <div className="lg:col-span-3">
-          <Card className="shadow-md border border-slate-200">
-            <CardHeader className="bg-slate-100 border-b">
-              <CardTitle>Recent Orders</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <RecentOrders onSelectOrder={handleLoadRecentOrder} />
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              {activeTab === 'presets' ? (
+                <PresetsList onSelectPreset={handleLoadPreset} />
+              ) : (
+                <RecentOrders onSelectOrder={handleLoadRecentOrder} />
+              )}
             </CardContent>
           </Card>
         </div>

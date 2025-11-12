@@ -57,6 +57,21 @@ export async function GET(
         WHERE order_id = $1
         GROUP BY order_id
       ),
+      hand_bundles_summary AS (
+        SELECT 
+          order_id,
+          COUNT(*) as hand_bundles_count,
+          json_agg(
+            json_build_object(
+              'id', id::text,
+              'quantity', quantity,
+              'description', description
+            )
+          ) as hand_bundles_data
+        FROM freight_items
+        WHERE type = 'hand_bundle' AND order_id = $1
+        GROUP BY order_id
+      ),
       pickup_assignments AS (
         SELECT 
           toa.order_id,
@@ -124,8 +139,10 @@ export async function GET(
           WHEN f.square_footage > 0 THEN f.square_footage
           ELSE COALESCE(ss.total_skid_footage, 0) + COALESCE(vs.total_vinyl_footage, 0)
         END as footage,
+        COALESCE(hbs.hand_bundles_count, 0) as "handBundles",
         COALESCE(ss.skids_data, '[]'::json) as "skidsData",
         COALESCE(vs.vinyl_data, '[]'::json) as "vinylData",
+        COALESCE(hbs.hand_bundles_data, '[]'::json) as "handBundlesData",
         -- Assignment details
         CASE WHEN pa.truckload_id IS NOT NULL THEN
           json_build_object(
@@ -181,6 +198,7 @@ export async function GET(
       -- Join with freight data
       LEFT JOIN skids_summary ss ON o.id = ss.order_id
       LEFT JOIN vinyl_summary vs ON o.id = vs.order_id
+      LEFT JOIN hand_bundles_summary hbs ON o.id = hbs.order_id
       LEFT JOIN footage f ON o.id = f.order_id
       -- Join with assignments
       LEFT JOIN pickup_assignments pa ON o.id = pa.order_id

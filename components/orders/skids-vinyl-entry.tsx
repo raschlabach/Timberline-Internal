@@ -15,34 +15,32 @@ interface SkidsVinylEntryProps {
 
 export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) {
   const [items, setItems] = useState<SkidData[]>(skidsVinyl);
-  const initialRenderRef = useRef(true);
+  const isInitialMount = useRef(true);
 
-  // Update parent component when local state changes, but not on initial render
+  // Sync local state with props when they change
   useEffect(() => {
-    if (initialRenderRef.current) {
-      initialRenderRef.current = false;
+    // Skip the first render to avoid unnecessary updates
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    setItems(skidsVinyl);
+  }, [skidsVinyl]);
+
+  // Update parent when local state changes (debounced)
+  useEffect(() => {
+    // Skip the first render to avoid unnecessary updates
+    if (isInitialMount.current) {
       return;
     }
 
-    // Only update parent if the items have changed from what was passed in
-    if (JSON.stringify(items) !== JSON.stringify(skidsVinyl)) {
+    const timeoutId = setTimeout(() => {
       onUpdate(items);
-    }
-  }, [items, onUpdate, skidsVinyl]);
+    }, 100); // Reduced debounce time for better responsiveness
 
-  // Effect to sync with parent state
-  useEffect(() => {
-    console.log('SkidsVinylEntry received new props:', { skidsVinyl, currentItems: items });
-    
-    // Always update local state to match props
-    setItems(skidsVinyl);
-    
-    // If this is a reset (empty array), also reset the initialRenderRef
-    if (skidsVinyl.length === 0) {
-      console.log('Resetting initialRenderRef due to empty skidsVinyl');
-      initialRenderRef.current = true;
-    }
-  }, [skidsVinyl]);
+    return () => clearTimeout(timeoutId);
+  }, [items, onUpdate]);
 
   // Calculate the next number for a type
   const getNextNumber = useCallback((type: 'skid' | 'vinyl'): number => {
@@ -73,35 +71,53 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
     return [...renumbered, ...otherItems];
   }, []);
 
-  // Add a new skid
-  const addSkid = useCallback(() => {
+  // Add a new skid with specified dimensions
+  const addSkid = useCallback((width: number, length: number) => {
     const nextNumber = getNextNumber('skid');
+    const footage = width * length;
+    
     const newSkid: SkidData = {
       id: uuidv4(),
       number: nextNumber,
-      width: 0,
-      length: 0,
-      footage: 0,
+      width: width,
+      length: length,
+      footage: footage,
       type: 'skid'
     };
     
-    console.log(`Adding Skid ${nextNumber}`);
+    console.log(`Adding Skid ${nextNumber} with dimensions ${width}x${length}`);
     setItems(prevItems => [...prevItems, newSkid]);
   }, [getNextNumber]);
+
+  // Add a 4x4 skid
+  const addSkid4x4 = useCallback(() => {
+    addSkid(4, 4);
+  }, [addSkid]);
+
+  // Add a 4x3 skid
+  const addSkid4x3 = useCallback(() => {
+    addSkid(4, 3);
+  }, [addSkid]);
 
   // Add a new vinyl
   const addVinyl = useCallback(() => {
     const nextNumber = getNextNumber('vinyl');
+    
+    // Set default dimensions for vinyl (4x12 for all customers)
+    const defaultWidth = 4;
+    const defaultLength = 12;
+    const defaultFootage = defaultWidth * defaultLength;
+    
     const newVinyl: SkidData = {
       id: uuidv4(),
       number: nextNumber,
-      width: 0,
-      length: 0,
-      footage: 0,
+      width: defaultWidth,
+      length: defaultLength,
+      footage: defaultFootage,
       type: 'vinyl'
     };
     
-    console.log(`Adding Vinyl ${nextNumber}`);
+    console.log(`Adding Vinyl ${nextNumber} with default dimensions ${defaultWidth}x${defaultLength}`);
     setItems(prevItems => [...prevItems, newVinyl]);
   }, [getNextNumber]);
 
@@ -148,9 +164,9 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
   const totalFootage = items.reduce((sum, item) => sum + item.footage, 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Display all skids and vinyl */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         {items.length === 0 ? (
           <p className="text-gray-500 text-center py-4">
             No items added yet. Add skids or vinyl using the buttons below.
@@ -158,7 +174,7 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
         ) : (
           <>
             {/* Header */}
-            <div className="grid grid-cols-12 gap-2 font-medium text-sm text-gray-500 mb-2">
+            <div className="grid grid-cols-12 gap-2 font-medium text-xs text-gray-500 mb-1">
               <div className="col-span-2">Item</div>
               <div className="col-span-3">Width</div>
               <div className="col-span-1"></div>
@@ -179,25 +195,37 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
             ))}
             
             {/* Total footage */}
-            <div className="border-t pt-2 mt-4 flex justify-between">
-              <span className="font-medium">Total Footage:</span>
-              <span className="font-medium">{totalFootage.toFixed(2)} ft²</span>
+            <div className="border-t pt-1 mt-2 flex justify-between">
+              <span className="font-medium text-sm">Total Footage:</span>
+              <span className="font-medium text-sm">{totalFootage.toFixed(2)} ft²</span>
             </div>
           </>
         )}
       </div>
       
       {/* Add buttons */}
-      <div className="flex gap-2">
-        <Button 
-          type="button" 
-          variant="outline" 
-          onClick={addSkid}
-          className="flex-1"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Skid
-        </Button>
+      <div className="flex gap-2 mt-2">
+        <div className="flex gap-1 flex-1">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={addSkid4x4}
+            className="flex-1"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add 4×4 Skid
+          </Button>
+          
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={addSkid4x3}
+            className="flex-1"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add 4×3 Skid
+          </Button>
+        </div>
         
         <Button 
           type="button" 

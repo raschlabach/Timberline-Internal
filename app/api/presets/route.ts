@@ -53,6 +53,20 @@ export async function GET(): Promise<NextResponse<PresetResponse>> {
             (
               SELECT json_agg(
                 json_build_object(
+                  'id', hb.id::text,
+                  'quantity', hb.quantity,
+                  'description', hb.description
+                )
+              )
+              FROM preset_hand_bundles hb
+              WHERE hb.preset_id = p.id
+            ),
+            '[]'::json
+          ) as hand_bundles,
+          COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
                   'url', l.url,
                   'description', l.description
                 )
@@ -68,7 +82,7 @@ export async function GET(): Promise<NextResponse<PresetResponse>> {
         LEFT JOIN customers dc ON p.delivery_customer_id = dc.id
         LEFT JOIN locations dl ON dc.location_id = dl.id
         LEFT JOIN customers payc ON p.paying_customer_id = payc.id
-        ORDER BY p.name ASC
+        ORDER BY p.display_order ASC, p.name ASC
       `);
 
       console.log('Raw database result:', result.rows);
@@ -79,6 +93,7 @@ export async function GET(): Promise<NextResponse<PresetResponse>> {
           
           // Parse JSON strings if they're strings
           const skidsVinyl = typeof row.skids_vinyl === 'string' ? JSON.parse(row.skids_vinyl) : row.skids_vinyl;
+          const handBundles = typeof row.hand_bundles === 'string' ? JSON.parse(row.hand_bundles) : row.hand_bundles;
           const links = typeof row.links === 'string' ? JSON.parse(row.links) : row.links;
           
           return {
@@ -111,6 +126,7 @@ export async function GET(): Promise<NextResponse<PresetResponse>> {
             freightType: row.freight_type || 'skidsVinyl',
             skidsVinyl: Array.isArray(skidsVinyl) ? skidsVinyl : [],
             footage: row.footage || 0,
+            handBundles: Array.isArray(handBundles) ? handBundles : [],
             comments: row.comments || '',
             freightQuote: row.freight_quote?.toString() || '',
             statusFlags: {
@@ -118,6 +134,7 @@ export async function GET(): Promise<NextResponse<PresetResponse>> {
               needsAttention: row.needs_attention || false
             },
             links: Array.isArray(links) ? links : [],
+            isFavorite: row.is_favorite || false,
             createdAt: row.created_at,
             updatedAt: row.updated_at
           };
@@ -161,7 +178,22 @@ export async function GET(): Promise<NextResponse<PresetResponse>> {
 // POST /api/presets - Create a new preset
 export async function POST(request: NextRequest): Promise<NextResponse<PresetResponse>> {
   try {
+    console.log('POST /api/presets called');
     const session = await getSession();
+    console.log('Session:', session);
+    
+    if (!session?.user?.id) {
+      console.log('No session found, returning 401');
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unauthorized',
+          error: 'Unauthorized'
+        },
+        { status: 401 }
+      );
+    }
+    
     const data: CreatePresetRequest = await request.json();
 
     console.log('Creating preset with data:', {
@@ -175,6 +207,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<PresetRes
     await query('BEGIN');
 
     try {
+      // Get the next display_order value
+      const maxOrderResult = await query('SELECT COALESCE(MAX(display_order), 0) + 1 as next_order FROM order_presets');
+      const nextDisplayOrder = maxOrderResult.rows[0].next_order;
+
       // Insert the preset
       const presetResult = await query(
         `INSERT INTO order_presets (
@@ -196,7 +232,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<PresetRes
           rr_order,
           middlefield,
           pa_ny,
-          created_by
+          display_order
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING id`,
         [
@@ -218,7 +254,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<PresetRes
           data.filters?.rrOrder || false,
           data.filters?.middlefield || false,
           data.filters?.paNy || false,
-          session.user.id
+          nextDisplayOrder
         ]
       );
 
@@ -245,6 +281,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<PresetRes
               item.length,
               item.footage,
               item.number
+            ]
+          );
+        }
+      }
+
+      // Insert hand bundles if present
+      if (data.handBundles?.length > 0) {
+        console.log('Adding hand bundles:', data.handBundles);
+        for (const handBundle of data.handBundles) {
+          await query(
+            `INSERT INTO preset_hand_bundles (
+              preset_id,
+              quantity,
+              description
+            ) VALUES ($1, $2, $3)`,
+            [
+              presetId,
+              handBundle.quantity,
+              handBundle.description
             ]
           );
         }
@@ -278,7 +333,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<PresetRes
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
-      });
+      } as PresetResponse);
 
     } catch (error) {
       // Rollback on error
@@ -293,7 +348,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<PresetRes
         success: false, 
         message: error instanceof Error ? error.message : 'Failed to create preset',
         error: error instanceof Error ? error.stack : undefined
-      },
+      } as PresetResponse,
       { status: 500 }
     );
   }

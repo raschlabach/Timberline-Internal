@@ -1,21 +1,30 @@
 import { NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { hash } from 'bcrypt'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET /api/drivers - Get all drivers
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    console.log('Fetching drivers...')
     const result = await query(`
       SELECT 
         u.id,
-        u.full_name as "fullName",
-        u.username,
+        u.full_name,
         d.color
       FROM users u
-      INNER JOIN drivers d ON u.id = d.user_id
+      JOIN drivers d ON u.id = d.user_id
       WHERE u.role = 'driver'
-      ORDER BY u.full_name ASC
+      ORDER BY u.full_name
     `)
+
+    console.log('Drivers query result:', result.rows)
 
     return NextResponse.json({
       success: true,
@@ -35,18 +44,25 @@ export async function POST(request: Request) {
   const client = await getClient()
   
   try {
-    const { fullName, username, password, color } = await request.json()
+    const { fullName, color } = await request.json()
+
+    if (!fullName || !color) {
+      return NextResponse.json({
+        success: false,
+        error: 'Full name and color are required'
+      }, { status: 400 })
+    }
 
     // Start a transaction since we need to insert into two tables
     await client.query('BEGIN')
 
     try {
-      // Insert into users table first
+      // Insert into users table first (no username/password needed)
       const userResult = await client.query(
         `INSERT INTO users (full_name, username, password_hash, role)
-         VALUES ($1, $2, $3, 'driver')
+         VALUES ($1, NULL, NULL, 'driver')
          RETURNING id`,
-        [fullName, username || null, password ? await hash(password, 10) : null]
+        [fullName.trim()]
       )
 
       // Insert into drivers table
@@ -82,26 +98,26 @@ export async function PUT(request: Request) {
   const client = await getClient()
   
   try {
-    const { id, fullName, username, password, color } = await request.json()
+    const { id, fullName, color } = await request.json()
+
+    if (!id || !fullName || !color) {
+      return NextResponse.json({
+        success: false,
+        error: 'ID, full name, and color are required'
+      }, { status: 400 })
+    }
 
     // Start a transaction
     await client.query('BEGIN')
 
     try {
-      // Update users table
-      const userUpdateQuery = password
-        ? `UPDATE users 
-           SET full_name = $1, username = $2, password_hash = $3
-           WHERE id = $4`
-        : `UPDATE users 
-           SET full_name = $1, username = $2
-           WHERE id = $4`
-
-      const userParams = password
-        ? [fullName, username || null, await hash(password, 10), id]
-        : [fullName, username || null, id]
-
-      await client.query(userUpdateQuery, userParams)
+      // Update users table (only full name, no username/password changes)
+      await client.query(
+        `UPDATE users 
+         SET full_name = $1
+         WHERE id = $2`,
+        [fullName.trim(), id]
+      )
 
       // Update drivers table
       await client.query(

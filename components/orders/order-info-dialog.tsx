@@ -10,13 +10,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CustomerSelector } from "@/components/orders/customer-selector";
 import { SkidsVinylEntry } from "@/components/orders/skids-vinyl-entry";
+import { HandBundleEntry } from "@/components/orders/hand-bundle-entry";
 import { toast } from 'sonner';
-import { OrderData, OrderCustomer, SkidData, Customer, convertToOrderCustomer } from '@/types/shared';
+import { OrderData, OrderCustomer, SkidData, HandBundleData, Customer, convertToOrderCustomer } from '@/types/shared';
 import { AssignOrderDialog } from "@/components/orders/assign-order-dialog";
 import { CustomerEditModal } from "@/components/customer/customer-edit-modal";
-import { Edit } from "lucide-react";
+import { Edit, ChevronDown } from "lucide-react";
 
 interface OrderInfoDialogProps {
   isOpen: boolean;
@@ -40,6 +42,14 @@ export function OrderInfoDialog({
   const [assignmentType, setAssignmentType] = useState<'pickup' | 'delivery'>('pickup');
   const [isCustomerEditModalOpen, setIsCustomerEditModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<OrderCustomer | null>(null);
+  const [isHandBundlesOpen, setIsHandBundlesOpen] = useState(false);
+
+  // Auto-open hand bundles section when hand bundles are present
+  useEffect(() => {
+    if (formData?.handBundlesData && formData.handBundlesData.length > 0 && !isHandBundlesOpen) {
+      setIsHandBundlesOpen(true);
+    }
+  }, [formData?.handBundlesData, isHandBundlesOpen]);
 
   useEffect(() => {
     if (isOpen && orderId) {
@@ -75,23 +85,30 @@ export function OrderInfoDialog({
         skids: data.skids || 0,
         vinyl: data.vinyl || 0,
         footage: data.footage || 0,
-        skidsData: Array.isArray(data.skidsData) ? data.skidsData.map((skid: any) => ({
-          id: skid.id || 0,
-          type: 'skid' as const,
-          width: skid.width || 0,
-          length: skid.length || 0,
-          footage: skid.footage || 0,
-          quantity: skid.quantity || 0,
-          number: skid.number || 0
-        })) : [],
-        vinylData: Array.isArray(data.vinylData) ? data.vinylData.map((vinyl: any) => ({
-          id: vinyl.id || 0,
-          type: 'vinyl' as const,
-          width: vinyl.width || 0,
-          length: vinyl.length || 0,
-          footage: vinyl.footage || 0,
-          quantity: vinyl.quantity || 0
-        })) : [],
+        skidsData: Array.isArray(data.skidsData) ? data.skidsData.flatMap((skid: any, index: number) => {
+          // Expand items with quantity > 1 into multiple individual items
+          const quantity = skid.quantity || 1;
+          return Array.from({ length: quantity }, (_, i) => ({
+            id: `${skid.id || index}-${i}`,
+            type: 'skid' as const,
+            width: skid.width || 0,
+            length: skid.length || 0,
+            footage: skid.footage || 0,
+            number: i + 1 // Will be renumbered by SkidsVinylEntry
+          }));
+        }) : [],
+        vinylData: Array.isArray(data.vinylData) ? data.vinylData.flatMap((vinyl: any, index: number) => {
+          // Expand items with quantity > 1 into multiple individual items
+          const quantity = vinyl.quantity || 1;
+          return Array.from({ length: quantity }, (_, i) => ({
+            id: `${vinyl.id || index}-${i}`,
+            type: 'vinyl' as const,
+            width: vinyl.width || 0,
+            length: vinyl.length || 0,
+            footage: vinyl.footage || 0,
+            number: i + 1 // Will be renumbered by SkidsVinylEntry
+          }));
+        }) : [],
         pickupDate: data.pickupDate || '',
         isRushOrder: Boolean(data.isRushOrder),
         needsAttention: Boolean(data.needsAttention),
@@ -129,6 +146,23 @@ export function OrderInfoDialog({
     
     setIsSaving(true);
     try {
+      // Transform skidsData and vinylData to include quantity field (each item = quantity 1)
+      const skidsData = formData.skidsData.map(skid => ({
+        id: skid.id,
+        width: skid.width,
+        length: skid.length,
+        footage: skid.footage,
+        quantity: 1 // Each SkidData item represents a single skid
+      }));
+      
+      const vinylData = formData.vinylData.map(vinyl => ({
+        id: vinyl.id,
+        width: vinyl.width,
+        length: vinyl.length,
+        footage: vinyl.footage,
+        quantity: 1 // Each SkidData item represents a single vinyl
+      }));
+      
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -142,19 +176,22 @@ export function OrderInfoDialog({
           comments: formData.comments,
           freightQuote: formData.freightQuote,
           filters: formData.filters,
-          skidsData: formData.skidsData,
-          vinylData: formData.vinylData
+          skidsData: skidsData,
+          vinylData: vinylData
         })
       });
       
-      if (!response.ok) throw new Error('Failed to update order');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update order');
+      }
       
       toast.success('Order updated successfully');
       onOrderUpdate();
       onClose();
     } catch (error) {
       console.error('Error updating order:', error);
-      toast.error('Failed to update order');
+      toast.error(error instanceof Error ? error.message : 'Failed to update order');
     } finally {
       setIsSaving(false);
     }
@@ -221,6 +258,17 @@ export function OrderInfoDialog({
         ...prev,
         skidsData: items.filter((item: SkidData): item is SkidData => item.type === 'skid'),
         vinylData: items.filter((item: SkidData): item is SkidData => item.type === 'vinyl')
+      };
+    });
+  }
+
+  function handleHandBundlesChange(handBundles: HandBundleData[]) {
+    if (!formData) return;
+    setFormData(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        handBundlesData: handBundles
       };
     });
   }
@@ -413,6 +461,37 @@ export function OrderInfoDialog({
                   handleSkidsVinylChange([...skids, ...vinyl]);
                 }}
               />
+            </div>
+
+            {/* Hand Bundles Section */}
+            <div className="bg-white rounded-lg border shadow-sm">
+              <Collapsible open={isHandBundlesOpen} onOpenChange={setIsHandBundlesOpen}>
+                <CollapsibleTrigger asChild>
+                  <div className="p-6 pb-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                      <div className="flex items-center">
+                        Hand Bundles
+                        {formData.handBundlesData && formData.handBundlesData.length > 0 && (
+                          <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {formData.handBundlesData.length}
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className={`h-5 w-5 transition-transform ${isHandBundlesOpen ? 'rotate-180' : ''}`} />
+                    </h3>
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-6 pb-6">
+                    <HandBundleEntry
+                      handBundles={formData.handBundlesData || []}
+                      onUpdate={(handBundles: HandBundleData[]) => {
+                        handleHandBundlesChange(handBundles);
+                      }}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </div>
 
             {/* Load Filters Section */}

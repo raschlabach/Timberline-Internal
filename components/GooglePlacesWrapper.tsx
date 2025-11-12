@@ -13,6 +13,9 @@ export function GooglePlacesWrapper({ children, apiKey, isOpen = true }: GoogleP
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const [scriptError, setScriptError] = useState<string | null>(null)
   
+  // Validate API key
+  const isValidApiKey = apiKey && apiKey.length > 20
+  
   const handleScriptLoad = () => {
     console.log("Google Maps script loaded successfully")
     setScriptLoaded(true)
@@ -59,6 +62,17 @@ export function GooglePlacesWrapper({ children, apiKey, isOpen = true }: GoogleP
       return () => clearTimeout(timer)
     }
   }, [apiKey, scriptError, scriptLoaded])
+  
+  // If API key is invalid, show error message
+  if (!isValidApiKey) {
+    return (
+      <div className="p-4 border border-amber-300 bg-amber-50 rounded-md text-amber-700">
+        <p className="font-medium">Invalid Google Maps API Key</p>
+        <p className="text-sm mt-1">The Google Maps API key appears to be invalid or missing.</p>
+        <p className="text-xs mt-2">Please check your API key in the .env.local file and make sure it's properly set.</p>
+      </div>
+    )
+  }
   
   if (scriptError) {
     return (
