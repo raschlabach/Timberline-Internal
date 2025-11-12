@@ -252,20 +252,15 @@ export default function TruckloadManager() {
       })
   };
 
-  // Sort drivers by activity (most truckloads first, then by name)
-  // Use total truckload count (not filtered) to maintain consistent column order
-  const sortedDrivers = drivers.sort((a, b) => {
-    const aTotalTruckloads = truckloads.filter((t: TruckloadSummary) => t.driverId === a.id).length;
-    const bTotalTruckloads = truckloads.filter((t: TruckloadSummary) => t.driverId === b.id).length;
-    if (aTotalTruckloads !== bTotalTruckloads) {
-      return bTotalTruckloads - aTotalTruckloads; // Most active first
-    }
+  // Sort drivers by name (alphabetically) to ensure consistent order
+  // All drivers should be visible regardless of truckload count
+  const sortedDrivers = [...drivers].sort((a, b) => {
     return a.full_name.localeCompare(b.full_name);
   });
 
-  // Get drivers to display based on view mode
+  // Get drivers to display - always show ALL drivers
   const getDisplayDrivers = () => {
-    // Show all drivers in both compact and grid modes
+    // Show all drivers in both compact and grid modes, regardless of truckload count
     return sortedDrivers;
   };
 

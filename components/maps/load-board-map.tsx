@@ -548,7 +548,14 @@ export default function LoadBoardMap() {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/orders/recent');
+      // Add cache-busting timestamp to prevent 304 responses
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/orders/recent?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch orders');
       }
@@ -571,12 +578,14 @@ export default function LoadBoardMap() {
 
   // Listen for orderCreated event to refresh immediately
   useEffect(() => {
-    const handleOrderCreated = () => {
-      console.log('Order created event received, refreshing load board map...');
+    const handleOrderCreated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Order created event received, refreshing load board map...', customEvent.detail);
       fetchOrders();
     };
 
     window.addEventListener('orderCreated', handleOrderCreated);
+    console.log('Order created event listener registered for map');
     return () => {
       window.removeEventListener('orderCreated', handleOrderCreated);
     };

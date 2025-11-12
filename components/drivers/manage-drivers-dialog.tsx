@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Pencil, Trash2, UserPlus, Users, Palette } from 'lucide-react'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface Driver {
   id: number
@@ -38,6 +39,7 @@ const DRIVER_COLORS = [
 ]
 
 export function ManageDriversDialog() {
+  const queryClient = useQueryClient()
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [isEditing, setIsEditing] = useState<number | null>(null)
   const [formData, setFormData] = useState<DriverFormData>({
@@ -86,6 +88,8 @@ export function ManageDriversDialog() {
       if (data.success) {
         toast.success(isEditing ? 'Driver updated successfully' : 'Driver created successfully')
         fetchDrivers()
+        // Invalidate React Query cache so truckload manager refreshes
+        queryClient.invalidateQueries({ queryKey: ['drivers'] })
         resetForm()
       } else {
         toast.error(data.error || 'Failed to save driver')
@@ -108,6 +112,8 @@ export function ManageDriversDialog() {
       if (data.success) {
         toast.success('Driver deleted successfully')
         fetchDrivers()
+        // Invalidate React Query cache so truckload manager refreshes
+        queryClient.invalidateQueries({ queryKey: ['drivers'] })
       }
     } catch (error) {
       toast.error('Failed to delete driver')

@@ -245,7 +245,14 @@ function useLoadBoardOrders(
 
   const fetchOrders = useCallback(async () => {
     try {
-      const response = await fetch('/api/orders/recent');
+      // Add cache-busting timestamp to prevent 304 responses
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/orders/recent?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
       setOrders(data);
@@ -271,12 +278,15 @@ function useLoadBoardOrders(
 
   // Listen for orderCreated event to refresh immediately
   useEffect(() => {
-    const handleOrderCreated = () => {
-      console.log('Order created event received, refreshing load board...');
+    const handleOrderCreated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Order created event received, refreshing load board...', customEvent.detail);
+      // Force refresh by calling fetchOrders
       fetchOrders();
     };
 
     window.addEventListener('orderCreated', handleOrderCreated);
+    console.log('Order created event listener registered');
     return () => {
       window.removeEventListener('orderCreated', handleOrderCreated);
     };
