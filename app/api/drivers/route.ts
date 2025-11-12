@@ -44,51 +44,118 @@ export async function POST(request: Request) {
   const client = await getClient()
   
   try {
-    const { fullName, color } = await request.json()
+    const body = await request.json()
+    console.log('Driver creation request:', { body: { ...body, fullName: body.fullName || body.name } })
+    
+    const name = String(body.name ?? body.fullName ?? '').trim()
+    const explicitUsername = String(body.username ?? '').trim()
+    const color = body.color
 
-    if (!fullName || !color) {
+    // Return 400 if name is missing
+    if (!name) {
+      client.release()
       return NextResponse.json({
         success: false,
-        error: 'Full name and color are required'
+        error: 'Name is required'
       }, { status: 400 })
     }
 
+    if (!color) {
+      client.release()
+      return NextResponse.json({
+        success: false,
+        error: 'Color is required'
+      }, { status: 400 })
+    }
+
+    // Derive username from name or explicit username
+    const base = explicitUsername || name || 'driver'
+    const username = base.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+    console.log('Derived username:', username)
+
     // Start a transaction since we need to insert into two tables
     await client.query('BEGIN')
+    console.log('Transaction started for driver creation')
 
     try {
-      // Insert into users table first (no username/password needed)
-      const userResult = await client.query(
-        `INSERT INTO users (full_name, username, password_hash, role)
-         VALUES ($1, NULL, NULL, 'driver')
-         RETURNING id`,
-        [fullName.trim()]
-      )
+      // Generate unique username with retry logic
+      const unique = username || 'driver'
+      let finalUsername = unique
+      let tries = 0
+      let userId: number | null = null
+
+      while (tries < 3) {
+        try {
+          console.log(`Attempting to create user with username: ${finalUsername} (try ${tries + 1}/3)`)
+          const userResult = await client.query(
+            `INSERT INTO users (username, full_name, role, is_active, created_at, updated_at)
+             VALUES ($1, $2, 'driver', true, now(), now())
+             RETURNING id`,
+            [finalUsername, name || null]
+          )
+          userId = userResult.rows[0].id
+          console.log('User created with ID:', userId)
+          break
+        } catch (e: any) {
+          console.log('User creation attempt failed:', { 
+            message: e.message, 
+            code: e.code,
+            username: finalUsername 
+          })
+          if (String(e.message).includes('duplicate') || e.code === '23505') {
+            finalUsername = `${unique}_${Math.floor(Math.random() * 1e6)}`
+            tries++
+            continue
+          }
+          throw e
+        }
+      }
+
+      if (!userId) {
+        throw new Error('Failed to create user after retries')
+      }
 
       // Insert into drivers table
+      console.log('Inserting driver record for user:', userId)
       await client.query(
         `INSERT INTO drivers (user_id, color)
          VALUES ($1, $2)`,
-        [userResult.rows[0].id, color]
+        [userId, color]
       )
+      console.log('Driver record created')
 
       await client.query('COMMIT')
+      console.log('Transaction committed successfully')
 
       return NextResponse.json({
         success: true,
         message: 'Driver created successfully'
       })
     } catch (error) {
-      await client.query('ROLLBACK')
+      console.error('Error in driver creation transaction:', error)
+      try {
+        await client.query('ROLLBACK')
+        console.log('Rollback successful')
+      } catch (rollbackError) {
+        console.error('Error during rollback:', rollbackError)
+      }
       throw error
     } finally {
       client.release()
     }
   } catch (error) {
     console.error('Error creating driver:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorDetails = error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : { error: String(error) }
+    console.error('Error details:', errorDetails)
     return NextResponse.json({
       success: false,
-      error: 'Failed to create driver'
+      error: errorMessage || 'Failed to create driver',
+      details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
     }, { status: 500 })
   }
 }

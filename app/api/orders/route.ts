@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -240,6 +240,18 @@ export async function GET(request: NextRequest) {
     if (ordersResult.rows.length === 0) {
       console.log("No orders found. Checking individual tables...");
       
+      // Check total orders
+      const totalOrdersCount = await query('SELECT COUNT(*) as count FROM orders');
+      console.log("Total orders in database:", totalOrdersCount.rows[0].count);
+      
+      // Check unassigned orders specifically
+      const unassignedCount = await query("SELECT COUNT(*) as count FROM orders WHERE status = 'unassigned'");
+      console.log("Unassigned orders count:", unassignedCount.rows[0].count);
+      
+      // Check order statuses
+      const statusBreakdown = await query("SELECT status, COUNT(*) as count FROM orders GROUP BY status");
+      console.log("Order status breakdown:", statusBreakdown.rows);
+      
       // Check customers
       const customerCount = await query('SELECT COUNT(*) as count FROM customers');
       console.log("Total customers:", customerCount.rows[0].count);
@@ -251,6 +263,8 @@ export async function GET(request: NextRequest) {
       console.log("Freight counts - Skids:", skidsCount.rows[0].count, 
                   "Vinyl:", vinylCount.rows[0].count, 
                   "Footage:", footageCount.rows[0].count);
+    } else {
+      console.log("Orders found, sample order IDs:", ordersResult.rows.slice(0, 3).map((r: any) => r.id));
     }
 
     // Transform the data to match the Order interface
@@ -316,31 +330,46 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const client = await getClient();
+  
   try {
     // Get the authenticated user
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
+      client.release();
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const data = await request.json();
+    console.log('Order creation request:', { 
+      hasPickupCustomer: !!data.pickupCustomer?.id,
+      hasDeliveryCustomer: !!data.deliveryCustomer?.id,
+      hasPickupDate: !!data.pickupDate,
+      freightType: data.freightType,
+      userId: session.user.id
+    });
     
     // Validate required fields
     if (!data.pickupCustomer?.id) {
+      client.release();
       return NextResponse.json({ error: 'Pickup customer is required' }, { status: 400 });
     }
     if (!data.deliveryCustomer?.id) {
+      client.release();
       return NextResponse.json({ error: 'Delivery customer is required' }, { status: 400 });
     }
     if (!data.pickupDate) {
+      client.release();
       return NextResponse.json({ error: 'Pickup date is required' }, { status: 400 });
     }
 
     // Start a transaction
-    const client = await query('BEGIN');
     try {
+      await client.query('BEGIN');
+      console.log('Transaction started');
+
       // Insert the order
-      const orderResult = await query(
+      const orderResult = await client.query(
         `INSERT INTO orders (
           pickup_customer_id,
           delivery_customer_id,
@@ -383,11 +412,12 @@ export async function POST(request: NextRequest) {
       );
 
       const orderId = orderResult.rows[0].id;
+      console.log('Order inserted with ID:', orderId);
 
       // Insert skids/vinyl if present
       if (data.freightType === 'skidsVinyl' && data.skidsVinyl?.length > 0) {
         for (const item of data.skidsVinyl) {
-          await query(
+          await client.query(
             `INSERT INTO ${item.type === 'skid' ? 'skids' : 'vinyl'} (
               order_id,
               width,
@@ -408,7 +438,7 @@ export async function POST(request: NextRequest) {
 
       // Insert footage if present
       if (data.freightType === 'footage' && data.footage > 0) {
-        await query(
+        await client.query(
           `INSERT INTO footage (
             order_id,
             square_footage
@@ -420,7 +450,7 @@ export async function POST(request: NextRequest) {
       // Insert hand bundles if present
       if (data.handBundles?.length > 0) {
         for (const handBundle of data.handBundles) {
-          await query(
+          await client.query(
             `INSERT INTO freight_items (
               order_id,
               type,
@@ -442,7 +472,7 @@ export async function POST(request: NextRequest) {
       // Insert order links if present
       if (data.links?.length > 0) {
         for (const link of data.links) {
-          await query(
+          await client.query(
             `INSERT INTO order_links (
               order_id,
               url,
@@ -454,7 +484,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Commit the transaction
-      await query('COMMIT');
+      await client.query('COMMIT');
+      console.log('Transaction committed successfully');
 
       return NextResponse.json({ 
         success: true, 
@@ -464,14 +495,32 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
       // Rollback on error
-      await query('ROLLBACK');
+      console.error('Error in transaction, rolling back:', error);
+      try {
+        await client.query('ROLLBACK');
+        console.log('Rollback successful');
+      } catch (rollbackError) {
+        console.error('Error during rollback:', rollbackError);
+      }
       throw error;
+    } finally {
+      client.release();
     }
 
   } catch (error) {
     console.error('Error creating order:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorDetails = error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : { error: String(error) };
+    console.error('Error details:', errorDetails);
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { 
+        error: errorMessage || 'Failed to create order',
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
       { status: 500 }
     );
   }
