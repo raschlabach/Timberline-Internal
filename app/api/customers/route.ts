@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
           l.county, 
           l.zip_code,
           c.phone_number_1, 
+          c.phone_number_1_ext,
           c.phone_number_2, 
+          c.phone_number_2_ext,
           c.notes,
           c.quotes,
           -- Order counts
@@ -141,15 +143,19 @@ export async function POST(request: NextRequest) {
         customer_name, 
         location_id, 
         phone_number_1, 
+        phone_number_1_ext,
         phone_number_2,
+        phone_number_2_ext,
         quotes, 
         notes
-      ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         body.customer_name,
         locationId,
         body.phone_number_1,
+        body.phone_number_1_ext || null,
         body.phone_number_2 || null,
+        body.phone_number_2_ext || null,
         body.quotes || null,
         body.notes || null
       ]
@@ -168,7 +174,9 @@ export async function POST(request: NextRequest) {
         l.county, 
         l.zip_code,
         c.phone_number_1, 
+        c.phone_number_1_ext,
         c.phone_number_2,
+        c.phone_number_2_ext,
         c.quotes, 
         c.notes
       FROM 

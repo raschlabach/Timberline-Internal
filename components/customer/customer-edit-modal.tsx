@@ -16,7 +16,9 @@ interface Customer {
   zip: string
   county: string
   phone_number_1: string | null
+  phone_number_1_ext: string | null
   phone_number_2: string | null
+  phone_number_2_ext: string | null
   price_category: number
   notes: string | null
   quotes?: string | null
@@ -205,7 +207,9 @@ export function CustomerEditModal({
       const cleanedFormData = {
         ...formData,
         phone_number_1: formData.phone_number_1 ? formData.phone_number_1.replace(/\D/g, '') : null,
+        phone_number_1_ext: formData.phone_number_1_ext?.trim() || null,
         phone_number_2: formData.phone_number_2 ? formData.phone_number_2.replace(/\D/g, '') : null,
+        phone_number_2_ext: formData.phone_number_2_ext?.trim() || null,
         // Map zip to zip_code for API
         zip_code: formData.zip
       }
@@ -471,17 +475,29 @@ export function CustomerEditModal({
               <label htmlFor="phone_number_1" className="block text-sm font-medium text-gray-700">
                 Primary Phone <span className="text-amber-500">◆</span>
               </label>
-              <input
-                type="tel"
-                id="phone_number_1"
-                name="phone_number_1"
-                value={formData.phone_number_1 || ''}
-                onChange={handleInputChange}
-                className={`block w-full rounded-md border ${
-                  errors.phone_number_1 ? 'border-red-500' : 'border-gray-300'
-                } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                placeholder="(XXX) XXX-XXXX"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  id="phone_number_1"
+                  name="phone_number_1"
+                  value={formData.phone_number_1 || ''}
+                  onChange={handleInputChange}
+                  className={`flex-1 rounded-md border ${
+                    errors.phone_number_1 ? 'border-red-500' : 'border-gray-300'
+                  } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  placeholder="(XXX) XXX-XXXX"
+                />
+                <input
+                  type="text"
+                  id="phone_number_1_ext"
+                  name="phone_number_1_ext"
+                  value={formData.phone_number_1_ext || ''}
+                  onChange={handleInputChange}
+                  className="w-24 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ext"
+                  maxLength={10}
+                />
+              </div>
               {errors.phone_number_1 && (
                 <p className="text-red-500 text-xs mt-1">{errors.phone_number_1}</p>
               )}
@@ -494,17 +510,29 @@ export function CustomerEditModal({
               <label htmlFor="phone_number_2" className="block text-sm font-medium text-gray-700">
                 Secondary Phone
               </label>
-              <input
-                type="tel"
-                id="phone_number_2"
-                name="phone_number_2"
-                value={formData.phone_number_2 || ''}
-                onChange={handleInputChange}
-                className={`block w-full rounded-md border ${
-                  errors.phone_number_2 ? 'border-red-500' : 'border-gray-300'
-                } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                placeholder="(XXX) XXX-XXXX"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  id="phone_number_2"
+                  name="phone_number_2"
+                  value={formData.phone_number_2 || ''}
+                  onChange={handleInputChange}
+                  className={`flex-1 rounded-md border ${
+                    errors.phone_number_2 ? 'border-red-500' : 'border-gray-300'
+                  } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  placeholder="(XXX) XXX-XXXX"
+                />
+                <input
+                  type="text"
+                  id="phone_number_2_ext"
+                  name="phone_number_2_ext"
+                  value={formData.phone_number_2_ext || ''}
+                  onChange={handleInputChange}
+                  className="w-24 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ext"
+                  maxLength={10}
+                />
+              </div>
               {errors.phone_number_2 && (
                 <p className="text-red-500 text-xs mt-1">{errors.phone_number_2}</p>
               )}

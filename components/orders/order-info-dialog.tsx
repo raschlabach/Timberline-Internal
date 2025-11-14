@@ -789,7 +789,9 @@ export function OrderInfoDialog({
               zip: '',
               county: '',
               phone_number_1: null,
+              phone_number_1_ext: null,
               phone_number_2: null,
+              phone_number_2_ext: null,
               price_category: 0,
               notes: null
             }}

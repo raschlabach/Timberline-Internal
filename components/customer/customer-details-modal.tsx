@@ -27,7 +27,9 @@ interface Customer {
   zip: string
   county: string
   phone_number_1: string | null
+  phone_number_1_ext: string | null
   phone_number_2: string | null
+  phone_number_2_ext: string | null
   price_category: number
   notes: string | null
   quotes?: string | null
@@ -108,10 +110,18 @@ export function CustomerDetailsModal({
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4" />
                     <span className="font-medium">Primary:</span>
-                    <span>{formatPhoneNumber(customer.phone_number_1) || '-'}</span>
+                    <span>
+                      {formatPhoneNumber(customer.phone_number_1) || '-'}
+                      {customer.phone_number_1_ext && (
+                        <span className="text-muted-foreground ml-1">ext. {customer.phone_number_1_ext}</span>
+                      )}
+                    </span>
                     {customer.phone_number_1 && (
                       <button
-                        onClick={() => copyToClipboard(customer.phone_number_1)}
+                        onClick={() => {
+                          const phoneText = customer.phone_number_1 + (customer.phone_number_1_ext ? ` ext. ${customer.phone_number_1_ext}` : '');
+                          copyToClipboard(phoneText);
+                        }}
                         className="text-muted-foreground hover:text-foreground"
                         aria-label="Copy primary phone number"
                       >
@@ -124,9 +134,17 @@ export function CustomerDetailsModal({
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4" />
                       <span className="font-medium">Secondary:</span>
-                      <span>{formatPhoneNumber(customer.phone_number_2) || '-'}</span>
+                      <span>
+                        {formatPhoneNumber(customer.phone_number_2) || '-'}
+                        {customer.phone_number_2_ext && (
+                          <span className="text-muted-foreground ml-1">ext. {customer.phone_number_2_ext}</span>
+                        )}
+                      </span>
                       <button
-                        onClick={() => copyToClipboard(customer.phone_number_2)}
+                        onClick={() => {
+                          const phoneText = customer.phone_number_2 + (customer.phone_number_2_ext ? ` ext. ${customer.phone_number_2_ext}` : '');
+                          copyToClipboard(phoneText);
+                        }}
                         className="text-primary hover:text-primary/80 focus:outline-none"
                         aria-label="Copy secondary phone number to clipboard"
                       >

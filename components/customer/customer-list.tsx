@@ -28,7 +28,9 @@ interface Customer {
   zip: string
   county: string
   phone_number_1: string | null
+  phone_number_1_ext: string | null
   phone_number_2: string | null
+  phone_number_2_ext: string | null
   price_category: number
   notes: string | null
   quotes?: string | null

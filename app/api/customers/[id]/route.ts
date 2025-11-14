@@ -19,7 +19,9 @@ export async function GET(
         l.county, 
         l.zip_code,
         c.phone_number_1, 
+        c.phone_number_1_ext,
         c.phone_number_2, 
+        c.phone_number_2_ext,
         c.notes,
         c.quotes
       FROM 
@@ -103,15 +105,19 @@ export async function PUT(
       `UPDATE customers SET
         customer_name = $1,
         phone_number_1 = $2,
-        phone_number_2 = $3,
-        notes = $4,
-        quotes = $5,
+        phone_number_1_ext = $3,
+        phone_number_2 = $4,
+        phone_number_2_ext = $5,
+        notes = $6,
+        quotes = $7,
         updated_at = NOW()
-      WHERE id = $6`,
+      WHERE id = $8`,
       [
         body.customer_name,
         body.phone_number_1,
+        body.phone_number_1_ext || null,
         body.phone_number_2 || null,
+        body.phone_number_2_ext || null,
         body.notes || null,
         body.quotes || null,
         id
@@ -129,7 +135,9 @@ export async function PUT(
         l.county, 
         l.zip_code,
         c.phone_number_1, 
+        c.phone_number_1_ext,
         c.phone_number_2, 
+        c.phone_number_2_ext,
         c.notes,
         c.quotes
       FROM 
