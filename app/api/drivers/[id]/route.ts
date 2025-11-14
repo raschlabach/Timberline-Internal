@@ -24,13 +24,22 @@ export async function DELETE(
     const client = await getClient()
     
     try {
-      // Check if the driver is assigned to any active truckloads
+      // Check if the driver is assigned to any truckloads (active or completed)
       const assignmentCheck = await client.query(
-        `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1 AND is_completed = FALSE`,
+        `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1`,
         [driverId]
       )
 
-      if (parseInt(assignmentCheck.rows[0].count) > 0) {
+      const truckloadCount = parseInt(assignmentCheck.rows[0].count)
+      
+      // Check for active truckloads specifically
+      const activeCheck = await client.query(
+        `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1 AND is_completed = FALSE`,
+        [driverId]
+      )
+      const activeCount = parseInt(activeCheck.rows[0].count)
+
+      if (activeCount > 0) {
         client.release()
         return NextResponse.json({ 
           success: false, 
@@ -42,6 +51,14 @@ export async function DELETE(
       await client.query('BEGIN')
 
       try {
+        // If there are completed truckloads, set driver_id to NULL to preserve historical data
+        if (truckloadCount > 0) {
+          await client.query(
+            `UPDATE truckloads SET driver_id = NULL WHERE driver_id = $1`,
+            [driverId]
+          )
+        }
+
         // Delete from drivers table first (due to foreign key constraint)
         const driverDeleteResult = await client.query(
           'DELETE FROM drivers WHERE user_id = $1 RETURNING user_id', 
