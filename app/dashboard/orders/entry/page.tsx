@@ -236,7 +236,7 @@ export default function OrderEntryPage() {
   }, [formState.freightType]);
 
   // Handle form submission
-  const handleSubmit = async () => {
+  const handleSubmit = async (clearForm: boolean = true) => {
     // Clear previous validation errors
     setValidationErrors({});
     
@@ -289,8 +289,10 @@ export default function OrderEntryPage() {
       
       toast.success('Order created successfully!');
       
-      // Clear the form by resetting to initial state
-      resetForm();
+      // Clear the form only if clearForm is true
+      if (clearForm) {
+        resetForm();
+      }
 
       // Stay on the order entry page for continued order creation
       
@@ -725,12 +727,21 @@ export default function OrderEntryPage() {
                 Save as Preset
               </Button>
               <Button 
-                type="submit"
-                onClick={handleSubmit} 
+                type="button"
+                onClick={() => handleSubmit(true)} 
                 className="bg-primary hover:bg-primary/90"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Creating Order...' : 'Create Order'}
+                {isSubmitting ? 'Creating Order...' : 'Submit and Clear'}
+              </Button>
+              <Button 
+                type="button"
+                onClick={() => handleSubmit(false)} 
+                variant="outline"
+                className="border-primary text-primary hover:bg-primary/10"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Creating Order...' : 'Submit and Keep Data'}
               </Button>
             </div>
             

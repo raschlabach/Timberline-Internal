@@ -136,16 +136,22 @@ export function EditTruckloadDialog({
       if (!response.ok) {
         const contentType = response.headers.get('content-type')
         if (contentType && contentType.includes('application/json')) {
-          const error = await response.json()
-          throw new Error(error.message || `Failed to delete truckload: ${response.status}`)
+          const errorData = await response.json()
+          // API returns { success: false, error: '...' } or { success: false, message: '...' }
+          throw new Error(errorData.error || errorData.message || `Failed to delete truckload: ${response.status}`)
         } else {
           throw new Error(`Failed to delete truckload: ${response.status}`)
         }
       }
       
-      toast.success('Truckload deleted successfully')
-      onTruckloadUpdated()
-      onClose()
+      const result = await response.json()
+      if (result.success) {
+        toast.success(result.message || 'Truckload deleted successfully')
+        onTruckloadUpdated()
+        onClose()
+      } else {
+        throw new Error(result.error || result.message || 'Failed to delete truckload')
+      }
     } catch (error) {
       console.error('Error deleting truckload:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to delete truckload')
