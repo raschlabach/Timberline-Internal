@@ -1,43 +1,91 @@
 import { NextResponse } from 'next/server'
 import { getClient } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const client = await getClient()
-  
   try {
-    const { id } = params
-    if (!id) throw new Error('No ID provided')
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
 
-    // Start a transaction
-    await client.query('BEGIN')
+    const driverId = parseInt(params.id)
+    if (isNaN(driverId)) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid driver ID' 
+      }, { status: 400 })
+    }
 
+    const client = await getClient()
+    
     try {
-      // Delete from drivers table first (due to foreign key constraint)
-      await client.query('DELETE FROM drivers WHERE user_id = $1', [id])
-      
-      // Then delete from users table
-      await client.query('DELETE FROM users WHERE id = $1', [id])
+      // Check if the driver is assigned to any active truckloads
+      const assignmentCheck = await client.query(
+        `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1 AND is_completed = FALSE`,
+        [driverId]
+      )
 
-      await client.query('COMMIT')
+      if (parseInt(assignmentCheck.rows[0].count) > 0) {
+        client.release()
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Cannot delete driver: assigned to active truckloads' 
+        }, { status: 400 })
+      }
 
-      return NextResponse.json({
-        success: true,
-        message: 'Driver deleted successfully'
-      })
+      // Start a transaction
+      await client.query('BEGIN')
+
+      try {
+        // Delete from drivers table first (due to foreign key constraint)
+        const driverDeleteResult = await client.query(
+          'DELETE FROM drivers WHERE user_id = $1 RETURNING user_id', 
+          [driverId]
+        )
+        
+        if (driverDeleteResult.rows.length === 0) {
+          await client.query('ROLLBACK')
+          client.release()
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Driver not found' 
+          }, { status: 404 })
+        }
+        
+        // Then delete from users table
+        await client.query('DELETE FROM users WHERE id = $1 AND role = \'driver\'', [driverId])
+
+        await client.query('COMMIT')
+
+        return NextResponse.json({
+          success: true,
+          message: 'Driver deleted successfully'
+        })
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
     } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
+      console.error('Error deleting driver:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return NextResponse.json({
+        success: false,
+        error: errorMessage || 'Failed to delete driver'
+      }, { status: 500 })
     }
   } catch (error) {
-    console.error('Error deleting driver:', error)
+    console.error('Error in driver delete handler:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json({
       success: false,
-      error: 'Failed to delete driver'
+      error: errorMessage || 'Failed to delete driver'
     }, { status: 500 })
   }
 } 

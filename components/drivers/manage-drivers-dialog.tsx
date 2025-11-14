@@ -104,19 +104,28 @@ export function ManageDriversDialog() {
 
     try {
       const response = await fetch(`/api/drivers/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       })
       
       const data = await response.json()
       
       if (data.success) {
-        toast.success('Driver deleted successfully')
+        toast.success(data.message || 'Driver deleted successfully')
         fetchDrivers()
         // Invalidate React Query cache so truckload manager refreshes
         queryClient.invalidateQueries({ queryKey: ['drivers'] })
+      } else {
+        // Show the actual error message from the API
+        toast.error(data.error || 'Failed to delete driver')
       }
     } catch (error) {
-      toast.error('Failed to delete driver')
+      console.error('Error deleting driver:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete driver'
+      toast.error(errorMessage)
     }
   }
 
