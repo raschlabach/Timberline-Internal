@@ -6,6 +6,22 @@ export async function GET(request: NextRequest) {
   try {
     console.log("Fetching customers from database...");
     
+    // Check if extension columns exist
+    const columnCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'customers' 
+      AND column_name IN ('phone_number_1_ext', 'phone_number_2_ext')
+    `);
+    const hasExtensions = columnCheck.rows.length > 0;
+    
+    // Build query with or without extension columns
+    const extensionFields = hasExtensions 
+      ? `c.phone_number_1_ext,
+          c.phone_number_2_ext,`
+      : `NULL::VARCHAR as phone_number_1_ext,
+          NULL::VARCHAR as phone_number_2_ext,`;
+    
     // Add a timeout to the query to prevent long-running queries
     const result = await Promise.race([
       query(
@@ -18,9 +34,8 @@ export async function GET(request: NextRequest) {
           l.county, 
           l.zip_code,
           c.phone_number_1, 
-          c.phone_number_1_ext,
+          ${extensionFields}
           c.phone_number_2, 
-          c.phone_number_2_ext,
           c.notes,
           c.quotes,
           -- Order counts
@@ -137,33 +152,70 @@ export async function POST(request: NextRequest) {
     
     const locationId = locationResult.rows[0].id
     
+    // Check if extension columns exist
+    const columnCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'customers' 
+      AND column_name IN ('phone_number_1_ext', 'phone_number_2_ext')
+    `);
+    const hasExtensions = columnCheck.rows.length > 0;
+    
     // Then create the customer with reference to the location
-    const customerResult = await query(
-      `INSERT INTO customers (
-        customer_name, 
-        location_id, 
-        phone_number_1, 
-        phone_number_1_ext,
-        phone_number_2,
-        phone_number_2_ext,
-        quotes, 
-        notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [
-        body.customer_name,
-        locationId,
-        body.phone_number_1,
-        body.phone_number_1_ext || null,
-        body.phone_number_2 || null,
-        body.phone_number_2_ext || null,
-        body.quotes || null,
-        body.notes || null
-      ]
-    )
+    let customerResult;
+    if (hasExtensions) {
+      customerResult = await query(
+        `INSERT INTO customers (
+          customer_name, 
+          location_id, 
+          phone_number_1, 
+          phone_number_1_ext,
+          phone_number_2,
+          phone_number_2_ext,
+          quotes, 
+          notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [
+          body.customer_name,
+          locationId,
+          body.phone_number_1,
+          body.phone_number_1_ext || null,
+          body.phone_number_2 || null,
+          body.phone_number_2_ext || null,
+          body.quotes || null,
+          body.notes || null
+        ]
+      )
+    } else {
+      customerResult = await query(
+        `INSERT INTO customers (
+          customer_name, 
+          location_id, 
+          phone_number_1, 
+          phone_number_2,
+          quotes, 
+          notes
+        ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [
+          body.customer_name,
+          locationId,
+          body.phone_number_1,
+          body.phone_number_2 || null,
+          body.quotes || null,
+          body.notes || null
+        ]
+      )
+    }
     
     const customerId = customerResult.rows[0].id
     
-    // Return the complete customer data
+    // Return the complete customer data (reuse extension check)
+    const returnExtensionFields = hasExtensions 
+      ? `c.phone_number_1_ext,
+          c.phone_number_2_ext,`
+      : `NULL::VARCHAR as phone_number_1_ext,
+          NULL::VARCHAR as phone_number_2_ext,`;
+    
     const result = await query(
       `SELECT 
         c.id, 
@@ -174,9 +226,8 @@ export async function POST(request: NextRequest) {
         l.county, 
         l.zip_code,
         c.phone_number_1, 
-        c.phone_number_1_ext,
+        ${returnExtensionFields}
         c.phone_number_2,
-        c.phone_number_2_ext,
         c.quotes, 
         c.notes
       FROM 

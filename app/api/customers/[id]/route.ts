@@ -9,6 +9,22 @@ export async function GET(
   try {
     const id = params.id
     
+    // Check if extension columns exist
+    const columnCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'customers' 
+      AND column_name IN ('phone_number_1_ext', 'phone_number_2_ext')
+    `);
+    const hasExtensions = columnCheck.rows.length > 0;
+    
+    // Build query with or without extension columns
+    const extensionFields = hasExtensions 
+      ? `c.phone_number_1_ext,
+          c.phone_number_2_ext,`
+      : `NULL::VARCHAR as phone_number_1_ext,
+          NULL::VARCHAR as phone_number_2_ext,`;
+    
     const result = await query(
       `SELECT 
         c.id, 
@@ -19,9 +35,8 @@ export async function GET(
         l.county, 
         l.zip_code,
         c.phone_number_1, 
-        c.phone_number_1_ext,
+        ${extensionFields}
         c.phone_number_2, 
-        c.phone_number_2_ext,
         c.notes,
         c.quotes
       FROM 
@@ -100,31 +115,67 @@ export async function PUT(
       ]
     )
     
-    // Update the customer
-    await query(
-      `UPDATE customers SET
-        customer_name = $1,
-        phone_number_1 = $2,
-        phone_number_1_ext = $3,
-        phone_number_2 = $4,
-        phone_number_2_ext = $5,
-        notes = $6,
-        quotes = $7,
-        updated_at = NOW()
-      WHERE id = $8`,
-      [
-        body.customer_name,
-        body.phone_number_1,
-        body.phone_number_1_ext || null,
-        body.phone_number_2 || null,
-        body.phone_number_2_ext || null,
-        body.notes || null,
-        body.quotes || null,
-        id
-      ]
-    )
+    // Check if extension columns exist before updating
+    const columnCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'customers' 
+      AND column_name IN ('phone_number_1_ext', 'phone_number_2_ext')
+    `);
+    const hasExtensions = columnCheck.rows.length > 0;
     
-    // Return the updated customer data
+    // Update the customer
+    if (hasExtensions) {
+      await query(
+        `UPDATE customers SET
+          customer_name = $1,
+          phone_number_1 = $2,
+          phone_number_1_ext = $3,
+          phone_number_2 = $4,
+          phone_number_2_ext = $5,
+          notes = $6,
+          quotes = $7,
+          updated_at = NOW()
+        WHERE id = $8`,
+        [
+          body.customer_name,
+          body.phone_number_1,
+          body.phone_number_1_ext || null,
+          body.phone_number_2 || null,
+          body.phone_number_2_ext || null,
+          body.notes || null,
+          body.quotes || null,
+          id
+        ]
+      )
+    } else {
+      await query(
+        `UPDATE customers SET
+          customer_name = $1,
+          phone_number_1 = $2,
+          phone_number_2 = $3,
+          notes = $4,
+          quotes = $5,
+          updated_at = NOW()
+        WHERE id = $6`,
+        [
+          body.customer_name,
+          body.phone_number_1,
+          body.phone_number_2 || null,
+          body.notes || null,
+          body.quotes || null,
+          id
+        ]
+      )
+    }
+    
+    // Return the updated customer data (reuse extension check)
+    const returnExtensionFields = hasExtensions 
+      ? `c.phone_number_1_ext,
+          c.phone_number_2_ext,`
+      : `NULL::VARCHAR as phone_number_1_ext,
+          NULL::VARCHAR as phone_number_2_ext,`;
+    
     const result = await query(
       `SELECT 
         c.id, 
@@ -135,9 +186,8 @@ export async function PUT(
         l.county, 
         l.zip_code,
         c.phone_number_1, 
-        c.phone_number_1_ext,
+        ${returnExtensionFields}
         c.phone_number_2, 
-        c.phone_number_2_ext,
         c.notes,
         c.quotes
       FROM 
