@@ -218,8 +218,9 @@ export async function GET(request: NextRequest) {
         GROUP BY order_id
       ) ol ON true
       WHERE 
-        -- Only show unassigned orders for the load board
-        o.status = 'unassigned'
+        -- Show unassigned orders and pickup-assigned orders (but not delivery-assigned)
+        -- This allows orders with pickup assignments to remain visible so delivery can still be assigned
+        o.status IN ('unassigned', 'pickup_assigned')
       ORDER BY 
         -- Show rush orders first, then by pickup date
         o.is_rush DESC,
