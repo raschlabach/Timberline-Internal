@@ -218,9 +218,18 @@ export async function GET(request: NextRequest) {
         GROUP BY order_id
       ) ol ON true
       WHERE 
-        -- Show unassigned orders and pickup-assigned orders (but not delivery-assigned)
+        -- Show orders that don't have delivery assignments (regardless of status)
         -- This allows orders with pickup assignments to remain visible so delivery can still be assigned
-        o.status IN ('unassigned', 'pickup_assigned')
+        -- We filter by actual assignments rather than status to handle edge cases where status might be out of sync
+        NOT EXISTS (
+          SELECT 1 
+          FROM truckload_order_assignments toa_delivery
+          JOIN truckloads t_delivery ON toa_delivery.truckload_id = t_delivery.id
+          WHERE toa_delivery.order_id = o.id 
+          AND toa_delivery.assignment_type = 'delivery'
+        )
+        -- Also exclude completed orders
+        AND o.status != 'completed'
       ORDER BY 
         -- Show rush orders first, then by pickup date
         o.is_rush DESC,
