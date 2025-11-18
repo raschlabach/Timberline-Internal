@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { format, parseISO, isValid } from 'date-fns'
 import { toast } from 'sonner'
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TruckloadSummary } from '@/types/truckloads'
 import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
 import { useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, ChevronUp, Package, CheckCircle2 } from 'lucide-react'
 
 interface AssignOrderDialogProps {
   isOpen: boolean
@@ -40,21 +40,6 @@ interface AssignOrderDialogProps {
   isPickupCompleted?: boolean
 }
 
-function getDialogWidth(columnCount: number): number {
-  const columnWidth = 300 // width of each driver column
-  const gapWidth = 16 // gap between columns
-  const padding = 32 // padding on each side
-  const minWidth = 800 // minimum width
-  const maxWidthPercentage = 95 // maximum width as percentage of viewport
-
-  const totalColumnsWidth = (columnCount * columnWidth) +
-    ((Math.max(columnCount - 1, 0)) * gapWidth) +
-    (padding * 2)
-
-  const maxAllowedWidth = (typeof window !== 'undefined' ? (window.innerWidth * maxWidthPercentage) / 100 : minWidth)
-
-  return Math.min(Math.max(totalColumnsWidth, minWidth), maxAllowedWidth)
-}
 
 function formatDateRange(startDate: string | undefined, endDate: string | undefined): string | null {
   if (!startDate || !endDate) return null
@@ -88,9 +73,18 @@ export function AssignOrderDialog({
   const [isLoading, setIsLoading] = useState(false)
   const [isUnassigning, setIsUnassigning] = useState(false)
   const [truckloadView, setTruckloadView] = useState<TruckloadView>('current')
+  const [collapsedDrivers, setCollapsedDrivers] = useState<Record<string, boolean>>({})
 
   // Check if pickup assignment is locked
   const isPickupLocked = Boolean(isPickupCompleted && pickupAssignment)
+
+  // Toggle driver column collapse
+  const toggleDriverCollapse = (driverName: string) => {
+    setCollapsedDrivers(prev => ({
+      ...prev,
+      [driverName]: !prev[driverName]
+    }))
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -264,17 +258,13 @@ export function AssignOrderDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="max-h-[90vh] flex flex-col"
-        style={{ 
-          width: `${getDialogWidth(driverColumns.length)}px`,
-          maxWidth: 'none' // Override any max-width constraints
-        }}
+        className="max-h-[90vh] flex flex-col max-w-[95vw] w-full"
       >
         <DialogHeader>
           <DialogTitle>Assign Order to Truckload</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4 flex-1 overflow-hidden">
+        <div className="space-y-6 py-4 flex-1 overflow-y-auto">
           {/* Assignment Type Selection */}
           <div className="space-y-2">
             <Label className="text-lg font-semibold">Assignment Type</Label>
@@ -386,73 +376,123 @@ export function AssignOrderDialog({
                   </TabsList>
                 </Tabs>
               </div>
-              <ScrollArea className="h-full">
-                <div className="flex gap-4 p-4">
-                  {driverColumns.map((driver) => (
-                    <div 
-                      key={driver.driverName} 
-                      className="w-[300px] flex-shrink-0"
-                      style={{ minWidth: '300px' }} // Ensure minimum width
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                {driverColumns.map((driver) => {
+                  const isCollapsed = collapsedDrivers[driver.driverName] !== undefined ? collapsedDrivers[driver.driverName] : true
+                  const completedCount = driver.truckloads.filter(t => t.isCompleted).length
+                  
+                  return (
+                    <Card 
+                      key={driver.driverName}
+                      className="w-full bg-white shadow-lg border-0 h-fit"
+                      style={{
+                        borderLeft: `4px solid ${driver.driverColor}`,
+                      }}
                     >
-                      <Card>
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 mb-4">
+                      <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 -ml-1"
+                              onClick={() => toggleDriverCollapse(driver.driverName)}
+                            >
+                              {isCollapsed ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500" />
+                              ) : (
+                                <ChevronUp className="h-4 w-4 text-gray-500" />
+                              )}
+                            </Button>
                             <div 
-                              className="w-3 h-3 rounded-full flex-shrink-0" 
+                              className="w-3 h-3 rounded-full shadow-sm" 
                               style={{ backgroundColor: driver.driverColor }}
                             />
-                            <span className="font-medium truncate">{driver.driverName}</span>
+                            <div className="flex-1">
+                              <CardTitle className="text-base font-semibold text-gray-900">
+                                {driver.driverName}
+                              </CardTitle>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <div className="flex items-center gap-1 text-xs text-gray-600">
+                                  <Package className="h-2.5 w-2.5" />
+                                  <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-gray-600">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
+                                  <span>{completedCount} complete</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
+                        </div>
+                      </CardHeader>
+                      {!isCollapsed && (
+                        <CardContent className="p-3">
                           <div className="space-y-2">
                             {driver.truckloads.map((truckload) => (
                               <div
                                 key={truckload.id}
                                 className={`
                                   p-3 rounded-lg border cursor-pointer transition-colors
-                                  ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5' : 'hover:bg-gray-50'}
+                                  ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'hover:bg-gray-50 border-gray-200'}
                                 `}
                                 onClick={() => handleTruckloadSelection(truckload.id)}
                               >
-                                <div className="mt-1 text-sm text-gray-600">
+                                <div className="text-xs font-medium text-gray-700 mb-1">
                                   {formatDateRange(truckload.startDate, truckload.endDate) || (
-                                    <span className="text-gray-400">No date range available</span>
+                                    <span className="text-gray-400">No date range</span>
                                   )}
                                 </div>
+                                {truckload.description && (
+                                  <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                                    {truckload.description}
+                                  </div>
+                                )}
                                 {truckload.trailerNumber && (
-                                  <div className="mt-1 text-sm">
+                                  <div className="text-xs text-gray-500 mb-2">
                                     Trailer: <span className="font-medium">{truckload.trailerNumber}</span>
                                   </div>
                                 )}
-                                <div className="mt-2 text-sm line-clamp-2">
-                                  {truckload.description}
-                                </div>
-                                <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                                  <div className="whitespace-nowrap">
-                                    <span className="text-red-600">Pickup:</span> {truckload.pickupFootage} ft²
+                                <div className="grid grid-cols-3 gap-1 text-xs">
+                                  <div className="bg-red-50 p-1.5 rounded border border-red-100">
+                                    <div className="text-red-700 font-semibold">Pickup</div>
+                                    <div className="text-red-800 font-bold">{truckload.pickupFootage.toLocaleString()} ft²</div>
                                   </div>
-                                  <div className="whitespace-nowrap">
-                                    <span>Delivery:</span> {truckload.deliveryFootage} ft²
+                                  <div className="bg-gray-50 p-1.5 rounded border border-gray-200">
+                                    <div className="text-gray-700 font-semibold">Delivery</div>
+                                    <div className="text-gray-800 font-bold">{truckload.deliveryFootage.toLocaleString()} ft²</div>
                                   </div>
-                                  {truckload.transferFootage > 0 && (
-                                    <div className="whitespace-nowrap">
-                                      <span className="text-blue-600">Transfer:</span> {truckload.transferFootage} ft²
+                                  {truckload.transferFootage > 0 ? (
+                                    <div className="bg-blue-50 p-1.5 rounded border border-blue-100">
+                                      <div className="text-blue-700 font-semibold">Transfer</div>
+                                      <div className="text-blue-800 font-bold">{truckload.transferFootage.toLocaleString()} ft²</div>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-gray-50 p-1.5 rounded border border-gray-200 opacity-50">
+                                      <div className="text-gray-500 font-semibold">Transfer</div>
+                                      <div className="text-gray-600 font-bold">0 ft²</div>
                                     </div>
                                   )}
                                 </div>
                               </div>
                             ))}
                             {driver.truckloads.length === 0 && (
-                              <p className="text-sm text-gray-500 text-center py-4">
-                                No truckloads assigned
-                              </p>
+                              <div className="text-center py-6">
+                                <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                                  <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500 font-medium">
+                                    No truckloads assigned
+                                  </p>
+                                </div>
+                              </div>
                             )}
                           </div>
                         </CardContent>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                      )}
+                    </Card>
+                  )
+                })}
+              </div>
             </div>
           )}
 
