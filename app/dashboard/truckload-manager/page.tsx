@@ -142,7 +142,7 @@ export default function TruckloadManager() {
       setDriverOrder(sorted.map(d => d.id))
     }
 
-    // Load collapsed state
+    // Load collapsed state - default to all collapsed if no saved state
     const savedCollapsed = localStorage.getItem('truckloadManager_collapsedDrivers')
     if (savedCollapsed) {
       try {
@@ -150,7 +150,20 @@ export default function TruckloadManager() {
         setCollapsedDrivers(parsed)
       } catch (e) {
         console.error('Failed to parse saved collapsed state:', e)
+        // If parsing fails, default to all collapsed
+        const allCollapsed: Record<number, boolean> = {}
+        driversData.drivers.forEach(driver => {
+          allCollapsed[driver.id] = true
+        })
+        setCollapsedDrivers(allCollapsed)
       }
+    } else {
+      // No saved state - default to all collapsed
+      const allCollapsed: Record<number, boolean> = {}
+      driversData.drivers.forEach(driver => {
+        allCollapsed[driver.id] = true
+      })
+      setCollapsedDrivers(allCollapsed)
     }
   }, [driversData?.drivers])
 
