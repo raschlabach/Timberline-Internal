@@ -23,11 +23,11 @@ export async function GET() {
           -- Calculate footage from skids and vinyl (same as sidebar calculation)
           COALESCE(
             (
-              SELECT SUM(s.width * s.length * s.quantity)
+              SELECT COALESCE(SUM(s.width * s.length * s.quantity), 0)
               FROM skids s
               WHERE s.order_id = o.id
             ) + (
-              SELECT SUM(v.width * v.length * v.quantity)
+              SELECT COALESCE(SUM(v.width * v.length * v.quantity), 0)
               FROM vinyl v
               WHERE v.order_id = o.id
             ),
@@ -49,27 +49,27 @@ export async function GET() {
           ta.truckload_id,
           -- Sum pickup footage (excluding transfer orders)
           COALESCE(SUM(CASE 
-            WHEN ta.assignment_type = 'pickup' AND NOT ta.is_transfer_order
+            WHEN ta.assignment_type = 'pickup' AND ta.is_transfer_order = false
             THEN ta.square_footage
             ELSE 0 
-          END), 0)::numeric as pickup_footage,
+          END), 0) as pickup_footage,
           -- Sum delivery footage (excluding transfer orders)
           COALESCE(SUM(CASE 
-            WHEN ta.assignment_type = 'delivery' AND NOT ta.is_transfer_order
+            WHEN ta.assignment_type = 'delivery' AND ta.is_transfer_order = false
             THEN ta.square_footage
             ELSE 0 
-          END), 0)::numeric as delivery_footage,
+          END), 0) as delivery_footage,
           -- Sum transfer footage (count each order once - group by order_id to deduplicate)
           COALESCE((
             SELECT SUM(ta_transfer.square_footage)
             FROM (
-              SELECT order_id, MAX(square_footage) as square_footage
+              SELECT DISTINCT ON (order_id) order_id, square_footage
               FROM truckload_assignments
               WHERE truckload_id = ta.truckload_id
               AND is_transfer_order = true
-              GROUP BY order_id
+              ORDER BY order_id
             ) ta_transfer
-          ), 0)::numeric as transfer_footage
+          ), 0) as transfer_footage
         FROM truckload_assignments ta
         GROUP BY ta.truckload_id
       )
@@ -98,41 +98,60 @@ export async function GET() {
 
     // Log detailed information for each truckload
     if (result.rows && result.rows.length > 0) {
+      console.log(`\n=== Truckload Footage Summary ===`)
       for (const truckload of result.rows) {
-        console.log(`\nTruckload ${truckload.id} details:`, {
-          driverName: truckload.driverName,
+        console.log(`Truckload ${truckload.id} (${truckload.driverName || 'No Driver'}):`, {
           pickupFootage: truckload.pickupFootage,
           deliveryFootage: truckload.deliveryFootage,
           transferFootage: truckload.transferFootage,
-          assignments: await query(`
+        })
+        
+        // Check if this truckload has assignments
+        const assignmentsCheck = await query(`
+          SELECT COUNT(*) as count
+          FROM truckload_order_assignments
+          WHERE truckload_id = $1
+        `, [truckload.id])
+        
+        if (parseInt(assignmentsCheck.rows[0].count) > 0) {
+          const assignments = await query(`
             SELECT 
               toa.truckload_id,
               toa.order_id,
               toa.assignment_type,
               COALESCE(
                 (
-                  SELECT SUM(s.width * s.length * s.quantity)
+                  SELECT COALESCE(SUM(s.width * s.length * s.quantity), 0)
                   FROM skids s
                   WHERE s.order_id = o.id
                 ) + (
-                  SELECT SUM(v.width * v.length * v.quantity)
+                  SELECT COALESCE(SUM(v.width * v.length * v.quantity), 0)
                   FROM vinyl v
                   WHERE v.order_id = o.id
                 ),
                 0
               ) as square_footage,
-              CASE WHEN EXISTS (
+              EXISTS (
                 SELECT 1 
                 FROM truckload_order_assignments toa2 
                 WHERE toa2.truckload_id = toa.truckload_id 
                 AND toa2.order_id = toa.order_id 
                 AND toa2.assignment_type != toa.assignment_type
-              ) THEN true ELSE false END as is_transfer
+              ) as is_transfer_order
             FROM truckload_order_assignments toa
             JOIN orders o ON toa.order_id = o.id
             WHERE toa.truckload_id = $1
           `, [truckload.id])
-        })
+          
+          console.log(`  Assignments (${assignments.rows.length}):`, assignments.rows.map(a => ({
+            orderId: a.order_id,
+            type: a.assignment_type,
+            footage: a.square_footage,
+            isTransfer: a.is_transfer_order
+          })))
+        } else {
+          console.log(`  No assignments found`)
+        }
       }
     }
 
