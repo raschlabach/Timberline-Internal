@@ -433,7 +433,7 @@ export default function TruckloadManager() {
                     onMoveDown={() => moveDriver(driver.id, 'down')}
                     isFirst={driverOrder.indexOf(driver.id) === 0}
                     isLast={driverOrder.indexOf(driver.id) === driverOrder.length - 1}
-                    isCollapsed={collapsedDrivers[driver.id] || false}
+                    isCollapsed={collapsedDrivers[driver.id] !== undefined ? collapsedDrivers[driver.id] : true}
                     onToggleCollapse={() => toggleDriverCollapse(driver.id)}
                   />
                 ))}
@@ -446,7 +446,7 @@ export default function TruckloadManager() {
               <DriverCard 
                 key={driver.id} 
                 driver={driver}
-                isCollapsed={collapsedDrivers[driver.id] || false}
+                isCollapsed={collapsedDrivers[driver.id] !== undefined ? collapsedDrivers[driver.id] : true}
                 onToggleCollapse={() => toggleDriverCollapse(driver.id)}
               />
             ))}
