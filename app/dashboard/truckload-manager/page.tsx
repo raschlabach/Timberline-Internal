@@ -2,14 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import { format } from 'date-fns';
 import { 
   Loader2, 
-  ChevronLeft, 
-  ChevronRight, 
   Info, 
   Plus,
   Truck, 
@@ -19,11 +15,11 @@ import {
   XCircle,
   Clock,
   Package,
-  Grid3X3,
-  List,
   GripVertical,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from "@/components/ui/badge";
@@ -95,21 +91,19 @@ export default function TruckloadManager() {
     }
   })
 
-  const [scrollPosition, setScrollPosition] = useState(0)
-  const [maxScroll, setMaxScroll] = useState(0)
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedTruckload, setSelectedTruckload] = useState<TruckloadSummary | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<'compact' | 'grid'>('compact')
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null)
   const [driverToggleStates, setDriverToggleStates] = useState<Record<number, boolean>>({})
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
+  const [collapsedDrivers, setCollapsedDrivers] = useState<Record<number, boolean>>({})
 
   const queryClient = useQueryClient()
 
-  // Load driver order from localStorage on mount and when drivers change
+  // Load driver order and collapsed state from localStorage on mount
   useEffect(() => {
     if (!driversData?.drivers) return
     
@@ -125,18 +119,39 @@ export default function TruckloadManager() {
         if (parsed.every((id: number) => driverIds.has(id)) && 
             Array.from(driverIds).every(id => savedIds.has(id))) {
           setDriverOrder(parsed)
-          return
+        } else {
+          // Initialize with alphabetical order
+          const sorted = [...driversData.drivers].sort((a, b) => 
+            a.full_name.localeCompare(b.full_name)
+          )
+          setDriverOrder(sorted.map(d => d.id))
         }
       } catch (e) {
         console.error('Failed to parse saved driver order:', e)
+        // Initialize with alphabetical order
+        const sorted = [...driversData.drivers].sort((a, b) => 
+          a.full_name.localeCompare(b.full_name)
+        )
+        setDriverOrder(sorted.map(d => d.id))
+      }
+    } else {
+      // Initialize with alphabetical order
+      const sorted = [...driversData.drivers].sort((a, b) => 
+        a.full_name.localeCompare(b.full_name)
+      )
+      setDriverOrder(sorted.map(d => d.id))
+    }
+
+    // Load collapsed state
+    const savedCollapsed = localStorage.getItem('truckloadManager_collapsedDrivers')
+    if (savedCollapsed) {
+      try {
+        const parsed = JSON.parse(savedCollapsed)
+        setCollapsedDrivers(parsed)
+      } catch (e) {
+        console.error('Failed to parse saved collapsed state:', e)
       }
     }
-    
-    // Initialize with alphabetical order
-    const sorted = [...driversData.drivers].sort((a, b) => 
-      a.full_name.localeCompare(b.full_name)
-    )
-    setDriverOrder(sorted.map(d => d.id))
   }, [driversData?.drivers])
 
   // Save driver order to localStorage whenever it changes
@@ -145,6 +160,11 @@ export default function TruckloadManager() {
       localStorage.setItem('truckloadManager_driverOrder', JSON.stringify(driverOrder))
     }
   }, [driverOrder])
+
+  // Save collapsed state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('truckloadManager_collapsedDrivers', JSON.stringify(collapsedDrivers))
+  }, [collapsedDrivers])
 
   // Set up drag and drop sensors
   const sensors = useSensors(
@@ -159,6 +179,14 @@ export default function TruckloadManager() {
     setDriverToggleStates(prev => ({
       ...prev,
       [driverId]: !prev[driverId] // Toggle the state, defaulting to true if undefined
+    }))
+  }
+
+  // Toggle driver column collapse
+  const toggleDriverCollapse = (driverId: number) => {
+    setCollapsedDrivers(prev => ({
+      ...prev,
+      [driverId]: !prev[driverId]
     }))
   }
 
@@ -184,40 +212,6 @@ export default function TruckloadManager() {
     }
   })
 
-  const handleScroll = (direction: 'left' | 'right') => {
-    const container = document.getElementById('driver-columns');
-    if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8; // Scroll by 80% of the visible width
-    const newPosition = direction === 'left' 
-      ? Math.max(0, container.scrollLeft - scrollAmount)
-      : Math.min(container.scrollWidth - container.clientWidth, container.scrollLeft + scrollAmount);
-
-    container.scrollTo({
-      left: newPosition,
-      behavior: 'smooth'
-    });
-    setScrollPosition(newPosition);
-  };
-
-  useEffect(() => {
-    const container = document.getElementById('driver-columns');
-    if (!container) return;
-
-    const updateScrollInfo = () => {
-      setScrollPosition(container.scrollLeft);
-      setMaxScroll(container.scrollWidth - container.clientWidth);
-    };
-
-    updateScrollInfo();
-    container.addEventListener('scroll', updateScrollInfo);
-    window.addEventListener('resize', updateScrollInfo);
-
-    return () => {
-      container.removeEventListener('scroll', updateScrollInfo);
-      window.removeEventListener('resize', updateScrollInfo);
-    };
-  }, []);
 
   if (isLoadingDrivers || isLoadingTruckloads) {
     return (
@@ -400,52 +394,6 @@ export default function TruckloadManager() {
             {isReorderMode ? 'Done Reordering' : 'Reorder Columns'}
           </Button>
           
-          {/* View Mode Controls */}
-          <div className="flex items-center gap-2 bg-white rounded-lg border shadow-sm p-1">
-            <Button
-              variant={viewMode === 'compact' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-8 px-3"
-              onClick={() => setViewMode('compact')}
-            >
-              <List className="h-4 w-4 mr-1" />
-              Compact
-            </Button>
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-8 px-3"
-              onClick={() => setViewMode('grid')}
-            >
-              <Grid3X3 className="h-4 w-4 mr-1" />
-              Grid
-            </Button>
-          </div>
-
-          {/* Scroll Controls (only show in compact mode) */}
-          {viewMode === 'compact' && (
-            <div className="flex items-center gap-2 bg-white rounded-lg border shadow-sm p-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-gray-100"
-                onClick={() => handleScroll('left')}
-                disabled={scrollPosition <= 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Separator orientation="vertical" className="h-6" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-gray-100"
-                onClick={() => handleScroll('right')}
-                disabled={scrollPosition >= maxScroll}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -460,63 +408,36 @@ export default function TruckloadManager() {
           >
             <SortableContext
               items={driverOrder}
-              strategy={viewMode === 'grid' ? verticalListSortingStrategy : undefined}
+              strategy={verticalListSortingStrategy}
             >
-              {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                  {displayDrivers.map((driver: Driver) => (
-                    <SortableDriverCard 
-                      key={driver.id} 
-                      driver={driver} 
-                      isReorderMode={isReorderMode}
-                      onMoveUp={() => moveDriver(driver.id, 'up')}
-                      onMoveDown={() => moveDriver(driver.id, 'down')}
-                      isFirst={driverOrder.indexOf(driver.id) === 0}
-                      isLast={driverOrder.indexOf(driver.id) === driverOrder.length - 1}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div
-                  id="driver-columns"
-                  className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide items-start"
-                  style={{ scrollbarWidth: 'none' }}
-                >
-                  {displayDrivers.map((driver: Driver) => (
-                    <SortableDriverCard 
-                      key={driver.id} 
-                      driver={driver} 
-                      isReorderMode={isReorderMode}
-                      onMoveUp={() => moveDriver(driver.id, 'up')}
-                      onMoveDown={() => moveDriver(driver.id, 'down')}
-                      isFirst={driverOrder.indexOf(driver.id) === 0}
-                      isLast={driverOrder.indexOf(driver.id) === driverOrder.length - 1}
-                    />
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                {displayDrivers.map((driver: Driver) => (
+                  <SortableDriverCard 
+                    key={driver.id} 
+                    driver={driver} 
+                    isReorderMode={isReorderMode}
+                    onMoveUp={() => moveDriver(driver.id, 'up')}
+                    onMoveDown={() => moveDriver(driver.id, 'down')}
+                    isFirst={driverOrder.indexOf(driver.id) === 0}
+                    isLast={driverOrder.indexOf(driver.id) === driverOrder.length - 1}
+                    isCollapsed={collapsedDrivers[driver.id] || false}
+                    onToggleCollapse={() => toggleDriverCollapse(driver.id)}
+                  />
+                ))}
+              </div>
             </SortableContext>
           </DndContext>
         ) : (
-          <>
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                {displayDrivers.map((driver: Driver) => (
-                  <DriverCard key={driver.id} driver={driver} />
-                ))}
-              </div>
-            ) : (
-              <div
-                id="driver-columns"
-                className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide items-start"
-                style={{ scrollbarWidth: 'none' }}
-              >
-                {displayDrivers.map((driver: Driver) => (
-                  <DriverCard key={driver.id} driver={driver} />
-                ))}
-              </div>
-            )}
-          </>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+            {displayDrivers.map((driver: Driver) => (
+              <DriverCard 
+                key={driver.id} 
+                driver={driver}
+                isCollapsed={collapsedDrivers[driver.id] || false}
+                onToggleCollapse={() => toggleDriverCollapse(driver.id)}
+              />
+            ))}
+          </div>
         )}
       </div>
 
@@ -708,7 +629,9 @@ export default function TruckloadManager() {
     onMoveUp,
     onMoveDown,
     isFirst,
-    isLast
+    isLast,
+    isCollapsed,
+    onToggleCollapse
   }: { 
     driver: Driver
     isReorderMode: boolean
@@ -716,6 +639,8 @@ export default function TruckloadManager() {
     onMoveDown: () => void
     isFirst: boolean
     isLast: boolean
+    isCollapsed: boolean
+    onToggleCollapse: () => void
   }) {
     const {
       attributes,
@@ -739,7 +664,7 @@ export default function TruckloadManager() {
     return (
       <div ref={setNodeRef} style={style} className={isDragging ? 'z-50' : ''}>
         <Card 
-          className={`${viewMode === 'grid' ? 'w-full' : 'min-w-[300px] flex-shrink-0'} bg-white shadow-lg border-0 h-fit ${
+          className={`w-full bg-white shadow-lg border-0 h-fit ${
             isReorderMode ? 'ring-2 ring-blue-300' : ''
           }`}
           style={{
@@ -758,6 +683,18 @@ export default function TruckloadManager() {
                     <GripVertical className="h-4 w-4 text-gray-400" />
                   </div>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 -ml-1"
+                  onClick={onToggleCollapse}
+                >
+                  {isCollapsed ? (
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  ) : (
+                    <ChevronUp className="h-4 w-4 text-gray-500" />
+                  )}
+                </Button>
                 <div 
                   className="w-3 h-3 rounded-full shadow-sm" 
                   style={{ backgroundColor: driver.color }}
@@ -846,7 +783,7 @@ export default function TruckloadManager() {
               </div>
             )}
           </CardHeader>
-          {!isReorderMode && (
+          {!isReorderMode && !isCollapsed && (
             <CardContent className="p-3">
               <div className="space-y-3">
                 {driverTruckloads.map((truckload: TruckloadSummary) => (
@@ -877,26 +814,38 @@ export default function TruckloadManager() {
   }
 
   // Driver Card Component
-  function DriverCard({ driver }: { driver: Driver }) {
+  function DriverCard({ driver, isCollapsed, onToggleCollapse }: { driver: Driver; isCollapsed: boolean; onToggleCollapse: () => void }) {
     const driverTruckloads = getDriverTruckloads(driver.id);
     const completedTruckloads = driverTruckloads.filter(t => t.isCompleted).length;
     const showActive = driverToggleStates[driver.id] !== false;
     
     return (
       <Card 
-        className={`${viewMode === 'grid' ? 'w-full' : 'min-w-[300px] flex-shrink-0'} bg-white shadow-lg border-0 h-fit`}
+        className="w-full bg-white shadow-lg border-0 h-fit"
         style={{
           borderLeft: `4px solid ${driver.color}`,
         }}
       >
         <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 -ml-1"
+                onClick={onToggleCollapse}
+              >
+                {isCollapsed ? (
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <ChevronUp className="h-4 w-4 text-gray-500" />
+                )}
+              </Button>
               <div 
                 className="w-3 h-3 rounded-full shadow-sm" 
                 style={{ backgroundColor: driver.color }}
               />
-              <div>
+              <div className="flex-1">
                 <CardTitle className="text-base font-semibold text-gray-900">
                   {driver.full_name}
                 </CardTitle>
@@ -955,29 +904,31 @@ export default function TruckloadManager() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-3">
-          <div className="space-y-3">
-            {driverTruckloads.map((truckload: TruckloadSummary) => (
-              <TruckloadCard key={truckload.id} truckload={truckload} />
-            ))}
-            {driverTruckloads.length === 0 && (
-              <div className="text-center py-6">
-                <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
-                  <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                  <p className="text-xs text-gray-500 font-medium">
-                    {showActive ? 'No active truckloads' : 'No completed truckloads'}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {showActive 
-                      ? 'Click the + button to add a new truckload' 
-                      : 'Switch to Active view to see current truckloads'
-                    }
-                  </p>
+        {!isCollapsed && (
+          <CardContent className="p-3">
+            <div className="space-y-3">
+              {driverTruckloads.map((truckload: TruckloadSummary) => (
+                <TruckloadCard key={truckload.id} truckload={truckload} />
+              ))}
+              {driverTruckloads.length === 0 && (
+                <div className="text-center py-6">
+                  <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                    <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                    <p className="text-xs text-gray-500 font-medium">
+                      {showActive ? 'No active truckloads' : 'No completed truckloads'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {showActive 
+                        ? 'Click the + button to add a new truckload' 
+                        : 'Switch to Active view to see current truckloads'
+                      }
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
+              )}
+            </div>
+          </CardContent>
+        )}
       </Card>
     );
   }
