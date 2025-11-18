@@ -307,8 +307,11 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
       if (!data.success) throw new Error(data.error || 'Failed to unassign stop')
 
       toast.success('Stop unassigned successfully')
-      // Invalidate the stops query to trigger a refresh
+      // Invalidate queries to refresh truckload manager and stops
       queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
+      queryClient.invalidateQueries({ queryKey: ["truckload", truckloadId] })
+      queryClient.invalidateQueries({ queryKey: ["truckloads"] })
+      queryClient.invalidateQueries({ queryKey: ["orders"] })
     } catch (error) {
       toast.error('Failed to unassign stop')
     }
@@ -611,6 +614,49 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
             }}
           />
 
+          {/* Footage Summary */}
+          <Card className="p-4">
+            <h3 className="text-sm font-medium mb-2">Footage Summary</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-red-600">Pickups</span>
+                <span className="font-medium">
+                  {sortedStops
+                    .filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order)
+                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
+                    .toLocaleString()} ft²
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-900">Deliveries</span>
+                <span className="font-medium">
+                  {sortedStops
+                    .filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order)
+                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
+                    .toLocaleString()} ft²
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-blue-600">Transfers</span>
+                <span className="font-medium">
+                  {sortedStops
+                    .filter(s => s.is_transfer_order)
+                    .reduce((acc, stop) => {
+                      // Use order_id to deduplicate transfer orders (same order appears twice - pickup and delivery)
+                      const orderId = stop.order_id
+                      if (!acc.processedOrders.has(orderId)) {
+                        acc.processedOrders.add(orderId)
+                        acc.total += Number(stop.footage || 0)
+                      }
+                      return acc
+                    }, { total: 0, processedOrders: new Set<number>() })
+                    .total
+                    .toLocaleString()} ft²
+                </span>
+              </div>
+            </div>
+          </Card>
+
           {/* Stops Section */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
@@ -699,48 +745,6 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
               <div className="bg-blue-50 p-2 rounded">
                 <div className="text-sm font-medium text-blue-600">Transfers</div>
                 <div className="text-lg font-bold">{sortedStops.filter(s => s.is_transfer_order).length}</div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Footage Summary */}
-          <Card className="p-4">
-            <h3 className="text-sm font-medium mb-2">Footage Summary</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-red-600">Pickups</span>
-                <span className="font-medium">
-                  {sortedStops
-                    .filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order)
-                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
-                    .toLocaleString()} ft²
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-900">Deliveries</span>
-                <span className="font-medium">
-                  {sortedStops
-                    .filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order)
-                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
-                    .toLocaleString()} ft²
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-blue-600">Transfers</span>
-                <span className="font-medium">
-                  {sortedStops
-                    .filter(s => s.is_transfer_order)
-                    .reduce((acc, stop) => {
-                      const assignmentId = stop.id
-                      if (!acc.processedOrders.has(assignmentId)) {
-                        acc.processedOrders.add(assignmentId)
-                        acc.total += Number(stop.footage || 0)
-                      }
-                      return acc
-                    }, { total: 0, processedOrders: new Set<number>() })
-                    .total
-                    .toLocaleString()} ft²
-                </span>
               </div>
             </div>
           </Card>

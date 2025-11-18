@@ -37,7 +37,7 @@ export async function GET() {
         JOIN orders o ON toa.order_id = o.id
       ),
       transfer_orders AS (
-        -- Identify orders that have both pickup and delivery assignments
+        -- Identify orders that have both pickup and delivery assignments in the same truckload
         SELECT DISTINCT
           ta1.truckload_id,
           ta1.order_id,
@@ -52,7 +52,7 @@ export async function GET() {
       footage_calculations AS (
         SELECT 
           t.id as truckload_id,
-          -- Sum pickup footage (excluding orders that are also deliveries)
+          -- Sum pickup footage (excluding orders that are also deliveries in the same truckload)
           COALESCE(SUM(CASE 
             WHEN ta.assignment_type = 'pickup' 
             AND NOT EXISTS (
@@ -63,7 +63,7 @@ export async function GET() {
             THEN ta.square_footage
             ELSE 0 
           END), 0) as pickup_footage,
-          -- Sum delivery footage (excluding orders that are also pickups)
+          -- Sum delivery footage (excluding orders that are also pickups in the same truckload)
           COALESCE(SUM(CASE 
             WHEN ta.assignment_type = 'delivery' 
             AND NOT EXISTS (
@@ -74,15 +74,14 @@ export async function GET() {
             THEN ta.square_footage
             ELSE 0 
           END), 0) as delivery_footage,
-          -- Sum transfer footage (count each order once)
-          COALESCE(SUM(DISTINCT CASE 
-            WHEN tr.order_id IS NOT NULL 
-            THEN tr.square_footage
-            ELSE 0 
-          END), 0) as transfer_footage
+          -- Sum transfer footage (count each order once - transfer_orders CTE already has distinct order_id per truckload)
+          COALESCE((
+            SELECT SUM(tr.square_footage)
+            FROM transfer_orders tr
+            WHERE tr.truckload_id = t.id
+          ), 0) as transfer_footage
         FROM truckloads t
         LEFT JOIN truckload_assignments ta ON t.id = ta.truckload_id
-        LEFT JOIN transfer_orders tr ON t.id = tr.truckload_id AND ta.order_id = tr.order_id
         GROUP BY t.id
       )
       SELECT 

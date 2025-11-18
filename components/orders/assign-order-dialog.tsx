@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TruckloadSummary } from '@/types/truckloads'
 import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface AssignOrderDialogProps {
   isOpen: boolean
@@ -78,6 +79,7 @@ export function AssignOrderDialog({
   onAssignmentChange,
   isPickupCompleted = false
 }: AssignOrderDialogProps) {
+  const queryClient = useQueryClient()
   const [assignmentType, setAssignmentType] = useState<'pickup' | 'delivery'>('pickup')
   const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([])
   const [truckloads, setTruckloads] = useState<TruckloadSummary[]>([])
@@ -175,6 +177,10 @@ export function AssignOrderDialog({
       if (!response.ok) throw new Error('Failed to unassign order')
 
       toast.success('Order unassigned successfully')
+      // Invalidate queries to refresh truckload manager and orders
+      queryClient.invalidateQueries({ queryKey: ['truckloads'] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['truckload-stops'] })
       onAssignmentChange()
       onClose()
     } catch (error) {
@@ -208,6 +214,10 @@ export function AssignOrderDialog({
       if (!response.ok) throw new Error('Failed to assign order')
 
       toast.success('Order assigned successfully')
+      // Invalidate queries to refresh truckload manager and orders
+      queryClient.invalidateQueries({ queryKey: ['truckloads'] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['truckload-stops'] })
       onAssignmentChange()
       onClose()
     } catch (error) {
