@@ -15,12 +15,12 @@ export async function GET() {
 
     const result = await query(`
       WITH truckload_assignments AS (
-        -- Get all assignments with their order data
+        -- Get all assignments with their order data and footage
         SELECT 
           toa.truckload_id,
           toa.order_id,
           toa.assignment_type,
-          -- Calculate footage from skids and vinyl
+          -- Calculate footage from skids and vinyl (same as sidebar calculation)
           COALESCE(
             (
               SELECT SUM(s.width * s.length * s.quantity)
@@ -32,53 +32,43 @@ export async function GET() {
               WHERE v.order_id = o.id
             ),
             0
-          ) as square_footage
+          ) as square_footage,
+          -- Check if this order is a transfer (has both pickup and delivery in same truckload)
+          EXISTS (
+            SELECT 1 
+            FROM truckload_order_assignments toa2 
+            WHERE toa2.truckload_id = toa.truckload_id 
+            AND toa2.order_id = toa.order_id 
+            AND toa2.assignment_type != toa.assignment_type
+          ) as is_transfer_order
         FROM truckload_order_assignments toa
         JOIN orders o ON toa.order_id = o.id
-      ),
-      transfer_orders AS (
-        -- Identify orders that have both pickup and delivery assignments in the same truckload
-        SELECT DISTINCT
-          ta1.truckload_id,
-          ta1.order_id,
-          ta1.square_footage
-        FROM truckload_assignments ta1
-        JOIN truckload_assignments ta2 ON 
-          ta1.truckload_id = ta2.truckload_id 
-          AND ta1.order_id = ta2.order_id
-          AND ta1.assignment_type = 'pickup'
-          AND ta2.assignment_type = 'delivery'
       ),
       footage_calculations AS (
         SELECT 
           t.id as truckload_id,
-          -- Sum pickup footage (excluding orders that are also deliveries in the same truckload)
+          -- Sum pickup footage (excluding transfer orders)
           COALESCE(SUM(CASE 
-            WHEN ta.assignment_type = 'pickup' 
-            AND NOT EXISTS (
-              SELECT 1 FROM transfer_orders tr 
-              WHERE tr.truckload_id = t.id 
-              AND tr.order_id = ta.order_id
-            )
+            WHEN ta.assignment_type = 'pickup' AND NOT ta.is_transfer_order
             THEN ta.square_footage
             ELSE 0 
           END), 0) as pickup_footage,
-          -- Sum delivery footage (excluding orders that are also pickups in the same truckload)
+          -- Sum delivery footage (excluding transfer orders)
           COALESCE(SUM(CASE 
-            WHEN ta.assignment_type = 'delivery' 
-            AND NOT EXISTS (
-              SELECT 1 FROM transfer_orders tr 
-              WHERE tr.truckload_id = t.id 
-              AND tr.order_id = ta.order_id
-            )
+            WHEN ta.assignment_type = 'delivery' AND NOT ta.is_transfer_order
             THEN ta.square_footage
             ELSE 0 
           END), 0) as delivery_footage,
-          -- Sum transfer footage (count each order once - transfer_orders CTE already has distinct order_id per truckload)
+          -- Sum transfer footage (count each order once - group by order_id to deduplicate)
           COALESCE((
-            SELECT SUM(tr.square_footage)
-            FROM transfer_orders tr
-            WHERE tr.truckload_id = t.id
+            SELECT SUM(ta_transfer.square_footage)
+            FROM (
+              SELECT order_id, MAX(square_footage) as square_footage
+              FROM truckload_assignments
+              WHERE truckload_id = t.id
+              AND is_transfer_order = true
+              GROUP BY order_id
+            ) ta_transfer
           ), 0) as transfer_footage
         FROM truckloads t
         LEFT JOIN truckload_assignments ta ON t.id = ta.truckload_id
