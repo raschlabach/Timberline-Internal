@@ -46,33 +46,32 @@ export async function GET() {
       ),
       footage_calculations AS (
         SELECT 
-          t.id as truckload_id,
+          ta.truckload_id,
           -- Sum pickup footage (excluding transfer orders)
           COALESCE(SUM(CASE 
             WHEN ta.assignment_type = 'pickup' AND NOT ta.is_transfer_order
             THEN ta.square_footage
             ELSE 0 
-          END), 0) as pickup_footage,
+          END), 0)::numeric as pickup_footage,
           -- Sum delivery footage (excluding transfer orders)
           COALESCE(SUM(CASE 
             WHEN ta.assignment_type = 'delivery' AND NOT ta.is_transfer_order
             THEN ta.square_footage
             ELSE 0 
-          END), 0) as delivery_footage,
+          END), 0)::numeric as delivery_footage,
           -- Sum transfer footage (count each order once - group by order_id to deduplicate)
           COALESCE((
             SELECT SUM(ta_transfer.square_footage)
             FROM (
               SELECT order_id, MAX(square_footage) as square_footage
               FROM truckload_assignments
-              WHERE truckload_id = t.id
+              WHERE truckload_id = ta.truckload_id
               AND is_transfer_order = true
               GROUP BY order_id
             ) ta_transfer
-          ), 0) as transfer_footage
-        FROM truckloads t
-        LEFT JOIN truckload_assignments ta ON t.id = ta.truckload_id
-        GROUP BY t.id
+          ), 0)::numeric as transfer_footage
+        FROM truckload_assignments ta
+        GROUP BY ta.truckload_id
       )
       SELECT 
         t.id,
