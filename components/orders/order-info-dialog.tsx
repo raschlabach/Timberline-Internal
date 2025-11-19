@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -109,7 +109,22 @@ export function OrderInfoDialog({
             number: i + 1 // Will be renumbered by SkidsVinylEntry
           }));
         }) : [],
-        pickupDate: data.pickupDate || '',
+        pickupDate: data.pickupDate 
+          ? (() => {
+              // Convert pickupDate to YYYY-MM-DD format for HTML date input
+              try {
+                const date = typeof data.pickupDate === 'string' 
+                  ? parseISO(data.pickupDate) 
+                  : new Date(data.pickupDate);
+                if (isValid(date)) {
+                  return format(date, 'yyyy-MM-dd');
+                }
+              } catch (e) {
+                console.error('Error parsing pickupDate:', e);
+              }
+              return '';
+            })()
+          : '',
         isRushOrder: Boolean(data.isRushOrder),
         needsAttention: Boolean(data.needsAttention),
         comments: data.comments || '',
