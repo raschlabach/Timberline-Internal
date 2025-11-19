@@ -506,7 +506,12 @@ export default function TruckloadManager() {
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-500" />
                 <span className="text-xs font-semibold text-gray-900">
-                  {format(new Date(truckload.startDate), 'MMM dd')}
+                  {(() => {
+                    // Parse date as local date to avoid timezone conversion
+                    const dateParts = truckload.startDate.split('-')
+                    const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
+                    return format(date, 'MMM dd')
+                  })()}
                 </span>
               </div>
               {truckload.isCompleted ? (
