@@ -93,6 +93,12 @@ export default function OrderEntryPage() {
       errors.deliveryCustomer = 'Delivery Customer is required';
     }
     
+    // Check if at least one filter is selected
+    const hasFilterSelected = Object.values(formState.filters).some(value => value === true);
+    if (!hasFilterSelected) {
+      errors.filters = 'Please select at least one load type filter';
+    }
+    
     if (formState.freightType === 'skidsVinyl' && formState.skidsVinyl.length === 0) {
       errors.freight = 'Please add at least one skid or vinyl item';
     }
@@ -132,7 +138,15 @@ export default function OrderEntryPage() {
         [filter]: checked
       }
     }));
-  }, []);
+    // Clear filter validation error when a filter is selected
+    if (checked && validationErrors.filters) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.filters;
+        return newErrors;
+      });
+    }
+  }, [validationErrors.filters]);
 
   const handleFreightTypeChange = useCallback((type: OrderFormState['freightType']): void => {
     setFormState(prev => ({
@@ -518,6 +532,7 @@ export default function OrderEntryPage() {
                 <CardTitle className="flex items-center text-sm">
                   <span className="flex items-center justify-center bg-primary text-white rounded-full w-5 h-5 text-xs mr-2" aria-hidden="true">2</span>
                   Load Filters
+                  <span className="text-red-500 ml-1" aria-label="required">*</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-3">
@@ -558,6 +573,9 @@ export default function OrderEntryPage() {
                     onCheckedChange={(checked: boolean) => handleFilterChange('paNy', checked)}
                   />
                 </div>
+                {validationErrors.filters && (
+                  <p className="text-sm text-red-500 mt-2" role="alert" aria-live="polite">{validationErrors.filters}</p>
+                )}
               </CardContent>
             </Card>
             
