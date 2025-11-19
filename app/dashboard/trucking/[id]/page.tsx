@@ -129,9 +129,9 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                             <TruckloadSidebarList truckloadId={truckloadId} />
                         </div>
                         <div className="flex-grow overflow-hidden">
-                            <Card className="h-full">
-                                <Tabs defaultValue="stops" className="h-full">
-                                    <div className="border-b px-4">
+                            <Card className="h-full flex flex-col">
+                                <Tabs defaultValue="stops" className="h-full flex flex-col">
+                                    <div className="border-b px-4 flex-shrink-0">
                                         <TabsList>
                                             <TabsTrigger value="stops">Stops</TabsTrigger>
                                             <TabsTrigger value="map">Map</TabsTrigger>
@@ -140,7 +140,7 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                                         </TabsList>
                                     </div>
 
-                                    <TabsContent value="stops" className="flex-grow overflow-hidden">
+                                    <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden">
                                         <div className="h-full min-h-0">
                                             <TruckloadStopsList truckloadId={truckloadId} />
                                         </div>

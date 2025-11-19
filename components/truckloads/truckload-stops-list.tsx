@@ -1059,8 +1059,8 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
 
   return (
     <TooltipProvider>
-      <div className="h-full flex flex-col min-h-0 overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="h-full flex flex-col min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-2">
           <DndContext
             sensors={sensors}
             collisionDetection={rectIntersection}
