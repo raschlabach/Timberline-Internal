@@ -290,7 +290,11 @@ export async function PATCH(
           data.pickupCustomer?.id,
           data.deliveryCustomer?.id,
           data.payingCustomer?.id || null,
-          data.pickupDate || null,
+          // Ensure pickupDate is a date string (YYYY-MM-DD) or null
+          // PostgreSQL DATE type handles this correctly without timezone conversion
+          data.pickupDate && typeof data.pickupDate === 'string' 
+            ? data.pickupDate 
+            : (data.pickupDate ? new Date(data.pickupDate).toISOString().split('T')[0] : null),
           // Convert empty string to null for numeric field
           (data.freightQuote && data.freightQuote.toString().trim() !== '') 
             ? parseFloat(data.freightQuote.toString()) 

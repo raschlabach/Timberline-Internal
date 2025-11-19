@@ -38,6 +38,7 @@ import {
 } from '@/types/orders';
 import { OrderCustomer, convertToOrderCustomer } from "@/types/shared";
 import { ChevronDown } from "lucide-react";
+import { format } from "date-fns";
 
 export default function OrderEntryPage() {
   const router = useRouter();
@@ -277,7 +278,10 @@ export default function OrderEntryPage() {
           skidsVinyl: formState.skidsVinyl,
           footage: formState.footage,
           handBundles: formState.handBundles,
-          pickupDate: formState.pickupDate,
+          // Convert Date object to YYYY-MM-DD string to avoid timezone issues
+          pickupDate: formState.pickupDate 
+            ? format(formState.pickupDate, 'yyyy-MM-dd')
+            : null,
           comments: formState.comments,
           freightQuote: formState.freightQuote ? parseFloat(formState.freightQuote) : null,
           statusFlags: formState.statusFlags,

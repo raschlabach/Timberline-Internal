@@ -178,6 +178,22 @@ export function OrderInfoDialog({
         quantity: 1 // Each SkidData item represents a single vinyl
       }));
       
+      // Convert pickupDate to YYYY-MM-DD string
+      // The date input field returns YYYY-MM-DD format, so we use it directly
+      let pickupDateValue: string | null = null;
+      if (formData.pickupDate) {
+        if (typeof formData.pickupDate === 'string') {
+          // If it's already a string, use it directly (should be YYYY-MM-DD)
+          pickupDateValue = formData.pickupDate;
+        } else {
+          // If it's somehow a Date object (shouldn't happen but handle it), format it
+          const date = new Date(formData.pickupDate as any);
+          if (!isNaN(date.getTime())) {
+            pickupDateValue = format(date, 'yyyy-MM-dd');
+          }
+        }
+      }
+
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -185,7 +201,7 @@ export function OrderInfoDialog({
           pickupCustomer: formData.pickupCustomer,
           deliveryCustomer: formData.deliveryCustomer,
           payingCustomer: formData.payingCustomer,
-          pickupDate: formData.pickupDate,
+          pickupDate: pickupDateValue,
           isRushOrder: formData.isRushOrder,
           needsAttention: formData.needsAttention,
           comments: formData.comments,
