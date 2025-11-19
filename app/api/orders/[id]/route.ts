@@ -290,8 +290,11 @@ export async function PATCH(
           data.pickupCustomer?.id,
           data.deliveryCustomer?.id,
           data.payingCustomer?.id || null,
-          data.pickupDate,
-          data.freightQuote || '',
+          data.pickupDate || null,
+          // Convert empty string to null for numeric field
+          (data.freightQuote && data.freightQuote.toString().trim() !== '') 
+            ? parseFloat(data.freightQuote.toString()) 
+            : null,
           data.comments || '',
           data.isRushOrder,
           data.needsAttention,
@@ -318,7 +321,13 @@ export async function PATCH(
             `INSERT INTO skids (
               order_id, width, length, square_footage, quantity
             ) VALUES ($1, $2, $3, $4, $5)`,
-            [orderId, skid.width, skid.length, skid.footage, skid.quantity]
+            [
+              orderId, 
+              Number(skid.width) || 0, 
+              Number(skid.length) || 0, 
+              Number(skid.footage) || 0, 
+              Number(skid.quantity) || 1
+            ]
           );
         }
       }
@@ -334,7 +343,13 @@ export async function PATCH(
             `INSERT INTO vinyl (
               order_id, width, length, square_footage, quantity
             ) VALUES ($1, $2, $3, $4, $5)`,
-            [orderId, vinyl.width, vinyl.length, vinyl.footage, vinyl.quantity]
+            [
+              orderId, 
+              Number(vinyl.width) || 0, 
+              Number(vinyl.length) || 0, 
+              Number(vinyl.footage) || 0, 
+              Number(vinyl.quantity) || 1
+            ]
           );
         }
       }
