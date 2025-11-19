@@ -803,6 +803,7 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   const [isReordering, setIsReordering] = useState(false)
   const [columnWidths, setColumnWidths] = useState<number[]>([0, 0, 0, 0, 0])
   const containerRef = useRef<HTMLDivElement>(null)
+  const hasMeasuredRef = useRef(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1058,9 +1059,12 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   // Measure column widths after stops are rendered
   useEffect(() => {
     if (stops.length === 0 || !containerRef.current) {
-      setColumnWidths([0, 0, 0, 0, 0])
+      hasMeasuredRef.current = false
       return
     }
+
+    // Only measure once per stops change
+    if (hasMeasuredRef.current) return
 
     const measureColumns = () => {
       try {
@@ -1089,22 +1093,33 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
         if (widths.some(w => w > 0)) {
           // Add small padding to each column (8px) for spacing
           const paddedWidths = widths.map(w => w > 0 ? w + 8 : 0)
-          setColumnWidths(paddedWidths)
+          
+          // Only update if widths actually changed to prevent infinite loops
+          setColumnWidths(prev => {
+            const hasChanged = prev.some((p, i) => p !== paddedWidths[i])
+            if (hasChanged) {
+              hasMeasuredRef.current = true
+              return paddedWidths
+            }
+            return prev
+          })
         }
       } catch (error) {
         console.error('Error measuring column widths:', error)
-        // Fallback to auto sizing - don't update state to avoid re-render loop
+        hasMeasuredRef.current = true // Mark as measured even on error to prevent retries
       }
     }
 
     // Use requestAnimationFrame and multiple timeouts to ensure DOM is fully rendered
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        requestAnimationFrame(() => {
-          setTimeout(measureColumns, 10)
-        })
-      }, 10)
-    })
+    const timeoutId = setTimeout(() => {
+      requestAnimationFrame(() => {
+        setTimeout(measureColumns, 10)
+      })
+    }, 50)
+
+    return () => {
+      clearTimeout(timeoutId)
+    }
   }, [stops])
 
   const gridTemplateColumns = columnWidths.every(w => w > 0)
