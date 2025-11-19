@@ -586,7 +586,7 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col relative">
+    <div className="h-[calc(100vh-4rem)] flex flex-col relative overflow-hidden">
       <div className="p-4 flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Fixed content at top */}
         <div className="space-y-4 flex-shrink-0">

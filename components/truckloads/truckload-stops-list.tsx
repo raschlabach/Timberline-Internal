@@ -197,22 +197,21 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
           <div>
             {groupedStop.stops.map((stop, index) => (
               <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-2 pt-2 border-t border-gray-200" : ""}>
-                {/* Header row with sequence, type, flags and date */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <div className="flex items-center gap-1">
-                      {index === 0 && (
-                        <button
-                          className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded"
-                          {...attributes}
-                          {...listeners}
-                        >
-                          <GripVertical className="h-3.5 w-3.5 text-gray-400" />
-                        </button>
-                      )}
-                      <span className="font-medium text-sm">#{stop.sequence_number}</span>
-                    </div>
-                    <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5">
+                {/* Single horizontal row with all info */}
+                <div className="flex items-center gap-2">
+                  {/* Left side: Drag handle, sequence, badges */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {index === 0 && (
+                      <button
+                        className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
+                        {...attributes}
+                        {...listeners}
+                      >
+                        <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                      </button>
+                    )}
+                    <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
+                    <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5 whitespace-nowrap">
                       {stop.assignment_type === 'pickup' ? (
                         <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
                       ) : (
@@ -220,13 +219,76 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                       )}
                     </Badge>
                     {stop.is_transfer_order && (
-                      <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200">
+                      <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
                         Transfer
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-0.5">
-                    <div className="text-xs text-gray-500 mr-1">
+
+                  {/* Origin customer */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-500 leading-tight">
+                      {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
+                    </div>
+                    <div className={`truncate leading-tight ${
+                      stop.assignment_type === 'pickup' 
+                        ? 'text-sm font-bold' 
+                        : 'text-xs font-medium text-gray-700'
+                    }`}>
+                      {stop.pickup_customer.name}
+                    </div>
+                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
+                  </div>
+
+                  {/* Destination customer */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-500 leading-tight">
+                      {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
+                    </div>
+                    <div className={`truncate leading-tight ${
+                      stop.assignment_type === 'delivery' 
+                        ? 'text-sm font-bold' 
+                        : 'text-xs font-medium text-gray-700'
+                    }`}>
+                      {stop.delivery_customer.name}
+                    </div>
+                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
+                  </div>
+
+                  {/* Freight Info */}
+                  <div className="flex-shrink-0 w-32">
+                    <div className="text-xs text-gray-500 leading-tight">Freight</div>
+                    <div className="flex flex-col gap-0.5 text-xs">
+                      {stop.footage > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">Ft:</span>
+                          <span className="font-medium">{Math.round(stop.footage)}</span>
+                        </div>
+                      )}
+                      {stop.skids > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">S:</span>
+                          <span className="font-medium">{stop.skids}</span>
+                        </div>
+                      )}
+                      {stop.vinyl > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">V:</span>
+                          <span className="font-medium">{stop.vinyl}</span>
+                        </div>
+                      )}
+                      {stop.hand_bundles > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500">HB:</span>
+                          <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right side: Date, flags, buttons */}
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                       {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
                     </div>
                     {stop.is_rush && (
@@ -354,80 +416,6 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     </DropdownMenu>
                   </div>
                 </div>
-
-                {/* Locations row */}
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  <div>
-                    <div className="text-xs text-gray-500 leading-tight">
-                      {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
-                    </div>
-                    <div className={`truncate leading-tight ${
-                      stop.assignment_type === 'pickup' 
-                        ? 'text-base font-bold' 
-                        : 'text-sm font-medium text-gray-700'
-                    }`}>
-                      {stop.pickup_customer.name}
-                    </div>
-                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 leading-tight">
-                      {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
-                    </div>
-                    <div className={`truncate leading-tight ${
-                      stop.assignment_type === 'delivery' 
-                        ? 'text-base font-bold' 
-                        : 'text-sm font-medium text-gray-700'
-                    }`}>
-                      {stop.delivery_customer.name}
-                    </div>
-                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 leading-tight">Freight Info</div>
-                    <div className="flex flex-col gap-0.5 text-xs">
-                      {stop.footage > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">Total Ft:</span>
-                          <span className="font-medium">{Math.round(stop.footage)}</span>
-                        </div>
-                      )}
-                      {stop.skids > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">Skids:</span>
-                          <span className="font-medium">{stop.skids}</span>
-                          {stop.skids_data?.length > 0 && (
-                            <span className="text-gray-600">
-                              ({stop.skids_data.map(skid => `${skid.quantity} ${skid.width}x${skid.length}`).join(' - ')})
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {stop.vinyl > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">Vinyl:</span>
-                          <span className="font-medium">{stop.vinyl}</span>
-                          {stop.vinyl_data?.length > 0 && (
-                            <span className="text-gray-600">
-                              ({stop.vinyl_data.map(vinyl => `${vinyl.quantity} ${vinyl.width}x${vinyl.length}`).join(' - ')})
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {stop.hand_bundles > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">HB:</span>
-                          <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
-                          {stop.hand_bundles_data?.length > 0 && (
-                            <span className="text-gray-600">
-                              ({stop.hand_bundles_data.map(bundle => `${bundle.quantity} ${bundle.description}`).join(' - ')})
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
               </div>
             ))}
           </div>
@@ -516,20 +504,19 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
         />
         
         <div className="pl-2.5">
-          {/* Header row with sequence, type, flags and date */}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-1 flex-wrap">
-              <div className="flex items-center gap-1">
-                <button
-                  className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded"
-                  {...attributes}
-                  {...listeners}
-                >
-                  <GripVertical className="h-3.5 w-3.5 text-gray-400" />
-                </button>
-                <span className="font-medium text-sm">#{stop.sequence_number}</span>
-              </div>
-              <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5">
+          {/* Single horizontal row with all info */}
+          <div className="flex items-center gap-2">
+            {/* Left side: Drag handle, sequence, badges */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+              </button>
+              <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
+              <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5 whitespace-nowrap">
                 {stop.assignment_type === 'pickup' ? (
                   <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
                 ) : (
@@ -537,13 +524,76 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
                 )}
               </Badge>
               {stop.is_transfer_order && (
-                <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200">
+                <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
                   Transfer
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-0.5">
-              <div className="text-xs text-gray-500 mr-1">
+
+            {/* Origin customer */}
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-500 leading-tight">
+                {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
+              </div>
+              <div className={`truncate leading-tight ${
+                stop.assignment_type === 'pickup' 
+                  ? 'text-sm font-bold' 
+                  : 'text-xs font-medium text-gray-700'
+              }`}>
+                {stop.pickup_customer.name}
+              </div>
+              <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
+            </div>
+
+            {/* Destination customer */}
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-500 leading-tight">
+                {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
+              </div>
+              <div className={`truncate leading-tight ${
+                stop.assignment_type === 'delivery' 
+                  ? 'text-sm font-bold' 
+                  : 'text-xs font-medium text-gray-700'
+              }`}>
+                {stop.delivery_customer.name}
+              </div>
+              <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
+            </div>
+
+            {/* Freight Info */}
+            <div className="flex-shrink-0 w-32">
+              <div className="text-xs text-gray-500 leading-tight">Freight</div>
+              <div className="flex flex-col gap-0.5 text-xs">
+                {stop.footage > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Ft:</span>
+                    <span className="font-medium">{Math.round(stop.footage)}</span>
+                  </div>
+                )}
+                {stop.skids > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">S:</span>
+                    <span className="font-medium">{stop.skids}</span>
+                  </div>
+                )}
+                {stop.vinyl > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">V:</span>
+                    <span className="font-medium">{stop.vinyl}</span>
+                  </div>
+                )}
+                {stop.hand_bundles > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">HB:</span>
+                    <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right side: Date, flags, buttons */}
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                 {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
               </div>
               {stop.is_rush && (
@@ -669,80 +719,6 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
-
-          {/* Locations row */}
-          <div className="grid grid-cols-3 gap-2 mt-1">
-            <div>
-              <div className="text-xs text-gray-500 leading-tight">
-                {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
-              </div>
-              <div className={`truncate leading-tight ${
-                stop.assignment_type === 'pickup' 
-                  ? 'text-base font-bold' 
-                  : 'text-sm font-medium text-gray-700'
-              }`}>
-                {stop.pickup_customer.name}
-              </div>
-              <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 leading-tight">
-                {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
-              </div>
-              <div className={`truncate leading-tight ${
-                stop.assignment_type === 'delivery' 
-                  ? 'text-base font-bold' 
-                  : 'text-sm font-medium text-gray-700'
-              }`}>
-                {stop.delivery_customer.name}
-              </div>
-              <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 leading-tight">Freight Info</div>
-              <div className="flex flex-col gap-0.5 text-xs">
-                {stop.footage > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-gray-500">Total Ft:</span>
-                    <span className="font-medium">{Math.round(stop.footage)}</span>
-                  </div>
-                )}
-                {stop.skids > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-gray-500">Skids:</span>
-                    <span className="font-medium">{stop.skids}</span>
-                    {stop.skids_data?.length > 0 && (
-                      <span className="text-gray-600">
-                        ({stop.skids_data.map(skid => `${skid.quantity} ${skid.width}x${skid.length}`).join(' - ')})
-                      </span>
-                    )}
-                  </div>
-                )}
-                {stop.vinyl > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-gray-500">Vinyl:</span>
-                    <span className="font-medium">{stop.vinyl}</span>
-                    {stop.vinyl_data?.length > 0 && (
-                      <span className="text-gray-600">
-                        ({stop.vinyl_data.map(vinyl => `${vinyl.quantity} ${vinyl.width}x${vinyl.length}`).join(' - ')})
-                      </span>
-                    )}
-                  </div>
-                )}
-                {stop.hand_bundles > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-gray-500">HB:</span>
-                    <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
-                    {stop.hand_bundles_data?.length > 0 && (
-                      <span className="text-gray-600">
-                        ({stop.hand_bundles_data.map(bundle => `${bundle.quantity} ${bundle.description}`).join(' - ')})
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
