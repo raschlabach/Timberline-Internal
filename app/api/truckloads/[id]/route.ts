@@ -140,3 +140,115 @@ export async function GET(
     }, { status: 500 })
   }
 }
+
+// PATCH /api/truckloads/[id] - Update a specific truckload
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const truckloadId = parseInt(params.id)
+    if (isNaN(truckloadId)) {
+      return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
+    }
+
+    const data = await request.json()
+    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number } = data
+
+    // Build dynamic update query based on what fields are provided
+    const updates: string[] = []
+    const values: any[] = []
+    let paramIndex = 1
+
+    if (driverId !== undefined) {
+      updates.push(`driver_id = $${paramIndex++}`)
+      values.push(driverId)
+    }
+
+    if (startDate !== undefined) {
+      updates.push(`start_date = $${paramIndex++}`)
+      // Ensure date is in YYYY-MM-DD format (extract date part if ISO string)
+      values.push(
+        startDate && typeof startDate === 'string' 
+          ? (startDate.includes('T') ? startDate.split('T')[0] : startDate)
+          : (startDate ? new Date(startDate).toISOString().split('T')[0] : null)
+      )
+    }
+
+    if (endDate !== undefined) {
+      updates.push(`end_date = $${paramIndex++}`)
+      // Ensure date is in YYYY-MM-DD format (extract date part if ISO string)
+      values.push(
+        endDate && typeof endDate === 'string' 
+          ? (endDate.includes('T') ? endDate.split('T')[0] : endDate)
+          : (endDate ? new Date(endDate).toISOString().split('T')[0] : null)
+      )
+    }
+
+    if (trailerNumber !== undefined) {
+      updates.push(`trailer_number = $${paramIndex++}`)
+      values.push(trailerNumber || null)
+    }
+
+    if (description !== undefined) {
+      updates.push(`description = $${paramIndex++}`)
+      values.push(description || null)
+    }
+
+    if (bill_of_lading_number !== undefined) {
+      updates.push(`bill_of_lading_number = $${paramIndex++}`)
+      values.push(bill_of_lading_number || null)
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'No fields to update' 
+      }, { status: 400 })
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`)
+    values.push(truckloadId)
+
+    const result = await query(
+      `UPDATE truckloads 
+       SET ${updates.join(', ')}
+       WHERE id = $${paramIndex}
+       RETURNING 
+         id,
+         driver_id as "driverId",
+         TO_CHAR(start_date, 'YYYY-MM-DD') as "startDate",
+         TO_CHAR(end_date, 'YYYY-MM-DD') as "endDate",
+         trailer_number as "trailerNumber",
+         bill_of_lading_number as "billOfLadingNumber",
+         description,
+         is_completed as "isCompleted",
+         total_mileage as "totalMileage",
+         estimated_duration as "estimatedDuration"`,
+      values
+    )
+
+    if (!result.rows.length) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Truckload not found' 
+      }, { status: 404 })
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      truckload: result.rows[0]
+    })
+  } catch (error) {
+    console.error('Error updating truckload:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to update truckload' 
+    }, { status: 500 })
+  }
+}
