@@ -128,8 +128,8 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                         <div className="w-80 flex-none border-r h-full overflow-hidden">
                             <TruckloadSidebarList truckloadId={truckloadId} />
                         </div>
-                        <div className="flex-grow overflow-hidden min-h-0 flex flex-col">
-                            <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div className="flex-grow overflow-hidden min-h-0">
+                            <Card className="h-full flex flex-col overflow-hidden">
                                 <Tabs defaultValue="stops" className="flex-1 flex flex-col min-h-0 overflow-hidden">
                                     <div className="border-b px-4 flex-shrink-0">
                                         <TabsList>
@@ -140,23 +140,23 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                                         </TabsList>
                                     </div>
 
-                                    <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden flex flex-col mt-0">
+                                    <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden mt-0">
                                         <TruckloadStopsList truckloadId={truckloadId} />
                                     </TabsContent>
 
-                                    <TabsContent value="map" className="flex-1 min-h-0 overflow-hidden flex flex-col mt-0">
+                                    <TabsContent value="map" className="flex-1 min-h-0 overflow-hidden mt-0">
                                         <div className="h-full min-h-0">
                                             <TruckloadMap truckloadId={truckloadId} />
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="load-builder" className="flex-1 min-h-0 overflow-hidden flex flex-col mt-0">
+                                    <TabsContent value="load-builder" className="flex-1 min-h-0 overflow-hidden mt-0">
                                         <div className="h-full min-h-0">
                                             <TruckloadLoadBuilder truckloadId={truckloadId} />
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="load-papers" className="flex-1 min-h-0 overflow-hidden flex flex-col mt-0">
+                                    <TabsContent value="load-papers" className="flex-1 min-h-0 overflow-hidden mt-0">
                                         <div className="h-full min-h-0">
                                             <TruckloadLoadPapers truckloadId={truckloadId} />
                                         </div>
