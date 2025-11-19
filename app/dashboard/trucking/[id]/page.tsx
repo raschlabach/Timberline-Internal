@@ -123,12 +123,12 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                         </div>
                     </div>
                 </div>
-                <div className="flex-grow overflow-hidden">
-                    <div className="h-full flex">
-                        <div className="w-80 flex-none border-r">
+                <div className="flex-grow overflow-hidden min-h-0">
+                    <div className="h-full flex min-h-0">
+                        <div className="w-80 flex-none border-r h-full overflow-hidden">
                             <TruckloadSidebarList truckloadId={truckloadId} />
                         </div>
-                        <div className="flex-grow overflow-hidden">
+                        <div className="flex-grow overflow-hidden min-h-0">
                             <Card className="h-full flex flex-col">
                                 <Tabs defaultValue="stops" className="h-full flex flex-col">
                                     <div className="border-b px-4 flex-shrink-0">
