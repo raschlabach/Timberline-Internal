@@ -98,8 +98,9 @@ export async function GET(
       SELECT 
         t.id,
         t.driver_id as "driverId",
-        t.start_date as "startDate",
-        t.end_date as "endDate",
+        -- Format dates as YYYY-MM-DD strings to avoid timezone issues
+        TO_CHAR(t.start_date, 'YYYY-MM-DD') as "startDate",
+        TO_CHAR(t.end_date, 'YYYY-MM-DD') as "endDate",
         t.trailer_number as "trailerNumber",
         t.bill_of_lading_number as "billOfLadingNumber",
         t.description,

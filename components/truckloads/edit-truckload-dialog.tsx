@@ -96,8 +96,9 @@ export function EditTruckloadDialog({
         body: JSON.stringify({
           id: truckload.id,
           driverId: parseInt(formData.driverId),
-          startDate: `${formData.startDate}T${formData.startTime}:00`,
-          endDate: `${formData.endDate}T${formData.endTime}:00`,
+          // Send dates as YYYY-MM-DD strings to avoid timezone issues
+          startDate: formData.startDate,
+          endDate: formData.endDate,
           trailerNumber: formData.trailerNumber || null,
           description: formData.description || null
         })

@@ -76,8 +76,9 @@ export async function GET() {
       SELECT 
         t.id,
         t.driver_id as "driverId",
-        t.start_date as "startDate",
-        t.end_date as "endDate",
+        -- Format dates as YYYY-MM-DD strings to avoid timezone issues
+        TO_CHAR(t.start_date, 'YYYY-MM-DD') as "startDate",
+        TO_CHAR(t.end_date, 'YYYY-MM-DD') as "endDate",
         t.trailer_number as "trailerNumber",
         t.bill_of_lading_number as "billOfLadingNumber",
         t.description,
@@ -242,8 +243,13 @@ export async function POST(request: Request) {
         RETURNING id`,
         [
           driverId,
-          startDate,
-          endDate,
+          // Ensure dates are in YYYY-MM-DD format (extract date part if ISO string)
+          startDate && typeof startDate === 'string' 
+            ? (startDate.includes('T') ? startDate.split('T')[0] : startDate)
+            : (startDate ? new Date(startDate).toISOString().split('T')[0] : null),
+          endDate && typeof endDate === 'string' 
+            ? (endDate.includes('T') ? endDate.split('T')[0] : endDate)
+            : (endDate ? new Date(endDate).toISOString().split('T')[0] : null),
           trailerNumber || null,
           bolNumber,
           description || '',
@@ -300,7 +306,19 @@ export async function PATCH(request: Request) {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
        RETURNING *`,
-      [driverId, startDate, endDate, trailerNumber || null, description || null, id]
+      [
+        driverId, 
+        // Ensure dates are in YYYY-MM-DD format (extract date part if ISO string)
+        startDate && typeof startDate === 'string' 
+          ? (startDate.includes('T') ? startDate.split('T')[0] : startDate)
+          : (startDate ? new Date(startDate).toISOString().split('T')[0] : null),
+        endDate && typeof endDate === 'string' 
+          ? (endDate.includes('T') ? endDate.split('T')[0] : endDate)
+          : (endDate ? new Date(endDate).toISOString().split('T')[0] : null),
+        trailerNumber || null, 
+        description || null, 
+        id
+      ]
     )
 
     if (!result.rows.length) {

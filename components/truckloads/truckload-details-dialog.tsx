@@ -138,10 +138,16 @@ export function TruckloadDetailsDialog({
         updates.driverId = parseInt(formData.driverId)
       }
       if (formData.startDate) {
-        updates.startDate = new Date(formData.startDate).toISOString()
+        // Send date as YYYY-MM-DD string to avoid timezone issues
+        updates.startDate = typeof formData.startDate === 'string' 
+          ? formData.startDate.split('T')[0] 
+          : format(new Date(formData.startDate), 'yyyy-MM-dd')
       }
       if (formData.endDate) {
-        updates.endDate = new Date(formData.endDate).toISOString()
+        // Send date as YYYY-MM-DD string to avoid timezone issues
+        updates.endDate = typeof formData.endDate === 'string' 
+          ? formData.endDate.split('T')[0] 
+          : format(new Date(formData.endDate), 'yyyy-MM-dd')
       }
       if (formData.description !== undefined) {
         updates.description = formData.description

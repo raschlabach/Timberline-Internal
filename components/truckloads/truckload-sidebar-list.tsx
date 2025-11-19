@@ -273,8 +273,9 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
       } else if (field === 'trailer') {
         updates.trailer_number = editValues.trailer
       } else if (field === 'dates') {
-        updates.startDate = editValues.startDate ? new Date(editValues.startDate).toISOString() : null
-        updates.endDate = editValues.endDate ? new Date(editValues.endDate).toISOString() : null
+        // Send dates as YYYY-MM-DD strings to avoid timezone issues
+        updates.startDate = editValues.startDate || null
+        updates.endDate = editValues.endDate || null
       } else {
         // Only allow string keys that exist in editValues
         if (field in editValues) {
