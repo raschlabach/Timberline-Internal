@@ -201,8 +201,8 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
               <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-0.5 pt-0.5 border-t border-gray-200" : ""}>
                 {/* Single horizontal row with all info - using grid for dynamic column widths */}
                 <div 
-                  className="grid gap-1 items-center"
-                  style={{ gridTemplateColumns: gridTemplateColumns || 'auto auto auto auto auto' }}
+                  className={gridTemplateColumns ? "grid gap-1 items-center" : "grid grid-cols-[auto_auto_auto_auto_auto] gap-1 items-center"}
+                  style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
                 >
                   {/* Left side: Drag handle, sequence, badges */}
                   <div data-column="0" className="flex items-center gap-1 flex-shrink-0">
@@ -517,8 +517,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
         <div className="pl-2">
           {/* Single horizontal row with all info - using grid for dynamic column widths */}
           <div 
-            className="grid gap-1 items-center"
-            style={{ gridTemplateColumns: gridTemplateColumns || 'auto auto auto auto auto' }}
+            className={gridTemplateColumns ? "grid gap-1 items-center" : "grid grid-cols-[auto_auto_auto_auto_auto] gap-1 items-center"}
+            style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
           >
             {/* Left side: Drag handle, sequence, badges */}
             <div data-column="0" className="flex items-center gap-1 flex-shrink-0">
@@ -1057,40 +1057,59 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
 
   // Measure column widths after stops are rendered
   useEffect(() => {
-    if (stops.length === 0 || !containerRef.current) return
-
-    const measureColumns = () => {
-      const widths = [0, 0, 0, 0, 0]
-      
-      // Find all column cells using data attributes
-      for (let i = 0; i < 5; i++) {
-        const cells = containerRef.current?.querySelectorAll(`[data-column="${i}"]`)
-        if (cells) {
-          cells.forEach(cell => {
-            const element = cell as HTMLElement
-            // Use scrollWidth to get full content width even if truncated
-            const width = element.scrollWidth > 0 ? element.scrollWidth : element.offsetWidth
-            if (width > widths[i]) {
-              widths[i] = width
-            }
-          })
-        }
-      }
-
-      // Add small padding to each column (8px) for spacing
-      const paddedWidths = widths.map(w => w + 8)
-      setColumnWidths(paddedWidths)
+    if (stops.length === 0 || !containerRef.current) {
+      setColumnWidths([0, 0, 0, 0, 0])
+      return
     }
 
-    // Use requestAnimationFrame to ensure DOM is fully rendered
+    const measureColumns = () => {
+      try {
+        if (!containerRef.current) return
+        
+        const widths = [0, 0, 0, 0, 0]
+        
+        // Find all column cells using data attributes
+        for (let i = 0; i < 5; i++) {
+          const cells = containerRef.current.querySelectorAll(`[data-column="${i}"]`)
+          if (cells && cells.length > 0) {
+            cells.forEach(cell => {
+              const element = cell as HTMLElement
+              if (element && element.offsetParent !== null) { // Check if element is visible
+                // Use scrollWidth to get full content width even if truncated
+                const width = element.scrollWidth > 0 ? element.scrollWidth : element.offsetWidth
+                if (width > 0 && width > widths[i]) {
+                  widths[i] = width
+                }
+              }
+            })
+          }
+        }
+
+        // Only update if we found valid widths (at least one column has width > 0)
+        if (widths.some(w => w > 0)) {
+          // Add small padding to each column (8px) for spacing
+          const paddedWidths = widths.map(w => w > 0 ? w + 8 : 0)
+          setColumnWidths(paddedWidths)
+        }
+      } catch (error) {
+        console.error('Error measuring column widths:', error)
+        // Fallback to auto sizing - don't update state to avoid re-render loop
+      }
+    }
+
+    // Use requestAnimationFrame and multiple timeouts to ensure DOM is fully rendered
     requestAnimationFrame(() => {
-      setTimeout(measureColumns, 0)
+      setTimeout(() => {
+        requestAnimationFrame(() => {
+          setTimeout(measureColumns, 10)
+        })
+      }, 10)
     })
   }, [stops])
 
   const gridTemplateColumns = columnWidths.every(w => w > 0)
     ? `${columnWidths[0]}px ${columnWidths[1]}px ${columnWidths[2]}px ${columnWidths[3]}px ${columnWidths[4]}px`
-    : 'auto auto auto auto auto'
+    : undefined
 
   return (
     <TooltipProvider>
