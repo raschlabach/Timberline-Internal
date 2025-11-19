@@ -102,48 +102,46 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
 
     if (truckload) {
         return (
-            <div className="h-screen flex flex-col overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden">
-                    <div className="h-full flex min-h-0 overflow-hidden">
-                        <div className="w-80 flex-none border-r h-full overflow-hidden flex flex-col">
-                            <TruckloadSidebarList truckloadId={truckloadId} />
-                        </div>
-                        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                            <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                <Tabs defaultValue="stops" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                    <div className="border-b px-4 flex-shrink-0">
-                                        <TabsList>
-                                            <TabsTrigger value="stops">Stops</TabsTrigger>
-                                            <TabsTrigger value="map">Map</TabsTrigger>
-                                            <TabsTrigger value="load-builder">Load Builder</TabsTrigger>
-                                            <TabsTrigger value="load-papers">Papers</TabsTrigger>
-                                        </TabsList>
+            <div className="h-[calc(100vh-4rem)] flex flex-col overflow-hidden -m-8">
+                <div className="flex-1 min-h-0 overflow-hidden flex">
+                    <div className="w-80 flex-none border-r overflow-hidden flex flex-col">
+                        <TruckloadSidebarList truckloadId={truckloadId} />
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                            <Tabs defaultValue="stops" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                                <div className="border-b px-4 flex-shrink-0">
+                                    <TabsList>
+                                        <TabsTrigger value="stops">Stops</TabsTrigger>
+                                        <TabsTrigger value="map">Map</TabsTrigger>
+                                        <TabsTrigger value="load-builder">Load Builder</TabsTrigger>
+                                        <TabsTrigger value="load-papers">Papers</TabsTrigger>
+                                    </TabsList>
+                                </div>
+
+                                <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden mt-0">
+                                    <TruckloadStopsList truckloadId={truckloadId} />
+                                </TabsContent>
+
+                                <TabsContent value="map" className="flex-1 min-h-0 overflow-hidden mt-0">
+                                    <div className="h-full min-h-0">
+                                        <TruckloadMap truckloadId={truckloadId} />
                                     </div>
+                                </TabsContent>
 
-                                    <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden mt-0">
-                                            <TruckloadStopsList truckloadId={truckloadId} />
-                                    </TabsContent>
+                                <TabsContent value="load-builder" className="flex-1 min-h-0 overflow-hidden mt-0">
+                                    <div className="h-full min-h-0">
+                                        <TruckloadLoadBuilder truckloadId={truckloadId} />
+                                    </div>
+                                </TabsContent>
 
-                                    <TabsContent value="map" className="flex-1 min-h-0 overflow-hidden mt-0">
-                                        <div className="h-full min-h-0">
-                                            <TruckloadMap truckloadId={truckloadId} />
-                                        </div>
-                                    </TabsContent>
-
-                                    <TabsContent value="load-builder" className="flex-1 min-h-0 overflow-hidden mt-0">
-                                        <div className="h-full min-h-0">
-                                            <TruckloadLoadBuilder truckloadId={truckloadId} />
-                                        </div>
-                                    </TabsContent>
-
-                                    <TabsContent value="load-papers" className="flex-1 min-h-0 overflow-hidden mt-0">
-                                        <div className="h-full min-h-0">
-                                            <TruckloadLoadPapers truckloadId={truckloadId} />
-                                        </div>
-                                    </TabsContent>
-                                </Tabs>
-                            </Card>
-                        </div>
+                                <TabsContent value="load-papers" className="flex-1 min-h-0 overflow-hidden mt-0">
+                                    <div className="h-full min-h-0">
+                                        <TruckloadLoadPapers truckloadId={truckloadId} />
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
+                        </Card>
                     </div>
                 </div>
             </div>
