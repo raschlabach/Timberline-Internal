@@ -6,8 +6,9 @@ import { format } from "date-fns"
 import { TruckloadSummary } from "@/types/truckloads"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
-import { User, Calendar, Truck, Tag, FileText, Pencil, MoreVertical, ArrowRight, X, Hash, Check } from "lucide-react"
+import { User, Calendar, Truck, Tag, FileText, Pencil, MoreVertical, ArrowRight, X, Hash, Check, ChevronDown } from "lucide-react"
 import { useState, useEffect } from "react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -103,6 +104,10 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
   const [optimizedStops, setOptimizedStops] = useState<TruckloadStop[]>([])
   const [currentRouteMetrics, setCurrentRouteMetrics] = useState<{ distance: string; duration: string } | null>(null)
   const [optimizedRouteMetrics, setOptimizedRouteMetrics] = useState<{ distance: string; duration: string } | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(true)
+  const [isFootageOpen, setIsFootageOpen] = useState(true)
+  const [isStopsOpen, setIsStopsOpen] = useState(true)
+  const [isStopSummaryOpen, setIsStopSummaryOpen] = useState(true)
   const queryClient = useQueryClient()
 
   const { data: truckload } = useQuery({
@@ -591,82 +596,116 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
         {/* Fixed content at top */}
         <div className="space-y-4 flex-shrink-0">
           {/* Truckload Details Card */}
-          <TruckloadDetailsCard 
-            truckload={{
-              id: truckload.id,
-              driverName: truckload.driverName,
-              driverColor: truckload.driverColor,
-              startDate: truckload.startDate,
-              endDate: truckload.endDate,
-              description: truckload.description,
-              billOfLadingNumber: truckload.billOfLadingNumber,
-              trailerNumber: truckload.trailerNumber,
-              isCompleted: truckload.isCompleted
-            }}
-            onTruckloadUpdated={() => {
-              queryClient.invalidateQueries({ queryKey: ["truckload", truckloadId] })
-            }}
-          />
+          <Collapsible open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+            <CollapsibleTrigger asChild>
+              <div className="cursor-pointer hover:bg-gray-50 rounded-md p-1 -m-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">Truckload Details</h3>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isDetailsOpen ? 'rotate-180' : ''}`} />
+                </div>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-2">
+                <TruckloadDetailsCard 
+                  truckload={{
+                    id: truckload.id,
+                    driverName: truckload.driverName,
+                    driverColor: truckload.driverColor,
+                    startDate: truckload.startDate,
+                    endDate: truckload.endDate,
+                    description: truckload.description,
+                    billOfLadingNumber: truckload.billOfLadingNumber,
+                    trailerNumber: truckload.trailerNumber,
+                    isCompleted: truckload.isCompleted
+                  }}
+                  onTruckloadUpdated={() => {
+                    queryClient.invalidateQueries({ queryKey: ["truckload", truckloadId] })
+                  }}
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Footage Summary */}
-          <Card className="p-4">
-            <h3 className="text-sm font-medium mb-2">Footage Summary</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-red-600">Pickups</span>
-                <span className="font-medium">
-                  {sortedStops
-                    .filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order)
-                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
-                    .toLocaleString()} ft²
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-900">Deliveries</span>
-                <span className="font-medium">
-                  {sortedStops
-                    .filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order)
-                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
-                    .toLocaleString()} ft²
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-blue-600">Transfers</span>
-                <span className="font-medium">
-                  {sortedStops
-                    .filter(s => s.is_transfer_order)
-                    .reduce((acc, stop) => {
-                      // Use order_id to deduplicate transfer orders (same order appears twice - pickup and delivery)
-                      const orderId = stop.order_id
-                      if (!acc.processedOrders.has(orderId)) {
-                        acc.processedOrders.add(orderId)
-                        acc.total += Number(stop.footage || 0)
-                      }
-                      return acc
-                    }, { total: 0, processedOrders: new Set<number>() })
-                    .total
-                    .toLocaleString()} ft²
-                </span>
-              </div>
-            </div>
-          </Card>
+          <Collapsible open={isFootageOpen} onOpenChange={setIsFootageOpen}>
+            <CollapsibleTrigger asChild>
+              <Card className="p-4 cursor-pointer hover:bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">Footage Summary</h3>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isFootageOpen ? 'rotate-180' : ''}`} />
+                </div>
+              </Card>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <Card className="p-4 mt-2">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-red-600">Pickups</span>
+                    <span className="font-medium">
+                      {sortedStops
+                        .filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order)
+                        .reduce((total, stop) => total + Number(stop.footage || 0), 0)
+                        .toLocaleString()} ft²
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-900">Deliveries</span>
+                    <span className="font-medium">
+                      {sortedStops
+                        .filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order)
+                        .reduce((total, stop) => total + Number(stop.footage || 0), 0)
+                        .toLocaleString()} ft²
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-600">Transfers</span>
+                    <span className="font-medium">
+                      {sortedStops
+                        .filter(s => s.is_transfer_order)
+                        .reduce((acc, stop) => {
+                          // Use order_id to deduplicate transfer orders (same order appears twice - pickup and delivery)
+                          const orderId = stop.order_id
+                          if (!acc.processedOrders.has(orderId)) {
+                            acc.processedOrders.add(orderId)
+                            acc.total += Number(stop.footage || 0)
+                          }
+                          return acc
+                        }, { total: 0, processedOrders: new Set<number>() })
+                        .total
+                        .toLocaleString()} ft²
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         {/* Stops Section - Scrollable */}
-        <div className="mt-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex items-center justify-between mb-2 flex-shrink-0">
-            <h3 className="text-sm font-medium">Stops</h3>
-            {stops.length > 0 && (
-              <Button
-                onClick={handleOptimizeOrder}
-                size="sm"
-                className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 h-7"
-              >
-                Optimize Order
-              </Button>
-            )}
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+        <Collapsible open={isStopsOpen} onOpenChange={setIsStopsOpen} className="mt-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+          <CollapsibleTrigger asChild>
+            <div className="flex items-center justify-between mb-2 flex-shrink-0 cursor-pointer hover:bg-gray-50 rounded-md p-1 -m-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium">Stops</h3>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isStopsOpen ? 'rotate-180' : ''}`} />
+              </div>
+              {stops.length > 0 && (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleOptimizeOrder()
+                  }}
+                  size="sm"
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 h-7"
+                >
+                  Optimize Order
+                </Button>
+              )}
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
             <div className="space-y-1">
               {sortedStops.map((stop) => (
                 <div
@@ -724,29 +763,39 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Stop Summary - Fixed at bottom */}
-        <div className="mt-4 flex-shrink-0">
-          <Card className="p-4">
-            <h3 className="text-sm font-medium mb-2">Stop Summary</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-red-50 p-2 rounded">
-                <div className="text-sm font-medium text-red-600">Pickups</div>
-                <div className="text-lg font-bold">{sortedStops.filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order).length}</div>
+        <Collapsible open={isStopSummaryOpen} onOpenChange={setIsStopSummaryOpen} className="mt-4 flex-shrink-0">
+          <CollapsibleTrigger asChild>
+            <Card className="p-4 cursor-pointer hover:bg-gray-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Stop Summary</h3>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isStopSummaryOpen ? 'rotate-180' : ''}`} />
               </div>
-              <div className="bg-gray-50 p-2 rounded">
-                <div className="text-sm font-medium text-gray-900">Deliveries</div>
-                <div className="text-lg font-bold">{sortedStops.filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order).length}</div>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <Card className="p-4 mt-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-red-50 p-2 rounded">
+                  <div className="text-sm font-medium text-red-600">Pickups</div>
+                  <div className="text-lg font-bold">{sortedStops.filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order).length}</div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <div className="text-sm font-medium text-gray-900">Deliveries</div>
+                  <div className="text-lg font-bold">{sortedStops.filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order).length}</div>
+                </div>
+                <div className="bg-blue-50 p-2 rounded">
+                  <div className="text-sm font-medium text-blue-600">Transfers</div>
+                  <div className="text-lg font-bold">{sortedStops.filter(s => s.is_transfer_order).length}</div>
+                </div>
               </div>
-              <div className="bg-blue-50 p-2 rounded">
-                <div className="text-sm font-medium text-blue-600">Transfers</div>
-                <div className="text-lg font-bold">{sortedStops.filter(s => s.is_transfer_order).length}</div>
-              </div>
-            </div>
-          </Card>
-        </div>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* Transfer Dialog */}

@@ -211,16 +211,22 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                       </button>
                     )}
                     <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
-                    <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5 whitespace-nowrap">
-                      {stop.assignment_type === 'pickup' ? (
-                        <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
-                      ) : (
-                        <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
-                      )}
-                    </Badge>
-                    {stop.is_transfer_order && (
+                    {stop.is_transfer_order ? (
                       <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
                         Transfer
+                      </Badge>
+                    ) : (
+                      <Badge 
+                        variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} 
+                        className={`text-xs h-5 px-1.5 whitespace-nowrap ${
+                          stop.assignment_type === 'delivery' ? 'bg-black text-white hover:bg-black/90' : ''
+                        }`}
+                      >
+                        {stop.assignment_type === 'pickup' ? (
+                          <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                        ) : (
+                          <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                        )}
                       </Badge>
                     )}
                   </div>
@@ -516,16 +522,22 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
                 <GripVertical className="h-3.5 w-3.5 text-gray-400" />
               </button>
               <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
-              <Badge variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} className="text-xs h-5 px-1.5 whitespace-nowrap">
-                {stop.assignment_type === 'pickup' ? (
-                  <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
-                ) : (
-                  <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
-                )}
-              </Badge>
-              {stop.is_transfer_order && (
+              {stop.is_transfer_order ? (
                 <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
                   Transfer
+                </Badge>
+              ) : (
+                <Badge 
+                  variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} 
+                  className={`text-xs h-5 px-1.5 whitespace-nowrap ${
+                    stop.assignment_type === 'delivery' ? 'bg-black text-white hover:bg-black/90' : ''
+                  }`}
+                >
+                  {stop.assignment_type === 'pickup' ? (
+                    <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                  ) : (
+                    <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                  )}
                 </Badge>
               )}
             </div>
