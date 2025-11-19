@@ -595,8 +595,8 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col relative">
-      <div className="p-4 space-y-4 flex-1 flex flex-col justify-start">
-        <div className="space-y-4">
+      <div className="p-4 space-y-4 flex-1 flex flex-col justify-start min-h-0">
+        <div className="space-y-4 flex-shrink-0">
           {/* Truckload Details Card */}
           <TruckloadDetailsCard 
             truckload={{
@@ -659,7 +659,7 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
           </Card>
 
           {/* Stops Section */}
-          <div className="mt-4">
+          <div className="mt-4 flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium">Stops</h3>
               {stops.length > 0 && (
@@ -672,8 +672,9 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                 </Button>
               )}
             </div>
-            <div className="space-y-1">
-              {sortedStops.map((stop) => (
+            <ScrollArea className="flex-1 pr-2">
+              <div className="space-y-1">
+                {sortedStops.map((stop) => (
                 <div
                   key={`${stop.id}-${stop.assignment_type}`}
                   className={`flex items-center gap-2 p-2 rounded-md text-sm ${
@@ -728,7 +729,8 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                   </DropdownMenu>
                 </div>
               ))}
-            </div>
+              </div>
+            </ScrollArea>
           </div>
 
           {/* Stop Summary */}
