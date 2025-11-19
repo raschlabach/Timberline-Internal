@@ -103,9 +103,9 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
     if (truckload) {
         return (
             <div className="h-screen flex flex-col overflow-hidden">
-                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                    <div className="flex-1 flex min-h-0 overflow-hidden">
-                        <div className="w-80 flex-none border-r overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                    <div className="h-full flex min-h-0 overflow-hidden">
+                        <div className="w-80 flex-none border-r h-full overflow-hidden flex flex-col">
                             <TruckloadSidebarList truckloadId={truckloadId} />
                         </div>
                         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
