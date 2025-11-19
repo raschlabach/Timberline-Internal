@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, getClient } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -259,10 +259,12 @@ export async function PATCH(
     const data = await request.json();
 
     // Start a transaction
-    const client = await query('BEGIN');
+    const client = await getClient();
     try {
+      await client.query('BEGIN');
+
       // Update the order's main fields
-      await query(
+      await client.query(
         `UPDATE orders SET
           pickup_customer_id = COALESCE($1, pickup_customer_id),
           delivery_customer_id = COALESCE($2, delivery_customer_id),
@@ -308,11 +310,11 @@ export async function PATCH(
       // Update skids if provided
       if (Array.isArray(data.skidsData)) {
         // Delete existing skids
-        await query('DELETE FROM skids WHERE order_id = $1', [orderId]);
+        await client.query('DELETE FROM skids WHERE order_id = $1', [orderId]);
         
         // Insert new skids
         for (const skid of data.skidsData) {
-          await query(
+          await client.query(
             `INSERT INTO skids (
               order_id, width, length, square_footage, quantity
             ) VALUES ($1, $2, $3, $4, $5)`,
@@ -324,11 +326,11 @@ export async function PATCH(
       // Update vinyl if provided
       if (Array.isArray(data.vinylData)) {
         // Delete existing vinyl
-        await query('DELETE FROM vinyl WHERE order_id = $1', [orderId]);
+        await client.query('DELETE FROM vinyl WHERE order_id = $1', [orderId]);
         
         // Insert new vinyl
         for (const vinyl of data.vinylData) {
-          await query(
+          await client.query(
             `INSERT INTO vinyl (
               order_id, width, length, square_footage, quantity
             ) VALUES ($1, $2, $3, $4, $5)`,
@@ -338,7 +340,7 @@ export async function PATCH(
       }
 
       // Commit the transaction
-      await query('COMMIT');
+      await client.query('COMMIT');
 
       // Fetch the updated order with all its details
       const updatedOrder = await query(
@@ -356,8 +358,11 @@ export async function PATCH(
       return NextResponse.json(updatedOrder.rows[0]);
     } catch (error) {
       // Rollback on error
-      await query('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      // Always release the client
+      client.release();
     }
   } catch (error) {
     console.error('Error updating order:', error);
@@ -383,26 +388,31 @@ export async function DELETE(
     const orderId = params.id;
     
     // Start a transaction
-    const client = await query('BEGIN');
+    const client = await getClient();
     try {
+      await client.query('BEGIN');
+
       // Delete related records first
-      await query('DELETE FROM skids WHERE order_id = $1', [orderId]);
-      await query('DELETE FROM vinyl WHERE order_id = $1', [orderId]);
-      await query('DELETE FROM footage WHERE order_id = $1', [orderId]);
-      await query('DELETE FROM order_links WHERE order_id = $1', [orderId]);
-      await query('DELETE FROM truckload_order_assignments WHERE order_id = $1', [orderId]);
+      await client.query('DELETE FROM skids WHERE order_id = $1', [orderId]);
+      await client.query('DELETE FROM vinyl WHERE order_id = $1', [orderId]);
+      await client.query('DELETE FROM footage WHERE order_id = $1', [orderId]);
+      await client.query('DELETE FROM order_links WHERE order_id = $1', [orderId]);
+      await client.query('DELETE FROM truckload_order_assignments WHERE order_id = $1', [orderId]);
       
       // Finally delete the order
-      await query('DELETE FROM orders WHERE id = $1', [orderId]);
+      await client.query('DELETE FROM orders WHERE id = $1', [orderId]);
       
       // Commit the transaction
-      await query('COMMIT');
+      await client.query('COMMIT');
       
       return NextResponse.json({ success: true });
     } catch (error) {
       // Rollback on error
-      await query('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      // Always release the client
+      client.release();
     }
   } catch (error) {
     console.error('Error deleting order:', error);
