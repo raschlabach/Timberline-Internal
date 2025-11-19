@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { format } from "date-fns"
 import { 
   AlertCircle, 
@@ -1060,8 +1059,8 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
 
   return (
     <TooltipProvider>
-      <div className="h-full flex flex-col min-h-0">
-        <ScrollArea className="flex-1 min-h-0">
+      <div className="h-full flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <DndContext
             sensors={sensors}
             collisionDetection={rectIntersection}
@@ -1084,7 +1083,7 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
               </div>
             </SortableContext>
           </DndContext>
-        </ScrollArea>
+        </div>
       </div>
 
       {selectedOrderId && (
