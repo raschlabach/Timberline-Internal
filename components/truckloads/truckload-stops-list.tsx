@@ -184,7 +184,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
       <Card 
         ref={setNodeRef}
         style={style}
-        className="py-1.5 px-3 relative"
+        className="py-1 px-2 relative"
       >
         <div className="absolute top-0 left-0 h-full w-1.5" 
           style={{ 
@@ -196,11 +196,11 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
           {/* Individual stops within the group - styled exactly like normal stops */}
           <div>
             {groupedStop.stops.map((stop, index) => (
-              <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-2 pt-2 border-t border-gray-200" : ""}>
-                {/* Single horizontal row with all info */}
-                <div className="flex items-center gap-2">
+              <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-1 pt-1 border-t border-gray-200" : ""}>
+                {/* Single horizontal row with all info - using grid for dynamic column widths */}
+                <div className="grid grid-cols-[auto_auto_auto_auto_auto] gap-3 items-center">
                   {/* Left side: Drag handle, sequence, badges */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                       {index === 0 && (
                         <button
                         className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
@@ -210,35 +210,35 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                           <GripVertical className="h-3.5 w-3.5 text-gray-400" />
                         </button>
                       )}
-                    <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
+                    <span className="font-medium text-xs whitespace-nowrap">#{stop.sequence_number}</span>
                     {stop.is_transfer_order ? (
-                      <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
+                      <Badge variant="outline" className="text-xs h-4 px-1 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
                         Transfer
                       </Badge>
                     ) : (
                       <Badge 
                         variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} 
-                        className={`text-xs h-5 px-1.5 whitespace-nowrap ${
+                        className={`text-xs h-4 px-1 whitespace-nowrap ${
                           stop.assignment_type === 'delivery' ? 'bg-black text-white hover:bg-black/90' : ''
                         }`}
                       >
                       {stop.assignment_type === 'pickup' ? (
-                        <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                        <><ArrowUp className="h-2.5 w-2.5 mr-0.5" /> Pickup</>
                       ) : (
-                        <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                        <><ArrowDown className="h-2.5 w-2.5 mr-0.5" /> Delivery</>
                       )}
                       </Badge>
                     )}
                   </div>
 
-                  {/* Origin customer */}
-                  <div className="flex-1 min-w-0">
+                  {/* Origin customer - auto width based on content */}
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 leading-tight">
                       {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
                     </div>
                     <div className={`truncate leading-tight ${
                       stop.assignment_type === 'pickup' 
-                        ? 'text-sm font-bold' 
+                        ? 'text-xs font-bold' 
                         : 'text-xs font-medium text-gray-700'
                     }`}>
                       {stop.pickup_customer.name}
@@ -246,14 +246,14 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
                   </div>
 
-                  {/* Destination customer */}
-                  <div className="flex-1 min-w-0">
+                  {/* Destination customer - auto width based on content */}
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 leading-tight">
                       {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
                     </div>
                     <div className={`truncate leading-tight ${
                       stop.assignment_type === 'delivery' 
-                        ? 'text-sm font-bold' 
+                        ? 'text-xs font-bold' 
                         : 'text-xs font-medium text-gray-700'
                     }`}>
                       {stop.delivery_customer.name}
@@ -261,8 +261,8 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
                   </div>
 
-                  {/* Freight Info */}
-                  <div className="flex-shrink-0 w-32">
+                  {/* Freight Info - auto width based on content */}
+                  <div className="flex-shrink-0 whitespace-nowrap">
                     <div className="text-xs text-gray-500 leading-tight">Freight</div>
                     <div className="flex flex-col gap-0.5 text-xs">
                       {stop.footage > 0 && (
@@ -292,7 +292,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     </div>
                   </div>
 
-                  {/* Right side: Date, flags, buttons */}
+                  {/* Right side: Date, flags, buttons - minimal width */}
                   <div className="flex items-center gap-0.5 flex-shrink-0">
                     <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                       {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
@@ -501,7 +501,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
       <Card 
         ref={setNodeRef}
         style={style}
-        className="py-1.5 px-3 relative"
+        className="py-1 px-2 relative"
       >
         <div className="absolute top-0 left-0 h-full w-1.5" 
           style={{ 
@@ -510,10 +510,10 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
         />
         
         <div className="pl-2.5">
-          {/* Single horizontal row with all info */}
-          <div className="flex items-center gap-2">
+          {/* Single horizontal row with all info - using grid for dynamic column widths */}
+          <div className="grid grid-cols-[auto_auto_auto_auto_auto] gap-3 items-center">
             {/* Left side: Drag handle, sequence, badges */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                 className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
                   {...attributes}
@@ -521,35 +521,35 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
                 >
                   <GripVertical className="h-3.5 w-3.5 text-gray-400" />
                 </button>
-              <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
+              <span className="font-medium text-xs whitespace-nowrap">#{stop.sequence_number}</span>
               {stop.is_transfer_order ? (
-                <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
+                <Badge variant="outline" className="text-xs h-4 px-1 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
                   Transfer
                 </Badge>
               ) : (
                 <Badge 
                   variant={stop.assignment_type === 'pickup' ? 'destructive' : 'default'} 
-                  className={`text-xs h-5 px-1.5 whitespace-nowrap ${
+                  className={`text-xs h-4 px-1 whitespace-nowrap ${
                     stop.assignment_type === 'delivery' ? 'bg-black text-white hover:bg-black/90' : ''
                   }`}
                 >
                 {stop.assignment_type === 'pickup' ? (
-                  <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                  <><ArrowUp className="h-2.5 w-2.5 mr-0.5" /> Pickup</>
                 ) : (
-                  <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                  <><ArrowDown className="h-2.5 w-2.5 mr-0.5" /> Delivery</>
                 )}
                 </Badge>
               )}
             </div>
 
-            {/* Origin customer */}
-            <div className="flex-1 min-w-0">
+            {/* Origin customer - auto width based on content */}
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 leading-tight">
                 {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
               </div>
               <div className={`truncate leading-tight ${
                 stop.assignment_type === 'pickup' 
-                  ? 'text-sm font-bold' 
+                  ? 'text-xs font-bold' 
                   : 'text-xs font-medium text-gray-700'
               }`}>
                 {stop.pickup_customer.name}
@@ -557,14 +557,14 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
             </div>
 
-            {/* Destination customer */}
-            <div className="flex-1 min-w-0">
+            {/* Destination customer - auto width based on content */}
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 leading-tight">
                 {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
               </div>
               <div className={`truncate leading-tight ${
                 stop.assignment_type === 'delivery' 
-                  ? 'text-sm font-bold' 
+                  ? 'text-xs font-bold' 
                   : 'text-xs font-medium text-gray-700'
               }`}>
                 {stop.delivery_customer.name}
@@ -572,8 +572,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
             </div>
 
-            {/* Freight Info */}
-            <div className="flex-shrink-0 w-32">
+            {/* Freight Info - auto width based on content */}
+            <div className="flex-shrink-0 whitespace-nowrap">
               <div className="text-xs text-gray-500 leading-tight">Freight</div>
               <div className="flex flex-col gap-0.5 text-xs">
                 {stop.footage > 0 && (
@@ -603,7 +603,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               </div>
             </div>
 
-            {/* Right side: Date, flags, buttons */}
+            {/* Right side: Date, flags, buttons - minimal width */}
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                 {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
@@ -1058,7 +1058,7 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
             items={groupedStops.map(group => `group-${group.groupKey}`)}
             strategy={verticalListSortingStrategy}
           >
-              <div className="space-y-2.5 p-4 pr-6">
+              <div className="space-y-1 p-2 pr-4">
               {groupedStops.map((group) => (
                 <SortableGroupedStop
                   key={`group-${group.groupKey}-${group.sequenceNumber}`}
