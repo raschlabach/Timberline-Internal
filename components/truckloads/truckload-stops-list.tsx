@@ -1047,8 +1047,8 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
 
   return (
     <TooltipProvider>
-      <div className="h-full flex flex-col min-h-0">
-        <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+      <div className="h-full flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <DndContext
             sensors={sensors}
             collisionDetection={rectIntersection}
@@ -1058,7 +1058,7 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
               items={groupedStops.map(group => `group-${group.groupKey}`)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-2.5 p-4">
+              <div className="space-y-2.5 p-4 pr-6">
                 {groupedStops.map((group) => (
                   <SortableGroupedStop
                     key={`group-${group.groupKey}-${group.sequenceNumber}`}

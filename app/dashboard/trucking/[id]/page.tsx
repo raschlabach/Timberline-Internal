@@ -140,10 +140,8 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                                         </TabsList>
                                     </div>
 
-                                    <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden">
-                                        <div className="h-full min-h-0">
-                                            <TruckloadStopsList truckloadId={truckloadId} />
-                                        </div>
+                                    <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                                        <TruckloadStopsList truckloadId={truckloadId} />
                                     </TabsContent>
 
                                     <TabsContent value="map" className="flex-grow">
