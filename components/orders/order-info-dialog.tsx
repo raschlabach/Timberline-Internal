@@ -111,13 +111,25 @@ export function OrderInfoDialog({
         }) : [],
         pickupDate: data.pickupDate 
           ? (() => {
-              // Convert pickupDate to YYYY-MM-DD format for HTML date input
+              // pickupDate should already be in YYYY-MM-DD format from the API
+              // If it's a string, use it directly; if it's a Date, extract the date part
+              if (typeof data.pickupDate === 'string') {
+                // If it's already YYYY-MM-DD, use it
+                if (/^\d{4}-\d{2}-\d{2}$/.test(data.pickupDate)) {
+                  return data.pickupDate;
+                }
+                // If it's an ISO string, extract just the date part
+                return data.pickupDate.split('T')[0];
+              }
+              // If it's a Date object, format it as YYYY-MM-DD in local timezone
               try {
-                const date = typeof data.pickupDate === 'string' 
-                  ? parseISO(data.pickupDate) 
-                  : new Date(data.pickupDate);
-                if (isValid(date)) {
-                  return format(date, 'yyyy-MM-dd');
+                const date = new Date(data.pickupDate);
+                if (!isNaN(date.getTime())) {
+                  // Use local date components to avoid timezone conversion
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  return `${year}-${month}-${day}`;
                 }
               } catch (e) {
                 console.error('Error parsing pickupDate:', e);

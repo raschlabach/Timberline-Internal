@@ -163,7 +163,8 @@ export async function GET(
           )
         ELSE NULL END as "deliveryAssignment",
         -- Other fields
-        o.pickup_date as "pickupDate",
+        -- Format pickup_date as YYYY-MM-DD string to avoid timezone issues
+        TO_CHAR(o.pickup_date, 'YYYY-MM-DD') as "pickupDate",
         COALESCE(o.is_rush, false) as "isRushOrder",
         COALESCE(o.needs_attention, false) as "needsAttention",
         o.comments,
