@@ -1,7 +1,6 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { TruckloadSummary } from "@/types/truckloads"
@@ -586,16 +585,10 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
     }
   }
 
-  // In the sequence dialog
-  const availableSequenceNumbers = sortedStops
-    .filter((s: TruckloadStop) => 
-      s.id !== selectedStop?.id || s.assignment_type !== selectedStop?.assignment_type
-    )
-    .map((s: TruckloadStop) => s.sequence_number)
-
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col relative">
-      <div className="p-4 space-y-4 flex-1 flex flex-col justify-start min-h-0">
+      <div className="p-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Fixed content at top */}
         <div className="space-y-4 flex-shrink-0">
           {/* Truckload Details Card */}
           <TruckloadDetailsCard 
@@ -657,24 +650,25 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
               </div>
             </div>
           </Card>
+        </div>
 
-          {/* Stops Section */}
-          <div className="mt-4 flex-1 flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium">Stops</h3>
-              {stops.length > 0 && (
-                <Button
-                  onClick={handleOptimizeOrder}
-                  size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 h-7"
-                >
-                  Optimize Order
-                </Button>
-              )}
-            </div>
-            <ScrollArea className="flex-1 pr-2">
-              <div className="space-y-1">
-                {sortedStops.map((stop) => (
+        {/* Stops Section - Scrollable */}
+        <div className="mt-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <h3 className="text-sm font-medium">Stops</h3>
+            {stops.length > 0 && (
+              <Button
+                onClick={handleOptimizeOrder}
+                size="sm"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 h-7"
+              >
+                Optimize Order
+              </Button>
+            )}
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+            <div className="space-y-1">
+              {sortedStops.map((stop) => (
                 <div
                   key={`${stop.id}-${stop.assignment_type}`}
                   className={`flex items-center gap-2 p-2 rounded-md text-sm ${
@@ -729,11 +723,12 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                   </DropdownMenu>
                 </div>
               ))}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
+        </div>
 
-          {/* Stop Summary */}
+        {/* Stop Summary - Fixed at bottom */}
+        <div className="mt-4 flex-shrink-0">
           <Card className="p-4">
             <h3 className="text-sm font-medium mb-2">Stop Summary</h3>
             <div className="grid grid-cols-3 gap-2">
@@ -751,21 +746,23 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
               </div>
             </div>
           </Card>
+        </div>
+      </div>
 
-          {/* Transfer Dialog */}
-          <TransferStopDialog
-            isOpen={isTransferDialogOpen}
-            onClose={() => setIsTransferDialogOpen(false)}
-            onTransferComplete={() => {
-              queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
-            }}
-            currentTruckloadId={truckloadId}
-            orderId={selectedStop?.id || 0}
-            assignmentType={selectedStop?.assignment_type || 'pickup'}
-          />
+      {/* Transfer Dialog */}
+      <TransferStopDialog
+        isOpen={isTransferDialogOpen}
+        onClose={() => setIsTransferDialogOpen(false)}
+        onTransferComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
+        }}
+        currentTruckloadId={truckloadId}
+        orderId={selectedStop?.id || 0}
+        assignmentType={selectedStop?.assignment_type || 'pickup'}
+      />
 
-          {/* Sequence Dialog */}
-          <Dialog open={isSequenceDialogOpen} onOpenChange={setIsSequenceDialogOpen}>
+      {/* Sequence Dialog */}
+      <Dialog open={isSequenceDialogOpen} onOpenChange={setIsSequenceDialogOpen}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Change Sequence Number</DialogTitle>
@@ -785,8 +782,8 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
             </DialogContent>
           </Dialog>
 
-          {/* Optimization Dialog */}
-          <Dialog open={isOptimizeDialogOpen} onOpenChange={setIsOptimizeDialogOpen}>
+      {/* Optimization Dialog */}
+      <Dialog open={isOptimizeDialogOpen} onOpenChange={setIsOptimizeDialogOpen}>
             <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Route Optimization</DialogTitle>
@@ -998,8 +995,6 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
               </div>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
     </div>
   )
 } 
