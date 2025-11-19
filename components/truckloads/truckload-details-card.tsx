@@ -65,7 +65,14 @@ export function TruckloadDetailsCard({ truckload, onTruckloadUpdated }: Truckloa
             <span className="text-xs text-gray-600">Dates:</span>
             <div className="text-xs font-medium">
               {truckload.startDate && truckload.endDate
-                ? `${format(new Date(truckload.startDate), 'MMM dd')} - ${format(new Date(truckload.endDate), 'MMM dd')}`
+                ? (() => {
+                    // Parse dates as local dates to avoid timezone conversion
+                    const startParts = truckload.startDate.split('-')
+                    const endParts = truckload.endDate.split('-')
+                    const startDate = new Date(parseInt(startParts[0]), parseInt(startParts[1]) - 1, parseInt(startParts[2]))
+                    const endDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, parseInt(endParts[2]))
+                    return `${format(startDate, 'MMM dd')} - ${format(endDate, 'MMM dd')}`
+                  })()
                 : 'No dates'}
             </div>
           </div>

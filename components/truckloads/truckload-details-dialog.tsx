@@ -55,10 +55,20 @@ export function TruckloadDetailsDialog({
   // Update form data when truckload changes
   useEffect(() => {
     if (truckload) {
+      // Dates should already be in YYYY-MM-DD format from the API (via TO_CHAR)
+      // Use them directly - HTML date inputs handle YYYY-MM-DD strings correctly
+      // Extract just the date part (first 10 characters) to ensure YYYY-MM-DD format
+      const startDateValue = truckload.startDate 
+        ? (truckload.startDate.length >= 10 ? truckload.startDate.substring(0, 10) : truckload.startDate)
+        : ''
+      const endDateValue = truckload.endDate 
+        ? (truckload.endDate.length >= 10 ? truckload.endDate.substring(0, 10) : truckload.endDate)
+        : ''
+      
       setFormData({
         driverId: truckload.driverId ? truckload.driverId.toString() : '',
-        startDate: truckload.startDate ? truckload.startDate.slice(0, 10) : '',
-        endDate: truckload.endDate ? truckload.endDate.slice(0, 10) : '',
+        startDate: startDateValue,
+        endDate: endDateValue,
         description: truckload.description || '',
         billOfLadingNumber: truckload.billOfLadingNumber || '',
         trailerNumber: truckload.trailerNumber || ''
