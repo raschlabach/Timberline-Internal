@@ -801,9 +801,9 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
   const [isOrderInfoOpen, setIsOrderInfoOpen] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
-  const [columnWidths, setColumnWidths] = useState<number[]>([0, 0, 0, 0, 0])
   const containerRef = useRef<HTMLDivElement>(null)
-  const hasMeasuredRef = useRef(false)
+  const columnWidthsRef = useRef<number[]>([0, 0, 0, 0, 0])
+  const [gridTemplateColumns, setGridTemplateColumns] = useState<string | undefined>(undefined)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1056,20 +1056,20 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   // Group stops by customer
   const groupedStops = groupStopsByCustomer(stops)
 
-  // Measure column widths after stops are rendered
+  // Measure column widths after stops are rendered - using refs to avoid infinite loops
   useEffect(() => {
     if (stops.length === 0 || !containerRef.current) {
-      hasMeasuredRef.current = false
+      setGridTemplateColumns(undefined)
       return
     }
 
-    // Only measure once per stops change
-    if (hasMeasuredRef.current) return
+    let isMounted = true
+    let timeoutId: NodeJS.Timeout
 
     const measureColumns = () => {
+      if (!isMounted || !containerRef.current) return
+      
       try {
-        if (!containerRef.current) return
-        
         const widths = [0, 0, 0, 0, 0]
         
         // Find all column cells using data attributes
@@ -1078,8 +1078,7 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
           if (cells && cells.length > 0) {
             cells.forEach(cell => {
               const element = cell as HTMLElement
-              if (element && element.offsetParent !== null) { // Check if element is visible
-                // Use scrollWidth to get full content width even if truncated
+              if (element && element.offsetParent !== null) {
                 const width = element.scrollWidth > 0 ? element.scrollWidth : element.offsetWidth
                 if (width > 0 && width > widths[i]) {
                   widths[i] = width
@@ -1089,42 +1088,44 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
           }
         }
 
-        // Only update if we found valid widths (at least one column has width > 0)
+        // Only update if we found valid widths and they're different from current
         if (widths.some(w => w > 0)) {
-          // Add small padding to each column (8px) for spacing
           const paddedWidths = widths.map(w => w > 0 ? w + 8 : 0)
           
-          // Only update if widths actually changed to prevent infinite loops
-          setColumnWidths(prev => {
-            const hasChanged = prev.some((p, i) => p !== paddedWidths[i])
-            if (hasChanged) {
-              hasMeasuredRef.current = true
-              return paddedWidths
-            }
-            return prev
-          })
+          // Check if widths actually changed
+          const hasChanged = columnWidthsRef.current.some((prev, i) => prev !== paddedWidths[i])
+          
+          if (hasChanged) {
+            columnWidthsRef.current = paddedWidths
+            const newTemplate = `${paddedWidths[0]}px ${paddedWidths[1]}px ${paddedWidths[2]}px ${paddedWidths[3]}px ${paddedWidths[4]}px`
+            setGridTemplateColumns(prev => {
+              // Only update if template string actually changed
+              if (prev !== newTemplate) {
+                return newTemplate
+              }
+              return prev
+            })
+          }
         }
       } catch (error) {
         console.error('Error measuring column widths:', error)
-        hasMeasuredRef.current = true // Mark as measured even on error to prevent retries
       }
     }
 
-    // Use requestAnimationFrame and multiple timeouts to ensure DOM is fully rendered
-    const timeoutId = setTimeout(() => {
+    // Delay measurement to ensure DOM is ready
+    timeoutId = setTimeout(() => {
       requestAnimationFrame(() => {
-        setTimeout(measureColumns, 10)
+        if (isMounted) {
+          measureColumns()
+        }
       })
-    }, 50)
+    }, 100)
 
     return () => {
+      isMounted = false
       clearTimeout(timeoutId)
     }
-  }, [stops])
-
-  const gridTemplateColumns = columnWidths.every(w => w > 0)
-    ? `${columnWidths[0]}px ${columnWidths[1]}px ${columnWidths[2]}px ${columnWidths[3]}px ${columnWidths[4]}px`
-    : undefined
+  }, [stops.length]) // Only depend on length, not the array itself
 
   return (
     <TooltipProvider>
