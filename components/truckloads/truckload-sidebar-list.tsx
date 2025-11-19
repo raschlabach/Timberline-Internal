@@ -606,23 +606,23 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="mt-2">
-                <TruckloadDetailsCard 
-                  truckload={{
-                    id: truckload.id,
-                    driverName: truckload.driverName,
-                    driverColor: truckload.driverColor,
-                    startDate: truckload.startDate,
-                    endDate: truckload.endDate,
-                    description: truckload.description,
-                    billOfLadingNumber: truckload.billOfLadingNumber,
-                    trailerNumber: truckload.trailerNumber,
-                    isCompleted: truckload.isCompleted
-                  }}
-                  onTruckloadUpdated={() => {
-                    queryClient.invalidateQueries({ queryKey: ["truckload", truckloadId] })
-                  }}
-                />
-              </div>
+          <TruckloadDetailsCard 
+            truckload={{
+              id: truckload.id,
+              driverName: truckload.driverName,
+              driverColor: truckload.driverColor,
+              startDate: truckload.startDate,
+              endDate: truckload.endDate,
+              description: truckload.description,
+              billOfLadingNumber: truckload.billOfLadingNumber,
+              trailerNumber: truckload.trailerNumber,
+              isCompleted: truckload.isCompleted
+            }}
+            onTruckloadUpdated={() => {
+              queryClient.invalidateQueries({ queryKey: ["truckload", truckloadId] })
+            }}
+          />
+            </div>
             </CollapsibleContent>
           </Collapsible>
 
@@ -633,50 +633,50 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">Footage Summary</h3>
                   <ChevronDown className={`h-4 w-4 transition-transform ${isFootageOpen ? 'rotate-180' : ''}`} />
-                </div>
-              </Card>
+            </div>
+          </Card>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <Card className="p-4 mt-2">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-red-600">Pickups</span>
-                    <span className="font-medium">
-                      {sortedStops
-                        .filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order)
-                        .reduce((total, stop) => total + Number(stop.footage || 0), 0)
-                        .toLocaleString()} ft²
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-900">Deliveries</span>
-                    <span className="font-medium">
-                      {sortedStops
-                        .filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order)
-                        .reduce((total, stop) => total + Number(stop.footage || 0), 0)
-                        .toLocaleString()} ft²
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-600">Transfers</span>
-                    <span className="font-medium">
-                      {sortedStops
-                        .filter(s => s.is_transfer_order)
-                        .reduce((acc, stop) => {
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-red-600">Pickups</span>
+                <span className="font-medium">
+                  {sortedStops
+                    .filter(s => s.assignment_type === 'pickup' && !s.is_transfer_order)
+                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
+                    .toLocaleString()} ft²
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-900">Deliveries</span>
+                <span className="font-medium">
+                  {sortedStops
+                    .filter(s => s.assignment_type === 'delivery' && !s.is_transfer_order)
+                    .reduce((total, stop) => total + Number(stop.footage || 0), 0)
+                    .toLocaleString()} ft²
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-blue-600">Transfers</span>
+                <span className="font-medium">
+                  {sortedStops
+                    .filter(s => s.is_transfer_order)
+                    .reduce((acc, stop) => {
                           // Use order_id to deduplicate transfer orders (same order appears twice - pickup and delivery)
                           const orderId = stop.order_id
                           if (!acc.processedOrders.has(orderId)) {
                             acc.processedOrders.add(orderId)
-                            acc.total += Number(stop.footage || 0)
-                          }
-                          return acc
-                        }, { total: 0, processedOrders: new Set<number>() })
-                        .total
-                        .toLocaleString()} ft²
-                    </span>
-                  </div>
-                </div>
-              </Card>
+                        acc.total += Number(stop.footage || 0)
+                      }
+                      return acc
+                    }, { total: 0, processedOrders: new Set<number>() })
+                    .total
+                    .toLocaleString()} ft²
+                </span>
+              </div>
+            </div>
+          </Card>
             </CollapsibleContent>
           </Collapsible>
 
@@ -725,20 +725,20 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
         </Collapsible>
       </div>
 
-      {/* Transfer Dialog */}
-      <TransferStopDialog
-        isOpen={isTransferDialogOpen}
-        onClose={() => setIsTransferDialogOpen(false)}
-        onTransferComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
-        }}
-        currentTruckloadId={truckloadId}
-        orderId={selectedStop?.id || 0}
-        assignmentType={selectedStop?.assignment_type || 'pickup'}
-      />
+          {/* Transfer Dialog */}
+          <TransferStopDialog
+            isOpen={isTransferDialogOpen}
+            onClose={() => setIsTransferDialogOpen(false)}
+            onTransferComplete={() => {
+              queryClient.invalidateQueries({ queryKey: ["truckload-stops", truckloadId] })
+            }}
+            currentTruckloadId={truckloadId}
+            orderId={selectedStop?.id || 0}
+            assignmentType={selectedStop?.assignment_type || 'pickup'}
+          />
 
-      {/* Sequence Dialog */}
-      <Dialog open={isSequenceDialogOpen} onOpenChange={setIsSequenceDialogOpen}>
+          {/* Sequence Dialog */}
+          <Dialog open={isSequenceDialogOpen} onOpenChange={setIsSequenceDialogOpen}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Change Sequence Number</DialogTitle>
@@ -758,8 +758,8 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
             </DialogContent>
           </Dialog>
 
-      {/* Optimization Dialog */}
-      <Dialog open={isOptimizeDialogOpen} onOpenChange={setIsOptimizeDialogOpen}>
+          {/* Optimization Dialog */}
+          <Dialog open={isOptimizeDialogOpen} onOpenChange={setIsOptimizeDialogOpen}>
             <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Route Optimization</DialogTitle>

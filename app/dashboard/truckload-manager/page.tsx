@@ -397,15 +397,15 @@ export default function TruckloadManager() {
           <ManageDriversDialog />
           
           {/* Reorder Mode Toggle */}
-          <Button
+            <Button
             variant={isReorderMode ? "default" : "outline"}
-            size="sm"
+              size="sm"
             onClick={() => setIsReorderMode(!isReorderMode)}
             className="gap-2"
-          >
+            >
             <GripVertical className="h-4 w-4" />
             {isReorderMode ? 'Done Reordering' : 'Reorder Columns'}
-          </Button>
+            </Button>
           
         </div>
       </div>
@@ -423,8 +423,8 @@ export default function TruckloadManager() {
               items={driverOrder}
               strategy={verticalListSortingStrategy}
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                {displayDrivers.map((driver: Driver) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+            {displayDrivers.map((driver: Driver) => (
                   <SortableDriverCard 
                     key={driver.id} 
                     driver={driver} 
@@ -436,8 +436,8 @@ export default function TruckloadManager() {
                     isCollapsed={collapsedDrivers[driver.id] !== undefined ? collapsedDrivers[driver.id] : true}
                     onToggleCollapse={() => toggleDriverCollapse(driver.id)}
                   />
-                ))}
-              </div>
+            ))}
+          </div>
             </SortableContext>
           </DndContext>
         ) : (
@@ -923,29 +923,29 @@ export default function TruckloadManager() {
           </div>
         </CardHeader>
         {!isCollapsed && (
-          <CardContent className="p-3">
-            <div className="space-y-3">
-              {driverTruckloads.map((truckload: TruckloadSummary) => (
-                <TruckloadCard key={truckload.id} truckload={truckload} />
-              ))}
-              {driverTruckloads.length === 0 && (
-                <div className="text-center py-6">
-                  <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
-                    <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                    <p className="text-xs text-gray-500 font-medium">
-                      {showActive ? 'No active truckloads' : 'No completed truckloads'}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {showActive 
-                        ? 'Click the + button to add a new truckload' 
-                        : 'Switch to Active view to see current truckloads'
-                      }
-                    </p>
-                  </div>
+        <CardContent className="p-3">
+          <div className="space-y-3">
+            {driverTruckloads.map((truckload: TruckloadSummary) => (
+              <TruckloadCard key={truckload.id} truckload={truckload} />
+            ))}
+            {driverTruckloads.length === 0 && (
+              <div className="text-center py-6">
+                <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                  <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                  <p className="text-xs text-gray-500 font-medium">
+                    {showActive ? 'No active truckloads' : 'No completed truckloads'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {showActive 
+                      ? 'Click the + button to add a new truckload' 
+                      : 'Switch to Active view to see current truckloads'
+                    }
+                  </p>
                 </div>
-              )}
-            </div>
-          </CardContent>
+              </div>
+            )}
+          </div>
+        </CardContent>
         )}
       </Card>
     );

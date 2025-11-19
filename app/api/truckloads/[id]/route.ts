@@ -30,16 +30,16 @@ export async function GET(
           toa.assignment_type,
           -- Calculate footage from skids and vinyl
           COALESCE(
-            (
-              SELECT SUM(s.width * s.length * s.quantity)
-              FROM skids s
-              WHERE s.order_id = o.id
-            ) + (
-              SELECT SUM(v.width * v.length * v.quantity)
-              FROM vinyl v
-              WHERE v.order_id = o.id
-            ),
-            0
+              (
+                SELECT SUM(s.width * s.length * s.quantity)
+                FROM skids s
+                WHERE s.order_id = o.id
+              ) + (
+                SELECT SUM(v.width * v.length * v.quantity)
+                FROM vinyl v
+                WHERE v.order_id = o.id
+              ),
+              0
           ) as square_footage
         FROM truckload_order_assignments toa
         JOIN orders o ON toa.order_id = o.id
@@ -120,9 +120,9 @@ export async function GET(
     `, [truckloadId])
 
     if (!result.rows || result.rows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Truckload not found'
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Truckload not found' 
       }, { status: 404 })
     }
 
@@ -242,7 +242,7 @@ export async function PATCH(
 
     return NextResponse.json({ 
       success: true, 
-      truckload: result.rows[0]
+      truckload: result.rows[0] 
     })
   } catch (error) {
     console.error('Error updating truckload:', error)
@@ -251,4 +251,4 @@ export async function PATCH(
       error: 'Failed to update truckload' 
     }, { status: 500 })
   }
-}
+} 

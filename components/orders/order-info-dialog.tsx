@@ -205,7 +205,7 @@ export function OrderInfoDialog({
           }
         }
       }
-
+      
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

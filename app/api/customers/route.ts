@@ -188,23 +188,23 @@ export async function POST(request: NextRequest) {
       )
     } else {
       customerResult = await query(
-        `INSERT INTO customers (
-          customer_name, 
-          location_id, 
-          phone_number_1, 
-          phone_number_2,
-          quotes, 
-          notes
-        ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [
-          body.customer_name,
-          locationId,
-          body.phone_number_1,
-          body.phone_number_2 || null,
-          body.quotes || null,
-          body.notes || null
-        ]
-      )
+      `INSERT INTO customers (
+        customer_name, 
+        location_id, 
+        phone_number_1, 
+        phone_number_2,
+        quotes, 
+        notes
+      ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [
+        body.customer_name,
+        locationId,
+        body.phone_number_1,
+        body.phone_number_2 || null,
+        body.quotes || null,
+        body.notes || null
+      ]
+    )
     }
     
     const customerId = customerResult.rows[0].id

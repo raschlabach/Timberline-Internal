@@ -476,17 +476,17 @@ export function CustomerEditModal({
                 Primary Phone <span className="text-amber-500">◆</span>
               </label>
               <div className="flex gap-2">
-                <input
-                  type="tel"
-                  id="phone_number_1"
-                  name="phone_number_1"
-                  value={formData.phone_number_1 || ''}
-                  onChange={handleInputChange}
+              <input
+                type="tel"
+                id="phone_number_1"
+                name="phone_number_1"
+                value={formData.phone_number_1 || ''}
+                onChange={handleInputChange}
                   className={`flex-1 rounded-md border ${
-                    errors.phone_number_1 ? 'border-red-500' : 'border-gray-300'
-                  } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  placeholder="(XXX) XXX-XXXX"
-                />
+                  errors.phone_number_1 ? 'border-red-500' : 'border-gray-300'
+                } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                placeholder="(XXX) XXX-XXXX"
+              />
                 <input
                   type="text"
                   id="phone_number_1_ext"
@@ -511,17 +511,17 @@ export function CustomerEditModal({
                 Secondary Phone
               </label>
               <div className="flex gap-2">
-                <input
-                  type="tel"
-                  id="phone_number_2"
-                  name="phone_number_2"
-                  value={formData.phone_number_2 || ''}
-                  onChange={handleInputChange}
+              <input
+                type="tel"
+                id="phone_number_2"
+                name="phone_number_2"
+                value={formData.phone_number_2 || ''}
+                onChange={handleInputChange}
                   className={`flex-1 rounded-md border ${
-                    errors.phone_number_2 ? 'border-red-500' : 'border-gray-300'
-                  } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  placeholder="(XXX) XXX-XXXX"
-                />
+                  errors.phone_number_2 ? 'border-red-500' : 'border-gray-300'
+                } px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                placeholder="(XXX) XXX-XXXX"
+              />
                 <input
                   type="text"
                   id="phone_number_2_ext"

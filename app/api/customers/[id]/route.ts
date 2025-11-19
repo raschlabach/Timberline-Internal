@@ -149,24 +149,24 @@ export async function PUT(
         ]
       )
     } else {
-      await query(
-        `UPDATE customers SET
-          customer_name = $1,
-          phone_number_1 = $2,
-          phone_number_2 = $3,
-          notes = $4,
-          quotes = $5,
-          updated_at = NOW()
-        WHERE id = $6`,
-        [
-          body.customer_name,
-          body.phone_number_1,
-          body.phone_number_2 || null,
-          body.notes || null,
-          body.quotes || null,
-          id
-        ]
-      )
+    await query(
+      `UPDATE customers SET
+        customer_name = $1,
+        phone_number_1 = $2,
+        phone_number_2 = $3,
+        notes = $4,
+        quotes = $5,
+        updated_at = NOW()
+      WHERE id = $6`,
+      [
+        body.customer_name,
+        body.phone_number_1,
+        body.phone_number_2 || null,
+        body.notes || null,
+        body.quotes || null,
+        id
+      ]
+    )
     }
     
     // Return the updated customer data (reuse extension check)

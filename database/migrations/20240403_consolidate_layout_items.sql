@@ -39,16 +39,16 @@ BEGIN
       AND table_name = 'trailer_layout_items'
       AND column_name = 'stack_id'
   ) THEN
-    INSERT INTO trailer_layout_items_new (
-        id, trailer_layout_id, item_type, item_id, x_position, y_position,
-        width, length, rotation, stack_id, stack_position, customer_id,
-        customer_name, created_at, updated_at
-    )
-    SELECT 
-        id, trailer_layout_id, item_type, item_id, x_position, y_position,
-        width, length, rotation, stack_id, stack_position, customer_id,
-        customer_name, created_at, updated_at
-    FROM trailer_layout_items;
+INSERT INTO trailer_layout_items_new (
+    id, trailer_layout_id, item_type, item_id, x_position, y_position,
+    width, length, rotation, stack_id, stack_position, customer_id,
+    customer_name, created_at, updated_at
+)
+SELECT 
+    id, trailer_layout_id, item_type, item_id, x_position, y_position,
+    width, length, rotation, stack_id, stack_position, customer_id,
+    customer_name, created_at, updated_at
+FROM trailer_layout_items;
   ELSE
     RAISE NOTICE 'Skipping step in 20240403_consolidate_layout_items.sql: stack_id not present in source table';
     INSERT INTO trailer_layout_items_new (
@@ -93,4 +93,4 @@ END $$;
 CREATE TRIGGER update_timestamp BEFORE UPDATE ON trailer_layout_items
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
-COMMIT;
+COMMIT; 

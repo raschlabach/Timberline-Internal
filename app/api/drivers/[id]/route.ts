@@ -21,9 +21,9 @@ export async function DELETE(
       }, { status: 400 })
     }
 
-    const client = await getClient()
-    
-    try {
+  const client = await getClient()
+  
+  try {
       // Check if the driver is assigned to any truckloads (active or completed)
       const assignmentCheck = await client.query(
         `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1`,
@@ -47,10 +47,10 @@ export async function DELETE(
         }, { status: 400 })
       }
 
-      // Start a transaction
-      await client.query('BEGIN')
+    // Start a transaction
+    await client.query('BEGIN')
 
-      try {
+    try {
         // If there are completed truckloads, set driver_id to NULL to preserve historical data
         if (truckloadCount > 0) {
           await client.query(
@@ -59,7 +59,7 @@ export async function DELETE(
           )
         }
 
-        // Delete from drivers table first (due to foreign key constraint)
+      // Delete from drivers table first (due to foreign key constraint)
         const driverDeleteResult = await client.query(
           'DELETE FROM drivers WHERE user_id = $1 RETURNING user_id', 
           [driverId]
@@ -73,24 +73,24 @@ export async function DELETE(
             error: 'Driver not found' 
           }, { status: 404 })
         }
-        
-        // Then delete from users table
+      
+      // Then delete from users table
         await client.query('DELETE FROM users WHERE id = $1 AND role = \'driver\'', [driverId])
 
-        await client.query('COMMIT')
+      await client.query('COMMIT')
 
-        return NextResponse.json({
-          success: true,
-          message: 'Driver deleted successfully'
-        })
-      } catch (error) {
-        await client.query('ROLLBACK')
-        throw error
-      } finally {
-        client.release()
-      }
+      return NextResponse.json({
+        success: true,
+        message: 'Driver deleted successfully'
+      })
     } catch (error) {
-      console.error('Error deleting driver:', error)
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error('Error deleting driver:', error)
       const errorMessage = error instanceof Error ? error.message : String(error)
       return NextResponse.json({
         success: false,

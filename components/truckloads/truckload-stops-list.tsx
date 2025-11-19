@@ -201,15 +201,15 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                 <div className="flex items-center gap-2">
                   {/* Left side: Drag handle, sequence, badges */}
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {index === 0 && (
-                      <button
+                      {index === 0 && (
+                        <button
                         className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
-                        {...attributes}
-                        {...listeners}
-                      >
-                        <GripVertical className="h-3.5 w-3.5 text-gray-400" />
-                      </button>
-                    )}
+                          {...attributes}
+                          {...listeners}
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                        </button>
+                      )}
                     <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
                     {stop.is_transfer_order ? (
                       <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
@@ -222,11 +222,11 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                           stop.assignment_type === 'delivery' ? 'bg-black text-white hover:bg-black/90' : ''
                         }`}
                       >
-                        {stop.assignment_type === 'pickup' ? (
-                          <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
-                        ) : (
-                          <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
-                        )}
+                      {stop.assignment_type === 'pickup' ? (
+                        <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                      ) : (
+                        <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                      )}
                       </Badge>
                     )}
                   </div>
@@ -514,13 +514,13 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
           <div className="flex items-center gap-2">
             {/* Left side: Drag handle, sequence, badges */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
+                <button
                 className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
-                {...attributes}
-                {...listeners}
-              >
-                <GripVertical className="h-3.5 w-3.5 text-gray-400" />
-              </button>
+                  {...attributes}
+                  {...listeners}
+                >
+                  <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                </button>
               <span className="font-medium text-sm whitespace-nowrap">#{stop.sequence_number}</span>
               {stop.is_transfer_order ? (
                 <Badge variant="outline" className="text-xs h-5 px-1.5 bg-blue-50 text-blue-800 border-blue-200 whitespace-nowrap">
@@ -533,11 +533,11 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
                     stop.assignment_type === 'delivery' ? 'bg-black text-white hover:bg-black/90' : ''
                   }`}
                 >
-                  {stop.assignment_type === 'pickup' ? (
-                    <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
-                  ) : (
-                    <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
-                  )}
+                {stop.assignment_type === 'pickup' ? (
+                  <><ArrowUp className="h-3 w-3 mr-0.5" /> Pickup</>
+                ) : (
+                  <><ArrowDown className="h-3 w-3 mr-0.5" /> Delivery</>
+                )}
                 </Badge>
               )}
             </div>
@@ -1049,28 +1049,28 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
     <TooltipProvider>
       <div className="h-full flex flex-col min-h-0 overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={rectIntersection}
-            onDragEnd={handleDragEnd}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={rectIntersection}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={groupedStops.map(group => `group-${group.groupKey}`)}
+            strategy={verticalListSortingStrategy}
           >
-            <SortableContext
-              items={groupedStops.map(group => `group-${group.groupKey}`)}
-              strategy={verticalListSortingStrategy}
-            >
               <div className="space-y-2.5 p-4 pr-6">
-                {groupedStops.map((group) => (
-                  <SortableGroupedStop
-                    key={`group-${group.groupKey}-${group.sequenceNumber}`}
-                    groupedStop={group}
-                    onOrderInfoClick={handleOrderInfoClick}
-                    onStopUpdate={fetchStops}
-                    truckloadId={truckloadId}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+              {groupedStops.map((group) => (
+                <SortableGroupedStop
+                  key={`group-${group.groupKey}-${group.sequenceNumber}`}
+                  groupedStop={group}
+                  onOrderInfoClick={handleOrderInfoClick}
+                  onStopUpdate={fetchStops}
+                  truckloadId={truckloadId}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
         </div>
       </div>
 

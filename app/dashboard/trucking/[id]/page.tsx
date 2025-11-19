@@ -102,27 +102,7 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
 
     if (truckload) {
         return (
-            <div className="h-screen flex flex-col">
-                <div className="flex-none border-b">
-                    <div className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-4">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => router.push('/dashboard/truckload-manager')}
-                                className="h-8 w-8"
-                            >
-                                <ArrowLeft className="h-4 w-4" />
-                            </Button>
-                            <h1 className="text-2xl font-bold">Truckload Editor</h1>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Badge variant={truckload.is_completed ? "default" : "secondary"}>
-                                {truckload.is_completed ? "Completed" : "In Progress"}
-                            </Badge>
-                        </div>
-                    </div>
-                </div>
+            <div className="h-screen flex flex-col overflow-hidden">
                 <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                     <div className="flex-1 flex min-h-0 overflow-hidden">
                         <div className="w-80 flex-none border-r overflow-hidden">
@@ -141,7 +121,7 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                                     </div>
 
                                     <TabsContent value="stops" className="flex-1 min-h-0 overflow-hidden mt-0">
-                                        <TruckloadStopsList truckloadId={truckloadId} />
+                                            <TruckloadStopsList truckloadId={truckloadId} />
                                     </TabsContent>
 
                                     <TabsContent value="map" className="flex-1 min-h-0 overflow-hidden mt-0">

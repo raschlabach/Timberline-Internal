@@ -266,7 +266,7 @@ export function BulkAssignmentDialog({
                 
                 return (
                   <Card 
-                    key={driver.driverName}
+                    key={driver.driverName} 
                     className="w-full bg-white shadow-lg border-0 h-fit"
                     style={{
                       borderLeft: `4px solid ${driver.driverColor}`,
@@ -362,18 +362,18 @@ export function BulkAssignmentDialog({
                               <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
                                 <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
                                 <p className="text-xs text-gray-500 font-medium">
-                                  No truckloads assigned
-                                </p>
+                              No truckloads assigned
+                            </p>
                               </div>
                             </div>
                           )}
                         </div>
                       </CardContent>
                     )}
-                  </Card>
+                    </Card>
                 )
               })}
-            </div>
+              </div>
           </div>
         </div>
 

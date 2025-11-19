@@ -94,10 +94,10 @@ export async function POST(request: Request) {
       while (tries < 3) {
         try {
           console.log(`Attempting to create user with username: ${finalUsername} (try ${tries + 1}/3)`)
-          const userResult = await client.query(
+      const userResult = await client.query(
             `INSERT INTO users (username, password_hash, full_name, role, is_active, created_at, updated_at)
              VALUES ($1, $2, $3, 'driver', true, now(), now())
-             RETURNING id`,
+         RETURNING id`,
             [finalUsername, passwordHash, name || null]
           )
           userId = userResult.rows[0].id
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error('Error in driver creation transaction:', error)
       try {
-        await client.query('ROLLBACK')
+      await client.query('ROLLBACK')
         console.log('Rollback successful')
       } catch (rollbackError) {
         console.error('Error during rollback:', rollbackError)

@@ -309,7 +309,7 @@ export default function OrderEntryPage() {
       
       // Clear the form only if clearForm is true
       if (clearForm) {
-        resetForm();
+      resetForm();
       }
 
       // Stay on the order entry page for continued order creation

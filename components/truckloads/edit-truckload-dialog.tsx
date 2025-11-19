@@ -148,8 +148,8 @@ export function EditTruckloadDialog({
       const result = await response.json()
       if (result.success) {
         toast.success(result.message || 'Truckload deleted successfully')
-        onTruckloadUpdated()
-        onClose()
+      onTruckloadUpdated()
+      onClose()
       } else {
         throw new Error(result.error || result.message || 'Failed to delete truckload')
       }
