@@ -1060,30 +1060,32 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
 
   return (
     <TooltipProvider>
-      <ScrollArea className="h-full pr-2">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={rectIntersection}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={groupedStops.map(group => `group-${group.groupKey}`)}
-            strategy={verticalListSortingStrategy}
+      <div className="h-full flex flex-col min-h-0">
+        <ScrollArea className="flex-1 min-h-0">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={rectIntersection}
+            onDragEnd={handleDragEnd}
           >
-            <div className="space-y-2.5">
-              {groupedStops.map((group) => (
-                <SortableGroupedStop
-                  key={`group-${group.groupKey}-${group.sequenceNumber}`}
-                  groupedStop={group}
-                  onOrderInfoClick={handleOrderInfoClick}
-                  onStopUpdate={fetchStops}
-                  truckloadId={truckloadId}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      </ScrollArea>
+            <SortableContext
+              items={groupedStops.map(group => `group-${group.groupKey}`)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2.5 p-4">
+                {groupedStops.map((group) => (
+                  <SortableGroupedStop
+                    key={`group-${group.groupKey}-${group.sequenceNumber}`}
+                    groupedStop={group}
+                    onOrderInfoClick={handleOrderInfoClick}
+                    onStopUpdate={fetchStops}
+                    truckloadId={truckloadId}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </ScrollArea>
+      </div>
 
       {selectedOrderId && (
         <OrderInfoDialog
