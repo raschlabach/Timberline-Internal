@@ -49,9 +49,34 @@ export function useLayoutOperations(
     const finalLayout: GridPosition[] = []
     let maxStackId = 0
 
+    // First, normalize and validate items from database
+    const normalizedLayout = layout.map(item => {
+      // Ensure all required fields are present and properly typed
+      const normalized: GridPosition = {
+        x: typeof item.x === 'number' ? item.x : parseInt(item.x) || 0,
+        y: typeof item.y === 'number' ? item.y : parseInt(item.y) || 0,
+        width: typeof item.width === 'number' ? item.width : parseInt(item.width) || 0,
+        length: typeof item.length === 'number' ? item.length : parseInt(item.length) || 0,
+        item_id: typeof item.item_id === 'number' ? item.item_id : parseInt(item.item_id) || 0,
+        type: item.type || item.item_type || 'skid', // Handle both field names
+        customerId: item.customerId || 0,
+        rotation: typeof item.rotation === 'number' ? item.rotation : parseInt(item.rotation) || 0,
+        customerName: item.customerName || '',
+        stackId: item.stackId || undefined,
+        stackPosition: item.stackPosition || undefined
+      }
+      return normalized
+    }).filter(item => 
+      // Filter out items with invalid required fields
+      item.item_id > 0 && 
+      item.customerId > 0 && 
+      item.customerName && 
+      (item.type === 'skid' || item.type === 'vinyl')
+    )
+
     // Group items by stack
     const stackMap = new Map<number, GridPosition[]>()
-    layout.forEach(item => {
+    normalizedLayout.forEach(item => {
       if (item.stackId) {
         if (!stackMap.has(item.stackId)) {
           stackMap.set(item.stackId, [])
@@ -133,21 +158,38 @@ export function useLayoutOperations(
       }
 
       // Validate and clean layout data before sending
-      const cleanedLayout = layout.map((item, index) => {
-        // Ensure all required fields are present and valid
-        if (typeof item.x !== 'number' || isNaN(item.x) ||
-            typeof item.y !== 'number' || isNaN(item.y) ||
-            typeof item.width !== 'number' || isNaN(item.width) ||
-            typeof item.length !== 'number' || isNaN(item.length) ||
-            typeof item.item_id !== 'number' || isNaN(item.item_id) ||
-            typeof item.customerId !== 'number' || isNaN(item.customerId) ||
-            !item.type || (item.type !== 'skid' && item.type !== 'vinyl') ||
-            !item.customerName || typeof item.customerName !== 'string' ||
-            typeof item.rotation !== 'number') {
-          console.error(`Invalid layout item at index ${index}:`, item)
+      const cleanedLayout = layout.map((item: any, index) => {
+        // Normalize the item first (handle both item_type and type fields from database)
+        const normalized = {
+          ...item,
+          type: item.type || (item as any).item_type || 'skid',
+          x: typeof item.x === 'number' ? item.x : parseInt(String(item.x)) || 0,
+          y: typeof item.y === 'number' ? item.y : parseInt(String(item.y)) || 0,
+          width: typeof item.width === 'number' ? item.width : parseInt(String(item.width)) || 0,
+          length: typeof item.length === 'number' ? item.length : parseInt(String(item.length)) || 0,
+          item_id: typeof item.item_id === 'number' ? item.item_id : parseInt(String(item.item_id)) || 0,
+          rotation: typeof item.rotation === 'number' ? item.rotation : parseInt(String(item.rotation)) || 0,
+          customerId: typeof item.customerId === 'number' ? item.customerId : parseInt(String(item.customerId)) || 0,
+          customerName: item.customerName || ''
+        }
+        
+        // Check which fields are invalid
+        const errors: string[] = []
+        if (typeof normalized.x !== 'number' || isNaN(normalized.x)) errors.push('x')
+        if (typeof normalized.y !== 'number' || isNaN(normalized.y)) errors.push('y')
+        if (typeof normalized.width !== 'number' || isNaN(normalized.width) || normalized.width <= 0) errors.push('width')
+        if (typeof normalized.length !== 'number' || isNaN(normalized.length) || normalized.length <= 0) errors.push('length')
+        if (typeof normalized.item_id !== 'number' || isNaN(normalized.item_id) || normalized.item_id <= 0) errors.push('item_id')
+        if (typeof normalized.customerId !== 'number' || isNaN(normalized.customerId) || normalized.customerId <= 0) errors.push('customerId')
+        if (!normalized.type || (normalized.type !== 'skid' && normalized.type !== 'vinyl')) errors.push('type')
+        if (!normalized.customerName || typeof normalized.customerName !== 'string') errors.push('customerName')
+        if (typeof normalized.rotation !== 'number' || isNaN(normalized.rotation)) errors.push('rotation')
+        
+        if (errors.length > 0) {
+          console.error(`Invalid layout item at index ${index} - missing/invalid fields: ${errors.join(', ')}`, normalized)
           return null
         }
-        return item
+        return normalized as GridPosition
       }).filter((item): item is GridPosition => item !== null)
 
       if (cleanedLayout.length !== layout.length) {

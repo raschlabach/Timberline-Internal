@@ -70,9 +70,26 @@ export async function GET(
       [layoutId]
     )
 
+    // Transform database fields to match frontend expectations
+    const transformedLayout = itemsResult.rows.map(item => ({
+      ...item,
+      type: item.item_type, // Map item_type to type
+      // Ensure numeric fields are numbers (handle potential string conversion)
+      x: typeof item.x === 'number' ? item.x : parseInt(item.x) || 0,
+      y: typeof item.y === 'number' ? item.y : parseInt(item.y) || 0,
+      width: typeof item.width === 'number' ? item.width : parseInt(item.width) || 0,
+      length: typeof item.length === 'number' ? item.length : parseInt(item.length) || 0,
+      item_id: typeof item.item_id === 'number' ? item.item_id : parseInt(item.item_id) || 0,
+      rotation: typeof item.rotation === 'number' ? item.rotation : parseInt(item.rotation) || 0,
+      customerId: item.customerId || 0, // Handle null
+      customerName: item.customerName || '', // Handle null
+      stackId: item.stackId || null,
+      stackPosition: item.stackPosition || null
+    }))
+
     return NextResponse.json({
       success: true,
-      layout: itemsResult.rows
+      layout: transformedLayout
     })
   } catch (error) {
     console.error('Error fetching layout:', error)
