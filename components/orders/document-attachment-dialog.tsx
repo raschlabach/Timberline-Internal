@@ -17,6 +17,7 @@ interface Document {
   file_type: string
   created_at: string
   uploaded_by: string
+  source?: string // 'document_attachment' or 'order_link'
 }
 
 interface DocumentAttachmentDialogProps {
@@ -105,21 +106,30 @@ export function DocumentAttachmentDialog({
     }
   }
 
-  const handleDelete = async (documentId: number) => {
+  const handleDelete = async (document: Document) => {
     if (!confirm('Are you sure you want to delete this document?')) {
       return
     }
 
     try {
-      const response = await fetch(`/api/orders/${orderId}/documents?documentId=${documentId}`, {
+      const url = new URL(`/api/orders/${orderId}/documents`, window.location.origin)
+      url.searchParams.set('documentId', document.id.toString())
+      if (document.source) {
+        url.searchParams.set('source', document.source)
+      }
+
+      const response = await fetch(url.toString(), {
         method: 'DELETE'
       })
 
       if (response.ok) {
         toast.success('Document deleted successfully')
         fetchDocuments()
+        // Trigger notification panel refresh
+        window.dispatchEvent(new CustomEvent('notificationUpdate'))
       } else {
-        toast.error('Failed to delete document')
+        const error = await response.json().catch(() => ({}))
+        toast.error(error.error || 'Failed to delete document')
       }
     } catch (error) {
       console.error('Error deleting document:', error)
@@ -282,7 +292,7 @@ export function DocumentAttachmentDialog({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(doc.id)}
+                          onClick={() => handleDelete(doc)}
                           className="text-red-600 hover:text-red-700"
                           title="Delete document"
                         >

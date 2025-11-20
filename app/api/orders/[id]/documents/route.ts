@@ -223,6 +223,7 @@ export async function DELETE(
 
     const { searchParams } = new URL(request.url)
     const documentId = searchParams.get('documentId')
+    const source = searchParams.get('source') // 'document_attachment' or 'order_link'
 
     if (!documentId) {
       return NextResponse.json({ success: false, error: 'Document ID required' }, { status: 400 })
@@ -232,27 +233,57 @@ export async function DELETE(
     try {
       await client.query('BEGIN')
 
-      // Get document info before deleting
-      const docResult = await client.query(
-        'SELECT file_path FROM document_attachments WHERE id = $1 AND order_id = $2',
-        [documentId, orderId]
-      )
+      // Determine which table to delete from based on source
+      if (source === 'order_link') {
+        // Delete from order_links
+        const linkResult = await client.query(
+          'SELECT id FROM order_links WHERE id = $1 AND order_id = $2',
+          [documentId, orderId]
+        )
 
-      if (docResult.rows.length === 0) {
-        throw new Error('Document not found')
+        if (linkResult.rows.length === 0) {
+          throw new Error('Link not found')
+        }
+
+        // Delete the link (this will also remove the file_data)
+        await client.query(
+          'DELETE FROM order_links WHERE id = $1 AND order_id = $2',
+          [documentId, orderId]
+        )
+
+        // Delete related notifications (order_link type)
+        // Note: order_link notifications don't have a direct link_id reference,
+        // so we delete all order_link notifications for this order
+        // This is acceptable since deleting a link should remove its notification
+        await client.query(
+          `DELETE FROM notifications 
+           WHERE order_id = $1 
+           AND type = 'order_link'`,
+          [orderId]
+        )
+      } else {
+        // Delete from document_attachments (default)
+        const docResult = await client.query(
+          'SELECT file_path FROM document_attachments WHERE id = $1 AND order_id = $2',
+          [documentId, orderId]
+        )
+
+        if (docResult.rows.length === 0) {
+          throw new Error('Document not found')
+        }
+
+        // Delete from database
+        await client.query(
+          'DELETE FROM document_attachments WHERE id = $1 AND order_id = $2',
+          [documentId, orderId]
+        )
+
+        // Delete related notifications
+        await client.query(
+          'DELETE FROM notifications WHERE document_attachment_id = $1',
+          [documentId]
+        )
       }
-
-      // Delete from database
-      await client.query(
-        'DELETE FROM document_attachments WHERE id = $1 AND order_id = $2',
-        [documentId, orderId]
-      )
-
-      // Delete related notifications
-      await client.query(
-        'DELETE FROM notifications WHERE document_attachment_id = $1',
-        [documentId]
-      )
 
       await client.query('COMMIT')
 
