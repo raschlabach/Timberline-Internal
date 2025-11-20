@@ -477,14 +477,27 @@ export async function POST(request: NextRequest) {
       // Insert order links if present
       if (data.links?.length > 0) {
         for (const link of data.links) {
-          await client.query(
-            `INSERT INTO order_links (
-              order_id,
-              url,
-              description
-            ) VALUES ($1, $2, $3)`,
-            [orderId, link.url, link.description || null]
-          );
+          // Check if this is a pre-uploaded file (URL starts with /api/uploads/order-links/)
+          // If so, update the existing record instead of creating a new one
+          if (link.url.startsWith('/api/uploads/order-links/')) {
+            await client.query(
+              `UPDATE order_links 
+               SET order_id = $1, description = COALESCE($2, description)
+               WHERE url = $3 AND order_id = 0
+               RETURNING id`,
+              [orderId, link.description || null, link.url]
+            );
+          } else {
+            // Regular URL link - create new record
+            await client.query(
+              `INSERT INTO order_links (
+                order_id,
+                url,
+                description
+              ) VALUES ($1, $2, $3)`,
+              [orderId, link.url, link.description || null]
+            );
+          }
 
           await client.query(
             `INSERT INTO notifications (

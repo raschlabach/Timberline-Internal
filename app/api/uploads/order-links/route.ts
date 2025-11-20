@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { existsSync } from 'fs'
-import { mkdir, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { query } from '@/lib/db'
 import { randomUUID } from 'crypto'
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
@@ -15,12 +13,6 @@ const ALLOWED_MIME_TYPES = [
   'image/gif',
   'image/webp',
 ]
-
-async function ensureUploadDir(directory: string) {
-  if (!existsSync(directory)) {
-    await mkdir(directory, { recursive: true })
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,25 +54,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'order-links')
-    console.log('Upload directory:', uploadDir)
-    await ensureUploadDir(uploadDir)
-
-    const extension = fileExtension || 'bin'
-    const uniqueFileName = `${randomUUID()}.${extension}`
-    const filePath = join(uploadDir, uniqueFileName)
-
-    console.log('Writing file to:', filePath)
+    // Convert file to base64 for database storage (works in serverless environments)
     const buffer = Buffer.from(await file.arrayBuffer())
-    await writeFile(filePath, buffer)
-    console.log('File uploaded successfully:', uniqueFileName)
+    const base64Data = buffer.toString('base64')
+    const fileId = randomUUID()
+
+    // Store file metadata in database
+    // We'll create a temporary record that can be linked to an order later
+    const result = await query(
+      `INSERT INTO order_links (
+        order_id,
+        url,
+        description,
+        file_data,
+        file_name,
+        file_type,
+        file_size
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id`,
+      [
+        0, // Temporary order_id (0 means unlinked file)
+        `/api/uploads/order-links/${fileId}`, // URL to serve the file
+        file.name,
+        base64Data,
+        file.name,
+        file.type,
+        file.size
+      ]
+    )
+
+    const linkId = result.rows[0].id
+
+    console.log('File uploaded successfully to database:', { linkId, fileName: file.name })
 
     return NextResponse.json({
       success: true,
-      url: `/uploads/order-links/${uniqueFileName}`,
+      url: `/api/uploads/order-links/${fileId}`,
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size,
+      linkId: linkId.toString(), // Return link ID so it can be updated when order is created
     })
   } catch (error) {
     console.error('Error uploading order link file:', error)
@@ -98,4 +111,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 
