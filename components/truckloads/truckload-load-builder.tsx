@@ -239,6 +239,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           activeTab={activeTab}
           state={state}
           actions={wrappedActions}
+          saveLayout={saveLayoutImmediate}
         />
 
         {/* Outgoing Layout */}

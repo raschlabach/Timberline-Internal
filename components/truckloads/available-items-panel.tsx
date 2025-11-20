@@ -60,6 +60,7 @@ interface LoadBuilderActions {
   setUsedDeliverySkidIds: (ids: Set<number>) => void
   setUsedPickupSkidIds: (ids: Set<number>) => void
   setSkidRotations: (rotations: Map<number, boolean>) => void
+  setPreviewPosition?: (position: {x: number, y: number} | null) => void
   handleSkidRotation: (skidId: number, isRotated: boolean) => void
   handleMove: (skidIndex: number) => void
 }
@@ -69,13 +70,15 @@ interface AvailableItemsPanelProps {
   activeTab: 'delivery' | 'pickup'
   state: LoadBuilderState
   actions: LoadBuilderActions
+  saveLayout?: (layout: any[]) => Promise<void>
 }
 
 export function AvailableItemsPanel({ 
   stops, 
   activeTab, 
   state, 
-  actions 
+  actions,
+  saveLayout
 }: AvailableItemsPanelProps) {
   const placedSkids = activeTab === 'delivery' ? state.placedDeliverySkids : state.placedPickupSkids
   
@@ -90,7 +93,8 @@ export function AvailableItemsPanel({
     return placedCount >= skid.quantity
   }
 
-  const handleClear = () => {
+  const handleClear = async () => {
+    // Clear the layouts - vinyl stacks will be rebuilt automatically when layout is empty
     if (activeTab === 'delivery') {
       actions.setPlacedDeliverySkids([])
       actions.setUsedDeliverySkidIds(new Set())
@@ -99,7 +103,19 @@ export function AvailableItemsPanel({
       actions.setUsedPickupSkidIds(new Set())
     }
     actions.setSelectedSkid(null)
+    if (actions.setPreviewPosition) {
+      actions.setPreviewPosition(null)
+    }
     actions.setSkidRotations(new Map())
+    
+    // Save the empty layout
+    if (saveLayout) {
+      try {
+        await saveLayout([])
+      } catch (error) {
+        console.error('Failed to save cleared layout:', error)
+      }
+    }
   }
 
   return (

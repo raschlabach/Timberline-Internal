@@ -296,9 +296,12 @@ export function useLoadBuilderState(truckloadId: number) {
       }
 
       // Don't clear selection - allow placing multiple items of the same type
-      // Only clear preview position
-      actions.setPreviewPosition(null)
-      actions.setDraggedSkid(null)
+      // But clear preview position and dragged skid so preview doesn't show after placement
+      setState(prev => ({
+        ...prev,
+        previewPosition: null,
+        draggedSkid: null
+      }))
 
       // Helper function to build vinyl stacks from layout
       const buildVinylStacks = (layout: GridPosition[]) => {
