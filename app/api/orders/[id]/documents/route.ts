@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
 
 export async function POST(
   request: NextRequest,
@@ -29,12 +26,17 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 })
     }
 
-    // Validate file type
+    // Validate file type - check extension if MIME type is empty
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp']
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
+    const isValidMimeType = allowedTypes.includes(file.type)
+    const isValidExtension = allowedExtensions.includes(fileExtension)
+
+    if (!isValidMimeType && !isValidExtension) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Invalid file type. Only PDF and image files are allowed.' 
+        error: `Invalid file type. Only PDF and image files are allowed. Received: ${file.type || fileExtension}` 
       }, { status: 400 })
     }
 
@@ -57,33 +59,29 @@ export async function POST(
         throw new Error('Order not found')
       }
 
-      // Create uploads directory if it doesn't exist
-      const uploadsDir = join(process.cwd(), 'public', 'uploads', 'documents')
-      if (!existsSync(uploadsDir)) {
-        await mkdir(uploadsDir, { recursive: true })
-      }
-
-      // Generate unique filename
-      const timestamp = Date.now()
-      const fileExtension = file.name.split('.').pop()
-      const uniqueFileName = `order_${orderId}_${timestamp}.${fileExtension}`
-      const filePath = join(uploadsDir, uniqueFileName)
-
-      // Save file
+      // Convert file to base64 for database storage (works in serverless environments)
       const bytes = await file.arrayBuffer()
       const buffer = Buffer.from(bytes)
-      await writeFile(filePath, buffer)
+      const base64Data = buffer.toString('base64')
 
-      // Save document attachment to database
+      // Save document attachment to database with file data
+      // We'll update the file_path after we get the ID
       const attachmentResult = await client.query(
         `INSERT INTO document_attachments 
-         (order_id, file_name, file_path, file_size, file_type, uploaded_by)
-         VALUES ($1, $2, $3, $4, $5, $6)
+         (order_id, file_name, file_path, file_size, file_type, uploaded_by, file_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id`,
-        [orderId, fileName || file.name, `/uploads/documents/${uniqueFileName}`, file.size, file.type, session.user.id]
+        [orderId, fileName || file.name, '', file.size, file.type, session.user.id, base64Data]
       )
 
       const attachmentId = attachmentResult.rows[0].id
+      
+      // Update file_path to point to the API endpoint
+      const filePath = `/api/orders/${orderId}/documents/${attachmentId}`
+      await client.query(
+        `UPDATE document_attachments SET file_path = $1 WHERE id = $2`,
+        [filePath, attachmentId]
+      )
 
       // Create notification
       await client.query(
@@ -100,7 +98,7 @@ export async function POST(
         attachment: {
           id: attachmentId,
           fileName: fileName || file.name,
-          filePath: `/uploads/documents/${uniqueFileName}`,
+          filePath: filePath,
           fileSize: file.size,
           fileType: file.type
         }
