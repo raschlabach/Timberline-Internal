@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
+      console.error('Upload failed: Unauthorized')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -33,17 +34,28 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null
 
     if (!file) {
+      console.error('Upload failed: No file provided')
       return NextResponse.json({ error: 'Missing file' }, { status: 400 })
     }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    console.log('Upload attempt:', { fileName: file.name, fileType: file.type, fileSize: file.size })
+
+    // More lenient file type checking - check extension if MIME type is empty
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp']
+    const isValidMimeType = ALLOWED_MIME_TYPES.includes(file.type)
+    const isValidExtension = allowedExtensions.includes(fileExtension)
+
+    if (!isValidMimeType && !isValidExtension) {
+      console.error('Upload failed: Invalid file type', { fileType: file.type, extension: fileExtension })
       return NextResponse.json(
-        { error: 'Invalid file type. Only PDF and image files are allowed.' },
+        { error: `Invalid file type. Only PDF and image files are allowed. Received: ${file.type || fileExtension}` },
         { status: 400 }
       )
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
+      console.error('Upload failed: File too large', { fileSize: file.size })
       return NextResponse.json(
         { error: 'File too large. Maximum size is 10MB.' },
         { status: 400 }
@@ -51,14 +63,17 @@ export async function POST(request: NextRequest) {
     }
 
     const uploadDir = join(process.cwd(), 'public', 'uploads', 'order-links')
+    console.log('Upload directory:', uploadDir)
     await ensureUploadDir(uploadDir)
 
-    const extension = file.name.split('.').pop() || ''
+    const extension = fileExtension || 'bin'
     const uniqueFileName = `${randomUUID()}.${extension}`
     const filePath = join(uploadDir, uniqueFileName)
 
+    console.log('Writing file to:', filePath)
     const buffer = Buffer.from(await file.arrayBuffer())
     await writeFile(filePath, buffer)
+    console.log('File uploaded successfully:', uniqueFileName)
 
     return NextResponse.json({
       success: true,
@@ -69,8 +84,16 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error uploading order link file:', error)
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+    }
+    const errorMessage = error instanceof Error ? error.message : 'Failed to upload file'
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

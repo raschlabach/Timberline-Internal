@@ -78,6 +78,8 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
     setIsUploading(true)
     try {
       for (const file of files) {
+        console.log('Uploading file:', { name: file.name, type: file.type, size: file.size })
+        
         const formData = new FormData()
         formData.append("file", file)
 
@@ -85,10 +87,27 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
           method: "POST",
           body: formData,
         })
-        const result = await response.json().catch(() => ({}))
+        
+        console.log('Upload response status:', response.status, response.statusText)
+        
+        let result
+        try {
+          result = await response.json()
+          console.log('Upload response data:', result)
+        } catch (jsonError) {
+          console.error('Failed to parse JSON response:', jsonError)
+          const text = await response.text()
+          console.error('Response text:', text)
+          throw new Error(`Server error: ${response.status} ${response.statusText}`)
+        }
 
         if (!response.ok) {
-          throw new Error(result?.error || `Failed to upload ${file.name}`)
+          throw new Error(result?.error || `Failed to upload ${file.name} (${response.status})`)
+        }
+
+        if (!result.url) {
+          console.error('Response missing url field:', result)
+          throw new Error('Server response missing file URL')
         }
 
         const newLink: OrderLink = {
