@@ -137,25 +137,62 @@ export async function GET(
 
     const client = await getClient()
     try {
+      // Fetch documents from both document_attachments and order_links (for files uploaded during order creation)
       const result = await client.query(
         `SELECT 
-          da.id,
+          da.id::text as id,
           da.file_name,
           da.file_path,
           da.file_size,
           da.file_type,
           da.created_at,
-          u.username as uploaded_by
+          COALESCE(u.username, 'System') as uploaded_by,
+          'document_attachment' as source
          FROM document_attachments da
          LEFT JOIN users u ON da.uploaded_by = u.id
          WHERE da.order_id = $1
-         ORDER BY da.created_at DESC`,
+         
+         UNION ALL
+         
+         SELECT 
+          ol.id::text as id,
+          COALESCE(ol.file_name, ol.description, 'Uploaded File') as file_name,
+          ol.url as file_path,
+          ol.file_size,
+          ol.file_type,
+          ol.created_at,
+          'Order Entry' as uploaded_by,
+          'order_link' as source
+         FROM order_links ol
+         WHERE ol.order_id = $1 
+           AND ol.file_data IS NOT NULL
+         
+         ORDER BY created_at DESC`,
         [orderId]
       )
 
+      // Transform the results to match the expected format
+      const documents = result.rows.map((row: any) => {
+        // For order_links, construct the file path to the API endpoint
+        const filePath = row.source === 'order_link' 
+          ? `/api/orders/${orderId}/documents/order-links/${row.id}`
+          : row.file_path
+        
+        return {
+          id: row.id,
+          file_name: row.file_name,
+          file_path: filePath,
+          file_size: row.file_size,
+          file_type: row.file_type,
+          created_at: row.created_at,
+          uploaded_by: row.uploaded_by || 'Order Entry',
+          source: row.source
+        }
+      })
+
       return NextResponse.json({
         success: true,
-        documents: result.rows
+        documents: documents
       })
     } finally {
       client.release()
