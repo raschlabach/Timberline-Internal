@@ -77,8 +77,18 @@ export function AvailableItemsPanel({
   state, 
   actions 
 }: AvailableItemsPanelProps) {
-  const usedSkidIds = activeTab === 'delivery' ? state.usedDeliverySkidIds : state.usedPickupSkidIds
   const placedSkids = activeTab === 'delivery' ? state.placedDeliverySkids : state.placedPickupSkids
+  
+  // Count how many times each skid ID has been placed
+  const getPlacedCount = (skidId: number) => {
+    return placedSkids.filter(skid => skid.item_id === skidId).length
+  }
+  
+  // Check if a skid is fully used (all quantity placed)
+  const isSkidFullyUsed = (skid: { id: number; quantity: number }) => {
+    const placedCount = getPlacedCount(skid.id)
+    return placedCount >= skid.quantity
+  }
 
   const handleClear = () => {
     if (activeTab === 'delivery') {
@@ -129,7 +139,7 @@ export function AvailableItemsPanel({
                     length={skid.length}
                     type="skid"
                     isSelected={state.selectedSkid?.id === skid.id}
-                    isUsed={usedSkidIds.has(skid.id)}
+                    isUsed={isSkidFullyUsed(skid)}
                     customerId={activeTab === 'delivery' ? stop.delivery_customer.id : stop.pickup_customer.id}
                     customerName={activeTab === 'delivery' ? stop.delivery_customer.name : stop.pickup_customer.name}
                     onRotate={() => {
@@ -144,7 +154,7 @@ export function AvailableItemsPanel({
                       }
                     }}
                     onClick={() => {
-                      if (!usedSkidIds.has(skid.id)) {
+                      if (!isSkidFullyUsed(skid)) {
                         const isRotated = state.skidRotations.get(skid.id)
                         actions.setSelectedSkid({
                           id: skid.id,
@@ -165,7 +175,7 @@ export function AvailableItemsPanel({
                     length={vinyl.length}
                     type="vinyl"
                     isSelected={state.selectedSkid?.id === vinyl.id}
-                    isUsed={usedSkidIds.has(vinyl.id)}
+                    isUsed={isSkidFullyUsed(vinyl)}
                     customerId={activeTab === 'delivery' ? stop.delivery_customer.id : stop.pickup_customer.id}
                     customerName={activeTab === 'delivery' ? stop.delivery_customer.name : stop.pickup_customer.name}
                     onRotate={() => {
@@ -180,7 +190,7 @@ export function AvailableItemsPanel({
                       }
                     }}
                     onClick={() => {
-                      if (!usedSkidIds.has(vinyl.id)) {
+                      if (!isSkidFullyUsed(vinyl)) {
                         const isRotated = state.skidRotations.get(vinyl.id)
                         actions.setSelectedSkid({
                           id: vinyl.id,
