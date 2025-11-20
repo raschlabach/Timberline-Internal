@@ -94,21 +94,28 @@ export function AvailableItemsPanel({
   }
 
   const handleClear = async () => {
-    // Clear the layouts - vinyl stacks will be rebuilt automatically when layout is empty
+    // Only clear the layout for the currently active tab (incoming or outgoing)
     if (activeTab === 'delivery') {
+      // Clear outgoing layout only
       actions.setPlacedDeliverySkids([])
       actions.setUsedDeliverySkidIds(new Set())
     } else {
+      // Clear incoming layout only
       actions.setPlacedPickupSkids([])
       actions.setUsedPickupSkidIds(new Set())
     }
+    
+    // Clear selection and preview only if they're for the active tab
+    // (Selection is shared, so we clear it, but it will be re-selected if needed)
     actions.setSelectedSkid(null)
     if (actions.setPreviewPosition) {
       actions.setPreviewPosition(null)
     }
-    actions.setSkidRotations(new Map())
     
-    // Save the empty layout
+    // Note: We don't clear skidRotations as they're shared between tabs
+    // and might be needed for the other tab
+    
+    // Save the empty layout for the active tab only
     if (saveLayout) {
       try {
         await saveLayout([])
@@ -127,8 +134,9 @@ export function AvailableItemsPanel({
           size="sm"
           onClick={handleClear}
           disabled={placedSkids.length === 0}
+          title={activeTab === 'delivery' ? 'Clear all outgoing items' : 'Clear all incoming items'}
         >
-          Clear All
+          Clear {activeTab === 'delivery' ? 'Outgoing' : 'Incoming'}
         </Button>
       </div>
       <ScrollArea className="h-[calc(100vh-16rem)]">
