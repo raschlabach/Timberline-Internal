@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { OrderData, OrderCustomer, SkidData, HandBundleData, Customer, convertToOrderCustomer } from '@/types/shared';
 import { AssignOrderDialog } from "@/components/orders/assign-order-dialog";
 import { CustomerEditModal } from "@/components/customer/customer-edit-modal";
-import { Edit, ChevronDown, UploadCloud, Loader2, Link as LinkIcon, Trash2, ExternalLink } from "lucide-react";
+import { Edit, ChevronDown, Loader2, Link as LinkIcon, Trash2, ExternalLink } from "lucide-react";
 import { v4 as uuidv4 } from 'uuid';
 
 interface OrderInfoDialogProps {
@@ -47,7 +47,6 @@ export function OrderInfoDialog({
   const [selectedCustomer, setSelectedCustomer] = useState<OrderCustomer | null>(null);
   const [isHandBundlesOpen, setIsHandBundlesOpen] = useState(false);
   const [isUploadingLink, setIsUploadingLink] = useState(false);
-  const [isLinkDragActive, setIsLinkDragActive] = useState(false);
   const linkFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-open hand bundles section when hand bundles are present
@@ -358,25 +357,6 @@ export function OrderInfoDialog({
     }
   };
 
-  function handleLinkDragOver(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsLinkDragActive(true);
-  }
-
-  function handleLinkDragLeave(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsLinkDragActive(false);
-  }
-
-  function handleLinkDrop(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsLinkDragActive(false);
-    const files = Array.from(event.dataTransfer.files || []);
-    if (files.length > 0) {
-      uploadOrderLinkFiles(files);
-    }
-  }
-
   function handleLinkFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
     if (files.length > 0) {
@@ -384,9 +364,6 @@ export function OrderInfoDialog({
     }
   }
 
-  function handleLinkBrowseClick() {
-    linkFileInputRef.current?.click();
-  }
 
   function appendLinkToState(newLink: { id: string; url: string; description: string }) {
     setFormData(prev => {
@@ -758,38 +735,26 @@ export function OrderInfoDialog({
             {/* Linked Files & URLs */}
             <div className="bg-white p-6 rounded-lg border shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Linked Files & URLs</h3>
-              <div
-                className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
-                  isLinkDragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'
-                }`}
-                onDragOver={handleLinkDragOver}
-                onDragLeave={handleLinkDragLeave}
-                onDrop={handleLinkDrop}
-                onClick={handleLinkBrowseClick}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  {isUploadingLink ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                  ) : (
-                    <UploadCloud className="h-6 w-6 text-blue-600" />
+              <div className="space-y-2">
+                <Label htmlFor="link-file-upload" className="text-sm font-medium">Upload File</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="link-file-upload"
+                    ref={linkFileInputRef}
+                    type="file"
+                    className="flex-1"
+                    multiple
+                    accept={ACCEPTED_LINK_FILE_TYPES}
+                    onChange={handleLinkFileSelect}
+                    disabled={isUploadingLink}
+                  />
+                  {isUploadingLink && (
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                   )}
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {isUploadingLink ? 'Uploading files...' : 'Drag & drop paperwork here'}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      or click to browse • Supports PDF and images up to 10MB
-                    </p>
-                  </div>
                 </div>
-                <input
-                  ref={linkFileInputRef}
-                  type="file"
-                  className="hidden"
-                  multiple
-                  accept={ACCEPTED_LINK_FILE_TYPES}
-                  onChange={handleLinkFileSelect}
-                />
+                <p className="text-xs text-gray-500">
+                  Supports PDF and images up to 10MB
+                </p>
               </div>
 
               <div className="mt-4 space-y-2">

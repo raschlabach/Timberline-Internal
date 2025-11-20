@@ -3,7 +3,7 @@
 import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Trash2, Link as LinkIcon, Plus, UploadCloud, Loader2 } from "lucide-react"
+import { Trash2, Link as LinkIcon, Plus, Loader2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { v4 as uuidv4 } from "uuid"
 import { OrderLink } from "@/types/orders"
@@ -18,7 +18,6 @@ const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.gif,.webp"
 
 export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
 
   function handleAddLink() {
@@ -42,25 +41,6 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
       return link
     })
     onUpdate(updatedLinks)
-  }
-
-  function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault()
-    setIsDragging(true)
-  }
-
-  function handleDragLeave(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault()
-    setIsDragging(false)
-  }
-
-  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault()
-    setIsDragging(false)
-    const files = Array.from(event.dataTransfer.files || [])
-    if (files.length > 0) {
-      uploadFiles(files)
-    }
   }
 
   function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
@@ -130,10 +110,6 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
     }
   }
 
-  function handleBrowseClick() {
-    fileInputRef.current?.click()
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -150,38 +126,25 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
         </Button>
       </div>
 
-      <div
-        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
-          isDragging ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300"
-        }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={handleBrowseClick}
-      >
-        <div className="flex flex-col items-center gap-2">
-          {isUploading ? (
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-          ) : (
-            <UploadCloud className="h-6 w-6 text-blue-600" />
+      <div className="space-y-2">
+        <Label htmlFor="file-upload" className="text-sm font-medium">Upload File</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="file-upload"
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileSelect}
+            accept={ACCEPTED_FILE_TYPES}
+            className="flex-1"
+            disabled={isUploading}
+          />
+          {isUploading && (
+            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
           )}
-          <div>
-            <p className="text-sm font-medium text-gray-900">
-              {isUploading ? "Uploading files..." : "Drag & drop paperwork here"}
-            </p>
-            <p className="text-xs text-gray-500">
-              or click to browse • Supports PDF and images up to 10MB
-            </p>
-          </div>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          multiple
-          onChange={handleFileSelect}
-          accept={ACCEPTED_FILE_TYPES}
-        />
+        <p className="text-xs text-gray-500">
+          Supports PDF and images up to 10MB
+        </p>
       </div>
 
       {links.length === 0 && (
