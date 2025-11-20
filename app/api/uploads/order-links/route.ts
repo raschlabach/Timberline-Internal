@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const fileId = randomUUID()
 
     // Store file metadata in database
-    // We'll create a temporary record that can be linked to an order later
+    // We'll create a temporary record with NULL order_id that can be linked to an order later
     const result = await query(
       `INSERT INTO order_links (
         order_id,
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id`,
       [
-        0, // Temporary order_id (0 means unlinked file)
+        null, // NULL order_id means unlinked file (will be linked when order is created)
         `/api/uploads/order-links/${fileId}`, // URL to serve the file
         file.name,
         base64Data,

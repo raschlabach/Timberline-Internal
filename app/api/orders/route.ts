@@ -483,7 +483,7 @@ export async function POST(request: NextRequest) {
             await client.query(
               `UPDATE order_links 
                SET order_id = $1, description = COALESCE($2, description)
-               WHERE url = $3 AND order_id = 0
+               WHERE url = $3 AND order_id IS NULL
                RETURNING id`,
               [orderId, link.description || null, link.url]
             );
