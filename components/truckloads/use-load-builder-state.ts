@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo } from "react"
+import { toast } from "sonner"
 
 interface GridPosition {
   x: number
@@ -166,11 +167,36 @@ export function useLoadBuilderState(truckloadId: number) {
         return
       }
 
-      // Find the customer info for the selected skid
-      const customerInfo = stops.find((stop: any) => 
+      // Find the stop and item data for the selected skid
+      const stopWithItem = stops.find((stop: any) => 
         stop.skids_data.some((skid: { id: number }) => skid.id === state.selectedSkid!.id) ||
         stop.vinyl_data.some((vinyl: { id: number }) => vinyl.id === state.selectedSkid!.id)
-      )?.[activeTab === 'delivery' ? 'delivery_customer' : 'pickup_customer']
+      )
+
+      if (!stopWithItem) {
+        console.error('Stop not found for skid:', state.selectedSkid)
+        return
+      }
+
+      // Get the item data (skid or vinyl) to check quantity
+      const itemData = stopWithItem.skids_data.find((skid: { id: number }) => skid.id === state.selectedSkid!.id) ||
+                      stopWithItem.vinyl_data.find((vinyl: { id: number }) => vinyl.id === state.selectedSkid!.id)
+
+      if (!itemData || !itemData.quantity) {
+        console.error('Item data not found for skid:', state.selectedSkid)
+        return
+      }
+
+      // Count how many times this item has already been placed
+      const placedCount = currentLayout.filter(skid => skid.item_id === state.selectedSkid!.id).length
+
+      // Check if we've reached the quantity limit
+      if (placedCount >= itemData.quantity) {
+        toast.warning(`Cannot place more items: All ${itemData.quantity} of this item have already been placed`)
+        return // Don't allow placement if quantity is exceeded
+      }
+
+      const customerInfo = stopWithItem[activeTab === 'delivery' ? 'delivery_customer' : 'pickup_customer']
 
       if (!customerInfo || !customerInfo.id || !customerInfo.name) {
         console.error('Customer info not found for skid:', state.selectedSkid, 'stops:', stops)
