@@ -116,14 +116,22 @@ interface GroupedStop {
   stops: TruckloadStop[]
 }
 
+interface ColumnWidths {
+  handleSequence: number
+  origin: number
+  dest: number
+  freight: number
+}
+
 interface SortableGroupedStopProps {
   groupedStop: GroupedStop
   onOrderInfoClick: (orderId: number) => void
   onStopUpdate: () => void
   truckloadId: number
+  columnWidths: ColumnWidths
 }
 
-function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId }: SortableGroupedStopProps) {
+function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId, columnWidths }: SortableGroupedStopProps) {
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
   const [isUnassigning, setIsUnassigning] = useState(false)
 
@@ -197,10 +205,15 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
           <div>
             {groupedStop.stops.map((stop, index) => (
               <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-1 pt-1 border-t border-gray-200" : ""}>
-                {/* Single horizontal row with all info - using flex for tighter control */}
-                <div className="flex items-center gap-1.5">
-                  {/* Left side: Drag handle, sequence, badges - fixed width to align all rows */}
-                  <div className="flex items-center gap-1 flex-shrink-0 w-[100px]">
+                {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
+                <div 
+                  className="grid gap-1.5 items-center"
+                  style={{
+                    gridTemplateColumns: `${columnWidths.handleSequence}px ${columnWidths.origin}px ${columnWidths.dest}px ${columnWidths.freight}px auto`
+                  }}
+                >
+                  {/* Left side: Drag handle, sequence, badges */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
                       {index === 0 && (
                         <button
                         className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
@@ -231,8 +244,8 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     )}
                   </div>
 
-                  {/* Origin customer - fixed width to align all rows */}
-                  <div className="min-w-0 w-[180px]">
+                  {/* Origin customer */}
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 leading-tight">
                       {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
                     </div>
@@ -246,8 +259,8 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
                   </div>
 
-                  {/* Destination customer - fixed width to align all rows */}
-                  <div className="min-w-0 w-[180px]">
+                  {/* Destination customer */}
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 leading-tight">
                       {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
                     </div>
@@ -261,8 +274,8 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
                   </div>
 
-                  {/* Freight Info - fixed width to align all rows */}
-                  <div className="flex-shrink-0 whitespace-nowrap w-[70px]">
+                  {/* Freight Info */}
+                  <div className="flex-shrink-0 whitespace-nowrap">
                     <div className="text-xs text-gray-500 leading-tight">Freight</div>
                     <div className="flex flex-col gap-0.5 text-xs">
                       {stop.footage > 0 && (
@@ -292,8 +305,8 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     </div>
                   </div>
 
-                  {/* Right side: Date, flags, buttons - minimal width */}
-                  <div className="flex items-center gap-0.5 flex-shrink-0 ml-auto">
+                  {/* Right side: Date, flags, buttons */}
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
                     <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                       {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
                     </div>
@@ -440,7 +453,22 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
   )
 }
 
-function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: SortableStopProps) {
+interface SortableStopProps {
+  stop: TruckloadStop
+  onOrderInfoClick: (orderId: number) => void
+  onStopUpdate: () => void
+  truckloadId: number
+  columnWidths?: ColumnWidths
+}
+
+function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, columnWidths }: SortableStopProps) {
+  // Default column widths if not provided
+  const widths = columnWidths || {
+    handleSequence: 130,
+    origin: 200,
+    dest: 200,
+    freight: 90
+  }
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
   const [isUnassigning, setIsUnassigning] = useState(false)
 
@@ -510,10 +538,15 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
         />
         
         <div className="pl-1">
-          {/* Single horizontal row with all info - using flex for tighter control */}
-          <div className="flex items-center gap-1.5">
-            {/* Left side: Drag handle, sequence, badges - fixed width to align all rows */}
-            <div className="flex items-center gap-1 flex-shrink-0 w-[100px]">
+          {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
+          <div 
+            className="grid gap-1.5 items-center"
+            style={{
+              gridTemplateColumns: `${widths.handleSequence}px ${widths.origin}px ${widths.dest}px ${widths.freight}px auto`
+            }}
+          >
+            {/* Left side: Drag handle, sequence, badges */}
+            <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                 className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
                   {...attributes}
@@ -542,8 +575,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               )}
             </div>
 
-            {/* Origin customer - fixed width to align all rows */}
-            <div className="min-w-0 w-[180px]">
+            {/* Origin customer */}
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 leading-tight">
                 {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
               </div>
@@ -557,8 +590,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
             </div>
 
-            {/* Destination customer - fixed width to align all rows */}
-            <div className="min-w-0 w-[180px]">
+            {/* Destination customer */}
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 leading-tight">
                 {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
               </div>
@@ -572,8 +605,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
             </div>
 
-            {/* Freight Info - fixed width to align all rows */}
-            <div className="flex-shrink-0 whitespace-nowrap w-[70px]">
+            {/* Freight Info */}
+            <div className="flex-shrink-0 whitespace-nowrap">
               <div className="text-xs text-gray-500 leading-tight">Freight</div>
               <div className="flex flex-col gap-0.5 text-xs">
                 {stop.footage > 0 && (
@@ -603,8 +636,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: Sor
               </div>
             </div>
 
-            {/* Right side: Date, flags, buttons - minimal width */}
-            <div className="flex items-center gap-0.5 flex-shrink-0 ml-auto">
+            {/* Right side: Date, flags, buttons */}
+            <div className="flex items-center gap-0.5 flex-shrink-0">
               <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                 {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
               </div>
@@ -1044,6 +1077,54 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
 
   // Group stops by customer
   const groupedStops = groupStopsByCustomer(stops)
+  
+  // Calculate column widths based on all stops (once in parent)
+  const calculateColumnWidths = () => {
+    let maxHandleSequence = 0
+    let maxOrigin = 0
+    let maxDest = 0
+    let maxFreight = 0
+    
+    stops.forEach(stop => {
+      // Calculate handle + sequence + badge width (approximate)
+      const sequenceText = `#${stop.sequence_number}`
+      const badgeText = stop.is_transfer_order ? 'Transfer' : stop.assignment_type === 'pickup' ? 'Pickup' : 'Delivery'
+      const handleWidth = 20 + sequenceText.length * 7 + badgeText.length * 8 + 35 // rough estimate with padding
+      maxHandleSequence = Math.max(maxHandleSequence, handleWidth)
+      
+      // Calculate origin customer width
+      const originLabel = stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'
+      const originName = stop.pickup_customer.name || ''
+      const originAddr = stop.pickup_customer.address || ''
+      const originWidth = Math.max(originLabel.length * 7, originName.length * 8, originAddr.length * 6.5) + 15
+      maxOrigin = Math.max(maxOrigin, originWidth)
+      
+      // Calculate destination customer width
+      const destLabel = stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'
+      const destName = stop.delivery_customer.name || ''
+      const destAddr = stop.delivery_customer.address || ''
+      const destWidth = Math.max(destLabel.length * 7, destName.length * 8, destAddr.length * 6.5) + 15
+      maxDest = Math.max(maxDest, destWidth)
+      
+      // Calculate freight width
+      const freightItems = []
+      if (stop.footage > 0) freightItems.push(`Ft: ${Math.round(stop.footage)}`)
+      if (stop.skids > 0) freightItems.push(`S: ${stop.skids}`)
+      if (stop.vinyl > 0) freightItems.push(`V: ${stop.vinyl}`)
+      if (stop.hand_bundles > 0) freightItems.push(`HB: ${stop.hand_bundles}`)
+      const freightWidth = Math.max(...freightItems.map(item => item.length * 7), 'Freight'.length * 7) + 15
+      maxFreight = Math.max(maxFreight, freightWidth)
+    })
+    
+    return {
+      handleSequence: Math.max(maxHandleSequence, 130),
+      origin: Math.max(maxOrigin, 200),
+      dest: Math.max(maxDest, 200),
+      freight: Math.max(maxFreight, 90)
+    }
+  }
+  
+  const columnWidths = calculateColumnWidths()
 
   return (
     <TooltipProvider>
@@ -1058,17 +1139,21 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
             items={groupedStops.map(group => `group-${group.groupKey}`)}
             strategy={verticalListSortingStrategy}
           >
-              <div className="space-y-1 p-2 pr-2">
-              {groupedStops.map((group) => (
-                <SortableGroupedStop
-                  key={`group-${group.groupKey}-${group.sequenceNumber}`}
-                  groupedStop={group}
-                  onOrderInfoClick={handleOrderInfoClick}
-                  onStopUpdate={fetchStops}
-                  truckloadId={truckloadId}
-                />
-              ))}
-            </div>
+              {/* Shared grid container to ensure column alignment across all stops */}
+              <div className="p-2 pr-2">
+                <div className="space-y-1">
+                  {groupedStops.map((group) => (
+                    <SortableGroupedStop
+                      key={`group-${group.groupKey}-${group.sequenceNumber}`}
+                      groupedStop={group}
+                      onOrderInfoClick={handleOrderInfoClick}
+                      onStopUpdate={fetchStops}
+                      truckloadId={truckloadId}
+                      columnWidths={columnWidths}
+                    />
+                  ))}
+                </div>
+              </div>
           </SortableContext>
         </DndContext>
         </div>
