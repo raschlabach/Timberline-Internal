@@ -192,7 +192,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
       <Card 
         ref={setNodeRef}
         style={style}
-        className="py-1 px-1 relative"
+        className="py-1 px-1 relative w-fit"
       >
         <div className="absolute top-0 left-0 h-full w-1.5" 
           style={{ 
@@ -207,9 +207,9 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
               <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-1 pt-1 border-t border-gray-200" : ""}>
                 {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
                 <div 
-                  className="grid gap-1.5 items-center"
+                  className="grid gap-1.5 items-center w-fit"
                   style={{
-                    gridTemplateColumns: `${columnWidths.handleSequence}px ${columnWidths.origin}px ${columnWidths.dest}px ${columnWidths.freight}px auto`
+                    gridTemplateColumns: `${columnWidths.handleSequence}px ${columnWidths.origin}px ${columnWidths.dest}px ${columnWidths.freight}px max-content`
                   }}
                 >
                   {/* Left side: Drag handle, sequence, badges */}
@@ -529,7 +529,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
       <Card 
         ref={setNodeRef}
         style={style}
-        className="py-1 px-1 relative"
+        className="py-1 px-1 relative w-fit"
       >
         <div className="absolute top-0 left-0 h-full w-1.5" 
           style={{ 
@@ -540,9 +540,9 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
         <div className="pl-1">
           {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
           <div 
-            className="grid gap-1.5 items-center"
+            className="grid gap-1.5 items-center w-fit"
             style={{
-              gridTemplateColumns: `${widths.handleSequence}px ${widths.origin}px ${widths.dest}px ${widths.freight}px auto`
+              gridTemplateColumns: `${widths.handleSequence}px ${widths.origin}px ${widths.dest}px ${widths.freight}px max-content`
             }}
           >
             {/* Left side: Drag handle, sequence, badges */}
