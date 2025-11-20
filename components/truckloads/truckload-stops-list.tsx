@@ -118,8 +118,8 @@ interface GroupedStop {
 
 interface ColumnWidths {
   handleSequence: number
-  origin: number
-  dest: number
+  firstCustomerCol: number  // First customer column (origin for pickups, dest for deliveries)
+  secondCustomerCol: number // Second customer column (dest for pickups, origin for deliveries)
   freight: number
 }
 
@@ -210,9 +210,10 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                 <div 
                   className={`grid gap-1.5 items-center w-fit ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}
                   style={{
-                    gridTemplateColumns: stop.assignment_type === 'delivery' 
-                      ? `${columnWidths.handleSequence}px ${columnWidths.dest}px ${columnWidths.origin}px ${columnWidths.freight}px max-content`
-                      : `${columnWidths.handleSequence}px ${columnWidths.origin}px ${columnWidths.dest}px ${columnWidths.freight}px max-content`
+                    // Column order is always: handle, firstCustomerCol, secondCustomerCol, freight, buttons
+                    // For pickups: firstCustomerCol = origin, secondCustomerCol = dest
+                    // For deliveries: firstCustomerCol = dest, secondCustomerCol = origin
+                    gridTemplateColumns: `${columnWidths.handleSequence}px ${columnWidths.firstCustomerCol}px ${columnWidths.secondCustomerCol}px ${columnWidths.freight}px max-content`
                   }}
                 >
                   {/* Left side: Drag handle, sequence, badges */}
@@ -479,8 +480,8 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
   // Default column widths if not provided
   const widths = columnWidths || {
     handleSequence: 130,
-    origin: 200,
-    dest: 200,
+    firstCustomerCol: 200,
+    secondCustomerCol: 200,
     freight: 90
   }
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
@@ -553,13 +554,13 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
         
         <div className="pl-1">
           {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
-          {/* For deliveries, swap column order so "To:" comes before "Origin:" */}
+          {/* Column order is always: handle, firstCustomerCol, secondCustomerCol, freight, buttons */}
           <div 
             className={`grid gap-1.5 items-center w-fit ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}
             style={{
-              gridTemplateColumns: stop.assignment_type === 'delivery' 
-                ? `${widths.handleSequence}px ${widths.dest}px ${widths.origin}px ${widths.freight}px max-content`
-                : `${widths.handleSequence}px ${widths.origin}px ${widths.dest}px ${widths.freight}px max-content`
+              // For pickups: firstCustomerCol = origin, secondCustomerCol = dest
+              // For deliveries: firstCustomerCol = dest, secondCustomerCol = origin
+              gridTemplateColumns: `${widths.handleSequence}px ${widths.firstCustomerCol}px ${widths.secondCustomerCol}px ${widths.freight}px max-content`
             }}
           >
             {/* Left side: Drag handle, sequence, badges */}
@@ -1107,10 +1108,13 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   const groupedStops = groupStopsByCustomer(stops)
   
   // Calculate column widths based on all stops (once in parent)
+  // Note: For pickups, column order is [handle, origin, dest, freight, buttons]
+  //       For deliveries, column order is [handle, dest, origin, freight, buttons]
+  // So we need to calculate max widths for "first customer column" and "second customer column"
   const calculateColumnWidths = () => {
     let maxHandleSequence = 0
-    let maxOrigin = 0
-    let maxDest = 0
+    let maxFirstCustomerCol = 0  // For pickups: origin (From:), for deliveries: dest (To:)
+    let maxSecondCustomerCol = 0 // For pickups: dest (Dest:), for deliveries: origin (Origin:)
     let maxFreight = 0
     
     stops.forEach(stop => {
@@ -1120,19 +1124,27 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
       const handleWidth = 20 + sequenceText.length * 7 + badgeText.length * 8 + 35 // rough estimate with padding
       maxHandleSequence = Math.max(maxHandleSequence, handleWidth)
       
-      // Calculate origin customer width
+      // Calculate origin customer width (pickup_customer)
       const originLabel = stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'
       const originName = stop.pickup_customer.name || ''
       const originAddr = stop.pickup_customer.address || ''
       const originWidth = Math.max(originLabel.length * 7, originName.length * 8, originAddr.length * 6.5) + 15
-      maxOrigin = Math.max(maxOrigin, originWidth)
       
-      // Calculate destination customer width
+      // Calculate destination customer width (delivery_customer)
       const destLabel = stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'
       const destName = stop.delivery_customer.name || ''
       const destAddr = stop.delivery_customer.address || ''
       const destWidth = Math.max(destLabel.length * 7, destName.length * 8, destAddr.length * 6.5) + 15
-      maxDest = Math.max(maxDest, destWidth)
+      
+      // For pickups: first col = origin, second col = dest
+      // For deliveries: first col = dest, second col = origin
+      if (stop.assignment_type === 'pickup') {
+        maxFirstCustomerCol = Math.max(maxFirstCustomerCol, originWidth)
+        maxSecondCustomerCol = Math.max(maxSecondCustomerCol, destWidth)
+      } else {
+        maxFirstCustomerCol = Math.max(maxFirstCustomerCol, destWidth)
+        maxSecondCustomerCol = Math.max(maxSecondCustomerCol, originWidth)
+      }
       
       // Calculate freight width
       const freightItems = []
@@ -1146,8 +1158,8 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
     
     return {
       handleSequence: Math.max(maxHandleSequence, 130),
-      origin: Math.max(maxOrigin, 200),
-      dest: Math.max(maxDest, 200),
+      firstCustomerCol: Math.max(maxFirstCustomerCol, 200),
+      secondCustomerCol: Math.max(maxSecondCustomerCol, 200),
       freight: Math.max(maxFreight, 90)
     }
   }
