@@ -132,13 +132,41 @@ export function useLayoutOperations(
         throw new Error('Layout must be an array')
       }
 
+      // Validate and clean layout data before sending
+      const cleanedLayout = layout.map((item, index) => {
+        // Ensure all required fields are present and valid
+        if (typeof item.x !== 'number' || isNaN(item.x) ||
+            typeof item.y !== 'number' || isNaN(item.y) ||
+            typeof item.width !== 'number' || isNaN(item.width) ||
+            typeof item.length !== 'number' || isNaN(item.length) ||
+            typeof item.item_id !== 'number' || isNaN(item.item_id) ||
+            typeof item.customerId !== 'number' || isNaN(item.customerId) ||
+            !item.type || (item.type !== 'skid' && item.type !== 'vinyl') ||
+            !item.customerName || typeof item.customerName !== 'string' ||
+            typeof item.rotation !== 'number') {
+          console.error(`Invalid layout item at index ${index}:`, item)
+          return null
+        }
+        return item
+      }).filter((item): item is GridPosition => item !== null)
+
+      if (cleanedLayout.length !== layout.length) {
+        const removedCount = layout.length - cleanedLayout.length
+        console.warn(`Removed ${removedCount} invalid item(s) from layout before saving`)
+        toast.warning(`Removed ${removedCount} invalid item(s) from layout`)
+      }
+
+      if (cleanedLayout.length === 0 && layout.length > 0) {
+        throw new Error('Cannot save layout: All items are missing required fields')
+      }
+
       const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          layout
+          layout: cleanedLayout
         })
       })
 
@@ -181,13 +209,41 @@ export function useLayoutOperations(
           throw new Error('Layout must be an array')
         }
 
+        // Validate and clean layout data before sending
+        const cleanedLayout = layout.map((item, index) => {
+          // Ensure all required fields are present and valid
+          if (typeof item.x !== 'number' || isNaN(item.x) ||
+              typeof item.y !== 'number' || isNaN(item.y) ||
+              typeof item.width !== 'number' || isNaN(item.width) ||
+              typeof item.length !== 'number' || isNaN(item.length) ||
+              typeof item.item_id !== 'number' || isNaN(item.item_id) ||
+              typeof item.customerId !== 'number' || isNaN(item.customerId) ||
+              !item.type || (item.type !== 'skid' && item.type !== 'vinyl') ||
+              !item.customerName || typeof item.customerName !== 'string' ||
+              typeof item.rotation !== 'number') {
+            console.error(`Invalid layout item at index ${index}:`, item)
+            return null
+          }
+          return item
+        }).filter((item): item is GridPosition => item !== null)
+
+        if (cleanedLayout.length !== layout.length) {
+          const removedCount = layout.length - cleanedLayout.length
+          console.warn(`Removed ${removedCount} invalid item(s) from layout before saving`)
+          toast.warning(`Removed ${removedCount} invalid item(s) from layout`)
+        }
+
+        if (cleanedLayout.length === 0 && layout.length > 0) {
+          throw new Error('Cannot save layout: All items are missing required fields')
+        }
+
         const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            layout
+            layout: cleanedLayout
           })
         })
 

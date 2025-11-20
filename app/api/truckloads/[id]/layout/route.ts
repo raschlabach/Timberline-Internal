@@ -136,15 +136,27 @@ export async function POST(
     }> = body.layout || []
 
     // Validate layout items
-    for (const item of layout) {
-      if (typeof item.x !== 'number' || typeof item.y !== 'number' ||
-          typeof item.width !== 'number' || typeof item.length !== 'number' ||
-          typeof item.item_id !== 'number' || typeof item.customerId !== 'number' ||
-          !item.type || !item.customerName) {
+    for (let i = 0; i < layout.length; i++) {
+      const item = layout[i]
+      const errors: string[] = []
+      
+      if (typeof item.x !== 'number' || isNaN(item.x)) errors.push(`item[${i}].x is missing or invalid`)
+      if (typeof item.y !== 'number' || isNaN(item.y)) errors.push(`item[${i}].y is missing or invalid`)
+      if (typeof item.width !== 'number' || isNaN(item.width) || item.width <= 0) errors.push(`item[${i}].width is missing or invalid`)
+      if (typeof item.length !== 'number' || isNaN(item.length) || item.length <= 0) errors.push(`item[${i}].length is missing or invalid`)
+      if (typeof item.item_id !== 'number' || isNaN(item.item_id)) errors.push(`item[${i}].item_id is missing or invalid`)
+      if (typeof item.customerId !== 'number' || isNaN(item.customerId)) errors.push(`item[${i}].customerId is missing or invalid`)
+      if (!item.type || (item.type !== 'skid' && item.type !== 'vinyl')) errors.push(`item[${i}].type is missing or invalid (must be 'skid' or 'vinyl')`)
+      if (!item.customerName || typeof item.customerName !== 'string') errors.push(`item[${i}].customerName is missing or invalid`)
+      if (typeof item.rotation !== 'number') errors.push(`item[${i}].rotation is missing or invalid`)
+      
+      if (errors.length > 0) {
         console.error('Invalid layout item:', item)
+        console.error('Validation errors:', errors)
         return NextResponse.json({ 
           success: false, 
-          error: 'Invalid layout item data. All required fields must be present and valid.' 
+          error: 'Invalid layout item data. All required fields must be present and valid.',
+          details: errors.join('; ')
         }, { status: 400 })
       }
     }

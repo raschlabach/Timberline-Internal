@@ -172,7 +172,10 @@ export function useLoadBuilderState(truckloadId: number) {
         stop.vinyl_data.some((vinyl: { id: number }) => vinyl.id === state.selectedSkid!.id)
       )?.[activeTab === 'delivery' ? 'delivery_customer' : 'pickup_customer']
 
-      if (!customerInfo) return
+      if (!customerInfo || !customerInfo.id || !customerInfo.name) {
+        console.error('Customer info not found for skid:', state.selectedSkid, 'stops:', stops)
+        return
+      }
 
       // Snap to grid and validate bounds
       const snappedX = Math.max(0, Math.min(GRID_WIDTH - 1, Math.floor(x)))
