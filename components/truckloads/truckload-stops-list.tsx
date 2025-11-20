@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -104,7 +104,6 @@ interface SortableStopProps {
   onOrderInfoClick: (orderId: number) => void
   onStopUpdate: () => void
   truckloadId: number
-  gridTemplateColumns?: string
 }
 
 interface GroupedStop {
@@ -122,10 +121,9 @@ interface SortableGroupedStopProps {
   onOrderInfoClick: (orderId: number) => void
   onStopUpdate: () => void
   truckloadId: number
-  gridTemplateColumns?: string
 }
 
-function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId, gridTemplateColumns }: SortableGroupedStopProps) {
+function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId }: SortableGroupedStopProps) {
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
   const [isUnassigning, setIsUnassigning] = useState(false)
 
@@ -186,7 +184,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
       <Card 
         ref={setNodeRef}
         style={style}
-        className="py-0.5 px-1.5 relative"
+        className="py-1 px-2 relative"
       >
         <div className="absolute top-0 left-0 h-full w-1.5" 
           style={{ 
@@ -194,18 +192,15 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
           }} 
         />
         
-        <div className="pl-2">
+        <div className="pl-2.5">
           {/* Individual stops within the group - styled exactly like normal stops */}
           <div>
             {groupedStop.stops.map((stop, index) => (
-              <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-0.5 pt-0.5 border-t border-gray-200" : ""}>
+              <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-1 pt-1 border-t border-gray-200" : ""}>
                 {/* Single horizontal row with all info - using grid for dynamic column widths */}
-                <div 
-                  className={gridTemplateColumns ? "grid gap-1 items-center" : "grid grid-cols-[auto_auto_auto_auto_auto] gap-1 items-center"}
-                  style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
-                >
+                <div className="grid grid-cols-[auto_auto_auto_auto_auto] gap-3 items-center">
                   {/* Left side: Drag handle, sequence, badges */}
-                  <div data-column="0" className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                       {index === 0 && (
                         <button
                         className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
@@ -237,7 +232,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                   </div>
 
                   {/* Origin customer - auto width based on content */}
-                  <div data-column="1" className="min-w-0">
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 leading-tight">
                       {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
                     </div>
@@ -252,7 +247,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                   </div>
 
                   {/* Destination customer - auto width based on content */}
-                  <div data-column="2" className="min-w-0">
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 leading-tight">
                       {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
                     </div>
@@ -267,7 +262,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                   </div>
 
                   {/* Freight Info - auto width based on content */}
-                  <div data-column="3" className="flex-shrink-0 whitespace-nowrap">
+                  <div className="flex-shrink-0 whitespace-nowrap">
                     <div className="text-xs text-gray-500 leading-tight">Freight</div>
                     <div className="flex flex-col gap-0.5 text-xs">
                       {stop.footage > 0 && (
@@ -298,7 +293,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                   </div>
 
                   {/* Right side: Date, flags, buttons - minimal width */}
-                  <div data-column="4" className="flex items-center gap-0.5 flex-shrink-0">
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
                     <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                       {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
                     </div>
@@ -445,7 +440,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
   )
 }
 
-function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridTemplateColumns }: SortableStopProps) {
+function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId }: SortableStopProps) {
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
   const [isUnassigning, setIsUnassigning] = useState(false)
 
@@ -506,7 +501,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
       <Card 
         ref={setNodeRef}
         style={style}
-        className="py-0.5 px-1.5 relative"
+        className="py-1 px-2 relative"
       >
         <div className="absolute top-0 left-0 h-full w-1.5" 
           style={{ 
@@ -514,14 +509,11 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
           }} 
         />
         
-        <div className="pl-2">
+        <div className="pl-2.5">
           {/* Single horizontal row with all info - using grid for dynamic column widths */}
-          <div 
-            className={gridTemplateColumns ? "grid gap-1 items-center" : "grid grid-cols-[auto_auto_auto_auto_auto] gap-1 items-center"}
-            style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
-          >
+          <div className="grid grid-cols-[auto_auto_auto_auto_auto] gap-3 items-center">
             {/* Left side: Drag handle, sequence, badges */}
-            <div data-column="0" className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                 className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-gray-100 rounded flex-shrink-0"
                   {...attributes}
@@ -551,7 +543,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
             </div>
 
             {/* Origin customer - auto width based on content */}
-            <div data-column="1" className="min-w-0">
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 leading-tight">
                 {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
               </div>
@@ -566,7 +558,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
             </div>
 
             {/* Destination customer - auto width based on content */}
-            <div data-column="2" className="min-w-0">
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 leading-tight">
                 {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
               </div>
@@ -581,7 +573,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
             </div>
 
             {/* Freight Info - auto width based on content */}
-            <div data-column="3" className="flex-shrink-0 whitespace-nowrap">
+            <div className="flex-shrink-0 whitespace-nowrap">
               <div className="text-xs text-gray-500 leading-tight">Freight</div>
               <div className="flex flex-col gap-0.5 text-xs">
                 {stop.footage > 0 && (
@@ -612,7 +604,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, gridT
             </div>
 
             {/* Right side: Date, flags, buttons - minimal width */}
-            <div data-column="4" className="flex items-center gap-0.5 flex-shrink-0">
+            <div className="flex items-center gap-0.5 flex-shrink-0">
               <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
                 {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
               </div>
@@ -801,9 +793,6 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
   const [isOrderInfoOpen, setIsOrderInfoOpen] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const columnWidthsRef = useRef<number[]>([0, 0, 0, 0, 0])
-  const [gridTemplateColumns, setGridTemplateColumns] = useState<string | undefined>(undefined)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1056,77 +1045,6 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   // Group stops by customer
   const groupedStops = groupStopsByCustomer(stops)
 
-  // Measure column widths after stops are rendered - using refs to avoid infinite loops
-  useEffect(() => {
-    if (stops.length === 0 || !containerRef.current) {
-      setGridTemplateColumns(undefined)
-      return
-    }
-
-    let isMounted = true
-    let timeoutId: NodeJS.Timeout
-
-    const measureColumns = () => {
-      if (!isMounted || !containerRef.current) return
-      
-      try {
-        const widths = [0, 0, 0, 0, 0]
-        
-        // Find all column cells using data attributes
-        for (let i = 0; i < 5; i++) {
-          const cells = containerRef.current.querySelectorAll(`[data-column="${i}"]`)
-          if (cells && cells.length > 0) {
-            cells.forEach(cell => {
-              const element = cell as HTMLElement
-              if (element && element.offsetParent !== null) {
-                const width = element.scrollWidth > 0 ? element.scrollWidth : element.offsetWidth
-                if (width > 0 && width > widths[i]) {
-                  widths[i] = width
-                }
-              }
-            })
-          }
-        }
-
-        // Only update if we found valid widths and they're different from current
-        if (widths.some(w => w > 0)) {
-          const paddedWidths = widths.map(w => w > 0 ? w + 8 : 0)
-          
-          // Check if widths actually changed
-          const hasChanged = columnWidthsRef.current.some((prev, i) => prev !== paddedWidths[i])
-          
-          if (hasChanged) {
-            columnWidthsRef.current = paddedWidths
-            const newTemplate = `${paddedWidths[0]}px ${paddedWidths[1]}px ${paddedWidths[2]}px ${paddedWidths[3]}px ${paddedWidths[4]}px`
-            setGridTemplateColumns(prev => {
-              // Only update if template string actually changed
-              if (prev !== newTemplate) {
-                return newTemplate
-              }
-              return prev
-            })
-          }
-        }
-      } catch (error) {
-        console.error('Error measuring column widths:', error)
-      }
-    }
-
-    // Delay measurement to ensure DOM is ready
-    timeoutId = setTimeout(() => {
-      requestAnimationFrame(() => {
-        if (isMounted) {
-          measureColumns()
-        }
-      })
-    }, 100)
-
-    return () => {
-      isMounted = false
-      clearTimeout(timeoutId)
-    }
-  }, [stops.length]) // Only depend on length, not the array itself
-
   return (
     <TooltipProvider>
       <div className="h-full flex flex-col min-h-0 overflow-hidden">
@@ -1140,7 +1058,7 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
             items={groupedStops.map(group => `group-${group.groupKey}`)}
             strategy={verticalListSortingStrategy}
           >
-              <div ref={containerRef} className="space-y-0.5 p-1 pr-2">
+              <div className="space-y-1 p-2 pr-4">
               {groupedStops.map((group) => (
                 <SortableGroupedStop
                   key={`group-${group.groupKey}-${group.sequenceNumber}`}
@@ -1148,7 +1066,6 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
                   onOrderInfoClick={handleOrderInfoClick}
                   onStopUpdate={fetchStops}
                   truckloadId={truckloadId}
-                  gridTemplateColumns={gridTemplateColumns}
                 />
               ))}
             </div>
