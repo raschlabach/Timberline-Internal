@@ -243,6 +243,57 @@ function useLoadBoardOrders(
     ...initialFilters
   });
 
+  useEffect(() => {
+    try {
+      const savedFilters = localStorage.getItem(LOCAL_STORAGE_KEYS.filters);
+      if (savedFilters) {
+        const parsedFilters = JSON.parse(savedFilters);
+        if (parsedFilters && typeof parsedFilters === 'object') {
+          setActiveFilters(prev => ({ ...prev, ...parsedFilters }));
+        }
+      }
+
+      const savedSort = localStorage.getItem(LOCAL_STORAGE_KEYS.sort);
+      if (savedSort) {
+        const parsedSort = JSON.parse(savedSort) as SortConfig;
+        if (parsedSort?.field && parsedSort?.direction) {
+          setSortConfig(parsedSort);
+        }
+      }
+
+      const savedView = localStorage.getItem(LOCAL_STORAGE_KEYS.view);
+      if (savedView === 'unassigned' || savedView === 'all') {
+        setViewMode(savedView);
+      }
+    } catch (storageError) {
+      console.error('Error loading load board preferences:', storageError);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.filters, JSON.stringify(activeFilters));
+    } catch (storageError) {
+      console.error('Error saving load board filters:', storageError);
+    }
+  }, [activeFilters]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.sort, JSON.stringify(sortConfig));
+    } catch (storageError) {
+      console.error('Error saving load board sort config:', storageError);
+    }
+  }, [sortConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.view, viewMode);
+    } catch (storageError) {
+      console.error('Error saving load board view mode:', storageError);
+    }
+  }, [viewMode]);
+
   const fetchOrders = useCallback(async () => {
     try {
       // Add cache-busting timestamp to prevent 304 responses
@@ -479,6 +530,12 @@ function formatDate(dateString: string): string {
     return 'Invalid date';
   }
 }
+
+const LOCAL_STORAGE_KEYS = {
+  filters: 'load-board-active-filters',
+  sort: 'load-board-sort-config',
+  view: 'load-board-view-mode'
+} as const;
 
 const FILTER_OPTIONS = [
   { id: 'ohioToIndiana', label: 'OH → IN' },
