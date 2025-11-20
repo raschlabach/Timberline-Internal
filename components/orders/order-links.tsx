@@ -97,6 +97,8 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
         }
         onUpdate([...links, newLink])
         toast.success(`Uploaded ${file.name}`)
+        // Trigger notification panel refresh (notification will be created when order is saved)
+        window.dispatchEvent(new CustomEvent('notificationUpdate'))
       }
     } catch (error) {
       console.error("Order link upload failed:", error)

@@ -418,6 +418,8 @@ export function OrderInfoDialog({
 
         appendLinkToState(normalizedLink);
         toast.success(`Attached ${file.name}`);
+        // Trigger notification panel refresh
+        window.dispatchEvent(new CustomEvent('notificationUpdate'));
       }
     } catch (error) {
       console.error('Error uploading order link:', error);

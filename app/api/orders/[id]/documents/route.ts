@@ -84,12 +84,14 @@ export async function POST(
       )
 
       // Create notification
-      await client.query(
+      const notificationResult = await client.query(
         `INSERT INTO notifications 
          (type, title, message, order_id, document_attachment_id)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
         ['document_attachment', 'Paperwork Attached', `Special paperwork has been attached to order #${orderId}`, orderId, attachmentId]
       )
+      console.log('Notification created:', notificationResult.rows[0].id)
 
       await client.query('COMMIT')
 

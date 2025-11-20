@@ -31,10 +31,19 @@ export function NotificationPanel({ className = "" }: NotificationPanelProps) {
   const fetchNotifications = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch('/api/notifications')
+      const response = await fetch('/api/notifications', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      })
       if (response.ok) {
         const data = await response.json()
-        setNotifications(data.notifications || [])
+        const notifications = data.notifications || []
+        setNotifications(notifications)
+        console.log('Fetched notifications:', notifications.length)
+      } else {
+        console.error('Failed to fetch notifications:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Error fetching notifications:', error)
@@ -83,10 +92,19 @@ export function NotificationPanel({ className = "" }: NotificationPanelProps) {
   useEffect(() => {
     fetchNotifications()
     
+    // Listen for notification update events
+    const handleNotificationUpdate = () => {
+      fetchNotifications()
+    }
+    window.addEventListener('notificationUpdate', handleNotificationUpdate)
+    
     // Poll for new notifications every 30 seconds
     const interval = setInterval(fetchNotifications, 30000)
     
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('notificationUpdate', handleNotificationUpdate)
+    }
   }, [])
 
   if (isLoading) {

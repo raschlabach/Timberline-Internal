@@ -91,6 +91,8 @@ export function DocumentAttachmentDialog({
           fileInputRef.current.value = ""
         }
         fetchDocuments()
+        // Trigger notification panel refresh
+        window.dispatchEvent(new CustomEvent('notificationUpdate'))
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to upload document')
