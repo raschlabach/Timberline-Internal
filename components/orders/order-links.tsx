@@ -1,73 +1,182 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Trash2, Link, Plus } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { v4 as uuidv4 } from "uuid";
-import { OrderLink } from "@/types/orders";
+import { useRef, useState } from "react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Trash2, Link as LinkIcon, Plus, UploadCloud, Loader2 } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { v4 as uuidv4 } from "uuid"
+import { OrderLink } from "@/types/orders"
+import { toast } from "sonner"
 
 interface OrderLinksProps {
-  links: OrderLink[];
-  onUpdate: (links: OrderLink[]) => void;
+  links: OrderLink[]
+  onUpdate: (links: OrderLink[]) => void
 }
 
+const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.gif,.webp"
+
 export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
-  // Add a new empty link
-  const handleAddLink = () => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+
+  function handleAddLink() {
     const newLink: OrderLink = {
       id: uuidv4(),
       url: "",
       description: "",
-    };
-    onUpdate([...links, newLink]);
-  };
+    }
+    onUpdate([...links, newLink])
+  }
 
-  // Remove a link by id
-  const handleRemoveLink = (id: string) => {
-    onUpdate(links.filter(link => link.id !== id));
-  };
+  function handleRemoveLink(id: string) {
+    onUpdate(links.filter(link => link.id !== id))
+  }
 
-  // Update a link field (url or description)
-  const handleUpdateLink = (id: string, field: keyof OrderLink, value: string) => {
+  function handleUpdateLink(id: string, field: keyof OrderLink, value: string) {
     const updatedLinks = links.map(link => {
       if (link.id === id) {
-        return { ...link, [field]: value };
+        return { ...link, [field]: value }
       }
-      return link;
-    });
-    onUpdate(updatedLinks);
-  };
+      return link
+    })
+    onUpdate(updatedLinks)
+  }
+
+  function handleDragOver(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragging(true)
+  }
+
+  function handleDragLeave(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragging(false)
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragging(false)
+    const files = Array.from(event.dataTransfer.files || [])
+    if (files.length > 0) {
+      uploadFiles(files)
+    }
+  }
+
+  function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || [])
+    if (files.length > 0) {
+      uploadFiles(files)
+    }
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0) {
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append("file", file)
+
+        const response = await fetch("/api/uploads/order-links", {
+          method: "POST",
+          body: formData,
+        })
+        const result = await response.json().catch(() => ({}))
+
+        if (!response.ok) {
+          throw new Error(result?.error || `Failed to upload ${file.name}`)
+        }
+
+        const newLink: OrderLink = {
+          id: uuidv4(),
+          url: result.url,
+          description: result.fileName || file.name,
+        }
+        onUpdate([...links, newLink])
+        toast.success(`Uploaded ${file.name}`)
+      }
+    } catch (error) {
+      console.error("Order link upload failed:", error)
+      const message = error instanceof Error ? error.message : "Failed to upload file"
+      toast.error(message)
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  function handleBrowseClick() {
+    fileInputRef.current?.click()
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium">Links</Label>
-        <Button 
-          type="button" 
-          variant="outline" 
-          size="sm" 
+        <Label className="text-sm font-medium">Links & Paperwork</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
           onClick={handleAddLink}
           className="flex items-center gap-1"
         >
           <Plus className="h-4 w-4" />
-          Add Link
+          Add Manual Link
         </Button>
+      </div>
+
+      <div
+        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
+          isDragging ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300"
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={handleBrowseClick}
+      >
+        <div className="flex flex-col items-center gap-2">
+          {isUploading ? (
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          ) : (
+            <UploadCloud className="h-6 w-6 text-blue-600" />
+          )}
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {isUploading ? "Uploading files..." : "Drag & drop paperwork here"}
+            </p>
+            <p className="text-xs text-gray-500">
+              or click to browse • Supports PDF and images up to 10MB
+            </p>
+          </div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          onChange={handleFileSelect}
+          accept={ACCEPTED_FILE_TYPES}
+        />
       </div>
 
       {links.length === 0 && (
         <div className="text-sm text-gray-500 italic">
-          No links added. Click "Add Link" to add a reference URL.
+          No links added yet. Upload paperwork or add a manual URL.
         </div>
       )}
 
       {links.map((link) => (
         <div key={link.id} className="flex flex-col gap-2 p-3 border rounded-md">
           <div className="flex items-center gap-2">
-            <Link className="h-4 w-4 text-gray-500 flex-shrink-0" />
+            <LinkIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />
             <Input
-              type="url"
+              type="text"
               placeholder="https://example.com"
               value={link.url}
               onChange={(e) => handleUpdateLink(link.id, "url", e.target.value)}
@@ -92,5 +201,5 @@ export function OrderLinks({ links, onUpdate }: OrderLinksProps) {
         </div>
       ))}
     </div>
-  );
-} 
+  )
+}

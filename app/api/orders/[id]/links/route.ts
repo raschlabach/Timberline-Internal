@@ -85,6 +85,21 @@ export async function POST(
       ]
     );
     
+    await query(
+      `INSERT INTO notifications (
+        type,
+        title,
+        message,
+        order_id
+      ) VALUES ($1, $2, $3, $4)`,
+      [
+        'order_link',
+        'Order Link Added',
+        `A new link (${body.description || body.url}) was added to order #${orderId}`,
+        orderId
+      ]
+    );
+    
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
     console.error('Error creating order link:', error);

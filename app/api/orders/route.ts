@@ -485,6 +485,21 @@ export async function POST(request: NextRequest) {
             ) VALUES ($1, $2, $3)`,
             [orderId, link.url, link.description || null]
           );
+
+          await client.query(
+            `INSERT INTO notifications (
+              type,
+              title,
+              message,
+              order_id
+            ) VALUES ($1, $2, $3, $4)`,
+            [
+              'order_link',
+              'Order Link Added',
+              `A new link (${link.description || link.url}) was added to order #${orderId}`,
+              orderId,
+            ]
+          );
         }
       }
 

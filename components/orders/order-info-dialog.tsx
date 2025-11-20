@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format, parseISO, isValid } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,8 @@ import { toast } from 'sonner';
 import { OrderData, OrderCustomer, SkidData, HandBundleData, Customer, convertToOrderCustomer } from '@/types/shared';
 import { AssignOrderDialog } from "@/components/orders/assign-order-dialog";
 import { CustomerEditModal } from "@/components/customer/customer-edit-modal";
-import { Edit, ChevronDown } from "lucide-react";
+import { Edit, ChevronDown, UploadCloud, Loader2, Link as LinkIcon, Trash2, ExternalLink } from "lucide-react";
+import { v4 as uuidv4 } from 'uuid';
 
 interface OrderInfoDialogProps {
   isOpen: boolean;
@@ -26,6 +27,8 @@ interface OrderInfoDialogProps {
   orderId: number;
   onOrderUpdate: () => void;
 }
+
+const ACCEPTED_LINK_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.gif,.webp";
 
 export function OrderInfoDialog({
   isOpen,
@@ -43,6 +46,9 @@ export function OrderInfoDialog({
   const [isCustomerEditModalOpen, setIsCustomerEditModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<OrderCustomer | null>(null);
   const [isHandBundlesOpen, setIsHandBundlesOpen] = useState(false);
+  const [isUploadingLink, setIsUploadingLink] = useState(false);
+  const [isLinkDragActive, setIsLinkDragActive] = useState(false);
+  const linkFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-open hand bundles section when hand bundles are present
   useEffect(() => {
@@ -64,6 +70,14 @@ export function OrderInfoDialog({
       if (!response.ok) throw new Error('Failed to fetch order details');
       const data = await response.json();
       
+      const normalizedLinks = Array.isArray(data.links)
+        ? data.links.map((link: any) => ({
+            id: link.id ? link.id.toString() : uuidv4(),
+            url: link.url,
+            description: link.description || '',
+          }))
+        : [];
+
       // Transform the data to match our interfaces
       const orderData: OrderData = {
         ...data,
@@ -150,7 +164,7 @@ export function OrderInfoDialog({
           middlefield: Boolean(data.filters?.middlefield),
           paNy: Boolean(data.filters?.paNy)
         },
-        links: data.links || [],
+        links: normalizedLinks,
         created_at: data.created_at || new Date().toISOString(),
         created_by: data.created_by,
         pickupAssignment: data.pickupAssignment || null,
@@ -343,6 +357,131 @@ export function OrderInfoDialog({
       });
     }
   };
+
+  function handleLinkDragOver(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsLinkDragActive(true);
+  }
+
+  function handleLinkDragLeave(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsLinkDragActive(false);
+  }
+
+  function handleLinkDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsLinkDragActive(false);
+    const files = Array.from(event.dataTransfer.files || []);
+    if (files.length > 0) {
+      uploadOrderLinkFiles(files);
+    }
+  }
+
+  function handleLinkFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    if (files.length > 0) {
+      uploadOrderLinkFiles(files);
+    }
+  }
+
+  function handleLinkBrowseClick() {
+    linkFileInputRef.current?.click();
+  }
+
+  function appendLinkToState(newLink: { id: string; url: string; description: string }) {
+    setFormData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        links: [...(prev.links || []), newLink],
+      };
+    });
+  }
+
+  async function uploadOrderLinkFiles(files: File[]) {
+    if (!formData || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingLink(true);
+    try {
+      for (const file of files) {
+        const uploadData = new FormData();
+        uploadData.append('file', file);
+
+        const uploadResponse = await fetch('/api/uploads/order-links', {
+          method: 'POST',
+          body: uploadData,
+        });
+        const uploadResult = await uploadResponse.json().catch(() => ({}));
+
+        if (!uploadResponse.ok) {
+          throw new Error(uploadResult?.error || `Failed to upload ${file.name}`);
+        }
+
+        const linkResponse = await fetch(`/api/orders/${formData.id}/links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: uploadResult.url,
+            description: file.name,
+          }),
+        });
+        const savedLink = await linkResponse.json().catch(() => ({}));
+
+        if (!linkResponse.ok) {
+          throw new Error(savedLink?.error || `Failed to attach ${file.name}`);
+        }
+
+        const normalizedLink = {
+          id: savedLink.id ? savedLink.id.toString() : uuidv4(),
+          url: savedLink.url,
+          description: savedLink.description || file.name,
+        };
+
+        appendLinkToState(normalizedLink);
+        toast.success(`Attached ${file.name}`);
+      }
+    } catch (error) {
+      console.error('Error uploading order link:', error);
+      const message = error instanceof Error ? error.message : 'Failed to upload link';
+      toast.error(message);
+    } finally {
+      setIsUploadingLink(false);
+      if (linkFileInputRef.current) {
+        linkFileInputRef.current.value = '';
+      }
+    }
+  }
+
+  async function handleDeleteLink(linkId: string) {
+    if (!formData) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/orders/${formData.id}/links/${linkId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.error || 'Failed to delete link');
+      }
+
+      setFormData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          links: (prev.links || []).filter(link => link.id !== linkId),
+        };
+      });
+      toast.success('Link removed');
+    } catch (error) {
+      console.error('Error deleting link:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete link');
+    }
+  }
 
   if (isLoading || !formData) {
     return (
@@ -613,6 +752,87 @@ export function OrderInfoDialog({
                     className="min-h-[100px]"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Linked Files & URLs */}
+            <div className="bg-white p-6 rounded-lg border shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Linked Files & URLs</h3>
+              <div
+                className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
+                  isLinkDragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'
+                }`}
+                onDragOver={handleLinkDragOver}
+                onDragLeave={handleLinkDragLeave}
+                onDrop={handleLinkDrop}
+                onClick={handleLinkBrowseClick}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  {isUploadingLink ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                  ) : (
+                    <UploadCloud className="h-6 w-6 text-blue-600" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {isUploadingLink ? 'Uploading files...' : 'Drag & drop paperwork here'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      or click to browse • Supports PDF and images up to 10MB
+                    </p>
+                  </div>
+                </div>
+                <input
+                  ref={linkFileInputRef}
+                  type="file"
+                  className="hidden"
+                  multiple
+                  accept={ACCEPTED_LINK_FILE_TYPES}
+                  onChange={handleLinkFileSelect}
+                />
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {formData.links && formData.links.length > 0 ? (
+                  formData.links.map((link) => (
+                    <div
+                      key={link.id}
+                      className="flex items-center justify-between gap-3 border rounded-md px-3 py-2"
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        <LinkIcon className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {link.description || link.url}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">{link.url}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(link.url, '_blank', 'noopener')}
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                          title="Open link"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteLink(link.id)}
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-red-600"
+                          title="Remove link"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No files or links attached yet.</p>
+                )}
               </div>
             </div>
 
