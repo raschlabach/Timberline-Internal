@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,9 +27,13 @@ interface NotificationPanelProps {
 export function NotificationPanel({ className = "" }: NotificationPanelProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const lastNotificationIdRef = useRef<number | null>(null)
 
-  const fetchNotifications = async () => {
-    setIsLoading(true)
+  const fetchNotifications = async (forceRefresh = false) => {
+    // Don't show loading spinner on background refreshes
+    if (forceRefresh) {
+      setIsLoading(true)
+    }
     try {
       const response = await fetch('/api/notifications', {
         cache: 'no-store',
@@ -39,9 +43,27 @@ export function NotificationPanel({ className = "" }: NotificationPanelProps) {
       })
       if (response.ok) {
         const data = await response.json()
-        const notifications = data.notifications || []
-        setNotifications(notifications)
-        console.log('Fetched notifications:', notifications.length)
+        const newNotifications = data.notifications || []
+        
+        // Check if we have new notifications (compare with last known ID)
+        const hasNewNotifications = lastNotificationIdRef.current === null || 
+          newNotifications.some((n: Notification) => 
+            n.id > (lastNotificationIdRef.current || 0)
+          )
+        
+        if (hasNewNotifications && lastNotificationIdRef.current !== null) {
+          // Only update if there are actually new notifications to avoid unnecessary re-renders
+          const latestId = newNotifications[0]?.id || lastNotificationIdRef.current
+          if (latestId > (lastNotificationIdRef.current || 0)) {
+            setNotifications(newNotifications)
+            lastNotificationIdRef.current = latestId
+          }
+        } else {
+          setNotifications(newNotifications)
+          if (newNotifications.length > 0) {
+            lastNotificationIdRef.current = newNotifications[0].id
+          }
+        }
       } else {
         console.error('Failed to fetch notifications:', response.status, response.statusText)
       }
@@ -90,16 +112,20 @@ export function NotificationPanel({ className = "" }: NotificationPanelProps) {
   }
 
   useEffect(() => {
-    fetchNotifications()
+    // Initial fetch with loading state
+    fetchNotifications(true)
     
-    // Listen for notification update events
+    // Listen for notification update events (local events for immediate refresh)
     const handleNotificationUpdate = () => {
-      fetchNotifications()
+      fetchNotifications(false)
     }
     window.addEventListener('notificationUpdate', handleNotificationUpdate)
     
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
+    // Poll for new notifications every 5 seconds (works across all users/devices)
+    // This ensures all users see new notifications within 5 seconds
+    const interval = setInterval(() => {
+      fetchNotifications(false)
+    }, 5000)
     
     return () => {
       clearInterval(interval)
