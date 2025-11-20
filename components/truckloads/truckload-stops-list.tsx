@@ -206,10 +206,13 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
             {groupedStop.stops.map((stop, index) => (
               <div key={`${stop.id}-${stop.assignment_type}`} className={index > 0 ? "mt-1 pt-1 border-t border-gray-200" : ""}>
                 {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
+                {/* For deliveries, swap column order so "To:" comes before "Origin:" */}
                 <div 
-                  className="grid gap-1.5 items-center w-fit"
+                  className={`grid gap-1.5 items-center w-fit ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}
                   style={{
-                    gridTemplateColumns: `${columnWidths.handleSequence}px ${columnWidths.origin}px ${columnWidths.dest}px ${columnWidths.freight}px max-content`
+                    gridTemplateColumns: stop.assignment_type === 'delivery' 
+                      ? `${columnWidths.handleSequence}px ${columnWidths.dest}px ${columnWidths.origin}px ${columnWidths.freight}px max-content`
+                      : `${columnWidths.handleSequence}px ${columnWidths.origin}px ${columnWidths.dest}px ${columnWidths.freight}px max-content`
                   }}
                 >
                   {/* Left side: Drag handle, sequence, badges */}
@@ -220,7 +223,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                           {...attributes}
                           {...listeners}
                         >
-                          <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                          <GripVertical className={`h-3.5 w-3.5 ${stop.assignment_type === 'pickup' ? 'text-red-400' : 'text-gray-400'}`} />
                         </button>
                       )}
                     <span className="font-medium text-xs whitespace-nowrap">#{stop.sequence_number}</span>
@@ -244,61 +247,72 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     )}
                   </div>
 
-                  {/* Origin customer */}
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-500 leading-tight">
-                      {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
-                    </div>
-                    <div className={`truncate leading-tight ${
-                      stop.assignment_type === 'pickup' 
-                        ? 'text-xs font-bold' 
-                        : 'text-xs font-medium text-gray-700'
-                    }`}>
-                      {stop.pickup_customer.name}
-                    </div>
-                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
-                  </div>
-
-                  {/* Destination customer */}
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-500 leading-tight">
-                      {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
-                    </div>
-                    <div className={`truncate leading-tight ${
-                      stop.assignment_type === 'delivery' 
-                        ? 'text-xs font-bold' 
-                        : 'text-xs font-medium text-gray-700'
-                    }`}>
-                      {stop.delivery_customer.name}
-                    </div>
-                    <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
-                  </div>
+                  {/* For deliveries: show destination first, then origin. For pickups: show origin first, then destination */}
+                  {stop.assignment_type === 'delivery' ? (
+                    <>
+                      {/* Destination customer (To:) - shown first for deliveries */}
+                      <div className="min-w-0">
+                        <div className="text-xs text-gray-500 leading-tight">To:</div>
+                        <div className="truncate leading-tight text-xs font-bold">
+                          {stop.delivery_customer.name}
+                        </div>
+                        <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
+                      </div>
+                      {/* Origin customer (Origin:) - shown second for deliveries */}
+                      <div className="min-w-0">
+                        <div className="text-xs text-gray-500 leading-tight">Origin:</div>
+                        <div className="truncate leading-tight text-xs font-medium text-gray-700">
+                          {stop.pickup_customer.name}
+                        </div>
+                        <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Origin customer (From:) - shown first for pickups */}
+                      <div className="min-w-0">
+                        <div className="text-xs text-red-500 leading-tight">From:</div>
+                        <div className="truncate leading-tight text-xs font-bold text-red-600">
+                          {stop.pickup_customer.name}
+                        </div>
+                        <div className="text-xs text-red-500 truncate leading-tight">{stop.pickup_customer.address}</div>
+                      </div>
+                      {/* Destination customer (Dest:) - shown second for pickups */}
+                      <div className="min-w-0">
+                        <div className="text-xs text-red-500 leading-tight">Dest:</div>
+                        <div className="truncate leading-tight text-xs font-medium text-red-600">
+                          {stop.delivery_customer.name}
+                        </div>
+                        <div className="text-xs text-red-500 truncate leading-tight">{stop.delivery_customer.address}</div>
+                      </div>
+                    </>
+                  )}
 
                   {/* Freight Info */}
                   <div className="flex-shrink-0 whitespace-nowrap">
-                    <div className="text-xs text-gray-500 leading-tight">Freight</div>
+                    <div className={`text-xs leading-tight ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>Freight</div>
                     <div className="flex flex-col gap-0.5 text-xs">
                       {stop.footage > 0 && (
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-500">Ft:</span>
-                          <span className="font-medium">{Math.round(stop.footage)}</span>
+                          <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>Ft:</span>
+                          <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{Math.round(stop.footage)}</span>
                         </div>
                       )}
                       {stop.skids > 0 && (
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-500">S:</span>
-                          <span className="font-medium">{stop.skids}</span>
+                          <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>S:</span>
+                          <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{stop.skids}</span>
                         </div>
                       )}
                       {stop.vinyl > 0 && (
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-500">V:</span>
-                          <span className="font-medium">{stop.vinyl}</span>
+                          <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>V:</span>
+                          <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{stop.vinyl}</span>
                         </div>
                       )}
                       {stop.hand_bundles > 0 && (
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-500">HB:</span>
+                          <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>HB:</span>
                           <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
                         </div>
                       )}
@@ -307,7 +321,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
 
                   {/* Right side: Date, flags, buttons */}
                   <div className="flex items-center gap-0.5 flex-shrink-0">
-                    <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
+                    <div className={`text-xs mr-1 whitespace-nowrap ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>
                       {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
                     </div>
                     {stop.is_rush && (
@@ -539,10 +553,13 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
         
         <div className="pl-1">
           {/* Single horizontal row with all info - using CSS Grid with calculated column widths */}
+          {/* For deliveries, swap column order so "To:" comes before "Origin:" */}
           <div 
-            className="grid gap-1.5 items-center w-fit"
+            className={`grid gap-1.5 items-center w-fit ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}
             style={{
-              gridTemplateColumns: `${widths.handleSequence}px ${widths.origin}px ${widths.dest}px ${widths.freight}px max-content`
+              gridTemplateColumns: stop.assignment_type === 'delivery' 
+                ? `${widths.handleSequence}px ${widths.dest}px ${widths.origin}px ${widths.freight}px max-content`
+                : `${widths.handleSequence}px ${widths.origin}px ${widths.dest}px ${widths.freight}px max-content`
             }}
           >
             {/* Left side: Drag handle, sequence, badges */}
@@ -552,7 +569,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
                   {...attributes}
                   {...listeners}
                 >
-                  <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+                  <GripVertical className={`h-3.5 w-3.5 ${stop.assignment_type === 'pickup' ? 'text-red-400' : 'text-gray-400'}`} />
                 </button>
               <span className="font-medium text-xs whitespace-nowrap">#{stop.sequence_number}</span>
               {stop.is_transfer_order ? (
@@ -575,61 +592,72 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
               )}
             </div>
 
-            {/* Origin customer */}
-            <div className="min-w-0">
-              <div className="text-xs text-gray-500 leading-tight">
-                {stop.assignment_type === 'pickup' ? 'From:' : 'Origin:'}
-              </div>
-              <div className={`truncate leading-tight ${
-                stop.assignment_type === 'pickup' 
-                  ? 'text-xs font-bold' 
-                  : 'text-xs font-medium text-gray-700'
-              }`}>
-                {stop.pickup_customer.name}
-              </div>
-              <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
-            </div>
-
-            {/* Destination customer */}
-            <div className="min-w-0">
-              <div className="text-xs text-gray-500 leading-tight">
-                {stop.assignment_type === 'delivery' ? 'To:' : 'Dest:'}
-              </div>
-              <div className={`truncate leading-tight ${
-                stop.assignment_type === 'delivery' 
-                  ? 'text-xs font-bold' 
-                  : 'text-xs font-medium text-gray-700'
-              }`}>
-                {stop.delivery_customer.name}
-              </div>
-              <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
-            </div>
+            {/* For deliveries: show destination first, then origin. For pickups: show origin first, then destination */}
+            {stop.assignment_type === 'delivery' ? (
+              <>
+                {/* Destination customer (To:) - shown first for deliveries */}
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500 leading-tight">To:</div>
+                  <div className="truncate leading-tight text-xs font-bold">
+                    {stop.delivery_customer.name}
+                  </div>
+                  <div className="text-xs text-gray-600 truncate leading-tight">{stop.delivery_customer.address}</div>
+                </div>
+                {/* Origin customer (Origin:) - shown second for deliveries */}
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500 leading-tight">Origin:</div>
+                  <div className="truncate leading-tight text-xs font-medium text-gray-700">
+                    {stop.pickup_customer.name}
+                  </div>
+                  <div className="text-xs text-gray-600 truncate leading-tight">{stop.pickup_customer.address}</div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Origin customer (From:) - shown first for pickups */}
+                <div className="min-w-0">
+                  <div className="text-xs text-red-500 leading-tight">From:</div>
+                  <div className="truncate leading-tight text-xs font-bold text-red-600">
+                    {stop.pickup_customer.name}
+                  </div>
+                  <div className="text-xs text-red-500 truncate leading-tight">{stop.pickup_customer.address}</div>
+                </div>
+                {/* Destination customer (Dest:) - shown second for pickups */}
+                <div className="min-w-0">
+                  <div className="text-xs text-red-500 leading-tight">Dest:</div>
+                  <div className="truncate leading-tight text-xs font-medium text-red-600">
+                    {stop.delivery_customer.name}
+                  </div>
+                  <div className="text-xs text-red-500 truncate leading-tight">{stop.delivery_customer.address}</div>
+                </div>
+              </>
+            )}
 
             {/* Freight Info */}
             <div className="flex-shrink-0 whitespace-nowrap">
-              <div className="text-xs text-gray-500 leading-tight">Freight</div>
+              <div className={`text-xs leading-tight ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>Freight</div>
               <div className="flex flex-col gap-0.5 text-xs">
                 {stop.footage > 0 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-gray-500">Ft:</span>
-                    <span className="font-medium">{Math.round(stop.footage)}</span>
+                    <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>Ft:</span>
+                    <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{Math.round(stop.footage)}</span>
                   </div>
                 )}
                 {stop.skids > 0 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-gray-500">S:</span>
-                    <span className="font-medium">{stop.skids}</span>
+                    <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>S:</span>
+                    <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{stop.skids}</span>
                   </div>
                 )}
                 {stop.vinyl > 0 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-gray-500">V:</span>
-                    <span className="font-medium">{stop.vinyl}</span>
+                    <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>V:</span>
+                    <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{stop.vinyl}</span>
                   </div>
                 )}
                 {stop.hand_bundles > 0 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-gray-500">HB:</span>
+                    <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>HB:</span>
                     <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
                   </div>
                 )}
@@ -638,7 +666,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
 
             {/* Right side: Date, flags, buttons */}
             <div className="flex items-center gap-0.5 flex-shrink-0">
-              <div className="text-xs text-gray-500 mr-1 whitespace-nowrap">
+              <div className={`text-xs mr-1 whitespace-nowrap ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>
                 {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
               </div>
               {stop.is_rush && (
