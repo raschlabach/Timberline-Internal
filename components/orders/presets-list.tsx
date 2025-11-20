@@ -23,6 +23,7 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
   const [isReordering, setIsReordering] = useState(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [favoriteGroups, setFavoriteGroups] = useState<Set<string>>(new Set());
 
   // Filter presets based on search query
   const filteredPresets = presets.filter(preset => {
@@ -81,13 +82,22 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
     };
   }
 
-  // Convert to array and sort by customer name (Favorites first)
+  // Convert to array and sort by customer name (Favorites first, then favorited groups alphabetically, then non-favorited alphabetically)
   const sortedGroups = Object.entries(groupedPresets)
     .sort(([keyA, a], [keyB, b]) => {
       // Favorites group always comes first
       if (keyA === '__FAVORITES__') return -1;
       if (keyB === '__FAVORITES__') return 1;
-      // Then sort alphabetically
+      
+      // Check if groups are favorited
+      const aIsFavorite = favoriteGroups.has(a.customerName);
+      const bIsFavorite = favoriteGroups.has(b.customerName);
+      
+      // Favorited groups come before non-favorited groups
+      if (aIsFavorite && !bIsFavorite) return -1;
+      if (!aIsFavorite && bIsFavorite) return 1;
+      
+      // Within favorited or non-favorited groups, sort alphabetically
       return a.customerName.localeCompare(b.customerName);
     });
 
@@ -112,6 +122,24 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
       }
       return newSet;
     });
+  };
+
+  // Fetch favorite customer groups
+  const fetchFavoriteGroups = async () => {
+    try {
+      const response = await fetch("/api/presets/favorite-groups");
+      if (!response.ok) {
+        throw new Error('Failed to fetch favorite groups');
+      }
+      const data = await response.json();
+      if (data.success && Array.isArray(data.favoriteGroups)) {
+        setFavoriteGroups(new Set(data.favoriteGroups));
+      }
+    } catch (err) {
+      console.error('Error fetching favorite groups:', err);
+      // Don't show error to user, just use empty set
+      setFavoriteGroups(new Set());
+    }
   };
 
   // Fetch presets
@@ -153,6 +181,7 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
   // Initial fetch
   useEffect(() => {
     fetchPresets();
+    fetchFavoriteGroups();
 
     // Listen for preset creation events
     const handlePresetCreated = () => {
@@ -302,6 +331,50 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
+      toast.error('Failed to update favorite status. Please try again.');
+    }
+  };
+
+  // Handle toggle favorite customer group
+  const handleToggleGroupFavorite = async (customerName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    const isCurrentlyFavorite = favoriteGroups.has(customerName);
+    
+    try {
+      const response = await fetch('/api/presets/toggle-group-favorite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerName: customerName,
+          isFavorite: !isCurrentlyFavorite
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update favorite status');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        // Update favorite groups in local state
+        setFavoriteGroups(prev => {
+          const newSet = new Set(prev);
+          if (isCurrentlyFavorite) {
+            newSet.delete(customerName);
+          } else {
+            newSet.add(customerName);
+          }
+          return newSet;
+        });
+        toast.success(result.message);
+      } else {
+        throw new Error(result.message || 'Failed to update favorite status');
+      }
+    } catch (error) {
+      console.error('Error toggling group favorite:', error);
       toast.error('Failed to update favorite status. Please try again.');
     }
   };
@@ -500,14 +573,18 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
                 <div key={groupKey} className="border-b border-slate-200 last:border-b-0">
                   {/* Group Header */}
                   <div 
-                    className={`px-3 py-2 cursor-pointer transition-colors flex items-center justify-between ${
+                    className={`px-3 py-2 transition-colors flex items-center justify-between ${
                       groupKey === '__FAVORITES__' 
                         ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400' 
+                        : favoriteGroups.has(group.customerName)
+                        ? 'bg-yellow-50/50 hover:bg-yellow-50 border-l-2 border-yellow-300'
                         : 'bg-slate-50 hover:bg-slate-100'
                     }`}
-                    onClick={() => toggleGroup(groupKey)}
                   >
-                    <div className="flex items-center gap-2">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer flex-1"
+                      onClick={() => toggleGroup(groupKey)}
+                    >
                       {isCollapsed ? (
                         <ChevronRight className={`h-4 w-4 ${
                           groupKey === '__FAVORITES__' ? 'text-yellow-600' : 'text-slate-400'
@@ -530,6 +607,24 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
                         {group.presets.length}
                       </span>
                     </div>
+                    {/* Star icon for favoriting parent groups (exclude __FAVORITES__ special group) */}
+                    {groupKey !== '__FAVORITES__' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={(e) => handleToggleGroupFavorite(group.customerName, e)}
+                        title={favoriteGroups.has(group.customerName) ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Star 
+                          className={`h-4 w-4 ${
+                            favoriteGroups.has(group.customerName)
+                              ? 'text-yellow-500 fill-yellow-500' 
+                              : 'text-gray-400 hover:text-yellow-500'
+                          }`} 
+                        />
+                      </Button>
+                    )}
                   </div>
                   
                   {/* Group Content */}

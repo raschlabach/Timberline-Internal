@@ -232,9 +232,7 @@ export async function GET(request: NextRequest) {
         -- Also exclude completed orders
         AND o.status != 'completed'
       ORDER BY 
-        -- Show rush orders first, then by pickup date
-        o.is_rush DESC,
-        o.pickup_date ASC,
+        -- Sort by created_at DESC (newest first)
         o.created_at DESC
     `;
 
