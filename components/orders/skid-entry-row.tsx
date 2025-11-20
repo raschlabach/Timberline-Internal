@@ -17,16 +17,46 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
   const [width, setWidth] = useState<string>(skid.width.toString());
   const [length, setLength] = useState<string>(skid.length.toString());
   const [footage, setFootage] = useState<number>(skid.footage);
+  const skidRef = useRef<SkidData>(skid);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prevSkidRef = useRef<SkidData>(skid);
+  
+  // Keep ref in sync with prop changes and sync local state when prop changes externally
+  useEffect(() => {
+    skidRef.current = skid;
+    
+    // Only sync local state if the prop changed from an external source
+    // (i.e., the skid dimensions changed but our local state doesn't match)
+    const prevSkid = prevSkidRef.current;
+    const currentWidth = parseFloat(width) || 0;
+    const currentLength = parseFloat(length) || 0;
+    
+    // If the prop changed and our local state matches the old prop, sync to new prop
+    // This handles cases where the parent updated the skid (e.g., after save/reload)
+    if (prevSkid.id === skid.id && 
+        (Math.abs(prevSkid.width - skid.width) > 0.01 || Math.abs(prevSkid.length - skid.length) > 0.01)) {
+      // Prop changed - check if our local state matches the old prop (meaning we didn't edit it)
+      if (Math.abs(currentWidth - prevSkid.width) < 0.01 && Math.abs(currentLength - prevSkid.length) < 0.01) {
+        // Our local state matches the old prop, so sync to new prop
+        setWidth(skid.width.toString());
+        setLength(skid.length.toString());
+        setFootage(skid.footage);
+      }
+    }
+    
+    prevSkidRef.current = skid;
+  }, [skid, width, length]);
   
   // Memoize the update function to avoid recreating it on every render
+  // Use ref to always get the latest skid data
   const updateParent = useCallback((widthVal: number, lengthVal: number, calculatedFootage: number) => {
     onUpdate({
-      ...skid,
+      ...skidRef.current,
       width: widthVal,
       length: lengthVal,
       footage: calculatedFootage
     });
-  }, [skid, onUpdate]);
+  }, [onUpdate]);
 
   // Calculate footage when width or length changes
   useEffect(() => {
@@ -36,13 +66,37 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
     
     setFootage(calculatedFootage);
     
-    // Update parent with a short debounce for better performance
-    const timeoutId = setTimeout(() => {
-      updateParent(widthVal, lengthVal, calculatedFootage);
-    }, 150);
+    // Clear any pending update
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
     
-    return () => clearTimeout(timeoutId);
+    // Update parent with a short debounce for better performance
+    updateTimeoutRef.current = setTimeout(() => {
+      updateParent(widthVal, lengthVal, calculatedFootage);
+      updateTimeoutRef.current = null;
+    }, 100);
+    
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+    };
   }, [width, length, updateParent]);
+
+  // Force immediate update on blur to ensure data is saved
+  const handleBlur = () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+      updateTimeoutRef.current = null;
+    }
+    const widthVal = parseFloat(width) || 0;
+    const lengthVal = parseFloat(length) || 0;
+    const calculatedFootage = widthVal * lengthVal;
+    setFootage(calculatedFootage);
+    updateParent(widthVal, lengthVal, calculatedFootage);
+  };
 
   // Handle width change
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,6 +134,7 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
           value={width}
           onChange={handleWidthChange}
           onFocus={handleFocus}
+          onBlur={handleBlur}
           className="w-full"
           min="0"
           step="0.01"
@@ -98,6 +153,7 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
           value={length}
           onChange={handleLengthChange}
           onFocus={handleFocus}
+          onBlur={handleBlur}
           className="w-full"
           min="0"
           step="0.01"
