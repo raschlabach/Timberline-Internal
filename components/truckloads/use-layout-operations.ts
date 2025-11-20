@@ -119,13 +119,19 @@ export function useLayoutOperations(
 
   // Immediate save function for auto-save operations
   const saveLayoutImmediate = useCallback(async (layout: GridPosition[], showSuccessToast: boolean = false) => {
-    if (!truckloadId) return
+    if (!truckloadId) {
+      console.error('Cannot save layout: truckloadId is missing')
+      return
+    }
     
     setIsSaving(true)
     
     try {
+      // Validate layout data before sending
+      if (!Array.isArray(layout)) {
+        throw new Error('Layout must be an array')
+      }
 
-      
       const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
         method: 'POST',
         headers: {
@@ -137,21 +143,23 @@ export function useLayoutOperations(
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save layout')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: Failed to save layout`)
       }
 
       const result = await response.json()
       if (!result.success) {
-        throw new Error(result.error || 'Failed to save layout')
+        throw new Error(result.error || result.details || 'Failed to save layout')
       }
-
 
       if (showSuccessToast) {
         toast.success('Layout saved successfully')
       }
     } catch (error) {
       console.error('Error auto-saving layout:', error)
-      toast.error(`Failed to save layout: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Failed to save layout: ${errorMessage}`)
+      throw error // Re-throw to allow caller to handle if needed
     } finally {
       setIsSaving(false)
     }
@@ -160,11 +168,19 @@ export function useLayoutOperations(
   // Debounced save function for manual saves
   const debouncedSaveLayout = useCallback(
     debounce(async (layout: GridPosition[], showSuccessToast: boolean = false) => {
-      if (!truckloadId) return
+      if (!truckloadId) {
+        console.error('Cannot save layout: truckloadId is missing')
+        return
+      }
       
       setIsSaving(true)
       
       try {
+        // Validate layout data before sending
+        if (!Array.isArray(layout)) {
+          throw new Error('Layout must be an array')
+        }
+
         const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
           method: 'POST',
           headers: {
@@ -176,12 +192,13 @@ export function useLayoutOperations(
         })
 
         if (!response.ok) {
-          throw new Error('Failed to save layout')
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: Failed to save layout`)
         }
 
         const result = await response.json()
         if (!result.success) {
-          throw new Error(result.error || 'Failed to save layout')
+          throw new Error(result.error || result.details || 'Failed to save layout')
         }
 
         if (showSuccessToast) {
@@ -189,7 +206,8 @@ export function useLayoutOperations(
         }
       } catch (error) {
         console.error('Error saving layout:', error)
-        toast.error(`Failed to save layout: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        toast.error(`Failed to save layout: ${errorMessage}`)
       } finally {
         setIsSaving(false)
       }

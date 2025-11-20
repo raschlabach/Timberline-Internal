@@ -95,13 +95,11 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      client.release()
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
     const truckloadId = parseInt(params.id)
     if (isNaN(truckloadId)) {
-      client.release()
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
 
@@ -109,11 +107,20 @@ export async function POST(
     const layoutType = searchParams.get('type') || 'delivery'
     
     if (layoutType !== 'delivery' && layoutType !== 'pickup') {
-      client.release()
       return NextResponse.json({ success: false, error: 'Invalid layout type. Must be "delivery" or "pickup"' }, { status: 400 })
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error('Error parsing request body:', error)
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid request body. Expected JSON.' 
+      }, { status: 400 })
+    }
+
     const layout: Array<{
       x: number
       y: number
@@ -127,6 +134,20 @@ export async function POST(
       stackId?: number
       stackPosition?: number
     }> = body.layout || []
+
+    // Validate layout items
+    for (const item of layout) {
+      if (typeof item.x !== 'number' || typeof item.y !== 'number' ||
+          typeof item.width !== 'number' || typeof item.length !== 'number' ||
+          typeof item.item_id !== 'number' || typeof item.customerId !== 'number' ||
+          !item.type || !item.customerName) {
+        console.error('Invalid layout item:', item)
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Invalid layout item data. All required fields must be present and valid.' 
+        }, { status: 400 })
+      }
+    }
 
     console.log(`Saving ${layoutType} layout for truckload ${truckloadId} with ${layout.length} items...`)
 
@@ -163,50 +184,57 @@ export async function POST(
       // Insert new items
       if (layout.length > 0) {
         for (const item of layout) {
-          await client.query(
-            `INSERT INTO trailer_layout_items (
-              trailer_layout_id,
-              item_type,
-              item_id,
-              x_position,
-              y_position,
-              width,
-              length,
-              rotation,
-              stack_id,
-              stack_position,
-              customer_id,
-              customer_name
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-            [
-              layoutId,
-              item.type,
-              item.item_id,
-              item.x,
-              item.y,
-              item.width,
-              item.length,
-              item.rotation || 0,
-              item.stackId || null,
-              item.stackPosition || null,
-              item.customerId,
-              item.customerName
-            ]
-          )
+          try {
+            await client.query(
+              `INSERT INTO trailer_layout_items (
+                trailer_layout_id,
+                item_type,
+                item_id,
+                x_position,
+                y_position,
+                width,
+                length,
+                rotation,
+                stack_id,
+                stack_position,
+                customer_id,
+                customer_name
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+              [
+                layoutId,
+                item.type,
+                item.item_id,
+                item.x,
+                item.y,
+                item.width,
+                item.length,
+                item.rotation || 0,
+                item.stackId || null,
+                item.stackPosition || null,
+                item.customerId,
+                item.customerName
+              ]
+            )
+          } catch (insertError) {
+            console.error('Error inserting layout item:', insertError, item)
+            throw new Error(`Failed to insert layout item: ${insertError instanceof Error ? insertError.message : 'Unknown error'}`)
+          }
         }
       }
 
       await client.query('COMMIT')
+
+      console.log(`Successfully saved ${layoutType} layout for truckload ${truckloadId}`)
 
       return NextResponse.json({
         success: true,
         message: 'Layout saved successfully'
       })
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.query('ROLLBACK').catch(rollbackError => {
+        console.error('Error during rollback:', rollbackError)
+      })
       throw error
-    } finally {
-      client.release()
     }
   } catch (error) {
     console.error('Error saving layout:', error)
@@ -216,6 +244,8 @@ export async function POST(
       error: 'Failed to save layout',
       details: errorMessage
     }, { status: 500 })
+  } finally {
+    client.release()
   }
 }
 
