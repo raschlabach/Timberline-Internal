@@ -140,9 +140,9 @@ export function TrailerGrid({
   }
 
   return (
-    <div className="flex gap-4 bg-gray-50 p-4 rounded-lg">
+    <div className="flex gap-4 bg-gray-50 p-4 rounded-lg print:overflow-visible print:max-h-none">
       <div
-        className="relative border border-gray-200 bg-white"
+        className="relative border border-gray-200 bg-white print:overflow-visible print:max-h-none"
         style={{
           width: GRID_WIDTH * CELL_SIZE,
           height: GRID_LENGTH * CELL_SIZE
@@ -182,7 +182,7 @@ export function TrailerGrid({
               const bottomSkid = stackGroup.skids[stackGroup.skids.length - 1]
               // Compare by item_id and position, not object reference
               if (skid.item_id !== bottomSkid.item_id || skid.x !== bottomSkid.x || skid.y !== bottomSkid.y) {
-                return null
+              return null
               }
             }
           }
