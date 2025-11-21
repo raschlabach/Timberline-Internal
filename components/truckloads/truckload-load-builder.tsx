@@ -115,18 +115,46 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     }
   }, [truckloadId])
 
+  // Track if we've done the initial sync
+  const [hasInitialSync, setHasInitialSync] = useState(false)
+
   // Fetch layout data on mount only
   useEffect(() => {
     if (truckloadId) {
       console.log('TruckloadLoadBuilder: Fetching layout data on mount for truckload:', truckloadId)
       fetchLayoutData().then(() => {
         console.log('TruckloadLoadBuilder: Layout data fetch completed')
+        setHasInitialSync(true)
       }).catch((error) => {
         console.error('TruckloadLoadBuilder: Error fetching layout data:', error)
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [truckloadId]) // Only fetch on mount or when truckloadId changes, not when fetchLayoutData changes
+
+  // After initial load, trigger a save to force re-render (same as when placing a new skid)
+  useEffect(() => {
+    if (hasInitialSync && !isSaving) {
+      const deliveryLayout = state.placedDeliverySkids
+      const pickupLayout = state.placedPickupSkids
+      
+      // Trigger saves for both layouts if they have items (this forces re-render)
+      if (deliveryLayout.length > 0) {
+        console.log('TruckloadLoadBuilder: Triggering save for delivery layout to force re-render:', deliveryLayout.length, 'items')
+        saveLayoutImmediate(deliveryLayout, false).catch(err => {
+          console.error('TruckloadLoadBuilder: Error syncing delivery layout:', err)
+        })
+      }
+      if (pickupLayout.length > 0) {
+        console.log('TruckloadLoadBuilder: Triggering save for pickup layout to force re-render:', pickupLayout.length, 'items')
+        saveLayoutImmediate(pickupLayout, false).catch(err => {
+          console.error('TruckloadLoadBuilder: Error syncing pickup layout:', err)
+        })
+      }
+      setHasInitialSync(false) // Only do this once
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasInitialSync, state.placedDeliverySkids.length, state.placedPickupSkids.length])
 
   // Handle tab change with proper state management
   const handleTabChange = useCallback(async (newTab: 'delivery' | 'pickup') => {
