@@ -187,13 +187,27 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
+          height: auto !important;
+          overflow: visible !important;
         }
         .print\\:hidden {
           display: none !important;
         }
         [data-radix-scroll-area-viewport],
-        [data-radix-scroll-area-root] {
+        [data-radix-scroll-area-root],
+        [data-radix-scroll-area-viewport] > * {
           height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: static !important;
+        }
+        .print-layout-container {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          padding: 25px !important;
+          height: auto !important;
+          max-height: none !important;
           overflow: visible !important;
         }
         .print-grid-container {
@@ -201,10 +215,14 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           transform-origin: top center;
           width: 153.85%;
           margin: 0 auto;
+          height: auto !important;
+          max-height: none !important;
         }
         .print-stacks-container {
           transform: scale(0.65);
           transform-origin: top center;
+          height: auto !important;
+          max-height: none !important;
         }
         * {
           box-sizing: border-box;
@@ -227,13 +245,27 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
+          height: auto !important;
+          overflow: visible !important;
         }
         .print\\:hidden {
           display: none !important;
         }
         [data-radix-scroll-area-viewport],
-        [data-radix-scroll-area-root] {
+        [data-radix-scroll-area-root],
+        [data-radix-scroll-area-viewport] > * {
           height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+          position: static !important;
+        }
+        .print-layout-container {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          padding: 25px !important;
+          height: auto !important;
+          max-height: none !important;
           overflow: visible !important;
         }
         .print-grid-container {
@@ -241,10 +273,14 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           transform-origin: top center;
           width: 153.85%;
           margin: 0 auto;
+          height: auto !important;
+          max-height: none !important;
         }
         .print-stacks-container {
           transform: scale(0.65);
           transform-origin: top center;
+          height: auto !important;
+          max-height: none !important;
         }
         * {
           box-sizing: border-box;
@@ -395,8 +431,8 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <div ref={deliveryPrintRef}>
-            <ScrollArea className="h-[calc(100vh-20rem)]">
+          <div ref={deliveryPrintRef} className="print-layout-container">
+            <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center print:justify-center">
                 {/* Trailer Grid */}
                 <div className="print-grid-container">
@@ -432,6 +468,32 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                 </div>
               </div>
             </ScrollArea>
+            {/* Print-only content without ScrollArea */}
+            <div className="hidden print:flex gap-4 items-start justify-center">
+              {/* Trailer Grid */}
+              <div className="print-grid-container">
+                <TrailerGrid
+                  key={`delivery-${renderKey}`}
+                  placedSkids={state.placedDeliverySkids}
+                  vinylStacks={state.deliveryVinylStacks}
+                  selectedSkid={null}
+                  previewPosition={null}
+                  draggedSkid={null}
+                  activeTab={activeTab}
+                  actions={null}
+                  stops={stops}
+                />
+              </div>
+
+              {/* Outgoing Stack Panel */}
+              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+                <StackPanel
+                  vinylStacks={state.deliveryVinylStacks}
+                  actions={wrappedActions}
+                  activeTab={activeTab}
+                />
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -479,8 +541,8 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <div ref={pickupPrintRef}>
-            <ScrollArea className="h-[calc(100vh-20rem)]">
+          <div ref={pickupPrintRef} className="print-layout-container">
+            <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center print:justify-center">
                 {/* Trailer Grid */}
                 <div className="print-grid-container">
@@ -516,6 +578,32 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                 </div>
               </div>
             </ScrollArea>
+            {/* Print-only content without ScrollArea */}
+            <div className="hidden print:flex gap-4 items-start justify-center">
+              {/* Trailer Grid */}
+              <div className="print-grid-container">
+                <TrailerGrid
+                  key={`pickup-${renderKey}`}
+                  placedSkids={state.placedPickupSkids}
+                  vinylStacks={state.pickupVinylStacks}
+                  selectedSkid={null}
+                  previewPosition={null}
+                  draggedSkid={null}
+                  activeTab={activeTab}
+                  actions={null}
+                  stops={stops}
+                />
+              </div>
+
+              {/* Incoming Stack Panel */}
+              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+                <StackPanel
+                  vinylStacks={state.pickupVinylStacks}
+                  actions={wrappedActions}
+                  activeTab={activeTab}
+                />
+              </div>
+            </div>
           </div>
         </Card>
               </div>
