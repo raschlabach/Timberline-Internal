@@ -184,45 +184,90 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         margin: 0.5in;
       }
       @media print {
-        body {
+        html, body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
           height: auto !important;
+          max-height: none !important;
           overflow: visible !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         .print\\:hidden {
           display: none !important;
         }
         [data-radix-scroll-area-viewport],
         [data-radix-scroll-area-root],
-        [data-radix-scroll-area-viewport] > * {
+        [data-radix-scroll-area-viewport] > *,
+        [data-radix-scroll-area-content] {
           height: auto !important;
           max-height: none !important;
+          min-height: 0 !important;
           overflow: visible !important;
           position: static !important;
+          display: block !important;
         }
-        .print-layout-container {
+        .print-layout-container,
+        .print-layout-container > *,
+        .print-layout-content {
           display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          padding: 25px !important;
           height: auto !important;
           max-height: none !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          page-break-inside: auto !important;
+        }
+        .print-layout-container {
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          padding: 25px !important;
+          width: 100% !important;
+        }
+        .print-layout-content {
+          flex-direction: row !important;
+          align-items: flex-start !important;
+          justify-content: center !important;
+          gap: 16px !important;
+          width: 100% !important;
+        }
+        .print-grid-container,
+        .print-grid-container > *,
+        .print-grid-container > * > *,
+        .print-grid-container > * > * > * {
+          height: auto !important;
+          max-height: none !important;
+          min-height: 0 !important;
           overflow: visible !important;
         }
         .print-grid-container {
           transform: scale(0.65);
           transform-origin: top center;
           width: 153.85%;
-          margin: 0 auto;
+          margin: 0;
+          flex-shrink: 0;
+        }
+        .print-grid-container > div {
           height: auto !important;
           max-height: none !important;
+        }
+        .print-grid-container div[style*="height"] {
+          height: auto !important;
+        }
+        .print-grid-container div[style*="max-height"] {
+          max-height: none !important;
+        }
+        .print-stacks-container,
+        .print-stacks-container > * {
+          height: auto !important;
+          max-height: none !important;
+          min-height: 0 !important;
+          overflow: visible !important;
         }
         .print-stacks-container {
           transform: scale(0.65);
           transform-origin: top center;
-          height: auto !important;
-          max-height: none !important;
+          flex-shrink: 0;
         }
         * {
           box-sizing: border-box;
@@ -242,45 +287,90 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         margin: 0.5in;
       }
       @media print {
-        body {
+        html, body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
           height: auto !important;
+          max-height: none !important;
           overflow: visible !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         .print\\:hidden {
           display: none !important;
         }
         [data-radix-scroll-area-viewport],
         [data-radix-scroll-area-root],
-        [data-radix-scroll-area-viewport] > * {
+        [data-radix-scroll-area-viewport] > *,
+        [data-radix-scroll-area-content] {
           height: auto !important;
           max-height: none !important;
+          min-height: 0 !important;
           overflow: visible !important;
           position: static !important;
+          display: block !important;
         }
-        .print-layout-container {
+        .print-layout-container,
+        .print-layout-container > *,
+        .print-layout-content {
           display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          padding: 25px !important;
           height: auto !important;
           max-height: none !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          page-break-inside: auto !important;
+        }
+        .print-layout-container {
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          padding: 25px !important;
+          width: 100% !important;
+        }
+        .print-layout-content {
+          flex-direction: row !important;
+          align-items: flex-start !important;
+          justify-content: center !important;
+          gap: 16px !important;
+          width: 100% !important;
+        }
+        .print-grid-container,
+        .print-grid-container > *,
+        .print-grid-container > * > *,
+        .print-grid-container > * > * > * {
+          height: auto !important;
+          max-height: none !important;
+          min-height: 0 !important;
           overflow: visible !important;
         }
         .print-grid-container {
           transform: scale(0.65);
           transform-origin: top center;
           width: 153.85%;
-          margin: 0 auto;
+          margin: 0;
+          flex-shrink: 0;
+        }
+        .print-grid-container > div {
           height: auto !important;
           max-height: none !important;
+        }
+        .print-grid-container div[style*="height"] {
+          height: auto !important;
+        }
+        .print-grid-container div[style*="max-height"] {
+          max-height: none !important;
+        }
+        .print-stacks-container,
+        .print-stacks-container > * {
+          height: auto !important;
+          max-height: none !important;
+          min-height: 0 !important;
+          overflow: visible !important;
         }
         .print-stacks-container {
           transform: scale(0.65);
           transform-origin: top center;
-          height: auto !important;
-          max-height: none !important;
+          flex-shrink: 0;
         }
         * {
           box-sizing: border-box;
@@ -469,11 +559,11 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               </div>
             </ScrollArea>
             {/* Print-only content without ScrollArea */}
-            <div className="hidden print:flex gap-4 items-start justify-center">
+            <div className="hidden print:flex gap-4 items-start justify-center print:print-layout-content">
               {/* Trailer Grid */}
               <div className="print-grid-container">
                 <TrailerGrid
-                  key={`delivery-${renderKey}`}
+                  key={`delivery-print-${renderKey}`}
                   placedSkids={state.placedDeliverySkids}
                   vinylStacks={state.deliveryVinylStacks}
                   selectedSkid={null}
@@ -579,11 +669,11 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               </div>
             </ScrollArea>
             {/* Print-only content without ScrollArea */}
-            <div className="hidden print:flex gap-4 items-start justify-center">
+            <div className="hidden print:flex gap-4 items-start justify-center print:print-layout-content">
               {/* Trailer Grid */}
               <div className="print-grid-container">
                 <TrailerGrid
-                  key={`pickup-${renderKey}`}
+                  key={`pickup-print-${renderKey}`}
                   placedSkids={state.placedPickupSkids}
                   vinylStacks={state.pickupVinylStacks}
                   selectedSkid={null}
