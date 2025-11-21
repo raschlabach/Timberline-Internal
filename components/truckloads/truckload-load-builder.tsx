@@ -196,6 +196,16 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           height: auto !important;
           overflow: visible !important;
         }
+        .print-grid-container {
+          transform: scale(0.65);
+          transform-origin: top center;
+          width: 153.85%;
+          margin: 0 auto;
+        }
+        .print-stacks-container {
+          transform: scale(0.65);
+          transform-origin: top center;
+        }
         * {
           box-sizing: border-box;
           print-color-adjust: exact;
@@ -225,6 +235,16 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         [data-radix-scroll-area-root] {
           height: auto !important;
           overflow: visible !important;
+        }
+        .print-grid-container {
+          transform: scale(0.65);
+          transform-origin: top center;
+          width: 153.85%;
+          margin: 0 auto;
+        }
+        .print-stacks-container {
+          transform: scale(0.65);
+          transform-origin: top center;
         }
         * {
           box-sizing: border-box;
@@ -361,7 +381,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             </Button>
           </div>
           <div className="mb-4 print:block hidden">
-            <h3 className="font-semibold text-lg">Outgoing Layout</h3>
+            <h1 className="font-bold text-3xl text-center mb-6">Outgoing Trailer Layout</h1>
           </div>
           
           {/* Footage Progress Bars */}
@@ -377,23 +397,25 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           {/* Grid and Stacks Side by Side - Scrollable */}
           <div ref={deliveryPrintRef}>
             <ScrollArea className="h-[calc(100vh-20rem)]">
-              <div className="flex gap-4 items-start">
+              <div className="flex gap-4 items-start justify-center print:justify-center">
                 {/* Trailer Grid */}
-                <TrailerGrid
-                  key={`delivery-${renderKey}`}
-                  placedSkids={state.placedDeliverySkids}
-                  vinylStacks={state.deliveryVinylStacks}
-                  selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-                  previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-                  draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-                  activeTab={activeTab}
-                  actions={activeTab === 'delivery' ? wrappedActions : null}
-                  stops={stops}
-                />
+                <div className="print-grid-container">
+                  <TrailerGrid
+                    key={`delivery-${renderKey}`}
+                    placedSkids={state.placedDeliverySkids}
+                    vinylStacks={state.deliveryVinylStacks}
+                    selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+                    previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+                    draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+                    activeTab={activeTab}
+                    actions={activeTab === 'delivery' ? wrappedActions : null}
+                    stops={stops}
+                  />
+                </div>
 
                 {/* Outgoing Stack Panel */}
-                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-                  <div className="mb-4">
+                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+                  <div className="mb-4 print:hidden">
                     <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
                     <p className="text-xs text-gray-600">
                       {activeTab === 'delivery' 
@@ -443,7 +465,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             </Button>
           </div>
           <div className="mb-4 print:block hidden">
-            <h3 className="font-semibold text-lg">Incoming Layout</h3>
+            <h1 className="font-bold text-3xl text-center mb-6">Incoming Trailer Layout</h1>
           </div>
 
           {/* Footage Progress Bars */}
@@ -459,36 +481,38 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           {/* Grid and Stacks Side by Side - Scrollable */}
           <div ref={pickupPrintRef}>
             <ScrollArea className="h-[calc(100vh-20rem)]">
-              <div className="flex gap-4 items-start">
-            {/* Trailer Grid */}
-            <TrailerGrid
-              key={`pickup-${renderKey}`}
-            placedSkids={state.placedPickupSkids}
-            vinylStacks={state.pickupVinylStacks}
-            selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
-            previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
-            draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
-            activeTab={activeTab}
-            actions={activeTab === 'pickup' ? wrappedActions : null}
-            stops={stops}
-          />
+              <div className="flex gap-4 items-start justify-center print:justify-center">
+                {/* Trailer Grid */}
+                <div className="print-grid-container">
+                  <TrailerGrid
+                    key={`pickup-${renderKey}`}
+                    placedSkids={state.placedPickupSkids}
+                    vinylStacks={state.pickupVinylStacks}
+                    selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
+                    previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
+                    draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
+                    activeTab={activeTab}
+                    actions={activeTab === 'pickup' ? wrappedActions : null}
+                    stops={stops}
+                  />
+                </div>
 
-        {/* Incoming Stack Panel */}
-              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm">Incoming Stacks</h3>
-            <p className="text-xs text-gray-600">
-              {activeTab === 'pickup' 
-                ? 'Manage stacked items' 
-                : 'Switch to Incoming tab to manage stacks'
-              }
-            </p>
-          </div>
-          <StackPanel
-            vinylStacks={state.pickupVinylStacks}
-            actions={wrappedActions}
-            activeTab={activeTab}
-          />
+                {/* Incoming Stack Panel */}
+                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+                  <div className="mb-4 print:hidden">
+                    <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+                    <p className="text-xs text-gray-600">
+                      {activeTab === 'pickup' 
+                        ? 'Manage stacked items' 
+                        : 'Switch to Incoming tab to manage stacks'
+                      }
+                    </p>
+                  </div>
+                  <StackPanel
+                    vinylStacks={state.pickupVinylStacks}
+                    actions={wrappedActions}
+                    activeTab={activeTab}
+                  />
                 </div>
               </div>
             </ScrollArea>
