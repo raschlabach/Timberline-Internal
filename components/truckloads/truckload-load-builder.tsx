@@ -152,8 +152,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       actions.handleGridClick(x, y, stops, saveLayoutImmediate),
     handleRemove: (skid: any, isStack: boolean, currentStack?: any) => 
       actions.handleRemove(skid, isStack, currentStack, saveLayoutImmediate),
-    handleMove: (skidIndex: number) => 
-      actions.handleMove(skidIndex),
     moveInStack: (stackId: number, skidId: number, direction: 'up' | 'down') => 
       actions.moveInStack(stackId, skidId, direction, saveLayoutImmediate),
     removeFromStack: (stackId: number, skidId: number) => 

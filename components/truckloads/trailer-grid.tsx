@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { RotateCw, GripHorizontal, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 
 interface GridPosition {
   x: number
@@ -42,8 +42,6 @@ interface LoadBuilderActions {
   handleGridClick: (x: number, y: number, stops: any[], saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
   handleGridMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void
   handleGridMouseLeave: () => void
-  handleRotate: (skidIndex: number) => void
-  handleMove: (skidIndex: number) => void
   handleRemove: (skid: GridPosition, isStack: boolean, currentStack?: VinylStack, saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
   moveInStack: (stackId: number, skidId: number, direction: 'up' | 'down', saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
   removeFromStack: (stackId: number, skidId: number, saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
@@ -198,50 +196,6 @@ export function TrailerGrid({
               {actions && (
                 <div className="absolute top-1 right-1 hidden group-hover:flex gap-1 z-10">
                 <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-6 w-6 bg-white/90 hover:bg-white shadow-sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          actions.handleRotate(index)
-                        }}
-                      >
-                        <RotateCw className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Rotate 90°</p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-6 w-6 bg-white/90 hover:bg-white shadow-sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isStack) {
-                            // For stacks, we need to handle differently - move the entire stack
-                            actions.handleRemove(skid, !!isStack, currentStack || undefined)
-                          } else {
-                            // For single items, use the new move function
-                            actions.handleMove(index)
-                          }
-                        }}
-                      >
-                        <GripHorizontal className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{isStack ? 'Move stack' : 'Move skid'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button

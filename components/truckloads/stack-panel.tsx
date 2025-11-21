@@ -42,8 +42,6 @@ interface LoadBuilderActions {
   handleGridClick: (x: number, y: number, stops: any[], saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
   handleGridMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void
   handleGridMouseLeave: () => void
-  handleRotate: (skidIndex: number) => void
-  handleMove: (skidIndex: number) => void
   handleRemove: (skid: GridPosition, isStack: boolean, currentStack?: VinylStack, saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
   moveInStack: (stackId: number, skidId: number, direction: 'up' | 'down', saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
   removeFromStack: (stackId: number, skidId: number, saveLayout?: (layout: GridPosition[]) => Promise<void>) => void
