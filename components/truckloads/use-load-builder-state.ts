@@ -609,17 +609,28 @@ export function useLoadBuilderState(truckloadId: number) {
       
       // Find the item to move and its current index
       const itemIndex = stackItems.findIndex(item => item.item_id === skidId)
-      if (itemIndex === -1) return
+      if (itemIndex === -1) {
+        console.error('Item not found in stack:', { stackId, skidId, stackItems })
+        return
+      }
       
       // Calculate new position
       const newIndex = direction === 'up' ? itemIndex - 1 : itemIndex + 1
-      if (newIndex < 0 || newIndex >= stackItems.length) return
+      if (newIndex < 0 || newIndex >= stackItems.length) {
+        console.error('Invalid new index:', { newIndex, stackLength: stackItems.length })
+        return
+      }
       
-      // Swap positions
-      const updatedStackItems = [...stackItems]
-      const temp = updatedStackItems[itemIndex].stackPosition
-      updatedStackItems[itemIndex].stackPosition = updatedStackItems[newIndex].stackPosition
-      updatedStackItems[newIndex].stackPosition = temp
+      // Swap positions by updating stackPosition
+      const updatedStackItems = stackItems.map((item, idx) => {
+        if (idx === itemIndex) {
+          return { ...item, stackPosition: stackItems[newIndex].stackPosition }
+        }
+        if (idx === newIndex) {
+          return { ...item, stackPosition: stackItems[itemIndex].stackPosition }
+        }
+        return item
+      })
       
       // Create updated layout
       const updatedLayout = [
@@ -627,10 +638,41 @@ export function useLoadBuilderState(truckloadId: number) {
         ...updatedStackItems
       ]
       
+      // Rebuild vinyl stacks
+      const buildVinylStacks = (layout: GridPosition[]) => {
+        const stacks: VinylStack[] = []
+        const stackMap = new Map<number, GridPosition[]>()
+        
+        layout.forEach(item => {
+          if (item.stackId) {
+            if (!stackMap.has(item.stackId)) {
+              stackMap.set(item.stackId, [])
+            }
+            stackMap.get(item.stackId)?.push(item)
+          }
+        })
+
+        stackMap.forEach((items, stackId) => {
+          items.sort((a, b) => (b.stackPosition || 0) - (a.stackPosition || 0))
+          stacks.push({
+            stackId,
+            skids: items,
+            x: items[items.length - 1].x,
+            y: items[items.length - 1].y
+          })
+        })
+
+        return stacks
+      }
+      
+      const newVinylStacks = buildVinylStacks(updatedLayout)
+      
       if (activeTab === 'delivery') {
         actions.setPlacedDeliverySkids(updatedLayout)
+        actions.setDeliveryVinylStacks(newVinylStacks)
       } else {
         actions.setPlacedPickupSkids(updatedLayout)
+        actions.setPickupVinylStacks(newVinylStacks)
       }
 
       // Auto-save the layout after moving the item
@@ -647,14 +689,60 @@ export function useLoadBuilderState(truckloadId: number) {
       // Remove the skid from the layout (remove only the first matching item_id in this stack)
       const stackItems = currentLayout.filter(item => item.stackId === stackId)
       const itemToRemove = stackItems.find(item => item.item_id === skidId)
-      const updatedLayout = itemToRemove 
-        ? currentLayout.filter(skid => !(skid.stackId === stackId && skid.item_id === skidId && skid === itemToRemove))
-        : currentLayout.filter(skid => skid.item_id !== skidId)
+      
+      if (!itemToRemove) {
+        console.error('Item not found in stack to remove:', { stackId, skidId, stackItems })
+        return
+      }
+      
+      // Remove the item and renumber remaining stack positions
+      const remainingStackItems = stackItems
+        .filter(item => !(item.item_id === skidId && item.x === itemToRemove.x && item.y === itemToRemove.y))
+        .map((item, idx) => ({
+          ...item,
+          stackPosition: stackItems.length - idx // Renumber positions (highest = top)
+        }))
+      
+      const updatedLayout = [
+        ...currentLayout.filter(item => item.stackId !== stackId),
+        ...remainingStackItems
+      ]
+      
+      // Rebuild vinyl stacks
+      const buildVinylStacks = (layout: GridPosition[]) => {
+        const stacks: VinylStack[] = []
+        const stackMap = new Map<number, GridPosition[]>()
+        
+        layout.forEach(item => {
+          if (item.stackId) {
+            if (!stackMap.has(item.stackId)) {
+              stackMap.set(item.stackId, [])
+            }
+            stackMap.get(item.stackId)?.push(item)
+          }
+        })
+
+        stackMap.forEach((items, stackId) => {
+          items.sort((a, b) => (b.stackPosition || 0) - (a.stackPosition || 0))
+          stacks.push({
+            stackId,
+            skids: items,
+            x: items[items.length - 1].x,
+            y: items[items.length - 1].y
+          })
+        })
+
+        return stacks
+      }
+      
+      const newVinylStacks = buildVinylStacks(updatedLayout)
       
       if (activeTab === 'delivery') {
         actions.setPlacedDeliverySkids(updatedLayout)
+        actions.setDeliveryVinylStacks(newVinylStacks)
       } else {
         actions.setPlacedPickupSkids(updatedLayout)
+        actions.setPickupVinylStacks(newVinylStacks)
       }
 
       // Auto-save the layout after removing from stack
