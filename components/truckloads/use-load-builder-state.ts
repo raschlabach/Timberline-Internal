@@ -296,12 +296,7 @@ export function useLoadBuilderState(truckloadId: number) {
       }
 
       // Don't clear selection - allow placing multiple items of the same type
-      // But clear preview position and dragged skid so preview doesn't show after placement
-      setState(prev => ({
-        ...prev,
-        previewPosition: null,
-        draggedSkid: null
-      }))
+      // Preview position and dragged skid will be cleared in the layout update below
 
       // Helper function to build vinyl stacks from layout
       const buildVinylStacks = (layout: GridPosition[]) => {
@@ -344,6 +339,8 @@ export function useLoadBuilderState(truckloadId: number) {
           // Don't add to usedSkidIds - we'll check quantity dynamically
           tempUpdatedLayout: undefined, // Clear the temporary layout
           deliveryVinylStacks: newVinylStacks, // Update vinyl stacks
+          previewPosition: null, // Clear preview position after placement
+          draggedSkid: null, // Clear dragged skid after placement
           // Increment stack counter if we created a new stack
           nextDeliveryStackId: existingStack ? prev.nextDeliveryStackId : prev.nextDeliveryStackId + 1
         }))
@@ -355,6 +352,8 @@ export function useLoadBuilderState(truckloadId: number) {
           // Don't add to usedSkidIds - we'll check quantity dynamically
           tempUpdatedLayout: undefined, // Clear the temporary layout
           pickupVinylStacks: newVinylStacks, // Update vinyl stacks
+          previewPosition: null, // Clear preview position after placement
+          draggedSkid: null, // Clear dragged skid after placement
           // Increment stack counter if we created a new stack
           nextPickupStackId: existingStack ? prev.nextPickupStackId : prev.nextPickupStackId + 1
         }))
@@ -371,13 +370,23 @@ export function useLoadBuilderState(truckloadId: number) {
     },
 
     handleGridMouseMove: (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!state.selectedSkid) return
+      if (!state.selectedSkid) {
+        // If no skid is selected, make sure preview is cleared
+        if (state.previewPosition) {
+          actions.setPreviewPosition(null)
+        }
+        return
+      }
 
       const rect = e.currentTarget.getBoundingClientRect()
       const x = Math.floor((e.clientX - rect.left) / CELL_SIZE)
       const y = Math.floor((e.clientY - rect.top) / CELL_SIZE)
 
-      actions.setPreviewPosition({ x, y })
+      // Only update preview if we have a valid position
+      const snappedX = Math.max(0, Math.min(GRID_WIDTH - 1, x))
+      const snappedY = Math.max(0, Math.min(GRID_LENGTH - 1, y))
+      
+      actions.setPreviewPosition({ x: snappedX, y: snappedY })
     },
 
     handleGridMouseLeave: () => {

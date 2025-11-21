@@ -230,8 +230,8 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       {/* Main Content Grid - Responsive with Toggle */}
       <div className={`grid gap-4 flex-1 min-h-0 ${
         showBothLayouts 
-          ? 'grid-cols-[300px,minmax(400px,1fr),200px,minmax(400px,1fr),200px]' 
-          : 'grid-cols-[300px,minmax(400px,1fr),200px]'
+          ? 'grid-cols-[300px,auto,200px,auto,200px]' 
+          : 'grid-cols-[300px,auto,200px]'
       }`}>
         {/* Available Items Panel */}
         <AvailableItemsPanel
@@ -245,7 +245,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         {/* Outgoing Layout */}
         <Card 
           id="delivery-layout"
-          className={`flex-grow p-4 overflow-hidden transition-all duration-200 ${
+          className={`p-4 overflow-hidden transition-all duration-200 w-fit ${
             activeTab === 'delivery' ? 'ring-2 ring-blue-500 shadow-lg' : 'opacity-50 pointer-events-none'
           } ${activeTab !== 'delivery' && !showBothLayouts ? 'hidden' : ''}`}
           role="tabpanel"
@@ -304,7 +304,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         {/* Incoming Layout */}
         <Card 
           id="pickup-layout"
-          className={`flex-grow p-4 overflow-hidden transition-all duration-200 ${
+          className={`p-4 overflow-hidden transition-all duration-200 w-fit ${
             activeTab === 'pickup' ? 'ring-2 ring-blue-500 shadow-lg' : 'opacity-50 pointer-events-none'
           } ${activeTab !== 'pickup' && !showBothLayouts ? 'hidden' : ''}`}
           role="tabpanel"
