@@ -192,28 +192,30 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           display: none !important;
         }
         .print-layout-wrapper {
-          padding: 25px;
+          padding: 15px;
           display: flex;
           flex-direction: row;
-          justify-content: center;
+          justify-content: space-between;
           align-items: flex-start;
-          gap: 16px;
+          gap: 20px;
+          width: 100%;
         }
         .print-grid-wrapper {
-          transform: scale(0.65);
+          transform: scale(0.85);
           transform-origin: top left;
           flex-shrink: 0;
+          flex: 1;
         }
         .print-stacks-wrapper {
-          transform: scale(0.65);
+          transform: scale(0.85);
           transform-origin: top left;
-          width: 200px;
-          max-width: 200px;
+          width: 250px;
+          max-width: 250px;
           flex-shrink: 0;
         }
         .print-stacks-wrapper > div {
-          width: 200px !important;
-          max-width: 200px !important;
+          width: 250px !important;
+          max-width: 250px !important;
         }
         .print-stacks-wrapper .card {
           width: 100% !important;
@@ -240,28 +242,30 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           display: none !important;
         }
         .print-layout-wrapper {
-          padding: 25px;
+          padding: 15px;
           display: flex;
           flex-direction: row;
-          justify-content: center;
+          justify-content: space-between;
           align-items: flex-start;
-          gap: 16px;
+          gap: 20px;
+          width: 100%;
         }
         .print-grid-wrapper {
-          transform: scale(0.65);
+          transform: scale(0.85);
           transform-origin: top left;
           flex-shrink: 0;
+          flex: 1;
         }
         .print-stacks-wrapper {
-          transform: scale(0.65);
+          transform: scale(0.85);
           transform-origin: top left;
-          width: 200px;
-          max-width: 200px;
+          width: 250px;
+          max-width: 250px;
           flex-shrink: 0;
         }
         .print-stacks-wrapper > div {
-          width: 200px !important;
-          max-width: 200px !important;
+          width: 250px !important;
+          max-width: 250px !important;
         }
         .print-stacks-wrapper .card {
           width: 100% !important;
