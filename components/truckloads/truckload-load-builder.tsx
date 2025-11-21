@@ -192,10 +192,10 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           display: none !important;
         }
         .print-layout-wrapper {
-          padding: 15px;
+          padding: 20px;
           display: flex;
           flex-direction: row;
-          justify-content: space-between;
+          justify-content: center;
           align-items: flex-start;
           gap: 20px;
           width: 100%;
@@ -242,10 +242,10 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           display: none !important;
         }
         .print-layout-wrapper {
-          padding: 15px;
+          padding: 20px;
           display: flex;
           flex-direction: row;
-          justify-content: space-between;
+          justify-content: center;
           align-items: flex-start;
           gap: 20px;
           width: 100%;
