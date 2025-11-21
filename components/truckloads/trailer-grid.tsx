@@ -118,8 +118,12 @@ export function TrailerGrid({
   const itemsToRender = placedSkids.filter((skid, index) => {
     if (skid.stackId) {
       const stackGroup = vinylStacks.find(s => s.stackId === skid.stackId)
-      if (stackGroup && skid !== stackGroup.skids[stackGroup.skids.length - 1]) {
-        return false // Skip non-bottom stack items
+      if (stackGroup) {
+        const bottomSkid = stackGroup.skids[stackGroup.skids.length - 1]
+        // Compare by item_id and position, not object reference
+        if (skid.item_id !== bottomSkid.item_id || skid.x !== bottomSkid.x || skid.y !== bottomSkid.y) {
+          return false // Skip non-bottom stack items
+        }
       }
     }
     return true
@@ -174,8 +178,12 @@ export function TrailerGrid({
           // If skid is part of a stack and not the bottom skid, don't render
           if (skid.stackId) {
             const stackGroup = vinylStacks.find(s => s.stackId === skid.stackId)
-            if (stackGroup && skid !== stackGroup.skids[stackGroup.skids.length - 1]) {
-              return null
+            if (stackGroup) {
+              const bottomSkid = stackGroup.skids[stackGroup.skids.length - 1]
+              // Compare by item_id and position, not object reference
+              if (skid.item_id !== bottomSkid.item_id || skid.x !== bottomSkid.x || skid.y !== bottomSkid.y) {
+                return null
+              }
             }
           }
 
