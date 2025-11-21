@@ -193,15 +193,14 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   }
 
   return (
-    <div className="h-full flex flex-col gap-4 overflow-y-auto" role="main" aria-label="Truckload Load Builder">
+    <div className="h-full flex flex-col gap-4 min-h-0" role="main" aria-label="Truckload Load Builder">
       {/* Tab Navigation */}
-      <div className="flex gap-4 items-center" role="tablist" aria-label="Layout tabs">
-        <div className="flex gap-4 flex-1">
+      <div className="flex gap-4 items-center shrink-0" role="tablist" aria-label="Layout tabs">
+        <div className="flex gap-4">
           <Button
             id="delivery-tab"
             variant={activeTab === 'delivery' ? 'default' : 'outline'}
             onClick={() => handleTabChange('delivery')}
-            className="flex-1"
             role="tab"
             aria-selected={activeTab === 'delivery'}
             aria-controls="delivery-layout"
@@ -212,7 +211,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             id="pickup-tab"
             variant={activeTab === 'pickup' ? 'default' : 'outline'}
             onClick={() => handleTabChange('pickup')}
-            className="flex-1"
             role="tab"
             aria-selected={activeTab === 'pickup'}
             aria-controls="pickup-layout"
@@ -234,7 +232,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       </div>
 
       {/* Main Content Grid - Responsive with Toggle */}
-      <div className={`grid gap-4 flex-1 min-h-0 ${
+      <div className={`grid gap-4 flex-1 min-h-0 overflow-y-auto ${
         showBothLayouts 
           ? 'grid-cols-[300px,auto,auto]' 
           : 'grid-cols-[300px,auto]'
