@@ -197,7 +197,9 @@ export function useLayoutOperations(
           item_id: typeof item.item_id === 'number' ? item.item_id : parseInt(String(item.item_id)) || 0,
           rotation: typeof item.rotation === 'number' ? item.rotation : parseInt(String(item.rotation)) || 0,
           customerId: typeof item.customerId === 'number' ? item.customerId : parseInt(String(item.customerId)) || 0,
-          customerName: item.customerName || ''
+          customerName: item.customerName || '',
+          stackId: item.stackId !== undefined ? (typeof item.stackId === 'number' ? item.stackId : parseInt(String(item.stackId))) : undefined,
+          stackPosition: item.stackPosition !== undefined ? (typeof item.stackPosition === 'number' ? item.stackPosition : parseInt(String(item.stackPosition))) : undefined
         }
         
         // Check which fields are invalid

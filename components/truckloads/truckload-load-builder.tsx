@@ -114,12 +114,13 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     }
   }, [truckloadId])
 
-  // Fetch layout data on mount
+  // Fetch layout data on mount only
   useEffect(() => {
     if (truckloadId) {
       fetchLayoutData()
     }
-  }, [truckloadId, fetchLayoutData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [truckloadId]) // Only fetch on mount or when truckloadId changes, not when fetchLayoutData changes
 
   // Handle tab change with proper state management
   const handleTabChange = useCallback(async (newTab: 'delivery' | 'pickup') => {
