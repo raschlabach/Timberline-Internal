@@ -62,6 +62,7 @@ interface LoadBuilderActions {
   setSkidRotations: (rotations: Map<number, boolean>) => void
   setPreviewPosition?: (position: {x: number, y: number} | null) => void
   handleSkidRotation: (skidId: number, isRotated: boolean) => void
+  handleMove: (skidIndex: number) => void
 }
 
 interface AvailableItemsPanelProps {
@@ -80,7 +81,7 @@ export function AvailableItemsPanel({
   saveLayout
 }: AvailableItemsPanelProps) {
   const placedSkids = activeTab === 'delivery' ? state.placedDeliverySkids : state.placedPickupSkids
-  
+
   // Count how many times each skid ID has been placed
   const getPlacedCount = (skidId: number) => {
     return placedSkids.filter(skid => skid.item_id === skidId).length

@@ -214,36 +214,36 @@ export async function POST(
       if (layout.length > 0) {
         for (const item of layout) {
           try {
-            await client.query(
-              `INSERT INTO trailer_layout_items (
-                trailer_layout_id,
-                item_type,
-                item_id,
-                x_position,
-                y_position,
-                width,
-                length,
-                rotation,
-                stack_id,
-                stack_position,
-                customer_id,
-                customer_name
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-              [
-                layoutId,
-                item.type,
-                item.item_id,
-                item.x,
-                item.y,
-                item.width,
-                item.length,
-                item.rotation || 0,
-                item.stackId || null,
-                item.stackPosition || null,
-                item.customerId,
-                item.customerName
-              ]
-            )
+          await client.query(
+            `INSERT INTO trailer_layout_items (
+              trailer_layout_id,
+              item_type,
+              item_id,
+              x_position,
+              y_position,
+              width,
+              length,
+              rotation,
+              stack_id,
+              stack_position,
+              customer_id,
+              customer_name
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [
+              layoutId,
+              item.type,
+              item.item_id,
+              item.x,
+              item.y,
+              item.width,
+              item.length,
+              item.rotation || 0,
+              item.stackId || null,
+              item.stackPosition || null,
+              item.customerId,
+              item.customerName
+            ]
+          )
           } catch (insertError) {
             console.error('Error inserting layout item:', insertError, item)
             throw new Error(`Failed to insert layout item: ${insertError instanceof Error ? insertError.message : 'Unknown error'}`)

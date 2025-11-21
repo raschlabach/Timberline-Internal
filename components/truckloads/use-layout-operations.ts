@@ -228,7 +228,7 @@ export function useLayoutOperations(
       if (cleanedLayout.length === 0 && layout.length > 0) {
         throw new Error('Cannot save layout: All items are missing required fields')
       }
-
+      
       const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
         method: 'POST',
         headers: {

@@ -152,6 +152,8 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       actions.handleGridClick(x, y, stops, saveLayoutImmediate),
     handleRemove: (skid: any, isStack: boolean, currentStack?: any) => 
       actions.handleRemove(skid, isStack, currentStack, saveLayoutImmediate),
+    handleMove: (skidIndex: number) => 
+      actions.handleMove(skidIndex),
     moveInStack: (stackId: number, skidId: number, direction: 'up' | 'down') => 
       actions.moveInStack(stackId, skidId, direction, saveLayoutImmediate),
     removeFromStack: (stackId: number, skidId: number) => 
@@ -270,35 +272,35 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
 
           {/* Grid and Stacks Side by Side */}
           <div className="flex gap-4 items-start">
-            {/* Trailer Grid */}
-            <TrailerGrid
-              placedSkids={state.placedDeliverySkids}
-              vinylStacks={state.deliveryVinylStacks}
-              selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-              previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-              draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-              activeTab={activeTab}
-              actions={activeTab === 'delivery' ? wrappedActions : null}
-              stops={stops}
-            />
+          {/* Trailer Grid */}
+          <TrailerGrid
+            placedSkids={state.placedDeliverySkids}
+            vinylStacks={state.deliveryVinylStacks}
+            selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+            previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+            draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+            activeTab={activeTab}
+            actions={activeTab === 'delivery' ? wrappedActions : null}
+            stops={stops}
+          />
 
-            {/* Outgoing Stack Panel */}
+        {/* Outgoing Stack Panel */}
             <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-              <div className="mb-4">
-                <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
-                <p className="text-xs text-gray-600">
-                  {activeTab === 'delivery' 
-                    ? 'Manage stacked items' 
-                    : 'Switch to Outgoing tab to manage stacks'
-                  }
-                </p>
-              </div>
-              <StackPanel
-                vinylStacks={state.deliveryVinylStacks}
-                actions={wrappedActions}
-                activeTab={activeTab}
-              />
-            </div>
+          <div className="mb-4">
+            <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+            <p className="text-xs text-gray-600">
+              {activeTab === 'delivery' 
+                ? 'Manage stacked items' 
+                : 'Switch to Outgoing tab to manage stacks'
+              }
+            </p>
+          </div>
+          <StackPanel
+            vinylStacks={state.deliveryVinylStacks}
+            actions={wrappedActions}
+            activeTab={activeTab}
+          />
+        </div>
           </div>
         </Card>
 
@@ -332,35 +334,35 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
 
           {/* Grid and Stacks Side by Side */}
           <div className="flex gap-4 items-start">
-            {/* Trailer Grid */}
-            <TrailerGrid
-              placedSkids={state.placedPickupSkids}
-              vinylStacks={state.pickupVinylStacks}
-              selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
-              previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
-              draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
-              activeTab={activeTab}
-              actions={activeTab === 'pickup' ? wrappedActions : null}
-              stops={stops}
-            />
+          {/* Trailer Grid */}
+          <TrailerGrid
+            placedSkids={state.placedPickupSkids}
+            vinylStacks={state.pickupVinylStacks}
+            selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
+            previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
+            draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
+            activeTab={activeTab}
+            actions={activeTab === 'pickup' ? wrappedActions : null}
+            stops={stops}
+          />
 
-            {/* Incoming Stack Panel */}
+        {/* Incoming Stack Panel */}
             <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-              <div className="mb-4">
-                <h3 className="font-semibold text-sm">Incoming Stacks</h3>
-                <p className="text-xs text-gray-600">
-                  {activeTab === 'pickup' 
-                    ? 'Manage stacked items' 
-                    : 'Switch to Incoming tab to manage stacks'
-                  }
-                </p>
-              </div>
-              <StackPanel
-                vinylStacks={state.pickupVinylStacks}
-                actions={wrappedActions}
-                activeTab={activeTab}
-              />
-            </div>
+          <div className="mb-4">
+            <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+            <p className="text-xs text-gray-600">
+              {activeTab === 'pickup' 
+                ? 'Manage stacked items' 
+                : 'Switch to Incoming tab to manage stacks'
+              }
+            </p>
+          </div>
+          <StackPanel
+            vinylStacks={state.pickupVinylStacks}
+            actions={wrappedActions}
+            activeTab={activeTab}
+          />
+        </div>
           </div>
         </Card>
               </div>
