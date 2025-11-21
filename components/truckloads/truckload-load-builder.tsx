@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -274,38 +275,40 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             type="delivery"
           />
 
-          {/* Grid and Stacks Side by Side */}
-          <div className="flex gap-4 items-start">
-          {/* Trailer Grid */}
-          <TrailerGrid
-            placedSkids={state.placedDeliverySkids}
-            vinylStacks={state.deliveryVinylStacks}
-            selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-            previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-            draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-            activeTab={activeTab}
-            actions={activeTab === 'delivery' ? wrappedActions : null}
-            stops={stops}
-          />
+          {/* Grid and Stacks Side by Side - Scrollable */}
+          <ScrollArea className="h-[calc(100vh-20rem)]">
+            <div className="flex gap-4 items-start">
+              {/* Trailer Grid */}
+              <TrailerGrid
+                placedSkids={state.placedDeliverySkids}
+                vinylStacks={state.deliveryVinylStacks}
+                selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+                previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+                draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+                activeTab={activeTab}
+                actions={activeTab === 'delivery' ? wrappedActions : null}
+                stops={stops}
+              />
 
-        {/* Outgoing Stack Panel */}
-            <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
-            <p className="text-xs text-gray-600">
-              {activeTab === 'delivery' 
-                ? 'Manage stacked items' 
-                : 'Switch to Outgoing tab to manage stacks'
-              }
-            </p>
-          </div>
-          <StackPanel
-            vinylStacks={state.deliveryVinylStacks}
-            actions={wrappedActions}
-            activeTab={activeTab}
-          />
-        </div>
-          </div>
+              {/* Outgoing Stack Panel */}
+              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+                  <p className="text-xs text-gray-600">
+                    {activeTab === 'delivery' 
+                      ? 'Manage stacked items' 
+                      : 'Switch to Outgoing tab to manage stacks'
+                    }
+                  </p>
+                </div>
+                <StackPanel
+                  vinylStacks={state.deliveryVinylStacks}
+                  actions={wrappedActions}
+                  activeTab={activeTab}
+                />
+              </div>
+            </div>
+          </ScrollArea>
         </Card>
 
         {/* Incoming Layout */}
@@ -336,38 +339,40 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             type="pickup"
           />
 
-          {/* Grid and Stacks Side by Side */}
-          <div className="flex gap-4 items-start">
-          {/* Trailer Grid */}
-          <TrailerGrid
-            placedSkids={state.placedPickupSkids}
-            vinylStacks={state.pickupVinylStacks}
-            selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
-            previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
-            draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
-            activeTab={activeTab}
-            actions={activeTab === 'pickup' ? wrappedActions : null}
-            stops={stops}
-          />
+          {/* Grid and Stacks Side by Side - Scrollable */}
+          <ScrollArea className="h-[calc(100vh-20rem)]">
+            <div className="flex gap-4 items-start">
+              {/* Trailer Grid */}
+              <TrailerGrid
+                placedSkids={state.placedPickupSkids}
+                vinylStacks={state.pickupVinylStacks}
+                selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
+                previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
+                draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
+                activeTab={activeTab}
+                actions={activeTab === 'pickup' ? wrappedActions : null}
+                stops={stops}
+              />
 
-        {/* Incoming Stack Panel */}
-            <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm">Incoming Stacks</h3>
-            <p className="text-xs text-gray-600">
-              {activeTab === 'pickup' 
-                ? 'Manage stacked items' 
-                : 'Switch to Incoming tab to manage stacks'
-              }
-            </p>
-          </div>
-          <StackPanel
-            vinylStacks={state.pickupVinylStacks}
-            actions={wrappedActions}
-            activeTab={activeTab}
-          />
-        </div>
-          </div>
+              {/* Incoming Stack Panel */}
+              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+                  <p className="text-xs text-gray-600">
+                    {activeTab === 'pickup' 
+                      ? 'Manage stacked items' 
+                      : 'Switch to Incoming tab to manage stacks'
+                    }
+                  </p>
+                </div>
+                <StackPanel
+                  vinylStacks={state.pickupVinylStacks}
+                  actions={wrappedActions}
+                  activeTab={activeTab}
+                />
+              </div>
+            </div>
+          </ScrollArea>
         </Card>
               </div>
 
