@@ -153,9 +153,9 @@ export function useLayoutOperations(
         if (deliveryLayout.layout && Array.isArray(deliveryLayout.layout) && deliveryLayout.layout.length > 0) {
           const { finalLayout, stacks, nextStackId } = processLayoutData(deliveryLayout.layout)
           console.log('Processed delivery layout:', finalLayout.length, 'items,', stacks.length, 'stacks')
-          actions.setPlacedDeliverySkids(finalLayout)
-          actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
-          actions.setDeliveryVinylStacks(stacks)
+        actions.setPlacedDeliverySkids(finalLayout)
+        actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
+        actions.setDeliveryVinylStacks(stacks)
           // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
           actions.setNextDeliveryStackId(nextStackId)
         } else {
@@ -176,9 +176,9 @@ export function useLayoutOperations(
           const { finalLayout, stacks, nextStackId } = processLayoutData(pickupLayout.layout)
           console.log('Processed pickup layout:', finalLayout.length, 'items,', stacks.length, 'stacks')
           console.log('Setting pickup skids in state:', finalLayout)
-          actions.setPlacedPickupSkids(finalLayout)
-          actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
-          actions.setPickupVinylStacks(stacks)
+        actions.setPlacedPickupSkids(finalLayout)
+        actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
+        actions.setPickupVinylStacks(stacks)
           // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
           actions.setNextPickupStackId(nextStackId)
           console.log('Pickup skids state updated')
@@ -299,7 +299,7 @@ export function useLayoutOperations(
       }
 
       console.log(`Successfully saved ${cleanedLayout.length} items to ${activeTab} layout for truckload ${truckloadId}`)
-      
+
       if (showSuccessToast) {
         toast.success('Layout saved successfully')
       }

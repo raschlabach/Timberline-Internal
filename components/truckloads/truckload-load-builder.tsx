@@ -55,6 +55,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showBothLayouts, setShowBothLayouts] = useState(false)
+  const [renderKey, setRenderKey] = useState(0)
 
   // Custom hooks for state management
   const {
@@ -115,46 +116,19 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     }
   }, [truckloadId])
 
-  // Track if we've done the initial sync
-  const [hasInitialSync, setHasInitialSync] = useState(false)
 
   // Fetch layout data on mount only
   useEffect(() => {
     if (truckloadId) {
-      console.log('TruckloadLoadBuilder: Fetching layout data on mount for truckload:', truckloadId)
       fetchLayoutData().then(() => {
-        console.log('TruckloadLoadBuilder: Layout data fetch completed')
-        setHasInitialSync(true)
+        // Force re-render by updating renderKey
+        setRenderKey(prev => prev + 1)
       }).catch((error) => {
         console.error('TruckloadLoadBuilder: Error fetching layout data:', error)
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [truckloadId]) // Only fetch on mount or when truckloadId changes, not when fetchLayoutData changes
-
-  // After initial load, trigger a save to force re-render (same as when placing a new skid)
-  useEffect(() => {
-    if (hasInitialSync && !isSaving) {
-      const deliveryLayout = state.placedDeliverySkids
-      const pickupLayout = state.placedPickupSkids
-      
-      // Trigger saves for both layouts if they have items (this forces re-render)
-      if (deliveryLayout.length > 0) {
-        console.log('TruckloadLoadBuilder: Triggering save for delivery layout to force re-render:', deliveryLayout.length, 'items')
-        saveLayoutImmediate(deliveryLayout, false).catch(err => {
-          console.error('TruckloadLoadBuilder: Error syncing delivery layout:', err)
-        })
-      }
-      if (pickupLayout.length > 0) {
-        console.log('TruckloadLoadBuilder: Triggering save for pickup layout to force re-render:', pickupLayout.length, 'items')
-        saveLayoutImmediate(pickupLayout, false).catch(err => {
-          console.error('TruckloadLoadBuilder: Error syncing pickup layout:', err)
-        })
-      }
-      setHasInitialSync(false) // Only do this once
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasInitialSync, state.placedDeliverySkids.length, state.placedPickupSkids.length])
+  }, [truckloadId])
 
   // Handle tab change with proper state management
   const handleTabChange = useCallback(async (newTab: 'delivery' | 'pickup') => {
@@ -308,34 +282,34 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             <div className="flex gap-4 items-start">
           {/* Trailer Grid */}
           <TrailerGrid
+            key={`delivery-${renderKey}`}
             placedSkids={state.placedDeliverySkids}
             vinylStacks={state.deliveryVinylStacks}
-            key={`delivery-${state.placedDeliverySkids.length}-${state.deliveryVinylStacks.length}`}
-                selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-                previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-                draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-                activeTab={activeTab}
-                actions={activeTab === 'delivery' ? wrappedActions : null}
-                stops={stops}
-              />
+            selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+            previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+            draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+            activeTab={activeTab}
+            actions={activeTab === 'delivery' ? wrappedActions : null}
+            stops={stops}
+          />
 
-              {/* Outgoing Stack Panel */}
+        {/* Outgoing Stack Panel */}
               <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-                <div className="mb-4">
-                  <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
-                  <p className="text-xs text-gray-600">
-                    {activeTab === 'delivery' 
-                      ? 'Manage stacked items' 
-                      : 'Switch to Outgoing tab to manage stacks'
-                    }
-                  </p>
-                </div>
-                <StackPanel
-                  vinylStacks={state.deliveryVinylStacks}
-                  actions={wrappedActions}
-                  activeTab={activeTab}
-                />
-              </div>
+          <div className="mb-4">
+            <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+            <p className="text-xs text-gray-600">
+              {activeTab === 'delivery' 
+                ? 'Manage stacked items' 
+                : 'Switch to Outgoing tab to manage stacks'
+              }
+            </p>
+          </div>
+          <StackPanel
+            vinylStacks={state.deliveryVinylStacks}
+            actions={wrappedActions}
+            activeTab={activeTab}
+          />
+        </div>
             </div>
           </ScrollArea>
         </Card>
@@ -371,36 +345,36 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           {/* Grid and Stacks Side by Side - Scrollable */}
           <ScrollArea className="h-[calc(100vh-20rem)]">
             <div className="flex gap-4 items-start">
-              {/* Trailer Grid */}
-              <TrailerGrid
-                placedSkids={state.placedPickupSkids}
-                vinylStacks={state.pickupVinylStacks}
-                key={`pickup-${state.placedPickupSkids.length}-${state.pickupVinylStacks.length}`}
-                selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
-                previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
-                draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
-                activeTab={activeTab}
-                actions={activeTab === 'pickup' ? wrappedActions : null}
-                stops={stops}
-              />
+          {/* Trailer Grid */}
+          <TrailerGrid
+            key={`pickup-${renderKey}`}
+            placedSkids={state.placedPickupSkids}
+            vinylStacks={state.pickupVinylStacks}
+            selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
+            previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
+            draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
+            activeTab={activeTab}
+            actions={activeTab === 'pickup' ? wrappedActions : null}
+            stops={stops}
+          />
 
-              {/* Incoming Stack Panel */}
+        {/* Incoming Stack Panel */}
               <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-                <div className="mb-4">
-                  <h3 className="font-semibold text-sm">Incoming Stacks</h3>
-                  <p className="text-xs text-gray-600">
-                    {activeTab === 'pickup' 
-                      ? 'Manage stacked items' 
-                      : 'Switch to Incoming tab to manage stacks'
-                    }
-                  </p>
-                </div>
-                <StackPanel
-                  vinylStacks={state.pickupVinylStacks}
-                  actions={wrappedActions}
-                  activeTab={activeTab}
-                />
-              </div>
+          <div className="mb-4">
+            <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+            <p className="text-xs text-gray-600">
+              {activeTab === 'pickup' 
+                ? 'Manage stacked items' 
+                : 'Switch to Incoming tab to manage stacks'
+              }
+            </p>
+          </div>
+          <StackPanel
+            vinylStacks={state.pickupVinylStacks}
+            actions={wrappedActions}
+            activeTab={activeTab}
+          />
+        </div>
             </div>
           </ScrollArea>
         </Card>
