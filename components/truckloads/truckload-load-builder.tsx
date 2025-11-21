@@ -188,8 +188,16 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
         }
+        html, body {
+          height: auto !important;
+          overflow: visible !important;
+        }
         .print\\:hidden {
           display: none !important;
+        }
+        [ref] {
+          height: auto !important;
+          overflow: hidden !important;
         }
         .print-layout-wrapper {
           padding: 20px;
@@ -199,6 +207,14 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           align-items: flex-start;
           gap: 20px;
           width: 100%;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          height: auto !important;
+        }
+        .print-grid-wrapper,
+        .print-stacks-wrapper {
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
         .print-grid-wrapper {
           transform: scale(0.85);
@@ -238,8 +254,16 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
         }
+        html, body {
+          height: auto !important;
+          overflow: visible !important;
+        }
         .print\\:hidden {
           display: none !important;
+        }
+        [ref] {
+          height: auto !important;
+          overflow: hidden !important;
         }
         .print-layout-wrapper {
           padding: 20px;
@@ -249,6 +273,14 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           align-items: flex-start;
           gap: 20px;
           width: 100%;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          height: auto !important;
+        }
+        .print-grid-wrapper,
+        .print-stacks-wrapper {
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
         .print-grid-wrapper {
           transform: scale(0.85);
@@ -415,7 +447,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <div ref={deliveryPrintRef}>
+          <div ref={deliveryPrintRef} className="print:overflow-hidden">
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center">
                 {/* Trailer Grid */}
@@ -520,7 +552,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <div ref={pickupPrintRef}>
+          <div ref={pickupPrintRef} className="print:overflow-hidden">
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center">
                 {/* Trailer Grid */}
