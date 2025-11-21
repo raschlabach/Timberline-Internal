@@ -204,7 +204,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           transform: scale(0.85);
           transform-origin: top left;
           flex-shrink: 0;
-          flex: 1;
+          width: fit-content;
         }
         .print-stacks-wrapper {
           transform: scale(0.85);
@@ -254,7 +254,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           transform: scale(0.85);
           transform-origin: top left;
           flex-shrink: 0;
-          flex: 1;
+          width: fit-content;
         }
         .print-stacks-wrapper {
           transform: scale(0.85);
