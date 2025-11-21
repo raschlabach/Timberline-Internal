@@ -121,14 +121,30 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   useEffect(() => {
     if (truckloadId) {
       fetchLayoutData().then(() => {
-        // Force re-render by updating renderKey
-        setRenderKey(prev => prev + 1)
+        console.log('TruckloadLoadBuilder: Layout fetch complete, current state:', {
+          deliveryCount: state.placedDeliverySkids.length,
+          pickupCount: state.placedPickupSkids.length
+        })
+        // Force re-render by updating renderKey after a brief delay to ensure state is set
+        setTimeout(() => {
+          console.log('TruckloadLoadBuilder: Forcing re-render with renderKey update')
+          setRenderKey(prev => prev + 1)
+        }, 100)
       }).catch((error) => {
         console.error('TruckloadLoadBuilder: Error fetching layout data:', error)
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [truckloadId])
+  
+  // Also watch for state changes and force re-render
+  useEffect(() => {
+    console.log('TruckloadLoadBuilder: State changed, forcing re-render', {
+      deliveryCount: state.placedDeliverySkids.length,
+      pickupCount: state.placedPickupSkids.length
+    })
+    setRenderKey(prev => prev + 1)
+  }, [state.placedDeliverySkids.length, state.placedPickupSkids.length])
 
   // Handle tab change with proper state management
   const handleTabChange = useCallback(async (newTab: 'delivery' | 'pickup') => {

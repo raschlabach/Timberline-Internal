@@ -139,17 +139,19 @@ export function useLoadBuilderState(truckloadId: number) {
   const actions: LoadBuilderActions = useMemo(() => ({
     setSelectedSkid: (skid) => setState(prev => ({ ...prev, selectedSkid: skid })),
     setPlacedDeliverySkids: (skids) => {
-      console.log('setPlacedDeliverySkids called with', skids.length, 'items')
+      console.log('setPlacedDeliverySkids called with', skids.length, 'items', skids)
       setState(prev => {
         console.log('Updating delivery skids state, prev count:', prev.placedDeliverySkids.length, 'new count:', skids.length)
-        return { ...prev, placedDeliverySkids: skids }
+        // Create a new array reference to ensure React detects the change
+        return { ...prev, placedDeliverySkids: [...skids] }
       })
     },
     setPlacedPickupSkids: (skids) => {
-      console.log('setPlacedPickupSkids called with', skids.length, 'items')
+      console.log('setPlacedPickupSkids called with', skids.length, 'items', skids)
       setState(prev => {
         console.log('Updating pickup skids state, prev count:', prev.placedPickupSkids.length, 'new count:', skids.length)
-        return { ...prev, placedPickupSkids: skids }
+        // Create a new array reference to ensure React detects the change
+        return { ...prev, placedPickupSkids: [...skids] }
       })
     },
     setPreviewPosition: (position) => setState(prev => ({ ...prev, previewPosition: position })),

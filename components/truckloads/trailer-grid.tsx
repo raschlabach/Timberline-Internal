@@ -107,19 +107,12 @@ export function TrailerGrid({
   actions,
   stops
 }: TrailerGridProps) {
-  // Force re-render when props change
-  const [renderKey, setRenderKey] = useState(0)
-
-  useEffect(() => {
-    console.log('TrailerGrid: Props changed', {
-      activeTab,
-      placedSkidsCount: placedSkids.length,
-      vinylStacksCount: vinylStacks.length,
-      placedSkids: placedSkids.map(s => ({ item_id: s.item_id, x: s.x, y: s.y, stackId: s.stackId }))
-    })
-    // Force re-render by updating key when items change
-    setRenderKey(prev => prev + 1)
-  }, [placedSkids.length, vinylStacks.length, activeTab])
+  console.log('TrailerGrid render:', {
+    activeTab,
+    placedSkidsCount: placedSkids.length,
+    vinylStacksCount: vinylStacks.length,
+    placedSkids: placedSkids
+  })
 
   const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!actions) return // Don't allow interaction if actions are null (inactive tab)
@@ -131,7 +124,7 @@ export function TrailerGrid({
   }
 
   return (
-    <div className="flex gap-4 bg-gray-50 p-4 rounded-lg" key={`grid-${renderKey}`}>
+    <div className="flex gap-4 bg-gray-50 p-4 rounded-lg">
       <div
         className="relative border border-gray-200 bg-white"
         style={{
