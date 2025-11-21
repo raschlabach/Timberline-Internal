@@ -102,7 +102,7 @@ export function StackPanel({
         return (
           <Card 
             key={stack.stackId} 
-            className="p-2 shrink-0 bg-white shadow-md"
+            className="p-2 shrink-0 bg-white shadow-md w-full"
           >
             <div className="text-xs font-semibold mb-1 flex items-center gap-1">
               <span>Stack #{stack.stackId}</span>
@@ -134,10 +134,10 @@ export function StackPanel({
                                       <div className="flex justify-between items-start gap-1">
                     <div className="min-w-0 flex-1">
                                               <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-medium bg-white/50 rounded-full w-4 h-4 flex items-center justify-center border border-black/10">
+                        <span className="text-[10px] font-medium bg-white/50 rounded-full w-4 h-4 flex items-center justify-center border border-black/10 shrink-0">
                           {stack.skids.length - index}
                         </span>
-                        <div className="font-medium text-xs truncate">
+                        <div className="font-medium text-xs break-words">
                           {skid.customerName}
                         </div>
                       </div>

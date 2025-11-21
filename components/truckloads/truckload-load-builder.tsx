@@ -285,7 +285,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             />
 
             {/* Outgoing Stack Panel */}
-            <div className="flex flex-col w-[200px] shrink-0">
+            <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
               <div className="mb-4">
                 <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
                 <p className="text-xs text-gray-600">
@@ -347,7 +347,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             />
 
             {/* Incoming Stack Panel */}
-            <div className="flex flex-col w-[200px] shrink-0">
+            <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
               <div className="mb-4">
                 <h3 className="font-semibold text-sm">Incoming Stacks</h3>
                 <p className="text-xs text-gray-600">
