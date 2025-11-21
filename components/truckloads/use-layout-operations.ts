@@ -138,30 +138,58 @@ export function useLayoutOperations(
     if (!truckloadId) return
 
     try {
+      console.log('Fetching layout data for truckload:', truckloadId)
       // Fetch both layouts at once to ensure consistency
       const [deliveryLayout, pickupLayout] = await Promise.all([
         fetch(`/api/truckloads/${truckloadId}/layout?type=delivery`).then(r => r.json()),
         fetch(`/api/truckloads/${truckloadId}/layout?type=pickup`).then(r => r.json())
       ])
       
+      console.log('Fetched delivery layout:', deliveryLayout)
+      console.log('Fetched pickup layout:', pickupLayout)
+      
       // Process delivery layout
-      if (deliveryLayout.success && deliveryLayout.layout) {
-        const { finalLayout, stacks, nextStackId } = processLayoutData(deliveryLayout.layout)
-        actions.setPlacedDeliverySkids(finalLayout)
-        actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
-        actions.setDeliveryVinylStacks(stacks)
-        // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
-        actions.setNextDeliveryStackId(nextStackId)
+      if (deliveryLayout.success) {
+        if (deliveryLayout.layout && Array.isArray(deliveryLayout.layout) && deliveryLayout.layout.length > 0) {
+          const { finalLayout, stacks, nextStackId } = processLayoutData(deliveryLayout.layout)
+          console.log('Processed delivery layout:', finalLayout.length, 'items,', stacks.length, 'stacks')
+          actions.setPlacedDeliverySkids(finalLayout)
+          actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
+          actions.setDeliveryVinylStacks(stacks)
+          // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
+          actions.setNextDeliveryStackId(nextStackId)
+        } else {
+          // Empty layout - explicitly set empty arrays
+          console.log('Delivery layout is empty or invalid')
+          actions.setPlacedDeliverySkids([])
+          actions.setUsedDeliverySkidIds(new Set())
+          actions.setDeliveryVinylStacks([])
+          actions.setNextDeliveryStackId(1)
+        }
+      } else {
+        console.error('Failed to fetch delivery layout:', deliveryLayout)
       }
       
       // Process pickup layout
-      if (pickupLayout.success && pickupLayout.layout) {
-        const { finalLayout, stacks, nextStackId } = processLayoutData(pickupLayout.layout)
-        actions.setPlacedPickupSkids(finalLayout)
-        actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
-        actions.setPickupVinylStacks(stacks)
-        // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
-        actions.setNextPickupStackId(nextStackId)
+      if (pickupLayout.success) {
+        if (pickupLayout.layout && Array.isArray(pickupLayout.layout) && pickupLayout.layout.length > 0) {
+          const { finalLayout, stacks, nextStackId } = processLayoutData(pickupLayout.layout)
+          console.log('Processed pickup layout:', finalLayout.length, 'items,', stacks.length, 'stacks')
+          actions.setPlacedPickupSkids(finalLayout)
+          actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
+          actions.setPickupVinylStacks(stacks)
+          // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
+          actions.setNextPickupStackId(nextStackId)
+        } else {
+          // Empty layout - explicitly set empty arrays
+          console.log('Pickup layout is empty or invalid')
+          actions.setPlacedPickupSkids([])
+          actions.setUsedPickupSkidIds(new Set())
+          actions.setPickupVinylStacks([])
+          actions.setNextPickupStackId(1)
+        }
+      } else {
+        console.error('Failed to fetch pickup layout:', pickupLayout)
       }
     } catch (error) {
       console.error('Error fetching layout data:', error)

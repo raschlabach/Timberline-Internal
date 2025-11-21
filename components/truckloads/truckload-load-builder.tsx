@@ -117,7 +117,12 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   // Fetch layout data on mount only
   useEffect(() => {
     if (truckloadId) {
-      fetchLayoutData()
+      console.log('TruckloadLoadBuilder: Fetching layout data on mount for truckload:', truckloadId)
+      fetchLayoutData().then(() => {
+        console.log('TruckloadLoadBuilder: Layout data fetch completed')
+      }).catch((error) => {
+        console.error('TruckloadLoadBuilder: Error fetching layout data:', error)
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [truckloadId]) // Only fetch on mount or when truckloadId changes, not when fetchLayoutData changes
