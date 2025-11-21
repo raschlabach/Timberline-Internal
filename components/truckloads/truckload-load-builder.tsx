@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { useReactToPrint } from "react-to-print"
 import { TrailerGrid } from "./trailer-grid"
 import { AvailableItemsPanel } from "./available-items-panel"
 import { StackPanel } from "./stack-panel"
@@ -56,6 +57,10 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   const [error, setError] = useState<string | null>(null)
   const [showBothLayouts, setShowBothLayouts] = useState(false)
   const [renderKey, setRenderKey] = useState(0)
+  
+  // Print refs for layout sections
+  const deliveryPrintRef = useRef<HTMLDivElement>(null)
+  const pickupPrintRef = useRef<HTMLDivElement>(null)
 
   // Custom hooks for state management
   const {
@@ -170,6 +175,67 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     toast.error('An unexpected error occurred. Please refresh the page.')
   }, [])
 
+  // Print handlers for delivery and pickup layouts
+  const handleDeliveryPrint = useReactToPrint({
+    documentTitle: `Outgoing-Layout-${truckloadId}`,
+    pageStyle: `
+      @page {
+        size: letter;
+        margin: 0.5in;
+      }
+      @media print {
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .print\\:hidden {
+          display: none !important;
+        }
+        [data-radix-scroll-area-viewport],
+        [data-radix-scroll-area-root] {
+          height: auto !important;
+          overflow: visible !important;
+        }
+        * {
+          box-sizing: border-box;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+      }
+    `,
+    contentRef: deliveryPrintRef,
+  })
+
+  const handlePickupPrint = useReactToPrint({
+    documentTitle: `Incoming-Layout-${truckloadId}`,
+    pageStyle: `
+      @page {
+        size: letter;
+        margin: 0.5in;
+      }
+      @media print {
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .print\\:hidden {
+          display: none !important;
+        }
+        [data-radix-scroll-area-viewport],
+        [data-radix-scroll-area-root] {
+          height: auto !important;
+          overflow: visible !important;
+        }
+        * {
+          box-sizing: border-box;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+      }
+    `,
+    contentRef: pickupPrintRef,
+  })
+
   // Create wrapped action functions that include auto-save
   const wrappedActions = useMemo(() => ({
     ...actions,
@@ -275,59 +341,76 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           aria-labelledby="delivery-tab"
           aria-hidden={activeTab !== 'delivery'}
         >
-          <div className="mb-4">
-            <h3 className="font-semibold">Outgoing Layout</h3>
-            <p className="text-sm text-gray-600">
-              {activeTab === 'delivery' 
-                ? 'Click to place selected items on the grid' 
-                : 'Switch to Outgoing tab to edit this layout'
-              }
-            </p>
+          <div className="mb-4 flex items-center justify-between print:hidden">
+            <div>
+              <h3 className="font-semibold">Outgoing Layout</h3>
+              <p className="text-sm text-gray-600">
+                {activeTab === 'delivery' 
+                  ? 'Click to place selected items on the grid' 
+                  : 'Switch to Outgoing tab to edit this layout'
+                }
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDeliveryPrint}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </div>
+          <div className="mb-4 print:block hidden">
+            <h3 className="font-semibold text-lg">Outgoing Layout</h3>
           </div>
           
           {/* Footage Progress Bars */}
-          <FootageProgressBars
-            placedSkids={state.placedDeliverySkids}
-            vinylStacks={state.deliveryVinylStacks}
-            stops={stops}
-            type="delivery"
-          />
+          <div className="print:hidden">
+            <FootageProgressBars
+              placedSkids={state.placedDeliverySkids}
+              vinylStacks={state.deliveryVinylStacks}
+              stops={stops}
+              type="delivery"
+            />
+          </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <ScrollArea className="h-[calc(100vh-20rem)]">
-            <div className="flex gap-4 items-start">
-          {/* Trailer Grid */}
-          <TrailerGrid
-            key={`delivery-${renderKey}`}
-            placedSkids={state.placedDeliverySkids}
-            vinylStacks={state.deliveryVinylStacks}
-            selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-            previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-            draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-            activeTab={activeTab}
-            actions={activeTab === 'delivery' ? wrappedActions : null}
-            stops={stops}
-          />
+          <div ref={deliveryPrintRef}>
+            <ScrollArea className="h-[calc(100vh-20rem)]">
+              <div className="flex gap-4 items-start">
+                {/* Trailer Grid */}
+                <TrailerGrid
+                  key={`delivery-${renderKey}`}
+                  placedSkids={state.placedDeliverySkids}
+                  vinylStacks={state.deliveryVinylStacks}
+                  selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+                  previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+                  draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+                  activeTab={activeTab}
+                  actions={activeTab === 'delivery' ? wrappedActions : null}
+                  stops={stops}
+                />
 
-        {/* Outgoing Stack Panel */}
-              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
-            <p className="text-xs text-gray-600">
-              {activeTab === 'delivery' 
-                ? 'Manage stacked items' 
-                : 'Switch to Outgoing tab to manage stacks'
-              }
-            </p>
+                {/* Outgoing Stack Panel */}
+                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
+                  <div className="mb-4">
+                    <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+                    <p className="text-xs text-gray-600">
+                      {activeTab === 'delivery' 
+                        ? 'Manage stacked items' 
+                        : 'Switch to Outgoing tab to manage stacks'
+                      }
+                    </p>
+                  </div>
+                  <StackPanel
+                    vinylStacks={state.deliveryVinylStacks}
+                    actions={wrappedActions}
+                    activeTab={activeTab}
+                  />
+                </div>
+              </div>
+            </ScrollArea>
           </div>
-          <StackPanel
-            vinylStacks={state.deliveryVinylStacks}
-            actions={wrappedActions}
-            activeTab={activeTab}
-          />
-        </div>
-            </div>
-          </ScrollArea>
         </Card>
 
         {/* Incoming Layout */}
@@ -340,30 +423,46 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           aria-labelledby="pickup-tab"
           aria-hidden={activeTab !== 'pickup'}
         >
-          <div className="mb-4">
-            <h3 className="font-semibold">Incoming Layout</h3>
-            <p className="text-sm text-gray-600">
-              {activeTab === 'pickup' 
-                ? 'Click to place selected items on the grid' 
-                : 'Switch to Incoming tab to edit this layout'
-              }
-            </p>
+          <div className="mb-4 flex items-center justify-between print:hidden">
+            <div>
+              <h3 className="font-semibold">Incoming Layout</h3>
+              <p className="text-sm text-gray-600">
+                {activeTab === 'pickup' 
+                  ? 'Click to place selected items on the grid' 
+                  : 'Switch to Incoming tab to edit this layout'
+                }
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePickupPrint}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </div>
+          <div className="mb-4 print:block hidden">
+            <h3 className="font-semibold text-lg">Incoming Layout</h3>
           </div>
 
           {/* Footage Progress Bars */}
-          <FootageProgressBars
-            placedSkids={state.placedPickupSkids}
-            vinylStacks={state.pickupVinylStacks}
-            stops={stops}
-            type="pickup"
-          />
+          <div className="print:hidden">
+            <FootageProgressBars
+              placedSkids={state.placedPickupSkids}
+              vinylStacks={state.pickupVinylStacks}
+              stops={stops}
+              type="pickup"
+            />
+          </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <ScrollArea className="h-[calc(100vh-20rem)]">
-            <div className="flex gap-4 items-start">
-          {/* Trailer Grid */}
-          <TrailerGrid
-            key={`pickup-${renderKey}`}
+          <div ref={pickupPrintRef}>
+            <ScrollArea className="h-[calc(100vh-20rem)]">
+              <div className="flex gap-4 items-start">
+            {/* Trailer Grid */}
+            <TrailerGrid
+              key={`pickup-${renderKey}`}
             placedSkids={state.placedPickupSkids}
             vinylStacks={state.pickupVinylStacks}
             selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
@@ -390,9 +489,10 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             actions={wrappedActions}
             activeTab={activeTab}
           />
-        </div>
-            </div>
-          </ScrollArea>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
         </Card>
               </div>
 
