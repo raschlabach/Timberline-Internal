@@ -202,10 +202,22 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         .print-grid-wrapper {
           transform: scale(0.65);
           transform-origin: top left;
+          flex-shrink: 0;
         }
         .print-stacks-wrapper {
           transform: scale(0.65);
           transform-origin: top left;
+          width: 200px;
+          max-width: 200px;
+          flex-shrink: 0;
+        }
+        .print-stacks-wrapper > div {
+          width: 200px !important;
+          max-width: 200px !important;
+        }
+        .print-stacks-wrapper .card {
+          width: 100% !important;
+          max-width: 100% !important;
         }
       }
     `,
@@ -238,10 +250,22 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         .print-grid-wrapper {
           transform: scale(0.65);
           transform-origin: top left;
+          flex-shrink: 0;
         }
         .print-stacks-wrapper {
           transform: scale(0.65);
           transform-origin: top left;
+          width: 200px;
+          max-width: 200px;
+          flex-shrink: 0;
+        }
+        .print-stacks-wrapper > div {
+          width: 200px !important;
+          max-width: 200px !important;
+        }
+        .print-stacks-wrapper .card {
+          width: 100% !important;
+          max-width: 100% !important;
         }
       }
     `,
@@ -423,7 +447,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               </div>
             </ScrollArea>
             {/* Print-only content */}
-            <div className="hidden print:block print-layout-wrapper">
+            <div className="hidden print:flex print-layout-wrapper">
               <div className="print-grid-wrapper">
                 <TrailerGrid
                   key={`delivery-print-${renderKey}`}
@@ -528,7 +552,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               </div>
             </ScrollArea>
             {/* Print-only content */}
-            <div className="hidden print:block print-layout-wrapper">
+            <div className="hidden print:flex print-layout-wrapper">
               <div className="print-grid-wrapper">
                 <TrailerGrid
                   key={`pickup-print-${renderKey}`}
