@@ -614,8 +614,8 @@ export function useLoadBuilderState(truckloadId: number) {
         return
       }
       
-      // Calculate new position
-      const newIndex = direction === 'up' ? itemIndex - 1 : itemIndex + 1
+      // Calculate new position (swapped: up arrow moves down in array, down arrow moves up in array)
+      const newIndex = direction === 'up' ? itemIndex + 1 : itemIndex - 1
       if (newIndex < 0 || newIndex >= stackItems.length) {
         console.error('Invalid new index:', { newIndex, stackLength: stackItems.length })
         return
