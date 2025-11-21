@@ -263,7 +263,13 @@ export function useLayoutOperations(
         truckloadId,
         activeTab,
         itemCount: cleanedLayout.length,
-        items: cleanedLayout
+        items: cleanedLayout.map(item => ({
+          item_id: item.item_id,
+          x: item.x,
+          y: item.y,
+          stackId: item.stackId,
+          customerName: item.customerName
+        }))
       })
       
       const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {

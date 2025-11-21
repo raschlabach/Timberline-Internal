@@ -369,9 +369,16 @@ export function useLoadBuilderState(truckloadId: number) {
                     // Auto-save the layout after placing the item
               if (saveLayout) {
                 try {
-                  console.log('Saving layout with', updatedLayout.length, 'items:', updatedLayout)
+                  console.log(`Saving ${activeTab} layout with ${updatedLayout.length} items. Active tab: ${activeTab}`)
+                  console.log('Updated layout items:', updatedLayout.map(item => ({
+                    item_id: item.item_id,
+                    x: item.x,
+                    y: item.y,
+                    stackId: item.stackId,
+                    customerName: item.customerName
+                  })))
                   await saveLayout(updatedLayout)
-                  console.log('Layout saved successfully')
+                  console.log(`Layout saved successfully for ${activeTab} tab`)
                 } catch (error) {
                   console.error('Failed to auto-save layout:', error)
                   toast.error(`Failed to save layout: ${error instanceof Error ? error.message : 'Unknown error'}`)
