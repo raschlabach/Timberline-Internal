@@ -226,11 +226,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           max-height: none !important;
           overflow: visible !important;
         }
-        .print-grid-container > * {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
         .print-grid-container > div[class*="flex"] {
           height: auto !important;
           max-height: none !important;
@@ -239,21 +234,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         .print-grid-container > div[class*="flex"] > div[style*="height"] {
           height: auto !important;
           max-height: none !important;
-        }
-        .print-grid-container div[style*="height"],
-        .print-grid-container div[style*="1272px"],
-        .print-grid-container div[style*="height: 1272px"],
-        .print-grid-container div[style*="height:1272px"],
-        .print-grid-container > div > div[style*="height"],
-        .print-grid-container > div[class*="flex"] > div[style*="height"],
-        .print-grid-container div[class*="relative"][style*="height"],
-        .print-grid-container div[class*="bg-white"][style*="height"] {
-          height: auto !important;
-          max-height: none !important;
-          min-height: 0 !important;
-        }
-        .print-grid-container * {
-          overflow: visible !important;
         }
         .print-stacks-container {
           transform: scale(0.65);
@@ -321,11 +301,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           max-height: none !important;
           overflow: visible !important;
         }
-        .print-grid-container > * {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
         .print-grid-container > div[class*="flex"] {
           height: auto !important;
           max-height: none !important;
@@ -334,21 +309,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         .print-grid-container > div[class*="flex"] > div[style*="height"] {
           height: auto !important;
           max-height: none !important;
-        }
-        .print-grid-container div[style*="height"],
-        .print-grid-container div[style*="1272px"],
-        .print-grid-container div[style*="height: 1272px"],
-        .print-grid-container div[style*="height:1272px"],
-        .print-grid-container > div > div[style*="height"],
-        .print-grid-container > div[class*="flex"] > div[style*="height"],
-        .print-grid-container div[class*="relative"][style*="height"],
-        .print-grid-container div[class*="bg-white"][style*="height"] {
-          height: auto !important;
-          max-height: none !important;
-          min-height: 0 !important;
-        }
-        .print-grid-container * {
-          overflow: visible !important;
         }
         .print-stacks-container {
           transform: scale(0.65);
