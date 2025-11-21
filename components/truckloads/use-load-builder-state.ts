@@ -259,40 +259,45 @@ export function useLoadBuilderState(truckloadId: number) {
       let updatedLayout: GridPosition[]
       if (existingStack) {
         // Add to existing stack
-        const stackId = existingStack.stackId || nextStackId
-        const stackItems = currentLayoutFromState.filter(item => 
-          item.stackId === stackId || (item.x === snappedX && item.y === snappedY)
-        )
-        
-        // Add new item to stack
-        newSkid.stackId = stackId
-        newSkid.stackPosition = (stackItems.length + 1) // New item goes on top
-        
-        // Update all items in the stack to ensure proper positions and same stackId
-        const updatedStackItems = stackItems.map((item, index) => ({
-          ...item,
-          stackId: stackId, // Ensure all items in stack have same stackId
-          stackPosition: index + 1 // Ensure proper positions (1, 2, 3, etc.)
-        }))
-        
-        // Combine updated stack items with new item and non-stack items
-        updatedLayout = [
-          ...currentLayoutFromState.filter(item => 
-            item.stackId !== stackId && !(item.x === snappedX && item.y === snappedY)
-          ),
-          ...updatedStackItems,
-          newSkid
-        ]
-        
-
+        const stackId = existingStack.stackId
+        if (!stackId) {
+          // If existing stack has no ID, assign the next available ID
+          const newStackId = nextStackId
+          newSkid.stackId = newStackId
+          newSkid.stackPosition = 1
+          updatedLayout = [...currentLayoutFromState, newSkid]
+        } else {
+          // Add to existing stack with known ID
+          const stackItems = currentLayoutFromState.filter(item => 
+            item.stackId === stackId || (item.x === snappedX && item.y === snappedY)
+          )
+          
+          // Add new item to stack
+          newSkid.stackId = stackId
+          newSkid.stackPosition = (stackItems.length + 1) // New item goes on top
+          
+          // Update all items in the stack to ensure proper positions and same stackId
+          const updatedStackItems = stackItems.map((item, index) => ({
+            ...item,
+            stackId: stackId, // Ensure all items in stack have same stackId
+            stackPosition: index + 1 // Ensure proper positions (1, 2, 3, etc.)
+          }))
+          
+          // Combine updated stack items with new item and non-stack items
+          updatedLayout = [
+            ...currentLayoutFromState.filter(item => 
+              item.stackId !== stackId && !(item.x === snappedX && item.y === snappedY)
+            ),
+            ...updatedStackItems,
+            newSkid
+          ]
+        }
       } else {
-        // Create new stack
+        // Create new stack with next sequential ID
         const stackId = nextStackId
         newSkid.stackId = stackId
         newSkid.stackPosition = 1 // First item in new stack
         updatedLayout = [...currentLayoutFromState, newSkid]
-        
-
       }
 
       // Don't clear selection - allow placing multiple items of the same type
@@ -341,6 +346,7 @@ export function useLoadBuilderState(truckloadId: number) {
           deliveryVinylStacks: newVinylStacks, // Update vinyl stacks
           previewPosition: null, // Clear preview position after placement
           draggedSkid: null, // Clear dragged skid after placement
+          selectedSkid: null, // Deselect skid after placement
           // Increment stack counter if we created a new stack
           nextDeliveryStackId: existingStack ? prev.nextDeliveryStackId : prev.nextDeliveryStackId + 1
         }))
@@ -354,6 +360,7 @@ export function useLoadBuilderState(truckloadId: number) {
           pickupVinylStacks: newVinylStacks, // Update vinyl stacks
           previewPosition: null, // Clear preview position after placement
           draggedSkid: null, // Clear dragged skid after placement
+          selectedSkid: null, // Deselect skid after placement
           // Increment stack counter if we created a new stack
           nextPickupStackId: existingStack ? prev.nextPickupStackId : prev.nextPickupStackId + 1
         }))

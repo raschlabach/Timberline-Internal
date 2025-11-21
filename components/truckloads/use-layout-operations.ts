@@ -47,7 +47,6 @@ export function useLayoutOperations(
   const processLayoutData = useCallback((layout: any[]) => {
     const stacks: VinylStack[] = []
     const finalLayout: GridPosition[] = []
-    let maxStackId = 0
 
     // First, normalize and validate items from database
     const normalizedLayout = layout.map(item => {
@@ -74,38 +73,64 @@ export function useLayoutOperations(
       (item.type === 'skid' || item.type === 'vinyl')
     )
 
-    // Group items by stack
-    const stackMap = new Map<number, GridPosition[]>()
+    // Group items by their original stack ID (from database)
+    const originalStackMap = new Map<number, GridPosition[]>()
     normalizedLayout.forEach(item => {
       if (item.stackId) {
-        if (!stackMap.has(item.stackId)) {
-          stackMap.set(item.stackId, [])
+        if (!originalStackMap.has(item.stackId)) {
+          originalStackMap.set(item.stackId, [])
         }
-        stackMap.get(item.stackId)?.push(item)
-        maxStackId = Math.max(maxStackId, item.stackId)
+        originalStackMap.get(item.stackId)?.push(item)
       } else {
         finalLayout.push(item)
       }
     })
 
-    // Process stacks
-    stackMap.forEach((items, stackId) => {
+    // Renumber stacks sequentially (1, 2, 3, etc.) for this truckload/layout
+    // This ensures each truckload's stacks are independent and start at 1
+    let newStackId = 1
+    const stackIdMapping = new Map<number, number>() // Maps old stack ID to new stack ID
+    
+    // Sort stacks by their position (x, y) to ensure consistent ordering
+    const sortedStacks = Array.from(originalStackMap.entries()).sort(([idA, itemsA], [idB, itemsB]) => {
+      const posA = itemsA[itemsA.length - 1] // Bottom item position
+      const posB = itemsB[itemsB.length - 1]
+      if (posA.y !== posB.y) return posA.y - posB.y
+      return posA.x - posB.x
+    })
+
+    // Process stacks and create mapping
+    sortedStacks.forEach(([oldStackId, items]) => {
       // Sort by stack position (highest first)
       items.sort((a, b) => (b.stackPosition || 0) - (a.stackPosition || 0))
       
-      // Create stack object
+      // Map old stack ID to new sequential ID
+      stackIdMapping.set(oldStackId, newStackId)
+      
+      // Create stack object with new sequential ID
       stacks.push({
-        stackId,
-        skids: items,
+        stackId: newStackId,
+        skids: items.map(item => ({
+          ...item,
+          stackId: newStackId // Update stack ID to new sequential number
+        })),
         x: items[items.length - 1].x,
         y: items[items.length - 1].y
       })
 
-      // Add all items to final layout
-      finalLayout.push(...items)
+      // Add all items to final layout with new stack IDs
+      finalLayout.push(...items.map(item => ({
+        ...item,
+        stackId: newStackId
+      })))
+      
+      newStackId++
     })
 
-    return { finalLayout, stacks, maxStackId }
+    // Return the next stack ID to use (which is the count of stacks + 1)
+    const nextStackId = newStackId
+
+    return { finalLayout, stacks, maxStackId: nextStackId - 1, nextStackId }
   }, [])
 
   // Function to fetch layout data
@@ -121,20 +146,22 @@ export function useLayoutOperations(
       
       // Process delivery layout
       if (deliveryLayout.success && deliveryLayout.layout) {
-        const { finalLayout, stacks, maxStackId } = processLayoutData(deliveryLayout.layout)
+        const { finalLayout, stacks, nextStackId } = processLayoutData(deliveryLayout.layout)
         actions.setPlacedDeliverySkids(finalLayout)
         actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
         actions.setDeliveryVinylStacks(stacks)
-        actions.setNextDeliveryStackId(maxStackId + 1)
+        // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
+        actions.setNextDeliveryStackId(nextStackId)
       }
       
       // Process pickup layout
       if (pickupLayout.success && pickupLayout.layout) {
-        const { finalLayout, stacks, maxStackId } = processLayoutData(pickupLayout.layout)
+        const { finalLayout, stacks, nextStackId } = processLayoutData(pickupLayout.layout)
         actions.setPlacedPickupSkids(finalLayout)
         actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
         actions.setPickupVinylStacks(stacks)
-        actions.setNextPickupStackId(maxStackId + 1)
+        // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
+        actions.setNextPickupStackId(nextStackId)
       }
     } catch (error) {
       console.error('Error fetching layout data:', error)
