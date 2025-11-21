@@ -230,8 +230,8 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       {/* Main Content Grid - Responsive with Toggle */}
       <div className={`grid gap-4 flex-1 min-h-0 ${
         showBothLayouts 
-          ? 'grid-cols-[300px,auto,200px,auto,200px]' 
-          : 'grid-cols-[300px,auto,200px]'
+          ? 'grid-cols-[300px,auto,auto]' 
+          : 'grid-cols-[300px,auto]'
       }`}>
         {/* Available Items Panel */}
         <AvailableItemsPanel
@@ -270,36 +270,39 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             type="delivery"
           />
 
-          {/* Trailer Grid */}
-          <TrailerGrid
-            placedSkids={state.placedDeliverySkids}
-            vinylStacks={state.deliveryVinylStacks}
-            selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-            previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-            draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-            activeTab={activeTab}
-            actions={activeTab === 'delivery' ? wrappedActions : null}
-            stops={stops}
-          />
-        </Card>
+          {/* Grid and Stacks Side by Side */}
+          <div className="flex gap-4 items-start">
+            {/* Trailer Grid */}
+            <TrailerGrid
+              placedSkids={state.placedDeliverySkids}
+              vinylStacks={state.deliveryVinylStacks}
+              selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+              previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+              draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+              activeTab={activeTab}
+              actions={activeTab === 'delivery' ? wrappedActions : null}
+              stops={stops}
+            />
 
-        {/* Outgoing Stack Panel */}
-        <div className={`flex flex-col ${activeTab === 'delivery' ? '' : 'opacity-50 pointer-events-none'} ${activeTab !== 'delivery' && !showBothLayouts ? 'hidden' : ''}`}>
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
-            <p className="text-xs text-gray-600">
-              {activeTab === 'delivery' 
-                ? 'Manage stacked items' 
-                : 'Switch to Outgoing tab to manage stacks'
-              }
-            </p>
+            {/* Outgoing Stack Panel */}
+            <div className="flex flex-col w-[200px] shrink-0">
+              <div className="mb-4">
+                <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+                <p className="text-xs text-gray-600">
+                  {activeTab === 'delivery' 
+                    ? 'Manage stacked items' 
+                    : 'Switch to Outgoing tab to manage stacks'
+                  }
+                </p>
+              </div>
+              <StackPanel
+                vinylStacks={state.deliveryVinylStacks}
+                actions={wrappedActions}
+                activeTab={activeTab}
+              />
+            </div>
           </div>
-          <StackPanel
-            vinylStacks={state.deliveryVinylStacks}
-            actions={wrappedActions}
-            activeTab={activeTab}
-          />
-        </div>
+        </Card>
 
         {/* Incoming Layout */}
         <Card 
@@ -329,36 +332,39 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
             type="pickup"
           />
 
-          {/* Trailer Grid */}
-          <TrailerGrid
-            placedSkids={state.placedPickupSkids}
-            vinylStacks={state.pickupVinylStacks}
-            selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
-            previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
-            draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
-            activeTab={activeTab}
-            actions={activeTab === 'pickup' ? wrappedActions : null}
-            stops={stops}
-          />
-        </Card>
+          {/* Grid and Stacks Side by Side */}
+          <div className="flex gap-4 items-start">
+            {/* Trailer Grid */}
+            <TrailerGrid
+              placedSkids={state.placedPickupSkids}
+              vinylStacks={state.pickupVinylStacks}
+              selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
+              previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
+              draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
+              activeTab={activeTab}
+              actions={activeTab === 'pickup' ? wrappedActions : null}
+              stops={stops}
+            />
 
-        {/* Incoming Stack Panel */}
-        <div className={`flex flex-col ${activeTab === 'pickup' ? '' : 'opacity-50 pointer-events-none'} ${activeTab !== 'pickup' && !showBothLayouts ? 'hidden' : ''}`}>
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm">Incoming Stacks</h3>
-            <p className="text-xs text-gray-600">
-              {activeTab === 'pickup' 
-                ? 'Manage stacked items' 
-                : 'Switch to Incoming tab to manage stacks'
-              }
-            </p>
+            {/* Incoming Stack Panel */}
+            <div className="flex flex-col w-[200px] shrink-0">
+              <div className="mb-4">
+                <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+                <p className="text-xs text-gray-600">
+                  {activeTab === 'pickup' 
+                    ? 'Manage stacked items' 
+                    : 'Switch to Incoming tab to manage stacks'
+                  }
+                </p>
+              </div>
+              <StackPanel
+                vinylStacks={state.pickupVinylStacks}
+                actions={wrappedActions}
+                activeTab={activeTab}
+              />
+            </div>
           </div>
-          <StackPanel
-            vinylStacks={state.pickupVinylStacks}
-            actions={wrappedActions}
-            activeTab={activeTab}
-          />
-        </div>
+        </Card>
               </div>
 
       {/* Save Status */}
