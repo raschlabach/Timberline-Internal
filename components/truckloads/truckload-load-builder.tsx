@@ -193,7 +193,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   }
 
   return (
-    <div className="h-full flex flex-col gap-4 min-h-0" role="main" aria-label="Truckload Load Builder">
+    <div className="h-full flex flex-col gap-4 min-h-0 overflow-y-auto" role="main" aria-label="Truckload Load Builder">
       {/* Tab Navigation */}
       <div className="flex gap-4 items-center shrink-0" role="tablist" aria-label="Layout tabs">
         <div className="flex gap-4">
@@ -232,7 +232,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       </div>
 
       {/* Main Content Grid - Responsive with Toggle */}
-      <div className={`grid gap-4 flex-1 min-h-0 overflow-y-auto ${
+      <div className={`grid gap-4 flex-1 min-h-0 ${
         showBothLayouts 
           ? 'grid-cols-[300px,auto,auto]' 
           : 'grid-cols-[300px,auto]'

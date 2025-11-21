@@ -129,7 +129,7 @@ export default function TruckloadBuilderPage({ params }: TruckloadBuilderPagePro
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="load-builder" className="flex-1 min-h-0 overflow-hidden mt-0">
+                                <TabsContent value="load-builder" className="flex-1 min-h-0 overflow-y-auto mt-0">
                                     <div className="h-full min-h-0">
                                         <TruckloadLoadBuilder truckloadId={truckloadId} />
                                     </div>
