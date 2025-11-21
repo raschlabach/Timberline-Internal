@@ -168,7 +168,7 @@ export function TrailerGrid({
                 isStack 
                   ? 'bg-gray-100/70 border-2 border-dotted border-gray-400' 
                   : `${skid.type === 'vinyl' ? 'border-[3px] border-dashed' : 'border-2'} border-black ${getCustomerColorClass(skid.customerId)}`
-              } group`}
+              } group z-10`}
               style={{
                 left: bottomSkid.x * CELL_SIZE,
                 top: bottomSkid.y * CELL_SIZE,
