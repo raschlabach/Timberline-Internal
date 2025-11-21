@@ -193,7 +193,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   }
 
   return (
-    <div className="h-full flex flex-col gap-4" role="main" aria-label="Truckload Load Builder">
+    <div className="h-full flex flex-col gap-4 overflow-y-auto" role="main" aria-label="Truckload Load Builder">
       {/* Tab Navigation */}
       <div className="flex gap-4 items-center" role="tablist" aria-label="Layout tabs">
         <div className="flex gap-4 flex-1">
