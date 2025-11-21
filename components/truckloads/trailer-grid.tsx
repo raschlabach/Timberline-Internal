@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { RotateCw, GripHorizontal, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 
 interface GridPosition {
   x: number
@@ -198,54 +198,6 @@ export function TrailerGrid({
               {actions && (
                 <div className="absolute top-1 right-1 hidden group-hover:flex gap-1 z-10">
                 <TooltipProvider>
-                  {/* Rotate button - hidden and disabled */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-6 w-6 bg-white/90 hover:bg-white shadow-sm hidden pointer-events-none"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          actions.handleRotate(index)
-                        }}
-                        disabled
-                      >
-                        <RotateCw className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Rotate 90°</p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  {/* Move button - hidden and disabled */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-6 w-6 bg-white/90 hover:bg-white shadow-sm hidden pointer-events-none"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isStack) {
-                            // For stacks, we need to handle differently - move the entire stack
-                            actions.handleRemove(skid, !!isStack, currentStack || undefined)
-                          } else {
-                            // For single items, use the new move function
-                            actions.handleMove(index)
-                          }
-                        }}
-                        disabled
-                      >
-                        <GripHorizontal className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{isStack ? 'Move stack' : 'Move skid'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-
                   {/* Delete button - visible and functional */}
                   <Tooltip>
                     <TooltipTrigger asChild>
