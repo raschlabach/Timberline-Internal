@@ -111,8 +111,20 @@ export function TrailerGrid({
     activeTab,
     placedSkidsCount: placedSkids.length,
     vinylStacksCount: vinylStacks.length,
-    placedSkids: placedSkids
+    placedSkids: placedSkids.map(s => ({ item_id: s.item_id, x: s.x, y: s.y, width: s.width, length: s.length, stackId: s.stackId, type: s.type }))
   })
+  
+  // Debug: Log what will be rendered
+  const itemsToRender = placedSkids.filter((skid, index) => {
+    if (skid.stackId) {
+      const stackGroup = vinylStacks.find(s => s.stackId === skid.stackId)
+      if (stackGroup && skid !== stackGroup.skids[stackGroup.skids.length - 1]) {
+        return false // Skip non-bottom stack items
+      }
+    }
+    return true
+  })
+  console.log('TrailerGrid: Items that will be rendered:', itemsToRender.length, itemsToRender)
 
   const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!actions) return // Don't allow interaction if actions are null (inactive tab)
@@ -171,9 +183,21 @@ export function TrailerGrid({
           const isStack = currentStack && currentStack.skids.length > 1
           const bottomSkid = isStack ? currentStack.skids[currentStack.skids.length - 1] : skid
 
+          console.log(`Rendering skid ${index}:`, {
+            item_id: skid.item_id,
+            x: bottomSkid.x,
+            y: bottomSkid.y,
+            width: bottomSkid.width,
+            length: bottomSkid.length,
+            left: bottomSkid.x * CELL_SIZE,
+            top: bottomSkid.y * CELL_SIZE,
+            stackId: skid.stackId,
+            isStack
+          })
+
           return (
             <div
-              key={`placed-${index}`}
+              key={`placed-${skid.item_id}-${index}-${skid.x}-${skid.y}`}
               className={`absolute ${
                 isStack 
                   ? 'bg-gray-100/70 border-2 border-dotted border-gray-400' 
@@ -183,7 +207,8 @@ export function TrailerGrid({
                 left: bottomSkid.x * CELL_SIZE,
                 top: bottomSkid.y * CELL_SIZE,
                 width: bottomSkid.width * CELL_SIZE,
-                height: bottomSkid.length * CELL_SIZE
+                height: bottomSkid.length * CELL_SIZE,
+                zIndex: 10
               }}
             >
               {/* Customer name and dimensions */}
