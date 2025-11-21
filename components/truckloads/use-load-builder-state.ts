@@ -138,8 +138,20 @@ export function useLoadBuilderState(truckloadId: number) {
   // Actions
   const actions: LoadBuilderActions = useMemo(() => ({
     setSelectedSkid: (skid) => setState(prev => ({ ...prev, selectedSkid: skid })),
-    setPlacedDeliverySkids: (skids) => setState(prev => ({ ...prev, placedDeliverySkids: skids })),
-    setPlacedPickupSkids: (skids) => setState(prev => ({ ...prev, placedPickupSkids: skids })),
+    setPlacedDeliverySkids: (skids) => {
+      console.log('setPlacedDeliverySkids called with', skids.length, 'items')
+      setState(prev => {
+        console.log('Updating delivery skids state, prev count:', prev.placedDeliverySkids.length, 'new count:', skids.length)
+        return { ...prev, placedDeliverySkids: skids }
+      })
+    },
+    setPlacedPickupSkids: (skids) => {
+      console.log('setPlacedPickupSkids called with', skids.length, 'items')
+      setState(prev => {
+        console.log('Updating pickup skids state, prev count:', prev.placedPickupSkids.length, 'new count:', skids.length)
+        return { ...prev, placedPickupSkids: skids }
+      })
+    },
     setPreviewPosition: (position) => setState(prev => ({ ...prev, previewPosition: position })),
     setUsedDeliverySkidIds: (ids) => setState(prev => ({ ...prev, usedDeliverySkidIds: ids })),
     setUsedPickupSkidIds: (ids) => setState(prev => ({ ...prev, usedPickupSkidIds: ids })),

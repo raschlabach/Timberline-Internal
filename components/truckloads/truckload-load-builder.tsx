@@ -278,10 +278,11 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           {/* Grid and Stacks Side by Side - Scrollable */}
           <ScrollArea className="h-[calc(100vh-20rem)]">
             <div className="flex gap-4 items-start">
-              {/* Trailer Grid */}
-              <TrailerGrid
-                placedSkids={state.placedDeliverySkids}
-                vinylStacks={state.deliveryVinylStacks}
+          {/* Trailer Grid */}
+          <TrailerGrid
+            placedSkids={state.placedDeliverySkids}
+            vinylStacks={state.deliveryVinylStacks}
+            key={`delivery-${state.placedDeliverySkids.length}-${state.deliveryVinylStacks.length}`}
                 selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
                 previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
                 draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
@@ -346,6 +347,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               <TrailerGrid
                 placedSkids={state.placedPickupSkids}
                 vinylStacks={state.pickupVinylStacks}
+                key={`pickup-${state.placedPickupSkids.length}-${state.pickupVinylStacks.length}`}
                 selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
                 previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
                 draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
