@@ -231,6 +231,13 @@ export function useLayoutOperations(
         throw new Error('Cannot save layout: All items are missing required fields')
       }
       
+      console.log('Saving layout to API:', {
+        truckloadId,
+        activeTab,
+        itemCount: cleanedLayout.length,
+        items: cleanedLayout
+      })
+      
       const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
         method: 'POST',
         headers: {
@@ -240,6 +247,8 @@ export function useLayoutOperations(
           layout: cleanedLayout
         })
       })
+      
+      console.log('Save response status:', response.status, response.statusText)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -247,10 +256,14 @@ export function useLayoutOperations(
       }
 
       const result = await response.json()
+      console.log('Save API response:', result)
+      
       if (!result.success) {
         throw new Error(result.error || result.details || 'Failed to save layout')
       }
 
+      console.log(`Successfully saved ${cleanedLayout.length} items to ${activeTab} layout for truckload ${truckloadId}`)
+      
       if (showSuccessToast) {
         toast.success('Layout saved successfully')
       }

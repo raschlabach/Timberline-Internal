@@ -369,10 +369,15 @@ export function useLoadBuilderState(truckloadId: number) {
                     // Auto-save the layout after placing the item
               if (saveLayout) {
                 try {
+                  console.log('Saving layout with', updatedLayout.length, 'items:', updatedLayout)
                   await saveLayout(updatedLayout)
+                  console.log('Layout saved successfully')
                 } catch (error) {
                   console.error('Failed to auto-save layout:', error)
+                  toast.error(`Failed to save layout: ${error instanceof Error ? error.message : 'Unknown error'}`)
                 }
+              } else {
+                console.warn('saveLayout function not provided to handleGridClick')
               }
     },
 
