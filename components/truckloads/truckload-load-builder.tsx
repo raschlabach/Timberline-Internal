@@ -187,64 +187,25 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
-          height: auto !important;
-          overflow: visible !important;
         }
         .print\\:hidden {
           display: none !important;
         }
-        [data-radix-scroll-area-viewport],
-        [data-radix-scroll-area-root],
-        [data-radix-scroll-area-viewport] > * {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-          position: static !important;
+        .print-layout-wrapper {
+          padding: 25px;
+          display: flex;
+          flex-direction: row;
+          justify-content: center;
+          align-items: flex-start;
+          gap: 16px;
         }
-        .print-layout-container {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          padding: 25px !important;
-          height: auto !important;
-          max-height: none !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-          page-break-inside: avoid !important;
-        }
-        .print-layout-container > div {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
-        .print-grid-container {
+        .print-grid-wrapper {
           transform: scale(0.65);
-          transform-origin: top center;
-          width: 153.85%;
-          margin: 0 auto;
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
+          transform-origin: top left;
         }
-        .print-grid-container > div[class*="flex"] {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
-        .print-grid-container > div[class*="flex"] > div[style*="height"] {
-          height: auto !important;
-          max-height: none !important;
-        }
-        .print-stacks-container {
+        .print-stacks-wrapper {
           transform: scale(0.65);
-          transform-origin: top center;
-          height: auto !important;
-          max-height: none !important;
-        }
-        * {
-          box-sizing: border-box;
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
+          transform-origin: top left;
         }
       }
     `,
@@ -262,64 +223,25 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
         body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
-          height: auto !important;
-          overflow: visible !important;
         }
         .print\\:hidden {
           display: none !important;
         }
-        [data-radix-scroll-area-viewport],
-        [data-radix-scroll-area-root],
-        [data-radix-scroll-area-viewport] > * {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-          position: static !important;
+        .print-layout-wrapper {
+          padding: 25px;
+          display: flex;
+          flex-direction: row;
+          justify-content: center;
+          align-items: flex-start;
+          gap: 16px;
         }
-        .print-layout-container {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          padding: 25px !important;
-          height: auto !important;
-          max-height: none !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-          page-break-inside: avoid !important;
-        }
-        .print-layout-container > div {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
-        .print-grid-container {
+        .print-grid-wrapper {
           transform: scale(0.65);
-          transform-origin: top center;
-          width: 153.85%;
-          margin: 0 auto;
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
+          transform-origin: top left;
         }
-        .print-grid-container > div[class*="flex"] {
-          height: auto !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
-        .print-grid-container > div[class*="flex"] > div[style*="height"] {
-          height: auto !important;
-          max-height: none !important;
-        }
-        .print-stacks-container {
+        .print-stacks-wrapper {
           transform: scale(0.65);
-          transform-origin: top center;
-          height: auto !important;
-          max-height: none !important;
-        }
-        * {
-          box-sizing: border-box;
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
+          transform-origin: top left;
         }
       }
     `,
@@ -465,26 +387,24 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <div ref={deliveryPrintRef} className="print-layout-container">
+          <div ref={deliveryPrintRef}>
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
-              <div className="flex gap-4 items-start justify-center print:justify-center">
+              <div className="flex gap-4 items-start justify-center">
                 {/* Trailer Grid */}
-                <div className="print-grid-container">
-                  <TrailerGrid
-                    key={`delivery-${renderKey}`}
-                    placedSkids={state.placedDeliverySkids}
-                    vinylStacks={state.deliveryVinylStacks}
-                    selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
-                    previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
-                    draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
-                    activeTab={activeTab}
-                    actions={activeTab === 'delivery' ? wrappedActions : null}
-                    stops={stops}
-                  />
-                </div>
+                <TrailerGrid
+                  key={`delivery-${renderKey}`}
+                  placedSkids={state.placedDeliverySkids}
+                  vinylStacks={state.deliveryVinylStacks}
+                  selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
+                  previewPosition={activeTab === 'delivery' ? state.previewPosition : null}
+                  draggedSkid={activeTab === 'delivery' ? state.draggedSkid : null}
+                  activeTab={activeTab}
+                  actions={activeTab === 'delivery' ? wrappedActions : null}
+                  stops={stops}
+                />
 
                 {/* Outgoing Stack Panel */}
-                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
                   <div className="mb-4 print:hidden">
                     <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
                     <p className="text-xs text-gray-600">
@@ -502,12 +422,11 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                 </div>
               </div>
             </ScrollArea>
-            {/* Print-only content without ScrollArea */}
-            <div className="hidden print:flex gap-4 items-start justify-center">
-              {/* Trailer Grid */}
-              <div className="print-grid-container">
+            {/* Print-only content */}
+            <div className="hidden print:block print-layout-wrapper">
+              <div className="print-grid-wrapper">
                 <TrailerGrid
-                  key={`delivery-${renderKey}`}
+                  key={`delivery-print-${renderKey}`}
                   placedSkids={state.placedDeliverySkids}
                   vinylStacks={state.deliveryVinylStacks}
                   selectedSkid={null}
@@ -518,9 +437,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                   stops={stops}
                 />
               </div>
-
-              {/* Outgoing Stack Panel */}
-              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+              <div className="print-stacks-wrapper">
                 <StackPanel
                   vinylStacks={state.deliveryVinylStacks}
                   actions={wrappedActions}
@@ -575,26 +492,24 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           </div>
 
           {/* Grid and Stacks Side by Side - Scrollable */}
-          <div ref={pickupPrintRef} className="print-layout-container">
+          <div ref={pickupPrintRef}>
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
-              <div className="flex gap-4 items-start justify-center print:justify-center">
+              <div className="flex gap-4 items-start justify-center">
                 {/* Trailer Grid */}
-                <div className="print-grid-container">
-                  <TrailerGrid
-                    key={`pickup-${renderKey}`}
-                    placedSkids={state.placedPickupSkids}
-                    vinylStacks={state.pickupVinylStacks}
-                    selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
-                    previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
-                    draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
-                    activeTab={activeTab}
-                    actions={activeTab === 'pickup' ? wrappedActions : null}
-                    stops={stops}
-                  />
-                </div>
+                <TrailerGrid
+                  key={`pickup-${renderKey}`}
+                  placedSkids={state.placedPickupSkids}
+                  vinylStacks={state.pickupVinylStacks}
+                  selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
+                  previewPosition={activeTab === 'pickup' ? state.previewPosition : null}
+                  draggedSkid={activeTab === 'pickup' ? state.draggedSkid : null}
+                  activeTab={activeTab}
+                  actions={activeTab === 'pickup' ? wrappedActions : null}
+                  stops={stops}
+                />
 
                 {/* Incoming Stack Panel */}
-                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
                   <div className="mb-4 print:hidden">
                     <h3 className="font-semibold text-sm">Incoming Stacks</h3>
                     <p className="text-xs text-gray-600">
@@ -612,12 +527,11 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                 </div>
               </div>
             </ScrollArea>
-            {/* Print-only content without ScrollArea */}
-            <div className="hidden print:flex gap-4 items-start justify-center">
-              {/* Trailer Grid */}
-              <div className="print-grid-container">
+            {/* Print-only content */}
+            <div className="hidden print:block print-layout-wrapper">
+              <div className="print-grid-wrapper">
                 <TrailerGrid
-                  key={`pickup-${renderKey}`}
+                  key={`pickup-print-${renderKey}`}
                   placedSkids={state.placedPickupSkids}
                   vinylStacks={state.pickupVinylStacks}
                   selectedSkid={null}
@@ -628,9 +542,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                   stops={stops}
                 />
               </div>
-
-              {/* Incoming Stack Panel */}
-              <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 print-stacks-container">
+              <div className="print-stacks-wrapper">
                 <StackPanel
                   vinylStacks={state.pickupVinylStacks}
                   actions={wrappedActions}
