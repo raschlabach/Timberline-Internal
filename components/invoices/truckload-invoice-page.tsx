@@ -254,39 +254,68 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         }
         
         const data = await res.json()
+        
+        // Helper to normalize dates for comparison (YYYY-MM-DD format)
+        const normalizeDate = (dateStr: string | null | undefined): string => {
+          if (!dateStr) return ''
+          // If already in YYYY-MM-DD format, return as-is
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+          // Try to parse and format
+          try {
+            return new Date(dateStr).toISOString().split('T')[0]
+          } catch {
+            return String(dateStr)
+          }
+        }
+        
         const loadedItems = data.success && data.items ? data.items.map((item: any) => ({
           id: `db-${item.id}`,
           driverName: item.driverName || '',
-          date: item.date || '',
+          date: formatDateForInput(item.date || ''),
           action: item.action || 'Picked up',
-          footage: item.footage || 0,
+          footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
           dimensions: item.dimensions || '',
-          deduction: item.deduction || 0,
+          deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
           isManual: item.isManual || false,
           comment: item.comment || ''
         })) : []
 
         // Merge with auto-detected cross-driver freight from CURRENT truckload's orders
         if (crossDriverFreight.length > 0) {
-          const autoItems = crossDriverFreight.map((item, idx) => {
-            const existing = loadedItems.find((e: CrossDriverFreightItem) => 
-              !e.isManual &&
-              e.driverName === item.driverName && 
-              e.date === item.date && 
-              e.action === item.action
-            )
+          const autoItems: CrossDriverFreightItem[] = []
+          
+          // First, collect all loaded non-manual items (they have saved deductions)
+          const loadedNonManual = loadedItems.filter((item: CrossDriverFreightItem) => !item.isManual)
+          const loadedManual = loadedItems.filter((item: CrossDriverFreightItem) => item.isManual)
+          
+          // Then, for each auto-detected item, check if it exists in loaded items
+          for (const autoItem of crossDriverFreight) {
+            const normalizedAutoDate = normalizeDate(autoItem.date)
+            const existing = loadedNonManual.find((e: CrossDriverFreightItem) => {
+              const normalizedLoadedDate = normalizeDate(e.date)
+              return !e.isManual &&
+                     e.driverName === autoItem.driverName && 
+                     normalizedLoadedDate === normalizedAutoDate && 
+                     e.action === autoItem.action
+            })
+            
             if (existing) {
-              return existing // Use loaded item with saved deduction
+              // Use the loaded item with saved deduction
+              autoItems.push(existing)
+            } else {
+              // New auto-detected item, add with 0 deduction
+              autoItems.push({
+                ...autoItem,
+                id: `auto-${Date.now()}-${Math.random()}`,
+                deduction: 0,
+                date: formatDateForInput(autoItem.date),
+                isManual: false
+              })
             }
-            return {
-              ...item,
-              id: `auto-${Date.now()}-${idx}`,
-              deduction: 0,
-              date: formatDateForInput(item.date),
-              isManual: false
-            }
-          })
-          setEditableCrossDriverFreight([...autoItems, ...loadedItems.filter((item: CrossDriverFreightItem) => item.isManual)])
+          }
+          
+          // Combine: auto items (with saved deductions) + manual items
+          setEditableCrossDriverFreight([...autoItems, ...loadedManual])
         } else {
           // No auto-detected freight, use only loaded items
           setEditableCrossDriverFreight(loadedItems)
@@ -488,40 +517,72 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         if (reloadRes.ok) {
           const reloadData = await reloadRes.json()
           if (reloadData.success && reloadData.items) {
+            // Helper to normalize dates for comparison (YYYY-MM-DD format)
+            const normalizeDate = (dateStr: string | null | undefined): string => {
+              if (!dateStr) return ''
+              // If already in YYYY-MM-DD format, return as-is
+              if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+              // Try to parse and format
+              try {
+                return new Date(dateStr).toISOString().split('T')[0]
+              } catch {
+                return String(dateStr)
+              }
+            }
+            
             const reloadedItems = reloadData.items.map((item: any) => ({
               id: `db-${item.id}`,
               driverName: item.driverName || '',
-              date: item.date || '',
+              date: formatDateForInput(item.date || ''),
               action: item.action || 'Picked up',
-              footage: item.footage || 0,
+              footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
               dimensions: item.dimensions || '',
-              deduction: item.deduction || 0,
+              deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
               isManual: item.isManual || false,
               comment: item.comment || ''
             }))
             
-            // Merge with auto-detected freight
+            console.log('Reloaded items from DB:', reloadedItems)
+            
+            // Merge with auto-detected freight - prioritize loaded items
             if (crossDriverFreight.length > 0) {
-              const autoItems = crossDriverFreight.map((item, idx) => {
-                const existing = reloadedItems.find((e: CrossDriverFreightItem) => 
-                  !e.isManual &&
-                  e.driverName === item.driverName && 
-                  e.date === item.date && 
-                  e.action === item.action
-                )
+              const autoItems: CrossDriverFreightItem[] = []
+              
+              // First, add all loaded items (they have saved deductions)
+              const loadedNonManual = reloadedItems.filter((item: CrossDriverFreightItem) => !item.isManual)
+              const loadedManual = reloadedItems.filter((item: CrossDriverFreightItem) => item.isManual)
+              
+              // Then, for each auto-detected item, check if it exists in loaded items
+              for (const autoItem of crossDriverFreight) {
+                const normalizedAutoDate = normalizeDate(autoItem.date)
+                const existing = loadedNonManual.find((e: CrossDriverFreightItem) => {
+                  const normalizedLoadedDate = normalizeDate(e.date)
+                  return !e.isManual &&
+                         e.driverName === autoItem.driverName && 
+                         normalizedLoadedDate === normalizedAutoDate && 
+                         e.action === autoItem.action
+                })
+                
                 if (existing) {
-                  return existing
+                  // Use the loaded item with saved deduction
+                  autoItems.push(existing)
+                } else {
+                  // New auto-detected item, add with 0 deduction
+                  autoItems.push({
+                    ...autoItem,
+                    id: `auto-${Date.now()}-${Math.random()}`,
+                    deduction: 0,
+                    date: formatDateForInput(autoItem.date),
+                    isManual: false
+                  })
                 }
-                return {
-                  ...item,
-                  id: `auto-${Date.now()}-${idx}`,
-                  deduction: 0,
-                  date: formatDateForInput(item.date),
-                  isManual: false
-                }
-              })
-              setEditableCrossDriverFreight([...autoItems, ...reloadedItems.filter((item: CrossDriverFreightItem) => item.isManual)])
+              }
+              
+              // Combine: auto items (with saved deductions) + manual items
+              setEditableCrossDriverFreight([...autoItems, ...loadedManual])
+              console.log('Merged items:', [...autoItems, ...loadedManual])
             } else {
+              // No auto-detected freight, use only loaded items
               setEditableCrossDriverFreight(reloadedItems)
             }
           }
