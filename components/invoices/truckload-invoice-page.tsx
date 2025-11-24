@@ -225,14 +225,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     return items
   }, [orders, selectedTruckload])
 
-  // Load cross-driver freight from database when truckload changes
+  // Clear cross-driver freight immediately when truckload changes
   useEffect(() => {
-    async function loadCrossDriverFreight() {
-      if (!selectedTruckloadId) {
-        setEditableCrossDriverFreight([])
-        return
-      }
+    setEditableCrossDriverFreight([])
+  }, [selectedTruckloadId])
 
+  // Load cross-driver freight from database and merge with auto-detected freight
+  useEffect(() => {
+    if (!selectedTruckloadId || !selectedTruckload) {
+      return
+    }
+
+    async function loadCrossDriverFreight() {
       try {
         const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
           method: 'GET',
@@ -244,62 +248,46 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         }
         
         const data = await res.json()
-        if (data.success && data.items) {
-          // Convert database items to editable format
-          const loadedItems = data.items.map((item: any) => ({
-            id: `db-${item.id}`,
-            driverName: item.driverName || '',
-            date: item.date || '',
-            action: item.action || 'Picked up',
-            footage: item.footage || 0,
-            dimensions: item.dimensions || '',
-            deduction: item.deduction || 0,
-            isManual: item.isManual || false,
-            comment: item.comment || ''
-          }))
-          
-          // Merge with auto-detected cross-driver freight
-          if (crossDriverFreight.length > 0) {
-            const autoItems = crossDriverFreight.map((item, idx) => {
-              const existing = loadedItems.find((e: CrossDriverFreightItem) => 
-                !e.isManual &&
-                e.driverName === item.driverName && 
-                e.date === item.date && 
-                e.action === item.action
-              )
-              if (existing) {
-                return existing // Use loaded item with saved deduction
-              }
-              return {
-                ...item,
-                id: `auto-${Date.now()}-${idx}`,
-                deduction: 0,
-                date: formatDateForInput(item.date),
-                isManual: false
-              }
-            })
-            setEditableCrossDriverFreight([...autoItems, ...loadedItems.filter((item: CrossDriverFreightItem) => item.isManual)])
-          } else {
-            setEditableCrossDriverFreight(loadedItems)
-          }
-        } else {
-          // No saved items, initialize from auto-detected freight
-          if (crossDriverFreight.length > 0) {
-            const initialized = crossDriverFreight.map((item, idx) => ({
+        const loadedItems = data.success && data.items ? data.items.map((item: any) => ({
+          id: `db-${item.id}`,
+          driverName: item.driverName || '',
+          date: item.date || '',
+          action: item.action || 'Picked up',
+          footage: item.footage || 0,
+          dimensions: item.dimensions || '',
+          deduction: item.deduction || 0,
+          isManual: item.isManual || false,
+          comment: item.comment || ''
+        })) : []
+
+        // Merge with auto-detected cross-driver freight from CURRENT truckload's orders
+        if (crossDriverFreight.length > 0) {
+          const autoItems = crossDriverFreight.map((item, idx) => {
+            const existing = loadedItems.find((e: CrossDriverFreightItem) => 
+              !e.isManual &&
+              e.driverName === item.driverName && 
+              e.date === item.date && 
+              e.action === item.action
+            )
+            if (existing) {
+              return existing // Use loaded item with saved deduction
+            }
+            return {
               ...item,
               id: `auto-${Date.now()}-${idx}`,
               deduction: 0,
               date: formatDateForInput(item.date),
               isManual: false
-            }))
-            setEditableCrossDriverFreight(initialized)
-          } else {
-            setEditableCrossDriverFreight([])
-          }
+            }
+          })
+          setEditableCrossDriverFreight([...autoItems, ...loadedItems.filter((item: CrossDriverFreightItem) => item.isManual)])
+        } else {
+          // No auto-detected freight, use only loaded items
+          setEditableCrossDriverFreight(loadedItems)
         }
       } catch (error) {
         console.error('Error loading cross-driver freight:', error)
-        // Fallback to auto-detected freight
+        // Fallback to auto-detected freight from current truckload only
         if (crossDriverFreight.length > 0) {
           const initialized = crossDriverFreight.map((item, idx) => ({
             ...item,
@@ -309,13 +297,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             isManual: false
           }))
           setEditableCrossDriverFreight(initialized)
+        } else {
+          setEditableCrossDriverFreight([])
         }
       }
     }
 
     loadCrossDriverFreight()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTruckloadId])
+  }, [selectedTruckloadId, crossDriverFreight, selectedTruckload])
 
   // Auto-calculate deductions based on footage when in footage mode
   useEffect(() => {
