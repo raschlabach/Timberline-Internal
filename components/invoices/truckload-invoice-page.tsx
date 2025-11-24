@@ -135,6 +135,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
+  const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    editableCrossDriverFreightRef.current = editableCrossDriverFreight
+  }, [editableCrossDriverFreight])
 
   // Calculate totals for payroll
   const totals = useMemo(() => {
@@ -440,21 +446,24 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const saveCrossDriverFreight = useCallback(async (): Promise<void> => {
     if (!selectedTruckloadId) return
 
+    // Use ref to get latest state
+    const currentItems = editableCrossDriverFreightRef.current
+
     try {
       const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          items: editableCrossDriverFreight.map(item => ({
-            driverName: item.driverName,
-            date: item.date,
-            action: item.action,
-            footage: item.footage,
-            dimensions: item.dimensions,
-            deduction: item.deduction,
-            isManual: item.isManual,
-            comment: item.comment
+          items: currentItems.map(item => ({
+            driverName: item.driverName || null,
+            date: item.date || null,
+            action: item.action || null,
+            footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
+            dimensions: item.dimensions || null,
+            deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
+            isManual: item.isManual || false,
+            comment: item.comment || null
           }))
         })
       })
@@ -465,12 +474,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         console.error('Error saving cross-driver freight:', errorMessage, errorData)
         throw new Error(errorMessage)
       }
+      
+      // Show success message
+      toast.success('Cross-driver freight saved')
     } catch (error) {
       console.error('Error saving cross-driver freight:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to save cross-driver freight'
       toast.error(errorMessage)
     }
-  }, [selectedTruckloadId, editableCrossDriverFreight])
+  }, [selectedTruckloadId])
 
   function deleteCrossDriverFreightItem(id: string): void {
     setEditableCrossDriverFreight(items => items.filter(item => item.id !== id))
