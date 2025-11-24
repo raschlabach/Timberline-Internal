@@ -910,7 +910,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       return (
                         <TableRow 
                           key={`${row.orderId}-${row.assignmentType}`} 
-                          className={`${row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50'} hover:bg-opacity-80 transition-colors cursor-pointer`}
+                          className={`${row.assignmentType === 'pickup' ? 'bg-red-50 hover:bg-red-100' : 'bg-gray-50 hover:bg-gray-100'} transition-colors cursor-pointer hover:shadow-sm`}
                         >
                           <TableCell className="text-sm text-center">{row.sequenceNumber}</TableCell>
                           <TableCell className="text-sm">{row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName}</TableCell>
