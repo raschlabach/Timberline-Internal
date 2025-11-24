@@ -5,8 +5,8 @@ const path = require('path');
 // Load database config
 const config = require('../database/config');
 
-// Use preview branch by default
-const branch = 'preview';
+// Use main branch for production
+const branch = process.argv[3] || 'main';
 
 console.log(`Applying migration to ${branch} branch...`);
 

@@ -19,6 +19,23 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
 
+    // Check if table exists first
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+      )
+    `)
+    
+    if (!tableCheck.rows[0].exists) {
+      // Table doesn't exist yet - return empty array instead of error
+      return NextResponse.json({
+        success: true,
+        items: []
+      })
+    }
+
     const result = await query(`
       SELECT 
         id,
