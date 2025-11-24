@@ -475,6 +475,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         throw new Error(errorMessage)
       }
       
+      const responseData = await res.json()
+      console.log('Save response:', responseData)
+      
       // Show success message
       toast.success('Cross-driver freight saved')
     } catch (error) {

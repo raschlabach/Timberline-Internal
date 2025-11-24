@@ -87,8 +87,14 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Items must be an array' }, { status: 400 })
     }
 
+    console.log(`[Cross-Driver Freight] Received ${items.length} items to save for truckload ${truckloadId}:`, JSON.stringify(items, null, 2))
+
     const client = await getClient()
     try {
+      // Log which database we're connecting to (for debugging)
+      const dbInfo = await client.query('SELECT current_database() as db_name, current_user as db_user')
+      console.log(`[Cross-Driver Freight] Connected to database: ${dbInfo.rows[0]?.db_name}, user: ${dbInfo.rows[0]?.db_user}`)
+      
       // Check if table exists
       const tableCheck = await client.query(`
         SELECT EXISTS (
@@ -104,15 +110,21 @@ export async function POST(
 
       await client.query('BEGIN')
 
+      console.log(`[Cross-Driver Freight] Saving ${items.length} items for truckload ${truckloadId}`)
+
       // Delete existing items for this truckload
-      await client.query(
+      const deleteResult = await client.query(
         'DELETE FROM cross_driver_freight_deductions WHERE truckload_id = $1',
         [truckloadId]
       )
+      console.log(`[Cross-Driver Freight] Deleted ${deleteResult.rowCount} existing items`)
 
       // Insert new items
       for (const item of items) {
-        await client.query(`
+        const footage = typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0
+        const deduction = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+        
+        const insertResult = await client.query(`
           INSERT INTO cross_driver_freight_deductions (
             truckload_id,
             driver_name,
@@ -124,24 +136,41 @@ export async function POST(
             is_manual,
             comment
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING id
         `, [
           truckloadId,
           item.driverName || null,
           item.date || null,
           item.action || null,
-          item.footage || 0,
+          footage,
           item.dimensions || null,
-          item.deduction || 0,
+          deduction,
           item.isManual || false,
           item.comment || null
         ])
+        console.log(`[Cross-Driver Freight] Inserted item: id=${insertResult.rows[0]?.id}, driver=${item.driverName}, deduction=${deduction}`)
       }
 
       await client.query('COMMIT')
+      console.log(`[Cross-Driver Freight] Successfully saved ${items.length} items for truckload ${truckloadId}`)
+
+      // Verify the data was saved by querying it back
+      const verifyResult = await client.query(`
+        SELECT id, driver_name, deduction, is_manual
+        FROM cross_driver_freight_deductions
+        WHERE truckload_id = $1
+        ORDER BY created_at ASC
+      `, [truckloadId])
+      console.log(`[Cross-Driver Freight] Verification: Found ${verifyResult.rows.length} items in database for truckload ${truckloadId}`)
+      verifyResult.rows.forEach((row, idx) => {
+        console.log(`[Cross-Driver Freight] Verified item ${idx + 1}: id=${row.id}, driver=${row.driver_name}, deduction=${row.deduction}, manual=${row.is_manual}`)
+      })
 
       return NextResponse.json({
         success: true,
-        message: 'Cross-driver freight saved successfully'
+        message: 'Cross-driver freight saved successfully',
+        savedCount: items.length,
+        verifiedCount: verifyResult.rows.length
       })
     } catch (error) {
       await client.query('ROLLBACK')
