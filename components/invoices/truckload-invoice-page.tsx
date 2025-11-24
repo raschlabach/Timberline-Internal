@@ -328,9 +328,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
 
   // Calculate total deductions and final driver pay
   const payrollCalculations = useMemo(() => {
-    const totalDeductions = editableCrossDriverFreight.reduce((sum, item) => sum + (item.deduction || 0), 0)
-    const finalDriverPay = totals.totalQuotes - totalDeductions
-    return { totalDeductions, finalDriverPay }
+    const totalDeductions = editableCrossDriverFreight.reduce((sum, item) => {
+      const deduction = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+      return sum + deduction
+    }, 0)
+    const finalDriverPay = (totals.totalQuotes || 0) - totalDeductions
+    return { totalDeductions: Number(totalDeductions), finalDriverPay: Number(finalDriverPay) }
   }, [editableCrossDriverFreight, totals.totalQuotes])
 
   // Ref to store debounce timeouts
