@@ -478,6 +478,56 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       const responseData = await res.json()
       console.log('Save response:', responseData)
       
+      // Reload the data to ensure we have the latest from database
+      if (responseData.success && responseData.verifiedCount > 0) {
+        // Trigger a reload of cross-driver freight
+        const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+        if (reloadRes.ok) {
+          const reloadData = await reloadRes.json()
+          if (reloadData.success && reloadData.items) {
+            const reloadedItems = reloadData.items.map((item: any) => ({
+              id: `db-${item.id}`,
+              driverName: item.driverName || '',
+              date: item.date || '',
+              action: item.action || 'Picked up',
+              footage: item.footage || 0,
+              dimensions: item.dimensions || '',
+              deduction: item.deduction || 0,
+              isManual: item.isManual || false,
+              comment: item.comment || ''
+            }))
+            
+            // Merge with auto-detected freight
+            if (crossDriverFreight.length > 0) {
+              const autoItems = crossDriverFreight.map((item, idx) => {
+                const existing = reloadedItems.find((e: CrossDriverFreightItem) => 
+                  !e.isManual &&
+                  e.driverName === item.driverName && 
+                  e.date === item.date && 
+                  e.action === item.action
+                )
+                if (existing) {
+                  return existing
+                }
+                return {
+                  ...item,
+                  id: `auto-${Date.now()}-${idx}`,
+                  deduction: 0,
+                  date: formatDateForInput(item.date),
+                  isManual: false
+                }
+              })
+              setEditableCrossDriverFreight([...autoItems, ...reloadedItems.filter((item: CrossDriverFreightItem) => item.isManual)])
+            } else {
+              setEditableCrossDriverFreight(reloadedItems)
+            }
+          }
+        }
+      }
+      
       // Show success message
       toast.success('Cross-driver freight saved')
     } catch (error) {

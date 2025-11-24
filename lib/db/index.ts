@@ -34,6 +34,12 @@ function parseConnectionString(connectionString: string) {
 
 const connectionConfig = HAS_CONNECTION_STRING ? parseConnectionString(RAW_URL) : null
 
+// Log which database we're using (only in development to avoid spam)
+if (!isProduction && !isBuildPhase && connectionConfig) {
+  const usingPreview = RAW_URL === PREVIEW_URL && PREVIEW_URL !== ''
+  console.log(`[DB] Using ${usingPreview ? 'PREVIEW' : 'MAIN'} database: ${connectionConfig.database}`)
+}
+
 const CONNECTION_TIMEOUT_MS = 10000
 const IDLE_TIMEOUT_MS = 30000
 const MAX_POOL_SIZE = 20

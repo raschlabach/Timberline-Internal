@@ -92,8 +92,18 @@ export async function POST(
     const client = await getClient()
     try {
       // Log which database we're connecting to (for debugging)
-      const dbInfo = await client.query('SELECT current_database() as db_name, current_user as db_user')
-      console.log(`[Cross-Driver Freight] Connected to database: ${dbInfo.rows[0]?.db_name}, user: ${dbInfo.rows[0]?.db_user}`)
+      const dbInfo = await client.query('SELECT current_database() as db_name, current_user as db_user, version() as db_version')
+      const dbName = dbInfo.rows[0]?.db_name
+      const dbUser = dbInfo.rows[0]?.db_user
+      console.log(`[Cross-Driver Freight] Connected to database: ${dbName}, user: ${dbUser}`)
+      
+      // Check connection string to verify we're using preview
+      const previewUrl = process.env.DB_CONNECTION_STRING_PREVIEW || ''
+      const mainUrl = process.env.DB_CONNECTION_STRING_MAIN || ''
+      const isPreview = previewUrl && (previewUrl.includes('ep-proud-glitter') || previewUrl.includes('preview'))
+      const isMain = mainUrl && (mainUrl.includes('ep-calm-frog') || mainUrl.includes('main'))
+      console.log(`[Cross-Driver Freight] Environment check - NODE_ENV: ${process.env.NODE_ENV}, Has PREVIEW_URL: ${!!previewUrl}, Has MAIN_URL: ${!!mainUrl}`)
+      console.log(`[Cross-Driver Freight] Database should be PREVIEW (development): ${process.env.NODE_ENV !== 'production'}`)
       
       // Check if table exists
       const tableCheck = await client.query(`
