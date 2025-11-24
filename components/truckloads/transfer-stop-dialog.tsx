@@ -1,36 +1,15 @@
+"use client"
+
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from 'sonner'
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, parseISO, isValid } from 'date-fns'
-import { Loader2 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-
-interface Truckload {
-  id: number
-  driver_id: string
-  start_date: string
-  end_date: string
-  trailer_number: string | null
-  bill_of_lading_number: string | null
-  description: string | null
-  is_completed: boolean
-  total_mileage: number
-  estimated_duration: number
-  driver_name: string | null
-  driver_color: string | null
-  pickup_footage: number
-  delivery_footage: number
-  transfer_footage: number
-}
-
-interface Driver {
-  full_name: string
-  color: string
-}
+import { Loader2, ChevronDown, ChevronUp, Package, CheckCircle2 } from "lucide-react"
+import { TruckloadSummary } from '@/types/truckloads'
+import { ApiDriver, ApiTruckload, DriverOption, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
 
 interface TransferStopDialogProps {
   isOpen: boolean
@@ -49,25 +28,50 @@ export function TransferStopDialog({
   orderId,
   assignmentType
 }: TransferStopDialogProps) {
-  const [truckloads, setTruckloads] = useState<Truckload[]>([])
-  const [drivers, setDrivers] = useState<Driver[]>([])
+  const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([])
+  const [truckloads, setTruckloads] = useState<TruckloadSummary[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
+  const [collapsedDrivers, setCollapsedDrivers] = useState<Record<string, boolean>>({})
+
+  // Toggle driver column collapse
+  function toggleDriverCollapse(driverName: string): void {
+    setCollapsedDrivers(prev => ({
+      ...prev,
+      [driverName]: !prev[driverName]
+    }))
+  }
 
   useEffect(() => {
     if (isOpen) {
+      setSelectedTruckloadId(null)
       fetchData()
     } else {
+      setAllTruckloads([])
       setTruckloads([])
       setSelectedTruckloadId(null)
       setIsLoading(false)
       setIsTransferring(false)
       setDrivers([])
+      setCollapsedDrivers({})
     }
   }, [isOpen])
 
-  const fetchData = async () => {
+  useEffect(() => {
+    // Filter out current truckload and completed truckloads, then sort
+    const filtered = allTruckloads.filter(function filterTruckloads(t) {
+      return !t.isCompleted && t.id !== currentTruckloadId
+    }).sort(function sortByPickupDate(first, second) {
+      const firstTimestamp = first.startDate ? new Date(first.startDate).getTime() : Number.POSITIVE_INFINITY
+      const secondTimestamp = second.startDate ? new Date(second.startDate).getTime() : Number.POSITIVE_INFINITY
+      return firstTimestamp - secondTimestamp
+    })
+    setTruckloads(filtered)
+  }, [allTruckloads, currentTruckloadId])
+
+  async function fetchData(): Promise<void> {
     setIsLoading(true)
     try {
       // Fetch both truckloads and drivers in parallel
@@ -88,41 +92,27 @@ export function TransferStopDialog({
       if (!driversData.success) throw new Error('Failed to fetch drivers')
 
       // Transform and set drivers
-      setDrivers(driversData.drivers)
+      const driverOptions = (driversData.drivers as ApiDriver[]).map(function mapDriver(driver) {
+        return mapDriverOption(driver)
+      })
+      setDrivers(driverOptions)
 
       // Transform the truckloads data
-      const transformedTruckloads = truckloadsData.truckloads
-        .filter((t: any) => !t.is_completed && t.id !== currentTruckloadId)
-        .map((t: any) => ({
-          id: t.id,
-          driver_id: t.driverId,
-          start_date: t.startDate,
-          end_date: t.endDate,
-          trailer_number: t.trailerNumber || null,
-          bill_of_lading_number: t.billOfLadingNumber || null,
-          description: t.description || null,
-          is_completed: t.isCompleted || false,
-          total_mileage: t.totalMileage || 0,
-          estimated_duration: t.estimatedDuration || 0,
-          driver_name: t.driverName || null,
-          driver_color: t.driverColor || '#808080',
-          pickup_footage: t.pickupFootage || 0,
-          delivery_footage: t.deliveryFootage || 0,
-          transfer_footage: t.transferFootage || 0
-        }))
-        .sort((a: any, b: any) => {
-          const driverNameCompare = (a.driver_name || '').localeCompare(b.driver_name || '');
-          if (driverNameCompare !== 0) return driverNameCompare;
-          return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
-        });
+      const mappedTruckloads = truckloadsData.truckloads.map(function mapData(truckload: ApiTruckload) {
+        return mapTruckloadSummary(truckload)
+      })
 
-      setTruckloads(transformedTruckloads)
+      setAllTruckloads(mappedTruckloads)
     } catch (error) {
       console.error('Error fetching data:', error)
       toast.error('Failed to load truckloads and drivers')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  function handleTruckloadSelection(truckloadId: number): void {
+    setSelectedTruckloadId(truckloadId)
   }
 
   const handleTransfer = async () => {
@@ -178,59 +168,50 @@ export function TransferStopDialog({
   }
 
   // Group truckloads by driver
-  const truckloadsByDriver = drivers.reduce((acc, driver) => {
-    acc[driver.full_name] = {
-      driverName: driver.full_name,
+  const truckloadsByDriver = drivers.reduce(function groupByDriver(acc, driver) {
+    acc[driver.fullName] = {
+      driverName: driver.fullName,
       driverColor: driver.color,
-      truckloads: truckloads.filter(t => t.driver_name === driver.full_name)
+      truckloads: truckloads.filter(function filterDriverTruckloads(t) {
+        return t.driverName === driver.fullName
+      })
     }
     return acc
-  }, {} as Record<string, { driverName: string; driverColor: string; truckloads: Truckload[] }>)
+  }, {} as Record<string, { driverName: string; driverColor: string; truckloads: TruckloadSummary[] }>)
+
+  const unassignedTruckloads = truckloads.filter(function filterUnassignedTruckloads(truckload) {
+    return !truckload.driverName
+  })
 
   // Convert to array and sort by driver name
-  const driverColumns = Object.values(truckloadsByDriver).sort((a, b) => 
-    a.driverName.localeCompare(b.driverName)
-  )
-
-  // Calculate dialog width based on number of columns
-  const getDialogWidth = () => {
-    const columnWidth = 300 // width of each driver column
-    const gapWidth = 16 // gap between columns
-    const padding = 32 // padding on each side
-    const minWidth = 800 // minimum width
-    const maxWidth = 95 // maximum width as percentage of viewport
-
-    // Calculate total width needed for all columns
-    const totalColumnsWidth = (driverColumns.length * columnWidth) + 
-                            ((driverColumns.length - 1) * gapWidth) + 
-                            (padding * 2)
-
-    // Get the maximum width allowed (95% of viewport)
-    const maxAllowedWidth = (window.innerWidth * maxWidth) / 100
-
-    // Return the larger of the calculated width or minimum width, but not exceeding max allowed
-    return Math.min(Math.max(totalColumnsWidth, minWidth), maxAllowedWidth)
-  }
+  const driverColumns = [
+    ...Object.values(truckloadsByDriver).sort(function sortDrivers(a, b) {
+      return a.driverName.localeCompare(b.driverName)
+    }),
+    ...(unassignedTruckloads.length > 0
+      ? [{
+          driverName: 'Unassigned',
+          driverColor: '#9ca3af',
+          truckloads: unassignedTruckloads
+        }]
+      : [])
+  ]
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="h-[90vh] flex flex-col"
-        style={{ 
-          width: `${getDialogWidth()}px`,
-          maxWidth: 'none' // Override any max-width constraints
-        }}
+        className="max-h-[90vh] flex flex-col max-w-[95vw] w-full"
       >
         <DialogHeader>
           <DialogTitle>Transfer Stop</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4 flex-1 overflow-hidden">
+        <div className="space-y-6 py-4 flex-1 overflow-y-auto">
           {/* Selected Stop Summary */}
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-            <Label>Selected Stop</Label>
-            <div className="text-sm">
-              <span className={assignmentType === 'pickup' ? 'text-red-600' : ''}>
+            <Label className="text-lg font-semibold">Selected Stop</Label>
+            <div className="text-base">
+              <span className={assignmentType === 'pickup' ? 'text-red-600 font-semibold' : 'font-semibold'}>
                 {assignmentType === 'pickup' ? 'Pickup' : 'Delivery'}
               </span>
             </div>
@@ -238,77 +219,139 @@ export function TransferStopDialog({
 
           {/* Truckload Selection */}
           <div className="space-y-2 flex-1 overflow-hidden">
-            <Label>Select Destination Truckload</Label>
-            <ScrollArea className="h-full">
-              <div className="flex gap-4 p-4">
-                {driverColumns.map((driver) => (
-                  <div 
-                    key={driver.driverName} 
-                    className="w-[300px] flex-shrink-0"
-                    style={{ minWidth: '300px' }} // Ensure minimum width
-                  >
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <div 
-                            className="w-3 h-3 rounded-full flex-shrink-0" 
-                            style={{ backgroundColor: driver.driverColor }}
-                          />
-                          <span className="font-medium truncate">{driver.driverName}</span>
-                        </div>
-                        <div className="space-y-2">
-                          {driver.truckloads.map((truckload) => (
-                            <div
-                              key={truckload.id}
-                              className={`
-                                p-3 rounded-lg border cursor-pointer transition-colors
-                                ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5' : 'hover:bg-gray-50'}
-                              `}
-                              onClick={() => setSelectedTruckloadId(truckload.id)}
+            <Label className="text-lg font-semibold">Select Destination Truckload</Label>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                {driverColumns.map(function renderDriver(driver) {
+                  const isCollapsed = collapsedDrivers[driver.driverName] !== undefined ? collapsedDrivers[driver.driverName] : true
+                  const completedCount = driver.truckloads.filter(function filterCompleted(t) {
+                    return t.isCompleted
+                  }).length
+                  
+                  return (
+                    <Card 
+                      key={driver.driverName} 
+                      className="w-full bg-white shadow-lg border-0 h-fit"
+                      style={{
+                        borderLeft: `4px solid ${driver.driverColor}`,
+                      }}
+                    >
+                      <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 -ml-1"
+                              onClick={() => toggleDriverCollapse(driver.driverName)}
                             >
-                              <div className="mt-1 text-sm text-gray-600">
-                                {formatDateRange(truckload.start_date, truckload.end_date) || (
-                                  <span className="text-gray-400">No date range available</span>
-                                )}
-                              </div>
-                              {truckload.trailer_number && (
-                                <div className="mt-1 text-sm">
-                                  Trailer: <span className="font-medium">{truckload.trailer_number}</span>
-                                </div>
+                              {isCollapsed ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500" />
+                              ) : (
+                                <ChevronUp className="h-4 w-4 text-gray-500" />
                               )}
-                              <div className="mt-2 text-sm line-clamp-2">
-                                {truckload.description}
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                                <div className="whitespace-nowrap">
-                                  <span className="text-red-600">Pickup:</span> {truckload.pickup_footage} ft²
+                            </Button>
+                            <div 
+                              className="w-3 h-3 rounded-full shadow-sm" 
+                              style={{ backgroundColor: driver.driverColor }}
+                            />
+                            <div className="flex-1">
+                              <CardTitle className="text-base font-semibold text-gray-900">
+                                {driver.driverName}
+                              </CardTitle>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <div className="flex items-center gap-1 text-xs text-gray-600">
+                                  <Package className="h-2.5 w-2.5" />
+                                  <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
                                 </div>
-                                <div className="whitespace-nowrap">
-                                  <span>Delivery:</span> {truckload.delivery_footage} ft²
+                                <div className="flex items-center gap-1 text-xs text-gray-600">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
+                                  <span>{completedCount} complete</span>
                                 </div>
-                                {truckload.transfer_footage > 0 && (
-                                  <div className="whitespace-nowrap">
-                                    <span className="text-blue-600">Transfer:</span> {truckload.transfer_footage} ft²
-                                  </div>
-                                )}
                               </div>
                             </div>
-                          ))}
-                          {driver.truckloads.length === 0 && (
-                            <p className="text-sm text-gray-500 text-center py-4">
-                              No truckloads assigned
-                            </p>
-                          )}
+                          </div>
                         </div>
-                      </CardContent>
+                      </CardHeader>
+                      {!isCollapsed && (
+                        <CardContent className="p-3">
+                          <div className="space-y-2">
+                            {driver.truckloads.map(function renderTruckload(truckload) {
+                              return (
+                                <div
+                                  key={truckload.id}
+                                  className={`
+                                    p-3 rounded-lg border cursor-pointer transition-colors
+                                    ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'hover:bg-gray-50 border-gray-200'}
+                                  `}
+                                  onClick={() => handleTruckloadSelection(truckload.id)}
+                                >
+                                  <div className="text-xs font-medium text-gray-700 mb-1">
+                                    {formatDateRange(truckload.startDate, truckload.endDate) || (
+                                      <span className="text-gray-400">No date range</span>
+                                    )}
+                                  </div>
+                                  {truckload.description && (
+                                    <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                                      {truckload.description}
+                                    </div>
+                                  )}
+                                  {truckload.trailerNumber && (
+                                    <div className="text-xs text-gray-500 mb-2">
+                                      Trailer: <span className="font-medium">{truckload.trailerNumber}</span>
+                                    </div>
+                                  )}
+                                  <div className="grid grid-cols-3 gap-1 text-xs">
+                                    <div className="bg-red-50 p-1.5 rounded border border-red-100">
+                                      <div className="text-red-700 font-semibold">Pickup</div>
+                                      <div className="text-red-800 font-bold">{truckload.pickupFootage.toLocaleString()} ft²</div>
+                                    </div>
+                                    <div className="bg-gray-50 p-1.5 rounded border border-gray-200">
+                                      <div className="text-gray-700 font-semibold">Delivery</div>
+                                      <div className="text-gray-800 font-bold">{truckload.deliveryFootage.toLocaleString()} ft²</div>
+                                    </div>
+                                    {truckload.transferFootage > 0 ? (
+                                      <div className="bg-blue-50 p-1.5 rounded border border-blue-100">
+                                        <div className="text-blue-700 font-semibold">Transfer</div>
+                                        <div className="text-blue-800 font-bold">{truckload.transferFootage.toLocaleString()} ft²</div>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-gray-50 p-1.5 rounded border border-gray-200 opacity-50">
+                                        <div className="text-gray-500 font-semibold">Transfer</div>
+                                        <div className="text-gray-600 font-bold">0 ft²</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {driver.truckloads.length === 0 && (
+                              <div className="text-center py-6">
+                                <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                                  <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500 font-medium">
+                                    No truckloads assigned
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      )}
                     </Card>
+                  )
+                })}
+                {driverColumns.length === 0 && !isLoading && (
+                  <div className="col-span-full text-center py-12">
+                    <div className="text-sm text-gray-500 italic">No available truckloads found</div>
                   </div>
-                ))}
-                {driverColumns.length === 0 && (
-                  <div className="text-sm text-gray-500 italic">No available truckloads found</div>
                 )}
               </div>
-            </ScrollArea>
+            )}
           </div>
         </div>
 
@@ -316,7 +359,7 @@ export function TransferStopDialog({
           <Button variant="outline" onClick={onClose} disabled={isTransferring}>
             Cancel
           </Button>
-          <Button onClick={handleTransfer} disabled={!selectedTruckloadId || isTransferring}>
+          <Button onClick={handleTransfer} disabled={!selectedTruckloadId || isTransferring || isLoading}>
             {isTransferring ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -333,13 +376,13 @@ export function TransferStopDialog({
 }
 
 // Helper function to format date range
-function formatDateRange(startDate: string, endDate: string) {
+function formatDateRange(startDate: string | undefined, endDate: string | undefined): string | null {
   if (!startDate || !endDate) return null
 
-  const start = parseISO(startDate)
-  const end = parseISO(endDate)
+  const parsedStart = parseISO(startDate)
+  const parsedEnd = parseISO(endDate)
 
-  if (!isValid(start) || !isValid(end)) return null
+  if (!isValid(parsedStart) || !isValid(parsedEnd)) return null
 
-  return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`
+  return `${format(parsedStart, 'MMM d')} - ${format(parsedEnd, 'MMM d, yyyy')}`
 } 
