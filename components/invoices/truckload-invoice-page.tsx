@@ -129,6 +129,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [selectedDriverId, setSelectedDriverId] = useState<string>('default')
   const [collapsedDrivers, setCollapsedDrivers] = useState<Set<string>>(new Set())
   const [editableCrossDriverFreight, setEditableCrossDriverFreight] = useState<CrossDriverFreightItem[]>([])
+  const [showAllQuotesFilled, setShowAllQuotesFilled] = useState<boolean>(false)
   const [deductByFootage, setDeductByFootage] = useState<boolean>(false)
   const [footageDeductionRate, setFootageDeductionRate] = useState<number>(0)
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
@@ -603,27 +604,56 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const items: TruckloadListItem[] = truckloads
     const groups: Record<string, { group: DriverGroup; items: TruckloadListItem[] }> = {}
 
-    items
+    let filteredItems = items
       .filter(i => {
         // Apply driver filter
         if (selectedDriverId !== 'default' && i.driver.driverId !== selectedDriverId) {
           return false
         }
         // Apply search filter
-        return i.displayLabel.toLowerCase().includes(searchValue.toLowerCase()) ||
+        const matchesSearch = i.displayLabel.toLowerCase().includes(searchValue.toLowerCase()) ||
           i.driver.driverName.toLowerCase().includes(searchValue.toLowerCase())
+        if (!matchesSearch) {
+          return false
+        }
+        // Apply quotes filled filter based on toggle
+        if (showAllQuotesFilled) {
+          // Show only truckloads with all quotes filled
+          return i.allQuotesFilled === true
+        } else {
+          // Show only truckloads without all quotes filled
+          return i.allQuotesFilled !== true
+        }
       })
       .sort((a, b) => b.startDate.localeCompare(a.startDate)) // Sort descending for most recent first
-      .forEach(i => {
-        const key = i.driver.driverId
-        if (!groups[key]) {
-          groups[key] = { group: i.driver, items: [] }
-        }
-        groups[key].items.push(i)
-      })
+
+    // If showing all quotes filled, limit to 5 newest
+    if (showAllQuotesFilled) {
+      filteredItems = filteredItems.slice(0, 5)
+    }
+
+    filteredItems.forEach(i => {
+      const key = i.driver.driverId
+      if (!groups[key]) {
+        groups[key] = { group: i.driver, items: [] }
+      }
+      groups[key].items.push(i)
+    })
 
     return Object.values(groups)
-  }, [searchValue, truckloads, selectedDriverId])
+  }, [searchValue, truckloads, selectedDriverId, showAllQuotesFilled])
+
+  // Auto-select first truckload when filter changes and current selection doesn't match
+  useEffect(() => {
+    const allFilteredTruckloads = groupedTruckloads.flatMap(g => g.items)
+    const currentTruckload = allFilteredTruckloads.find(t => t.id === selectedTruckloadId)
+    
+    if (!currentTruckload && allFilteredTruckloads.length > 0) {
+      setSelectedTruckloadId(allFilteredTruckloads[0].id)
+    } else if (allFilteredTruckloads.length === 0) {
+      setSelectedTruckloadId(null)
+    }
+  }, [groupedTruckloads, selectedTruckloadId])
 
   // Get unique drivers for dropdown
   const uniqueDrivers = useMemo(() => {
@@ -686,6 +716,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="mb-2 flex items-center justify-between gap-2 border border-gray-300 rounded-md px-3 py-2">
+          <Label htmlFor="quotes-toggle" className="text-xs cursor-pointer flex-1">
+            {showAllQuotesFilled ? 'All Quotes Filled (5 newest)' : 'Missing Quotes'}
+          </Label>
+          <Switch
+            id="quotes-toggle"
+            checked={showAllQuotesFilled}
+            onCheckedChange={setShowAllQuotesFilled}
+          />
         </div>
         <Separator className="my-2" />
         <ScrollArea className="flex-1">
