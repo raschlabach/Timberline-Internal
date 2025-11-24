@@ -1189,7 +1189,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     </div>
                                     {deductByFootage ? (
                                       <div className="text-sm text-gray-700 w-24 text-right">
-                                        ${item.deduction.toFixed(2)}
+                                        ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}
                                       </div>
                                     ) : (
                                       <Input
@@ -1372,7 +1372,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               return (
                                 <div key={item.id} className="border border-gray-300 rounded p-2 text-xs print-item-group">
                                   <div className="font-medium mb-1">{item.comment || 'Comment...'}</div>
-                                  <div>Deduction: ${item.deduction.toFixed(2)}</div>
+                                  <div>Deduction: ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}</div>
                                 </div>
                               )
                             } else {
@@ -1389,7 +1389,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     <span className="text-gray-500">-</span>
                                     <span>{item.dimensions}</span>
                                     <span className="text-gray-500">-</span>
-                                    <span>Deduction: ${item.deduction.toFixed(2)}</span>
+                                    <span>Deduction: ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}</span>
                                   </div>
                                 </div>
                               )
