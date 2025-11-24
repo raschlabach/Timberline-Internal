@@ -72,6 +72,19 @@ export async function POST(
 
     const client = await getClient()
     try {
+      // Check if table exists
+      const tableCheck = await client.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'cross_driver_freight_deductions'
+        )
+      `)
+      
+      if (!tableCheck.rows[0].exists) {
+        throw new Error('Table cross_driver_freight_deductions does not exist. Please run the migration: database/migrations/add-cross-driver-freight-table.sql')
+      }
+
       await client.query('BEGIN')
 
       // Delete existing items for this truckload
@@ -121,9 +134,10 @@ export async function POST(
     }
   } catch (error) {
     console.error('Error saving cross-driver freight:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({
       success: false,
-      error: 'Failed to save cross-driver freight'
+      error: `Failed to save cross-driver freight: ${errorMessage}`
     }, { status: 500 })
   }
 }

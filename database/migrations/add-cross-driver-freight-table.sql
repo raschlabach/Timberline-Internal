@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS cross_driver_freight_deductions (
 CREATE INDEX IF NOT EXISTS idx_cross_driver_freight_truckload ON cross_driver_freight_deductions(truckload_id);
 
 -- Add trigger to update updated_at timestamp
+DROP TRIGGER IF EXISTS update_cross_driver_freight_timestamp ON cross_driver_freight_deductions;
 CREATE TRIGGER update_cross_driver_freight_timestamp
 BEFORE UPDATE ON cross_driver_freight_deductions
 FOR EACH ROW EXECUTE FUNCTION update_timestamp();

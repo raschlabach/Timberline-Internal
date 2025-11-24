@@ -459,11 +459,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       })
 
       if (!res.ok) {
-        throw new Error('Failed to save cross-driver freight')
+        const errorData = await res.json().catch(() => ({}))
+        const errorMessage = errorData.error || `HTTP ${res.status}: Failed to save cross-driver freight`
+        console.error('Error saving cross-driver freight:', errorMessage, errorData)
+        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error('Error saving cross-driver freight:', error)
-      toast.error('Failed to save cross-driver freight')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save cross-driver freight'
+      toast.error(errorMessage)
     }
   }, [selectedTruckloadId, editableCrossDriverFreight])
 
