@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
-import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, Timer, Plus, Trash2, Gift, AlertTriangle } from 'lucide-react'
+import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -35,6 +35,7 @@ interface TruckloadListItem {
   description: string | null
   billOfLadingNumber: string | null
   isCompleted: boolean
+  allQuotesFilled?: boolean
 }
 
 interface TruckloadsApiResponse {
@@ -49,6 +50,7 @@ interface TruckloadsApiResponse {
     billOfLadingNumber: string | null
     description: string | null
     isCompleted: boolean
+    allQuotesFilled?: boolean
   }>
 }
 
@@ -131,6 +133,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [footageDeductionRate, setFootageDeductionRate] = useState<number>(0)
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
+  const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
 
   // Calculate totals for payroll
   const totals = useMemo(() => {
@@ -212,51 +215,97 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     return items
   }, [orders, selectedTruckload])
 
-  // Initialize editable cross-driver freight when crossDriverFreight or truckload changes
+  // Load cross-driver freight from database when truckload changes
   useEffect(() => {
-    setEditableCrossDriverFreight(prev => {
-      if (crossDriverFreight.length > 0) {
-        // Check if we need to sync - preserve user edits while adding new items
-        const currentKeys = new Set(prev.map(item => `${item.driverName}-${item.date}-${item.action}`))
-        const newItems = crossDriverFreight.filter(item => 
-          !currentKeys.has(`${item.driverName}-${item.date}-${item.action}`)
-        )
+    async function loadCrossDriverFreight() {
+      if (!selectedTruckloadId) {
+        setEditableCrossDriverFreight([])
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
+          method: 'GET',
+          credentials: 'include'
+        })
         
-        if (newItems.length > 0 || prev.length === 0) {
-          // Merge new items with existing edits
-          const initialized = crossDriverFreight.map((item, idx) => {
-            const existing = prev.find(e => 
-              !e.isManual &&
-              e.driverName === item.driverName && 
-              e.date === item.date && 
-              e.action === item.action
-            )
-            if (existing) {
-              return existing // Preserve existing edits including deductions
-            }
-            return {
+        if (!res.ok) {
+          throw new Error('Failed to load cross-driver freight')
+        }
+        
+        const data = await res.json()
+        if (data.success && data.items) {
+          // Convert database items to editable format
+          const loadedItems = data.items.map((item: any) => ({
+            id: `db-${item.id}`,
+            driverName: item.driverName || '',
+            date: item.date || '',
+            action: item.action || 'Picked up',
+            footage: item.footage || 0,
+            dimensions: item.dimensions || '',
+            deduction: item.deduction || 0,
+            isManual: item.isManual || false,
+            comment: item.comment || ''
+          }))
+          
+          // Merge with auto-detected cross-driver freight
+          if (crossDriverFreight.length > 0) {
+            const autoItems = crossDriverFreight.map((item, idx) => {
+              const existing = loadedItems.find((e: CrossDriverFreightItem) => 
+                !e.isManual &&
+                e.driverName === item.driverName && 
+                e.date === item.date && 
+                e.action === item.action
+              )
+              if (existing) {
+                return existing // Use loaded item with saved deduction
+              }
+              return {
+                ...item,
+                id: `auto-${Date.now()}-${idx}`,
+                deduction: 0,
+                date: formatDateForInput(item.date),
+                isManual: false
+              }
+            })
+            setEditableCrossDriverFreight([...autoItems, ...loadedItems.filter((item: CrossDriverFreightItem) => item.isManual)])
+          } else {
+            setEditableCrossDriverFreight(loadedItems)
+          }
+        } else {
+          // No saved items, initialize from auto-detected freight
+          if (crossDriverFreight.length > 0) {
+            const initialized = crossDriverFreight.map((item, idx) => ({
               ...item,
               id: `auto-${Date.now()}-${idx}`,
               deduction: 0,
-              date: formatDateForInput(item.date), // Ensure date is in YYYY-MM-DD format
+              date: formatDateForInput(item.date),
               isManual: false
-            }
-          })
-          // Also keep any manually added items
-          const manualItems = prev.filter(item => item.isManual)
-          return [...initialized, ...manualItems]
+            }))
+            setEditableCrossDriverFreight(initialized)
+          } else {
+            setEditableCrossDriverFreight([])
+          }
         }
-        return prev
-      } else if (crossDriverFreight.length === 0 && prev.length > 0) {
-        // Only clear if user hasn't added manual entries (check if all are empty driver names)
-        const hasManualEntries = prev.some(item => item.driverName === '')
-        if (!hasManualEntries) {
-          return []
+      } catch (error) {
+        console.error('Error loading cross-driver freight:', error)
+        // Fallback to auto-detected freight
+        if (crossDriverFreight.length > 0) {
+          const initialized = crossDriverFreight.map((item, idx) => ({
+            ...item,
+            id: `auto-${Date.now()}-${idx}`,
+            deduction: 0,
+            date: formatDateForInput(item.date),
+            isManual: false
+          }))
+          setEditableCrossDriverFreight(initialized)
         }
       }
-      return prev
-    })
-  }, [crossDriverFreight, selectedTruckloadId]) // Re-initialize when truckload changes
+    }
+
+    loadCrossDriverFreight()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTruckloadId])
 
   // Auto-calculate deductions based on footage when in footage mode
   useEffect(() => {
@@ -361,16 +410,70 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       comment: ''
     }
     setEditableCrossDriverFreight([...editableCrossDriverFreight, newItem])
+    // Auto-save after adding
+    if (selectedTruckloadId) {
+      setTimeout(() => {
+        saveCrossDriverFreight()
+      }, 500)
+    }
   }
 
   function updateCrossDriverFreightItem(id: string, updates: Partial<CrossDriverFreightItem>): void {
     setEditableCrossDriverFreight(items =>
       items.map(item => item.id === id ? { ...item, ...updates } : item)
     )
+    
+    // Auto-save after a delay
+    if (selectedTruckloadId) {
+      if (crossDriverFreightSaveTimeout.current) {
+        clearTimeout(crossDriverFreightSaveTimeout.current)
+      }
+      crossDriverFreightSaveTimeout.current = setTimeout(() => {
+        saveCrossDriverFreight()
+      }, 1000)
+    }
   }
+
+  // Function to save cross-driver freight to database
+  const saveCrossDriverFreight = useCallback(async (): Promise<void> => {
+    if (!selectedTruckloadId) return
+
+    try {
+      const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          items: editableCrossDriverFreight.map(item => ({
+            driverName: item.driverName,
+            date: item.date,
+            action: item.action,
+            footage: item.footage,
+            dimensions: item.dimensions,
+            deduction: item.deduction,
+            isManual: item.isManual,
+            comment: item.comment
+          }))
+        })
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to save cross-driver freight')
+      }
+    } catch (error) {
+      console.error('Error saving cross-driver freight:', error)
+      toast.error('Failed to save cross-driver freight')
+    }
+  }, [selectedTruckloadId, editableCrossDriverFreight])
 
   function deleteCrossDriverFreightItem(id: string): void {
     setEditableCrossDriverFreight(items => items.filter(item => item.id !== id))
+    // Auto-save after deletion
+    if (selectedTruckloadId) {
+      setTimeout(() => {
+        saveCrossDriverFreight()
+      }, 500)
+    }
   }
 
   useEffect(function loadTruckloads() {
@@ -403,6 +506,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             description: t.description,
             billOfLadingNumber: t.billOfLadingNumber,
             isCompleted: t.isCompleted || false,
+            allQuotesFilled: t.allQuotesFilled || false,
           }
         })
         if (!isCancelled) {
@@ -645,11 +749,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 }`}
                                 style={{ backgroundColor: bgColorStyle }}
                               >
-                                {isCompleted ? (
-                                  <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                ) : (
-                                  <Timer className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                                )}
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {isCompleted ? (
+                                    <Check className="h-4 w-4 text-green-600 mt-0.5" />
+                                  ) : (
+                                    <Timer className="h-4 w-4 text-yellow-600 mt-0.5" />
+                                  )}
+                                  {isCompleted && item.allQuotesFilled && (
+                                    <DollarSign className="h-4 w-4 text-green-700 mt-0.5" />
+                                  )}
+                                </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-xs font-medium">{formatDateShort(item.startDate)} - {formatDateShort(item.endDate)}</div>
                                   {item.description && (
@@ -761,7 +870,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       return (
                         <TableRow 
                           key={`${row.orderId}-${row.assignmentType}`} 
-                          className={row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50'}
+                          className={`${row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50'} hover:bg-opacity-80 transition-colors cursor-pointer`}
                         >
                           <TableCell className="text-sm text-center">{row.sequenceNumber}</TableCell>
                           <TableCell className="text-sm">{row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName}</TableCell>
@@ -1083,9 +1192,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 )}
               </div>
               
-              {/* Print view with table */}
+              {/* Print view with table - First page: Stops list */}
               <div className="hidden print:block print-invoice-content">
-                <Table className="print-table">
+                <div className="print-page-break-after">
+                  <Table className="print-table">
                   <TableHeader className="print-table-header">
                     <TableRow>
                       <TableHead className="w-auto">#</TableHead>
@@ -1182,10 +1292,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     })}
                   </TableBody>
                 </Table>
+                </div>
                 
-                {/* Print View Totals Section */}
+                {/* Print View Totals Section - Second page: Freight and Totals */}
                 {orders.length > 0 && (
-                  <div className="mt-6 space-y-4 border-t-2 border-gray-400 pt-4 print-section">
+                  <div className="mt-6 space-y-4 border-t-2 border-gray-400 pt-4 print-section print-page-break-before">
                     {/* Summary Totals */}
                     <div className="grid grid-cols-2 gap-4 mb-3 print-item-group">
                       <div className="border border-gray-300 rounded p-2">

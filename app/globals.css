@@ -286,6 +286,17 @@
     break-after: auto;
   }
   
+  /* Page break utilities for invoice printing */
+  .print-page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+  
+  .print-page-break-after {
+    page-break-after: always;
+    break-after: page;
+  }
+  
   /* Ensure proper spacing for print */
   .print\:block {
     display: block !important;

@@ -72,6 +72,15 @@ export async function GET() {
           ), 0) as transfer_footage
         FROM truckload_assignments ta
         GROUP BY ta.truckload_id
+      ),
+      quotes_status AS (
+        SELECT 
+          toa.truckload_id,
+          COUNT(*) as total_assignments,
+          COUNT(CASE WHEN o.freight_quote IS NOT NULL THEN 1 END) as quotes_filled
+        FROM truckload_order_assignments toa
+        JOIN orders o ON toa.order_id = o.id
+        GROUP BY toa.truckload_id
       )
       SELECT 
         t.id,
@@ -89,11 +98,15 @@ export async function GET() {
         d.color as "driverColor",
         COALESCE(fc.pickup_footage, 0) as "pickupFootage",
         COALESCE(fc.delivery_footage, 0) as "deliveryFootage",
-        COALESCE(fc.transfer_footage, 0) as "transferFootage"
+        COALESCE(fc.transfer_footage, 0) as "transferFootage",
+        COALESCE(qs.total_assignments, 0) as "totalAssignments",
+        COALESCE(qs.quotes_filled, 0) as "quotesFilled",
+        (COALESCE(qs.total_assignments, 0) > 0 AND COALESCE(qs.quotes_filled, 0) = COALESCE(qs.total_assignments, 0)) as "allQuotesFilled"
       FROM truckloads t
       LEFT JOIN users u ON t.driver_id = u.id
       LEFT JOIN drivers d ON u.id = d.user_id
       LEFT JOIN footage_calculations fc ON t.id = fc.truckload_id
+      LEFT JOIN quotes_status qs ON t.id = qs.truckload_id
       ORDER BY t.start_date DESC
     `)
 
