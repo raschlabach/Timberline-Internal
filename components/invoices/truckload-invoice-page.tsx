@@ -164,14 +164,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }
 
   // Identify cross-driver freight (skids/vinyl handled by other drivers)
+  // Only includes freight from orders in the selected truckload where the other part (pickup/delivery) was handled by a different driver
   const crossDriverFreight = useMemo(() => {
     if (!selectedTruckload) return []
     const currentDriverName = selectedTruckload.driver.driverName
     const items: Omit<CrossDriverFreightItem, 'id' | 'deduction'>[] = []
+    const seenOrders = new Set<string>() // Track orders we've already processed to avoid duplicates
 
     orders.forEach(order => {
-      // Build dimensions string
-      // Combine skids and vinyl by dimension
+      // Skip if we've already processed this order
+      if (seenOrders.has(order.orderId)) return
+      seenOrders.add(order.orderId)
+
+      // Build dimensions string from skids and vinyl for this order
       const dimensionGroups: { [key: string]: number } = {}
       order.skidsData.forEach(skid => {
         const dimension = `${skid.width}x${skid.length}`
@@ -186,25 +191,29 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         .map(([dimension, quantity]) => `${quantity} ${dimension}`)
         .join(', ')
 
-      // If current assignment is pickup and delivery was handled by another driver
-      if (order.assignmentType === 'pickup' && order.deliveryDriverName && 
-          order.deliveryDriverName !== currentDriverName && order.deliveryAssignmentDate) {
+      // Only create entry if the OTHER part of the order (not the current assignment) was handled by a different driver
+      // If current assignment is pickup, check if delivery was handled by another driver
+      if (order.assignmentType === 'pickup' && 
+          order.deliveryDriverName && 
+          order.deliveryDriverName !== currentDriverName && 
+          order.deliveryAssignmentDate) {
         items.push({
           driverName: order.deliveryDriverName,
-          date: order.deliveryAssignmentDate, // Will be formatted in useEffect
+          date: order.deliveryAssignmentDate,
           action: 'Delivered',
           footage: order.footage,
           dimensions: allDimensions || '—',
           isManual: false
         })
       }
-      
-      // If current assignment is delivery and pickup was handled by another driver
-      if (order.assignmentType === 'delivery' && order.pickupDriverName && 
-          order.pickupDriverName !== currentDriverName && order.pickupAssignmentDate) {
+      // If current assignment is delivery, check if pickup was handled by another driver
+      else if (order.assignmentType === 'delivery' && 
+               order.pickupDriverName && 
+               order.pickupDriverName !== currentDriverName && 
+               order.pickupAssignmentDate) {
         items.push({
           driverName: order.pickupDriverName,
-          date: order.pickupAssignmentDate, // Will be formatted in useEffect
+          date: order.pickupAssignmentDate,
           action: 'Picked up',
           footage: order.footage,
           dimensions: allDimensions || '—',
