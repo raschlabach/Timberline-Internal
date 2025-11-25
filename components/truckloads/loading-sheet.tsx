@@ -204,7 +204,14 @@ export function LoadingSheet({
             >
               <div className="text-sm font-semibold text-gray-800">{driverName}</div>
               <div className="text-xs text-gray-600">
-                {startDate && endDate ? `${format(new Date(startDate), 'M/d/yy')} - ${format(new Date(endDate), 'M/d/yy')}` : 'Date range not available'}
+                {startDate && endDate ? (() => {
+                  // Parse dates manually to avoid timezone issues
+                  const parseDateString = (dateStr: string): Date => {
+                    const parts = dateStr.split('-')
+                    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+                  }
+                  return `${format(parseDateString(startDate), 'M/d/yy')} - ${format(parseDateString(endDate), 'M/d/yy')}`
+                })() : 'Date range not available'}
               </div>
             </div>
             

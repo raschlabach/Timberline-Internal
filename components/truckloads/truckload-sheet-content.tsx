@@ -171,13 +171,18 @@ export function TruckloadSheetContent({ truckload, stops, isPreview = false }: T
 
   const totalFootage = pickupFootage + deliveryFootage + transferFootage
 
-  // Format dates
-  const startDate = new Date(truckload.startDate).toLocaleDateString('en-US', {
+  // Format dates - parse manually to avoid timezone issues
+  const parseDateString = (dateStr: string): Date => {
+    const parts = dateStr.split('-')
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+  }
+  
+  const startDate = parseDateString(truckload.startDate).toLocaleDateString('en-US', {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit'
   })
-  const endDate = new Date(truckload.endDate).toLocaleDateString('en-US', {
+  const endDate = parseDateString(truckload.endDate).toLocaleDateString('en-US', {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit'

@@ -165,14 +165,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       const isTransfer = hasPickup && hasDelivery
       
       if (isTransfer && !processedOrderIds.has(orderId)) {
-        // Combine into single row - use the order that has the quote if available
+        // Combine into single row - prefer delivery order for transfer orders
         const pickupOrder = groupOrders.find(o => o.assignmentType === 'pickup')
         const deliveryOrder = groupOrders.find(o => o.assignmentType === 'delivery')
-        const orderWithQuote = pickupOrder?.freightQuote ? pickupOrder : (deliveryOrder?.freightQuote ? deliveryOrder : pickupOrder || deliveryOrder!)
+        // For transfers, use delivery order (or pickup if delivery doesn't exist)
+        const transferOrder = deliveryOrder || pickupOrder!
         
         combined.push({
-          ...orderWithQuote,
-          assignmentType: 'pickup', // Use pickup as primary for display
+          ...transferOrder,
+          assignmentType: 'delivery', // Use delivery as primary for transfer orders
           sequenceNumber: Math.min(...groupOrders.map(o => o.sequenceNumber)), // Use lowest sequence
           isCombined: true
         })
@@ -192,31 +193,25 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     return combined.sort((a, b) => a.sequenceNumber - b.sequenceNumber)
   }, [orders])
 
-  // Calculate totals for payroll
+  // Calculate totals for payroll using groupedOrders to avoid double-counting transfers
   const totals = useMemo(() => {
-    // Count unique orders, not assignments
-    const uniqueOrderIds = new Set(orders.map(o => o.orderId))
-    const pickupCount = orders.filter(o => o.assignmentType === 'pickup' && !o.isTransferOrder).length
-    const deliveryCount = orders.filter(o => o.assignmentType === 'delivery' && !o.isTransferOrder).length
-    const transferCount = Array.from(uniqueOrderIds).filter(orderId => {
-      const orderAssignments = orders.filter(o => o.orderId === orderId)
-      return orderAssignments.some(o => o.assignmentType === 'pickup') && 
-             orderAssignments.some(o => o.assignmentType === 'delivery')
-    }).length
+    // Count based on grouped orders (transfers are already combined)
+    const pickupCount = groupedOrders.filter(o => o.assignmentType === 'pickup' && !(o as any).isCombined).length
+    const deliveryCount = groupedOrders.filter(o => o.assignmentType === 'delivery' && !(o as any).isCombined).length
+    const transferCount = groupedOrders.filter(o => (o as any).isCombined).length
     
-    const totalQuotes = Array.from(uniqueOrderIds).reduce((sum, orderId) => {
-      const orderAssignments = orders.filter(o => o.orderId === orderId)
-      const firstOrder = orderAssignments[0]
-      if (firstOrder?.freightQuote) {
+    // Calculate total quotes from grouped orders (each order counted once)
+    const totalQuotes = groupedOrders.reduce((sum, order) => {
+      if (order.freightQuote) {
         // Parse quote string (could be "$123.45" or "123.45")
-        const cleaned = firstOrder.freightQuote.replace(/[^0-9.-]/g, '')
+        const cleaned = order.freightQuote.replace(/[^0-9.-]/g, '')
         const value = parseFloat(cleaned)
         return sum + (isNaN(value) ? 0 : value)
       }
       return sum
     }, 0)
     return { pickupCount, deliveryCount, transferCount, totalQuotes }
-  }, [orders])
+  }, [groupedOrders])
 
   // Helper function to format dates for date input (YYYY-MM-DD)
   function formatDateForInput(dateStr: string | null): string {
@@ -1152,7 +1147,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           </TableCell>
                           <TableCell className="text-sm">
                             {isTransfer ? (
-                              <div className="text-xs text-blue-700 font-medium">Transfer Order</div>
+                              <div className="text-xs text-blue-700 font-medium">Transfer</div>
                             ) : row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
                               <div className="text-xs flex items-center gap-1.5">
                                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -1520,7 +1515,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           </TableCell>
                           <TableCell className="text-xs">
                             {isTransfer ? (
-                              <div className="text-xs text-blue-700 font-medium">Transfer Order</div>
+                              <div className="text-xs text-blue-700 font-medium">Transfer</div>
                             ) : row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
                               <div className="flex items-center gap-1.5">
                                 <div className="w-3 h-3 flex items-center justify-center flex-shrink-0">
