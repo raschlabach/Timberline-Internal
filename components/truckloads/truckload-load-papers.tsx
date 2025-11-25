@@ -365,6 +365,29 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
     }
   }
 
+  // Check if there's a Timberline Warehouse assignment
+  const hasTimberlineWarehouseAssignment = stops.some(stop => {
+    const pickupName = stop.pickup_customer.name?.toLowerCase() || ''
+    const deliveryName = stop.delivery_customer.name?.toLowerCase() || ''
+    const pickupAddress = stop.pickup_customer.address?.toLowerCase() || ''
+    const deliveryAddress = stop.delivery_customer.address?.toLowerCase() || ''
+    
+    // Check if customer name contains "Timberline Warehouse" or address contains the warehouse address
+    const isTimberlineWarehouse = (name: string, address: string) => {
+      return name.includes('timberline warehouse') || 
+             address.includes('1361 county road 108') ||
+             address.includes('2552 oh-93')
+    }
+    
+    // Check if the assigned customer (pickup or delivery based on assignment_type) is Timberline Warehouse
+    if (stop.assignment_type === 'pickup') {
+      return isTimberlineWarehouse(pickupName, pickupAddress)
+    } else if (stop.assignment_type === 'delivery') {
+      return isTimberlineWarehouse(deliveryName, deliveryAddress)
+    }
+    return false
+  })
+
   if (isLoading) {
     return (
       <div className="h-full w-full flex items-center justify-center">
@@ -384,6 +407,23 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
 
   return (
     <div className="h-full flex flex-col gap-4">
+      {/* Timberline Warehouse Warning */}
+      {hasTimberlineWarehouseAssignment && (
+        <Card className="p-4 bg-amber-50 border-amber-200">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                Timberline Warehouse Assignment Detected
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                This truckload contains an assignment for Timberline Warehouse. Please review the assignments carefully.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Truckload Sheet Section */}
       <Card className="p-4">
         <div 

@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
           ),
           'phone', COALESCE(pc.phone_number_1, ''),
           'phone2', COALESCE(pc.phone_number_2, ''),
+          'notes', COALESCE(pc.notes, ''),
           'lat', pl.latitude,
           'lng', pl.longitude
         ) as "pickupCustomer",
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
           ),
           'phone', COALESCE(dc.phone_number_1, ''),
           'phone2', COALESCE(dc.phone_number_2, ''),
+          'notes', COALESCE(dc.notes, ''),
           'lat', dl.latitude,
           'lng', dl.longitude
         ) as "deliveryCustomer",

@@ -87,8 +87,10 @@ export default function CustomerList() {
     zipcode: ALL_FILTER_VALUE
   });
   
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
   // Refs
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   
   // Computed filter options
@@ -105,9 +107,73 @@ export default function CustomerList() {
     return { states, counties, phonePrefixes, zipcodes };
   }, [customers]);
   
-  // Filtered customers
+  // Helper function to calculate match score for sorting
+  function getCustomerMatchScore(customer: Customer, searchQuery: string): number {
+    if (!searchQuery.trim()) return 0;
+    
+    const searchLower = searchQuery.toLowerCase().trim();
+    const nameLower = customer.customer_name?.toLowerCase() || '';
+    const cityLower = customer.city?.toLowerCase() || '';
+    const stateLower = customer.state?.toLowerCase() || '';
+    const addressLower = customer.address?.toLowerCase() || '';
+    const countyLower = customer.county?.toLowerCase() || '';
+    const zipLower = customer.zip?.toLowerCase() || '';
+    
+    // Normalize search query (same as the old DOM manipulation logic)
+    const normalizedSearch = searchLower
+      .replace(/[&\/\\#,+()$~%.'":*?<>{}]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Split into search terms
+    const searchTerms = normalizedSearch.split(' ').filter(term => term.length > 0);
+    
+    let score = 0;
+    
+    // Check each search term
+    for (const term of searchTerms) {
+      // Exact match on customer name (highest priority - 1000 points)
+      if (nameLower === term) {
+        score += 1000;
+      }
+      // Customer name starts with search term (high priority - 500 points)
+      else if (nameLower.startsWith(term)) {
+        score += 500;
+      }
+      // Customer name contains search term at word boundary (medium-high priority - 300 points)
+      else if (nameLower.includes(` ${term}`) || nameLower.startsWith(term)) {
+        score += 300;
+      }
+      // Customer name contains search term anywhere (medium priority - 200 points)
+      else if (nameLower.includes(term)) {
+        score += 200;
+      }
+      // Other fields match (lower priority - 50 points each)
+      else {
+        if (cityLower.includes(term)) score += 50;
+        if (stateLower.includes(term)) score += 50;
+        if (addressLower.includes(term)) score += 50;
+        if (countyLower.includes(term)) score += 50;
+        if (zipLower.includes(term)) score += 50;
+      }
+    }
+    
+    // Bonus: if the full search query matches the customer name exactly
+    if (nameLower === normalizedSearch) {
+      score += 2000;
+    }
+    // Bonus: if the full search query starts with customer name
+    else if (nameLower.startsWith(normalizedSearch)) {
+      score += 1000;
+    }
+    
+    return score;
+  }
+
+  // Filtered and sorted customers
   const filteredCustomers = useMemo(() => {
-    return customers.filter(customer => {
+    // First apply filters
+    let filtered = customers.filter(customer => {
       // State filter
       if (filters.state !== ALL_FILTER_VALUE && customer.state !== filters.state) return false;
       
@@ -126,7 +192,45 @@ export default function CustomerList() {
       
       return true;
     });
-  }, [customers, filters]);
+    
+    // Then apply search filter if there's a search query
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase().trim();
+      const normalizedSearch = searchLower
+        .replace(/[&\/\\#,+()$~%.'":*?<>{}]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const searchTerms = normalizedSearch.split(' ').filter(term => term.length > 0);
+      
+      filtered = filtered.filter(customer => {
+        const text = [
+          customer.customer_name,
+          customer.city,
+          customer.state,
+          customer.address,
+          customer.county,
+          customer.zip
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        const normalizedText = text
+          .replace(/[&\/\\#,+()$~%.'":*?<>{}]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        // Check if all search terms are in the text content
+        return searchTerms.every(term => normalizedText.includes(term));
+      });
+      
+      // Sort by match score (highest first)
+      filtered.sort((a, b) => {
+        const scoreA = getCustomerMatchScore(a, searchQuery);
+        const scoreB = getCustomerMatchScore(b, searchQuery);
+        return scoreB - scoreA;
+      });
+    }
+    
+    return filtered;
+  }, [customers, filters, searchQuery]);
   
   // Load customers
   useEffect(() => {
@@ -163,80 +267,8 @@ export default function CustomerList() {
     loadCustomers();
   }, []);
   
-  // Direct DOM manipulation for search with fuzzy matching
-  function doSearch() {
-    const searchInput = searchInputRef.current?.value.trim();
-    if (!searchInput) {
-      // Show all rows if no search value
-      tableRef.current?.querySelectorAll('tbody tr').forEach(row => {
-        (row as HTMLElement).style.display = '';
-      });
-      
-      // Update counter
-      const counter = document.getElementById('customerCounter');
-      if (counter) {
-        const totalRows = tableRef.current?.querySelectorAll('tbody tr').length || 0;
-        const filterText = hasActiveFilters() ? ' (filtered)' : '';
-        counter.textContent = `${totalRows} customer${totalRows !== 1 ? 's' : ''} shown${filterText}`;
-      }
-      return;
-    }
-    
-    // Normalize the search input by removing special characters and extra spaces
-    const normalizedSearch = searchInput.toLowerCase()
-      .replace(/[&\/\\#,+()$~%.'":*?<>{}]/g, ' ') // Replace special chars with space
-      .replace(/\s+/g, ' ')                       // Replace multiple spaces with single space
-      .trim();                                    // Trim spaces
-    
-    // Split into search terms
-    const searchTerms = normalizedSearch.split(' ').filter(term => term.length > 0);
-    
-    console.log("Normalized search terms:", searchTerms);
-    
-    // Get all table rows
-    const tableRows = tableRef.current?.querySelectorAll('tbody tr');
-    let visibleCount = 0;
-    
-    // For each row, check if it contains the search terms
-    tableRows?.forEach(row => {
-      const rowElement = row as HTMLElement;
-      // Get text content and normalize it the same way
-      const text = row.textContent || '';
-      const normalizedText = text.toLowerCase()
-        .replace(/[&\/\\#,+()$~%.'":*?<>{}]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      // Check if all search terms are in the text content (partial matching)
-      const matchesAllTerms = searchTerms.every(term => {
-        return normalizedText.includes(term);
-      });
-      
-      if (matchesAllTerms) {
-        rowElement.style.display = '';
-        visibleCount++;
-        console.log("Match found:", rowElement.querySelector('td')?.textContent);
-      } else {
-        rowElement.style.display = 'none';
-      }
-    });
-    
-    // Update the counter
-    const counter = document.getElementById('customerCounter');
-    if (counter) {
-      const filterText = hasActiveFilters() ? ' (filtered)' : '';
-      counter.textContent = `${visibleCount} customer${visibleCount !== 1 ? 's' : ''} shown${filterText}`;
-      if (visibleCount !== tableRows?.length) {
-        counter.textContent += ` (matching "${searchInput}")`;
-      }
-    }
-  }
-  
   function clearSearch() {
-    if (searchInputRef.current) {
-      searchInputRef.current.value = '';
-    }
-    doSearch();
+    setSearchQuery('');
   }
   
   function handleFilterChange(filterType: keyof FilterState, value: string) {
@@ -289,8 +321,7 @@ export default function CustomerList() {
     
     setSelectedCustomer(processedCustomer);
     
-    // Force a re-render of the table
-    setTimeout(doSearch, 100);
+    // Table will re-render automatically when filteredCustomers changes
   }
   
   // Loading state
@@ -346,13 +377,13 @@ export default function CustomerList() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  ref={searchInputRef}
                   type="text"
                   placeholder="Search customers by name, location, or phone..."
                   className="pl-10 pr-10"
-                  onChange={() => doSearch()}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                {searchInputRef.current?.value && (
+                {searchQuery && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -372,6 +403,7 @@ export default function CustomerList() {
               <span id="customerCounter">
                 {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} shown
                 {hasActiveFilters() && ' (filtered)'}
+                {searchQuery && ` (matching "${searchQuery}")`}
               </span>
             </div>
           </div>

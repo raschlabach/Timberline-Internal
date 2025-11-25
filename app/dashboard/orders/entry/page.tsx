@@ -100,9 +100,7 @@ export default function OrderEntryPage() {
       errors.filters = 'Please select at least one load type filter';
     }
     
-    if (formState.freightType === 'skidsVinyl' && formState.skidsVinyl.length === 0) {
-      errors.freight = 'Please add at least one skid or vinyl item';
-    }
+    // Skids/vinyl are optional - no validation needed
     
     if (formState.freightType === 'footage' && formState.footage <= 0) {
       errors.footage = 'Please enter a valid footage amount';

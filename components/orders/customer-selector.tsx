@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,18 +57,80 @@ export function CustomerSelector({
     fetchCustomers();
   }, [fetchCustomers]);
 
-  // Filter customers based on search query
-  const filteredCustomers = searchQuery === ''
-    ? customers
-    : customers.filter((customer) => {
-        const searchLower = searchQuery.toLowerCase();
-        return (
-          (customer.customer_name && customer.customer_name.toLowerCase().includes(searchLower)) ||
-          (customer.city && customer.city.toLowerCase().includes(searchLower)) ||
-          (customer.state && customer.state.toLowerCase().includes(searchLower)) ||
-          (customer.address && customer.address.toLowerCase().includes(searchLower))
-        );
-      });
+  // Helper function to calculate match score for sorting
+  function getCustomerMatchScore(customer: Customer, searchQuery: string): number {
+    const searchLower = searchQuery.toLowerCase().trim();
+    const nameLower = customer.customer_name?.toLowerCase() || '';
+    const cityLower = customer.city?.toLowerCase() || '';
+    const stateLower = customer.state?.toLowerCase() || '';
+    const addressLower = customer.address?.toLowerCase() || '';
+    
+    // Split search query into terms
+    const searchTerms = searchLower.split(/\s+/).filter(term => term.length > 0);
+    
+    let score = 0;
+    
+    // Check each search term
+    for (const term of searchTerms) {
+      // Exact match on customer name (highest priority - 1000 points)
+      if (nameLower === term) {
+        score += 1000;
+      }
+      // Customer name starts with search term (high priority - 500 points)
+      else if (nameLower.startsWith(term)) {
+        score += 500;
+      }
+      // Customer name contains search term at word boundary (medium-high priority - 300 points)
+      else if (nameLower.includes(` ${term}`) || nameLower.startsWith(term)) {
+        score += 300;
+      }
+      // Customer name contains search term anywhere (medium priority - 200 points)
+      else if (nameLower.includes(term)) {
+        score += 200;
+      }
+      // Other fields match (lower priority - 50 points each)
+      else {
+        if (cityLower.includes(term)) score += 50;
+        if (stateLower.includes(term)) score += 50;
+        if (addressLower.includes(term)) score += 50;
+      }
+    }
+    
+    // Bonus: if the full search query matches the customer name exactly
+    if (nameLower === searchLower) {
+      score += 2000;
+    }
+    // Bonus: if the full search query starts with customer name
+    else if (nameLower.startsWith(searchLower)) {
+      score += 1000;
+    }
+    
+    return score;
+  }
+
+  // Filter and sort customers based on search query
+  const filteredCustomers = useMemo(() => {
+    if (searchQuery === '') {
+      return customers;
+    }
+    
+    const searchLower = searchQuery.toLowerCase();
+    const filtered = customers.filter((customer) => {
+      return (
+        (customer.customer_name && customer.customer_name.toLowerCase().includes(searchLower)) ||
+        (customer.city && customer.city.toLowerCase().includes(searchLower)) ||
+        (customer.state && customer.state.toLowerCase().includes(searchLower)) ||
+        (customer.address && customer.address.toLowerCase().includes(searchLower))
+      );
+    });
+    
+    // Sort by match score (highest first)
+    return filtered.sort((a, b) => {
+      const scoreA = getCustomerMatchScore(a, searchQuery);
+      const scoreB = getCustomerMatchScore(b, searchQuery);
+      return scoreB - scoreA;
+    });
+  }, [customers, searchQuery]);
 
   // Direct selection function - bypasses the CommandItem onSelect  
   const selectCustomer = useCallback((customer: Customer) => {

@@ -37,6 +37,7 @@ interface Order {
     address: string;
     phone?: string;
     phone2?: string;
+    notes?: string;
   };
   deliveryCustomer: {
     id: number;
@@ -44,6 +45,7 @@ interface Order {
     address: string;
     phone?: string;
     phone2?: string;
+    notes?: string;
   };
   payingCustomer?: {
     id: number;
@@ -1234,9 +1236,48 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                             </TooltipProvider>
                           )}
                           <div className="flex items-center gap-2">
-                            <span className="text-red-600 font-extrabold text-[11px]">
-                              {order.pickupCustomer.name}
-                            </span>
+                            <TooltipProvider>
+                              <Tooltip delayDuration={200}>
+                                <TooltipTrigger asChild>
+                                  <span className="text-red-600 font-extrabold text-[11px] cursor-help hover:underline">
+                                    {order.pickupCustomer.name}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent 
+                                  className="bg-gray-900 text-white text-xs p-3 max-w-xs"
+                                  side="top"
+                                >
+                                  <div className="space-y-2">
+                                    <div className="font-semibold text-sm">{order.pickupCustomer.name}</div>
+                                    {order.pickupCustomer.address && (
+                                      <div>
+                                        <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
+                                        <div className="text-white">{order.pickupCustomer.address}</div>
+                                      </div>
+                                    )}
+                                    {(order.pickupCustomer.phone || order.pickupCustomer.phone2) && (
+                                      <div>
+                                        <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
+                                        <div className="space-y-0.5">
+                                          {order.pickupCustomer.phone && (
+                                            <div className="text-white">{order.pickupCustomer.phone}</div>
+                                          )}
+                                          {order.pickupCustomer.phone2 && (
+                                            <div className="text-white">{order.pickupCustomer.phone2}</div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {order.pickupCustomer.notes && (
+                                      <div>
+                                        <div className="text-gray-300 text-[10px] uppercase mb-0.5">Notes</div>
+                                        <div className="text-white whitespace-pre-wrap">{order.pickupCustomer.notes}</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <span className="text-gray-400 text-[11px]">→</span>
                             <div className="flex items-center">
                               {order.deliveryAssignment && (
@@ -1263,9 +1304,48 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                                   </Tooltip>
                                 </TooltipProvider>
                               )}
-                              <span className="text-gray-900 font-medium text-[11px]">
-                                {order.deliveryCustomer.name}
-                              </span>
+                              <TooltipProvider>
+                                <Tooltip delayDuration={200}>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-gray-900 font-medium text-[11px] cursor-help hover:underline">
+                                      {order.deliveryCustomer.name}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent 
+                                    className="bg-gray-900 text-white text-xs p-3 max-w-xs"
+                                    side="top"
+                                  >
+                                    <div className="space-y-2">
+                                      <div className="font-semibold text-sm">{order.deliveryCustomer.name}</div>
+                                      {order.deliveryCustomer.address && (
+                                        <div>
+                                          <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
+                                          <div className="text-white">{order.deliveryCustomer.address}</div>
+                                        </div>
+                                      )}
+                                      {(order.deliveryCustomer.phone || order.deliveryCustomer.phone2) && (
+                                        <div>
+                                          <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
+                                          <div className="space-y-0.5">
+                                            {order.deliveryCustomer.phone && (
+                                              <div className="text-white">{order.deliveryCustomer.phone}</div>
+                                            )}
+                                            {order.deliveryCustomer.phone2 && (
+                                              <div className="text-white">{order.deliveryCustomer.phone2}</div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {order.deliveryCustomer.notes && (
+                                        <div>
+                                          <div className="text-gray-300 text-[10px] uppercase mb-0.5">Notes</div>
+                                          <div className="text-white whitespace-pre-wrap">{order.deliveryCustomer.notes}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </div>
                         </div>

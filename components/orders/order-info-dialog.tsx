@@ -938,6 +938,40 @@ export function OrderInfoDialog({
                     </div>
                   )}
                 </div>
+
+                {/* Mark as Delivered Button */}
+                <div className="mt-4 pt-4 border-t">
+                  <Button
+                    variant="default"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    onClick={async () => {
+                      if (confirm(`Are you sure you want to mark Order #${orderId} as delivered? This will mark all skids and vinyl as delivered and remove the order from the load board.`)) {
+                        try {
+                          const response = await fetch(`/api/orders/${orderId}/mark-delivered`, {
+                            method: 'POST',
+                          });
+                          
+                          if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.error || 'Failed to mark order as delivered');
+                          }
+                          
+                          toast.success('Order marked as delivered successfully');
+                          fetchOrderDetails();
+                          onOrderUpdate();
+                        } catch (error) {
+                          console.error('Error marking order as delivered:', error);
+                          toast.error(error instanceof Error ? error.message : 'Failed to mark order as delivered');
+                        }
+                      }
+                    }}
+                  >
+                    Mark as Delivered
+                  </Button>
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    Use this when a customer picks up an order directly from the warehouse
+                  </p>
+                </div>
               </div>
             </div>
           </div>
