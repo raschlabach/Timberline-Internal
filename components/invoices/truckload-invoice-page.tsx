@@ -302,7 +302,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         // Add any new auto-detected items that aren't already saved
         if (crossDriverFreight.length > 0) {
           for (const autoItem of crossDriverFreight) {
-            const exists = savedNonManual.some((saved: CrossDriverFreightItem) => matchItem(saved, autoItem))
+            // Check if this auto-detected item already exists in finalItems
+            const exists = finalItems.some((saved: CrossDriverFreightItem) => matchItem(saved, autoItem))
             if (!exists) {
               // New auto-detected item, add with 0 deduction
               finalItems.push({
@@ -316,10 +317,35 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           }
         }
         
-        // Add manual items at the end
-        finalItems.push(...savedManual)
+        // Add manual items at the end (deduplicate manual items too)
+        for (const manualItem of savedManual) {
+          const exists = finalItems.some((item: CrossDriverFreightItem) => 
+            item.isManual && item.id === manualItem.id
+          )
+          if (!exists) {
+            finalItems.push(manualItem)
+          }
+        }
         
-        setEditableCrossDriverFreight(finalItems)
+        // Final deduplication pass - remove any duplicates based on matching criteria
+        const deduplicated: CrossDriverFreightItem[] = []
+        for (const item of finalItems) {
+          const isDuplicate = deduplicated.some((existing: CrossDriverFreightItem) => {
+            if (item.isManual && existing.isManual) {
+              // For manual items, match by id
+              return item.id === existing.id
+            } else if (!item.isManual && !existing.isManual) {
+              // For non-manual items, match by all fields
+              return matchItem(existing, item)
+            }
+            return false
+          })
+          if (!isDuplicate) {
+            deduplicated.push(item)
+          }
+        }
+        
+        setEditableCrossDriverFreight(deduplicated)
       } catch (error) {
         console.error('Error loading cross-driver freight:', error)
         // Fallback to auto-detected freight from current truckload only
@@ -478,13 +504,52 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     // Use ref to get latest state
     const currentItems = editableCrossDriverFreightRef.current
 
+    // Helper to match items for deduplication
+    const normalizeDate = (dateStr: string | null | undefined): string => {
+      if (!dateStr) return ''
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+      try {
+        return new Date(dateStr).toISOString().split('T')[0]
+      } catch {
+        return String(dateStr)
+      }
+    }
+    
+    const matchItem = (item1: CrossDriverFreightItem, item2: CrossDriverFreightItem): boolean => {
+      const date1 = normalizeDate(item1.date)
+      const date2 = normalizeDate(item2.date)
+      if (item1.isManual && item2.isManual) {
+        // For manual items, match by id
+        return item1.id === item2.id
+      } else if (!item1.isManual && !item2.isManual) {
+        // For non-manual items, match by all fields
+        return item1.driverName === item2.driverName &&
+               date1 === date2 &&
+               item1.action === item2.action &&
+               item1.dimensions === item2.dimensions &&
+               Math.abs((item1.footage || 0) - (item2.footage || 0)) < 0.01
+      }
+      return false
+    }
+
+    // Deduplicate items before saving
+    const deduplicated: CrossDriverFreightItem[] = []
+    for (const item of currentItems) {
+      const isDuplicate = deduplicated.some((existing: CrossDriverFreightItem) => matchItem(existing, item))
+      if (!isDuplicate) {
+        deduplicated.push(item)
+      }
+    }
+    
+    console.log(`[Save] Deduplicated ${currentItems.length} items to ${deduplicated.length} items before saving`)
+
     try {
       const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          items: currentItems.map(item => ({
+          items: deduplicated.map(item => ({
             driverName: item.driverName || null,
             date: item.date || null,
             action: item.action || null,
@@ -566,7 +631,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             // Add any new auto-detected items that aren't already saved
             if (crossDriverFreight.length > 0) {
               for (const autoItem of crossDriverFreight) {
-                const exists = savedNonManual.some((saved: CrossDriverFreightItem) => matchItem(saved, autoItem))
+                // Check if this auto-detected item already exists in finalItems
+                const exists = finalItems.some((saved: CrossDriverFreightItem) => matchItem(saved, autoItem))
                 if (!exists) {
                   // New auto-detected item, add with 0 deduction
                   finalItems.push({
@@ -580,11 +646,36 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               }
             }
             
-            // Add manual items at the end
-            finalItems.push(...savedManual)
+            // Add manual items at the end (deduplicate manual items too)
+            for (const manualItem of savedManual) {
+              const exists = finalItems.some((item: CrossDriverFreightItem) => 
+                item.isManual && item.id === manualItem.id
+              )
+              if (!exists) {
+                finalItems.push(manualItem)
+              }
+            }
             
-            setEditableCrossDriverFreight(finalItems)
-            console.log('Merged items (saved first, then new auto-detected):', finalItems)
+            // Final deduplication pass - remove any duplicates based on matching criteria
+            const deduplicated: CrossDriverFreightItem[] = []
+            for (const item of finalItems) {
+              const isDuplicate = deduplicated.some((existing: CrossDriverFreightItem) => {
+                if (item.isManual && existing.isManual) {
+                  // For manual items, match by id
+                  return item.id === existing.id
+                } else if (!item.isManual && !existing.isManual) {
+                  // For non-manual items, match by all fields
+                  return matchItem(existing, item)
+                }
+                return false
+              })
+              if (!isDuplicate) {
+                deduplicated.push(item)
+              }
+            }
+            
+            setEditableCrossDriverFreight(deduplicated)
+            console.log('Merged items (deduplicated):', deduplicated)
           }
         }
       }
