@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useRef, useState, useMemo, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
+import { formatPhoneNumber } from "@/lib/utils";
 
 interface FreightItem {
   packages: number;
@@ -180,8 +181,8 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
                 <p className="font-semibold mb-1 text-sm">{order.shipper.name}</p>
                 <p className="text-xs break-words">{order.shipper.address}</p>
                 <div className="mt-1.5 pt-1 border-t border-gray-200">
-                  <p className="text-xs">Phone: {order.shipper.phone}</p>
-                  {order.shipper.phone2 && <p className="text-xs">Phone 2: {order.shipper.phone2}</p>}
+                  <p className="text-xs">Phone: {formatPhoneNumber(order.shipper.phone)}</p>
+                  {order.shipper.phone2 && <p className="text-xs">Phone 2: {formatPhoneNumber(order.shipper.phone2)}</p>}
                 </div>
               </div>
             </div>
@@ -191,8 +192,8 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
                 <p className="font-semibold mb-1 text-sm">{order.consignee.name}</p>
                 <p className="text-xs break-words">{order.consignee.address}</p>
                 <div className="mt-1.5 pt-1 border-t border-gray-200">
-                  <p className="text-xs">Phone: {order.consignee.phone}</p>
-                  {order.consignee.phone2 && <p className="text-xs">Phone 2: {order.consignee.phone2}</p>}
+                  <p className="text-xs">Phone: {formatPhoneNumber(order.consignee.phone)}</p>
+                  {order.consignee.phone2 && <p className="text-xs">Phone 2: {formatPhoneNumber(order.consignee.phone2)}</p>}
                 </div>
               </div>
             </div>

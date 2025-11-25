@@ -28,6 +28,7 @@ import { AssignmentTypeDialog } from "@/components/orders/assignment-type-dialog
 import { SelectionPoolSummary } from "@/components/orders/selection-pool-summary";
 import { BulkAssignmentDialog } from "@/components/orders/bulk-assignment-dialog";
 import { DocumentAttachmentDialog } from "@/components/orders/document-attachment-dialog";
+import { formatPhoneNumber } from "@/lib/utils";
 
 interface Order {
   id: number;
@@ -1260,10 +1261,10 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                                         <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
                                         <div className="space-y-0.5">
                                           {order.pickupCustomer.phone && (
-                                            <div className="text-white">{order.pickupCustomer.phone}</div>
+                                            <div className="text-white">{formatPhoneNumber(order.pickupCustomer.phone)}</div>
                                           )}
                                           {order.pickupCustomer.phone2 && (
-                                            <div className="text-white">{order.pickupCustomer.phone2}</div>
+                                            <div className="text-white">{formatPhoneNumber(order.pickupCustomer.phone2)}</div>
                                           )}
                                         </div>
                                       </div>
@@ -1328,10 +1329,10 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                                           <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
                                           <div className="space-y-0.5">
                                             {order.deliveryCustomer.phone && (
-                                              <div className="text-white">{order.deliveryCustomer.phone}</div>
+                                              <div className="text-white">{formatPhoneNumber(order.deliveryCustomer.phone)}</div>
                                             )}
                                             {order.deliveryCustomer.phone2 && (
-                                              <div className="text-white">{order.deliveryCustomer.phone2}</div>
+                                              <div className="text-white">{formatPhoneNumber(order.deliveryCustomer.phone2)}</div>
                                             )}
                                           </div>
                                         </div>

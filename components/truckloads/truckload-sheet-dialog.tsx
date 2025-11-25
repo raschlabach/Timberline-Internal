@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useRef } from "react"
 import { useReactToPrint } from "react-to-print"
+import { formatPhoneNumber } from "@/lib/utils"
 
 interface TruckloadStop {
   id: number
@@ -265,13 +266,13 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
                           {stop.assignment_type === 'pickup' ? (
                             <>
                               {stop.pickup_customer.phone_number_1 && (
-                                <span>{stop.pickup_customer.phone_number_1}</span>
+                                <span>{formatPhoneNumber(stop.pickup_customer.phone_number_1)}</span>
                               )}
                               {stop.pickup_customer.phone_number_1 && stop.pickup_customer.phone_number_2 && (
                                 <span> | </span>
                               )}
                               {stop.pickup_customer.phone_number_2 && (
-                                <span>{stop.pickup_customer.phone_number_2}</span>
+                                <span>{formatPhoneNumber(stop.pickup_customer.phone_number_2)}</span>
                               )}
                               {!stop.pickup_customer.phone_number_1 && !stop.pickup_customer.phone_number_2 && (
                                 <span>No phone</span>
@@ -280,13 +281,13 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
                           ) : (
                             <>
                               {stop.delivery_customer.phone_number_1 && (
-                                <span>{stop.delivery_customer.phone_number_1}</span>
+                                <span>{formatPhoneNumber(stop.delivery_customer.phone_number_1)}</span>
                               )}
                               {stop.delivery_customer.phone_number_1 && stop.delivery_customer.phone_number_2 && (
                                 <span> | </span>
                               )}
                               {stop.delivery_customer.phone_number_2 && (
-                                <span>{stop.delivery_customer.phone_number_2}</span>
+                                <span>{formatPhoneNumber(stop.delivery_customer.phone_number_2)}</span>
                               )}
                               {!stop.delivery_customer.phone_number_1 && !stop.delivery_customer.phone_number_2 && (
                                 <span>No phone</span>

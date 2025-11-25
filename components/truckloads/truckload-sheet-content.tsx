@@ -1,5 +1,7 @@
 "use client"
 
+import { formatPhoneNumber } from "@/lib/utils"
+
 interface TruckloadStop {
   id: number
   assignment_type: 'pickup' | 'delivery'
@@ -319,13 +321,13 @@ export function TruckloadSheetContent({ truckload, stops, isPreview = false }: T
                       <span>{group.customerAddress}</span>
                       <span className="ml-2">
                         {group.phone1 && (
-                          <span>{group.phone1}</span>
+                          <span>{formatPhoneNumber(group.phone1)}</span>
                         )}
                         {group.phone1 && group.phone2 && (
                           <span> | </span>
                         )}
                         {group.phone2 && (
-                          <span>{group.phone2}</span>
+                          <span>{formatPhoneNumber(group.phone2)}</span>
                         )}
                         {!group.phone1 && !group.phone2 && (
                           <span>No phone</span>

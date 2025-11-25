@@ -10,6 +10,7 @@ import { TruckloadSheetDialog } from "./truckload-sheet-dialog"
 import { TruckloadSheetContent } from "./truckload-sheet-content"
 import { PickupSheet } from "./pickup-sheet"
 import { LoadingSheet } from "./loading-sheet"
+import { formatPhoneNumber } from "@/lib/utils"
 
 interface TruckloadStop {
   id: number
@@ -352,14 +353,14 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
       shipper: {
         name: stop.pickup_customer.name,
         address: stop.pickup_customer.address,
-        phone: '',
-        phone2: ''
+        phone: formatPhoneNumber(stop.pickup_customer.phone_number_1) || '',
+        phone2: formatPhoneNumber(stop.pickup_customer.phone_number_2) || ''
       },
       consignee: {
         name: stop.delivery_customer.name,
         address: stop.delivery_customer.address,
-        phone: '',
-        phone2: ''
+        phone: formatPhoneNumber(stop.delivery_customer.phone_number_1) || '',
+        phone2: formatPhoneNumber(stop.delivery_customer.phone_number_2) || ''
       },
       items
     }

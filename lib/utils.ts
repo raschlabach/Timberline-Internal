@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Formats a phone number string to standard US format (XXX) XXX-XXXX
+ * Formats a phone number string to standard US format XXX-XXX-XXXX
  * @param phoneNumber The phone number to format
  * @returns Formatted phone number string
  */
@@ -20,7 +20,7 @@ export function formatPhoneNumber(phoneNumber: string | null | undefined): strin
   const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
   
   if (match) {
-    return '(' + match[1] + ') ' + match[2] + '-' + match[3];
+    return match[1] + '-' + match[2] + '-' + match[3];
   }
   
   return phoneNumber; // Return original if not formattable
