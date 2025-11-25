@@ -589,7 +589,7 @@ export default function OrderEntryPage() {
                     onCheckedChange={(checked: boolean) => handleFilterChange('localFlatbed', checked)}
                   />
                   <FilterToggle 
-                    label="RR Order" 
+                    label="RNR Order" 
                     checked={formState.filters.rrOrder}
                     onCheckedChange={(checked: boolean) => handleFilterChange('rrOrder', checked)}
                   />

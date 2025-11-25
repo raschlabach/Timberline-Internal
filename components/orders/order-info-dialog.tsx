@@ -689,7 +689,7 @@ export function OrderInfoDialog({
                     checked={formData.filters.rrOrder}
                     onCheckedChange={(checked) => handleFilterChange('rrOrder', checked as boolean)}
                   />
-                  <Label htmlFor="rrOrder">RR Order</Label>
+                  <Label htmlFor="rrOrder">RNR Order</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox

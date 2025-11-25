@@ -301,7 +301,9 @@ function useLoadBoardOrders(
     try {
       // Add cache-busting timestamp to prevent 304 responses
       const timestamp = new Date().getTime();
-      const response = await fetch(`/api/orders/recent?t=${timestamp}`, {
+      // Include 'all' parameter when viewMode is 'all' to fetch all orders including assigned ones
+      const allParam = viewMode === 'all' ? '&all=true' : '';
+      const response = await fetch(`/api/orders/recent?t=${timestamp}${allParam}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -317,7 +319,7 @@ function useLoadBoardOrders(
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [viewMode]);
 
   // Check for new orders using localStorage (works across page navigations)
   useEffect(() => {
@@ -360,6 +362,11 @@ function useLoadBoardOrders(
 
     return () => clearInterval(intervalId);
   }, [fetchOrders]);
+
+  // Refetch orders when viewMode changes
+  useEffect(() => {
+    fetchOrders();
+  }, [viewMode, fetchOrders]);
 
   // Listen for orderCreated event to refresh immediately (works if on same page)
   useEffect(() => {

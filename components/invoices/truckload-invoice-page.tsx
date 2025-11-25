@@ -71,6 +71,7 @@ interface TruckloadOrdersApiResponse {
     comments: string | null
     is_rush: boolean
     needs_attention: boolean
+    is_transfer_order: boolean
     pickup_driver_name: string | null
     pickup_assignment_date: string | null
     delivery_driver_name: string | null
@@ -98,6 +99,7 @@ interface AssignedOrderRow {
   pickupAssignmentDate: string | null
   deliveryDriverName: string | null
   deliveryAssignmentDate: string | null
+  isTransferOrder: boolean
 }
 
 interface CrossDriverFreightItem {
@@ -142,20 +144,78 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     editableCrossDriverFreightRef.current = editableCrossDriverFreight
   }, [editableCrossDriverFreight])
 
+  // Group orders by orderId to combine transfer orders
+  const groupedOrders = useMemo(() => {
+    const groups = new Map<string, AssignedOrderRow[]>()
+    
+    orders.forEach(order => {
+      const existing = groups.get(order.orderId) || []
+      existing.push(order)
+      groups.set(order.orderId, existing)
+    })
+    
+    // Convert to array of combined rows
+    const combined: Array<AssignedOrderRow & { isCombined?: boolean }> = []
+    const processedOrderIds = new Set<string>()
+    
+    groups.forEach((groupOrders, orderId) => {
+      // Check if this is a transfer order (has both pickup and delivery in same truckload)
+      const hasPickup = groupOrders.some(o => o.assignmentType === 'pickup')
+      const hasDelivery = groupOrders.some(o => o.assignmentType === 'delivery')
+      const isTransfer = hasPickup && hasDelivery
+      
+      if (isTransfer && !processedOrderIds.has(orderId)) {
+        // Combine into single row - use the order that has the quote if available
+        const pickupOrder = groupOrders.find(o => o.assignmentType === 'pickup')
+        const deliveryOrder = groupOrders.find(o => o.assignmentType === 'delivery')
+        const orderWithQuote = pickupOrder?.freightQuote ? pickupOrder : (deliveryOrder?.freightQuote ? deliveryOrder : pickupOrder || deliveryOrder!)
+        
+        combined.push({
+          ...orderWithQuote,
+          assignmentType: 'pickup', // Use pickup as primary for display
+          sequenceNumber: Math.min(...groupOrders.map(o => o.sequenceNumber)), // Use lowest sequence
+          isCombined: true
+        })
+        processedOrderIds.add(orderId)
+      } else if (!isTransfer) {
+        // Non-transfer orders, add each one
+        groupOrders.forEach(order => {
+          const uniqueKey = `${orderId}-${order.assignmentType}`
+          if (!processedOrderIds.has(uniqueKey)) {
+            combined.push(order)
+            processedOrderIds.add(uniqueKey)
+          }
+        })
+      }
+    })
+    
+    return combined.sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+  }, [orders])
+
   // Calculate totals for payroll
   const totals = useMemo(() => {
-    const pickupCount = orders.filter(o => o.assignmentType === 'pickup').length
-    const deliveryCount = orders.filter(o => o.assignmentType === 'delivery').length
-    const totalQuotes = orders.reduce((sum, order) => {
-      if (order.freightQuote) {
+    // Count unique orders, not assignments
+    const uniqueOrderIds = new Set(orders.map(o => o.orderId))
+    const pickupCount = orders.filter(o => o.assignmentType === 'pickup' && !o.isTransferOrder).length
+    const deliveryCount = orders.filter(o => o.assignmentType === 'delivery' && !o.isTransferOrder).length
+    const transferCount = Array.from(uniqueOrderIds).filter(orderId => {
+      const orderAssignments = orders.filter(o => o.orderId === orderId)
+      return orderAssignments.some(o => o.assignmentType === 'pickup') && 
+             orderAssignments.some(o => o.assignmentType === 'delivery')
+    }).length
+    
+    const totalQuotes = Array.from(uniqueOrderIds).reduce((sum, orderId) => {
+      const orderAssignments = orders.filter(o => o.orderId === orderId)
+      const firstOrder = orderAssignments[0]
+      if (firstOrder?.freightQuote) {
         // Parse quote string (could be "$123.45" or "123.45")
-        const cleaned = order.freightQuote.replace(/[^0-9.-]/g, '')
+        const cleaned = firstOrder.freightQuote.replace(/[^0-9.-]/g, '')
         const value = parseFloat(cleaned)
         return sum + (isNaN(value) ? 0 : value)
       }
       return sum
     }, 0)
-    return { pickupCount, deliveryCount, totalQuotes }
+    return { pickupCount, deliveryCount, transferCount, totalQuotes }
   }, [orders])
 
   // Helper function to format dates for date input (YYYY-MM-DD)
@@ -706,6 +766,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           pickupAssignmentDate: o.pickup_assignment_date || null,
           deliveryDriverName: o.delivery_driver_name || null,
           deliveryAssignmentDate: o.delivery_assignment_date || null,
+          isTransferOrder: o.is_transfer_order || false,
         }))
         // Fetch paying customer names in parallel
         const payingNames = await Promise.all(rowsBase.map(r => fetchPayingCustomerName(r.orderId)))
@@ -1034,14 +1095,28 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         .map(([dimension, quantity]) => `${quantity} ${dimension}`)
                         .join(', ')
                       
+                      const isTransfer = (row as any).isCombined || false
+                      
                       return (
                         <TableRow 
-                          key={`${row.orderId}-${row.assignmentType}`} 
-                          className={`${row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50'} hover:bg-gray-300 transition-colors cursor-pointer hover:shadow-sm`}
+                          key={`${row.orderId}${isTransfer ? '-transfer' : `-${row.assignmentType}`}`} 
+                          className={`${isTransfer ? 'bg-blue-50' : (row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50')} hover:bg-gray-300 transition-colors cursor-pointer hover:shadow-sm`}
                         >
                           <TableCell className="text-sm text-center">{row.sequenceNumber}</TableCell>
-                          <TableCell className="text-sm">{row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName}</TableCell>
-                          <TableCell className="text-sm">{row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName}</TableCell>
+                          <TableCell className="text-sm">
+                            {isTransfer ? (
+                              <span className="font-bold">{row.pickupName}</span>
+                            ) : (
+                              row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {isTransfer ? (
+                              <span className="font-bold">{row.deliveryName}</span>
+                            ) : (
+                              row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName
+                            )}
+                          </TableCell>
                           <TableCell className="text-sm">{row.payingCustomerName || '—'}</TableCell>
                           <TableCell className="text-sm" style={{ width: '90px' }}>
                             <Input
@@ -1076,7 +1151,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm">
-                            {row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
+                            {isTransfer ? (
+                              <div className="text-xs text-blue-700 font-medium">Transfer Order</div>
+                            ) : row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
                               <div className="text-xs flex items-center gap-1.5">
                                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                                   {row.pickupDriverName !== selectedTruckload?.driver.driverName && (
@@ -1376,7 +1453,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map((row) => {
+                    {groupedOrders.map((row) => {
                       // Calculate total quantity of skids and vinyl combined
                       const totalSkidsQuantity = row.skidsData.reduce((sum, skid) => sum + skid.quantity, 0)
                       const totalVinylQuantity = row.vinylData.reduce((sum, vinyl) => sum + vinyl.quantity, 0)
@@ -1398,11 +1475,25 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         .map(([dimension, quantity]) => `${quantity} ${dimension}`)
                         .join(', ')
                       
+                      const isTransfer = (row as any).isCombined || false
+                      
                       return (
-                        <TableRow key={`${row.orderId}-${row.assignmentType}`} className="print-item-group">
+                        <TableRow key={`${row.orderId}${isTransfer ? '-transfer' : `-${row.assignmentType}`}`} className="print-item-group">
                           <TableCell className="text-xs">{row.sequenceNumber}</TableCell>
-                          <TableCell className="text-xs">{row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName}</TableCell>
-                          <TableCell className="text-xs">{row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName}</TableCell>
+                          <TableCell className="text-xs">
+                            {isTransfer ? (
+                              <span className="font-bold">{row.pickupName}</span>
+                            ) : (
+                              row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {isTransfer ? (
+                              <span className="font-bold">{row.deliveryName}</span>
+                            ) : (
+                              row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName
+                            )}
+                          </TableCell>
                           <TableCell className="text-xs">{row.payingCustomerName || '—'}</TableCell>
                           <TableCell className="text-xs" style={{ width: '90px' }}>{row.freightQuote || '—'}</TableCell>
                           <TableCell className="text-xs text-right">{row.footage}</TableCell>
@@ -1428,7 +1519,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </TableCell>
                           <TableCell className="text-xs">
-                            {row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
+                            {isTransfer ? (
+                              <div className="text-xs text-blue-700 font-medium">Transfer Order</div>
+                            ) : row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
                               <div className="flex items-center gap-1.5">
                                 <div className="w-3 h-3 flex items-center justify-center flex-shrink-0">
                                   {row.pickupDriverName !== selectedTruckload?.driver.driverName && (
