@@ -14,6 +14,141 @@ import { TruckloadSummary } from '@/types/truckloads'
 import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
 import { ChevronDown, ChevronUp, Package, CheckCircle2 } from 'lucide-react'
 
+// Component for truckload selection grid
+function TruckloadSelectionGrid({
+  driverColumns,
+  collapsedDrivers,
+  toggleDriverCollapse,
+  selectedTruckloadId,
+  onTruckloadSelect,
+  selectionType
+}: {
+  driverColumns: Array<{ driverName: string; driverColor: string; truckloads: TruckloadSummary[] }>
+  collapsedDrivers: Record<string, boolean>
+  toggleDriverCollapse: (driverName: string) => void
+  selectedTruckloadId: number | null
+  onTruckloadSelect: (truckloadId: number) => void
+  selectionType: 'pickup' | 'delivery'
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+      {driverColumns.map((driver) => {
+        const isCollapsed = collapsedDrivers[driver.driverName] !== undefined ? collapsedDrivers[driver.driverName] : true
+        const completedCount = driver.truckloads.filter(t => t.isCompleted).length
+        
+        return (
+          <Card 
+            key={driver.driverName} 
+            className="w-full bg-white shadow-lg border-0 h-fit"
+            style={{
+              borderLeft: `4px solid ${driver.driverColor}`,
+            }}
+          >
+            <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 -ml-1"
+                    onClick={() => toggleDriverCollapse(driver.driverName)}
+                  >
+                    {isCollapsed ? (
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <ChevronUp className="h-4 w-4 text-gray-500" />
+                    )}
+                  </Button>
+                  <div 
+                    className="w-3 h-3 rounded-full shadow-sm" 
+                    style={{ backgroundColor: driver.driverColor }}
+                  />
+                  <div className="flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">
+                      {driver.driverName}
+                    </CardTitle>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <Package className="h-2.5 w-2.5" />
+                        <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
+                        <span>{completedCount} complete</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            {!isCollapsed && (
+              <CardContent className="p-3">
+                <div className="space-y-2">
+                  {driver.truckloads.map((truckload) => (
+                    <div
+                      key={truckload.id}
+                      className={`
+                        p-3 rounded-lg border cursor-pointer transition-colors
+                        ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'hover:bg-gray-50 border-gray-200'}
+                      `}
+                      onClick={() => onTruckloadSelect(truckload.id)}
+                    >
+                      <div className="text-xs font-medium text-gray-700 mb-1">
+                        {format(new Date(truckload.startDate), 'MMM d')} - {format(new Date(truckload.endDate), 'MMM d, yyyy')}
+                      </div>
+                      {truckload.description && (
+                        <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                          {truckload.description}
+                        </div>
+                      )}
+                      {truckload.trailerNumber && (
+                        <div className="text-xs text-gray-500 mb-2">
+                          Trailer: <span className="font-medium">{truckload.trailerNumber}</span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-3 gap-1 text-xs">
+                        <div className="bg-red-50 p-1.5 rounded border border-red-100">
+                          <div className="text-red-700 font-semibold">Pickup</div>
+                          <div className="text-red-800 font-bold">{truckload.pickupFootage.toLocaleString()} ft²</div>
+                        </div>
+                        <div className="bg-gray-50 p-1.5 rounded border border-gray-200">
+                          <div className="text-gray-700 font-semibold">Delivery</div>
+                          <div className="text-gray-800 font-bold">{truckload.deliveryFootage.toLocaleString()} ft²</div>
+                        </div>
+                        {truckload.transferFootage > 0 ? (
+                          <div className="bg-blue-50 p-1.5 rounded border border-blue-100">
+                            <div className="text-blue-700 font-semibold">Transfer</div>
+                            <div className="text-blue-800 font-bold">{truckload.transferFootage.toLocaleString()} ft²</div>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 p-1.5 rounded border border-gray-200 opacity-50">
+                            <div className="text-gray-500 font-semibold">Transfer</div>
+                            <div className="text-gray-600 font-bold">0 ft²</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {driver.truckloads.length === 0 && (
+                    <div className="text-center py-6">
+                      <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                        <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                        <p className="text-xs text-gray-500 font-medium">
+                      No truckloads assigned
+                    </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            )}
+            </Card>
+        )
+      })}
+      </div>
+  )
+}
+
 interface PoolItem {
   orderId: number
   assignmentTypes: ('pickup' | 'delivery')[]
@@ -44,7 +179,8 @@ export function BulkAssignmentDialog({
   const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([])
   const [truckloads, setTruckloads] = useState<TruckloadSummary[]>([])
   const [drivers, setDrivers] = useState<DriverOption[]>([])
-  const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
+  const [selectedPickupTruckloadId, setSelectedPickupTruckloadId] = useState<number | null>(null)
+  const [selectedDeliveryTruckloadId, setSelectedDeliveryTruckloadId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [truckloadView, setTruckloadView] = useState<TruckloadView>('current')
   const [collapsedDrivers, setCollapsedDrivers] = useState<Record<string, boolean>>({})
@@ -60,7 +196,8 @@ export function BulkAssignmentDialog({
   useEffect(() => {
     if (isOpen) {
       setTruckloadView('current')
-      setSelectedTruckloadId(null)
+      setSelectedPickupTruckloadId(null)
+      setSelectedDeliveryTruckloadId(null)
       fetchData()
     }
   }, [isOpen])
@@ -70,20 +207,29 @@ export function BulkAssignmentDialog({
   }, [allTruckloads, truckloadView])
 
   useEffect(() => {
-    if (selectedTruckloadId && !truckloads.some(function hasSelection(truckload) {
-      return truckload.id === selectedTruckloadId
+    if (selectedPickupTruckloadId && !truckloads.some(function hasSelection(truckload) {
+      return truckload.id === selectedPickupTruckloadId
     })) {
-      setSelectedTruckloadId(null)
+      setSelectedPickupTruckloadId(null)
     }
-  }, [truckloads, selectedTruckloadId])
+    if (selectedDeliveryTruckloadId && !truckloads.some(function hasSelection(truckload) {
+      return truckload.id === selectedDeliveryTruckloadId
+    })) {
+      setSelectedDeliveryTruckloadId(null)
+    }
+  }, [truckloads, selectedPickupTruckloadId, selectedDeliveryTruckloadId])
 
   function handleTruckloadViewChange(nextValue: string): void {
     const view = nextValue === 'completed' ? 'completed' : 'current'
     setTruckloadView(view)
   }
 
-  function handleTruckloadSelection(truckloadId: number): void {
-    setSelectedTruckloadId(truckloadId)
+  function handlePickupTruckloadSelection(truckloadId: number): void {
+    setSelectedPickupTruckloadId(truckloadId)
+  }
+
+  function handleDeliveryTruckloadSelection(truckloadId: number): void {
+    setSelectedDeliveryTruckloadId(truckloadId)
   }
 
   async function fetchData(): Promise<void> {
@@ -124,29 +270,61 @@ export function BulkAssignmentDialog({
   }
 
   async function handleAssign(): Promise<void> {
-    if (!selectedTruckloadId) {
-      toast.error('Please select a truckload')
+    // Check if we have the required selections
+    const hasPickups = pickupCount > 0
+    const hasDeliveries = deliveryCount > 0
+    
+    if (hasPickups && !selectedPickupTruckloadId) {
+      toast.error('Please select a truckload for pickups')
+      return
+    }
+    
+    if (hasDeliveries && !selectedDeliveryTruckloadId) {
+      toast.error('Please select a truckload for deliveries')
       return
     }
 
     setIsLoading(true)
 
     try {
-      // Assign each item in the pool
-      for (const item of poolItems) {
-        for (const assignmentType of item.assignmentTypes) {
-          const response = await fetch('/api/truckloads/assign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orderId: item.orderId,
-              truckloadId: selectedTruckloadId,
-              assignmentType
+      // Assign pickups first
+      if (hasPickups && selectedPickupTruckloadId) {
+        for (const item of poolItems) {
+          if (item.assignmentTypes.includes('pickup')) {
+            const response = await fetch('/api/truckloads/assign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: item.orderId,
+                truckloadId: selectedPickupTruckloadId,
+                assignmentType: 'pickup'
+              })
             })
-          })
 
-          if (!response.ok) {
-            throw new Error(`Failed to assign order ${item.orderId} ${assignmentType}`)
+            if (!response.ok) {
+              throw new Error(`Failed to assign order ${item.orderId} pickup`)
+            }
+          }
+        }
+      }
+
+      // Then assign deliveries
+      if (hasDeliveries && selectedDeliveryTruckloadId) {
+        for (const item of poolItems) {
+          if (item.assignmentTypes.includes('delivery')) {
+            const response = await fetch('/api/truckloads/assign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: item.orderId,
+                truckloadId: selectedDeliveryTruckloadId,
+                assignmentType: 'delivery'
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error(`Failed to assign order ${item.orderId} delivery`)
+            }
           }
         }
       }
@@ -248,10 +426,10 @@ export function BulkAssignmentDialog({
             </ScrollArea>
           </div>
 
-          {/* Truckload Selection */}
-          <div className="space-y-2 flex-1 overflow-hidden">
+          {/* Truckload Selection - Split into Pickup and Delivery */}
+          <div className="space-y-6 flex-1 overflow-hidden">
             <div className="flex items-center justify-between gap-4">
-              <Label className="text-lg font-semibold">Select Truckload</Label>
+              <Label className="text-lg font-semibold">Select Truckloads</Label>
               <Tabs value={truckloadView} onValueChange={handleTruckloadViewChange}>
                 <TabsList>
                   <TabsTrigger value="current">Current</TabsTrigger>
@@ -259,121 +437,50 @@ export function BulkAssignmentDialog({
                 </TabsList>
               </Tabs>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-              {driverColumns.map((driver) => {
-                const isCollapsed = collapsedDrivers[driver.driverName] !== undefined ? collapsedDrivers[driver.driverName] : true
-                const completedCount = driver.truckloads.filter(t => t.isCompleted).length
-                
-                return (
-                  <Card 
-                    key={driver.driverName} 
-                    className="w-full bg-white shadow-lg border-0 h-fit"
-                    style={{
-                      borderLeft: `4px solid ${driver.driverColor}`,
-                    }}
-                  >
-                    <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 -ml-1"
-                            onClick={() => toggleDriverCollapse(driver.driverName)}
-                          >
-                            {isCollapsed ? (
-                              <ChevronDown className="h-4 w-4 text-gray-500" />
-                            ) : (
-                              <ChevronUp className="h-4 w-4 text-gray-500" />
-                            )}
-                          </Button>
-                          <div 
-                            className="w-3 h-3 rounded-full shadow-sm" 
-                            style={{ backgroundColor: driver.driverColor }}
-                          />
-                          <div className="flex-1">
-                            <CardTitle className="text-base font-semibold text-gray-900">
-                              {driver.driverName}
-                            </CardTitle>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <div className="flex items-center gap-1 text-xs text-gray-600">
-                                <Package className="h-2.5 w-2.5" />
-                                <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
-                              </div>
-                              <div className="flex items-center gap-1 text-xs text-gray-600">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
-                                <span>{completedCount} complete</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    {!isCollapsed && (
-                      <CardContent className="p-3">
-                        <div className="space-y-2">
-                          {driver.truckloads.map((truckload) => (
-                            <div
-                              key={truckload.id}
-                              className={`
-                                p-3 rounded-lg border cursor-pointer transition-colors
-                                ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'hover:bg-gray-50 border-gray-200'}
-                              `}
-                              onClick={() => handleTruckloadSelection(truckload.id)}
-                            >
-                              <div className="text-xs font-medium text-gray-700 mb-1">
-                                {format(new Date(truckload.startDate), 'MMM d')} - {format(new Date(truckload.endDate), 'MMM d, yyyy')}
-                              </div>
-                              {truckload.description && (
-                                <div className="text-xs text-gray-600 mb-2 line-clamp-2">
-                                  {truckload.description}
-                                </div>
-                              )}
-                              {truckload.trailerNumber && (
-                                <div className="text-xs text-gray-500 mb-2">
-                                  Trailer: <span className="font-medium">{truckload.trailerNumber}</span>
-                                </div>
-                              )}
-                              <div className="grid grid-cols-3 gap-1 text-xs">
-                                <div className="bg-red-50 p-1.5 rounded border border-red-100">
-                                  <div className="text-red-700 font-semibold">Pickup</div>
-                                  <div className="text-red-800 font-bold">{truckload.pickupFootage.toLocaleString()} ft²</div>
-                                </div>
-                                <div className="bg-gray-50 p-1.5 rounded border border-gray-200">
-                                  <div className="text-gray-700 font-semibold">Delivery</div>
-                                  <div className="text-gray-800 font-bold">{truckload.deliveryFootage.toLocaleString()} ft²</div>
-                                </div>
-                                {truckload.transferFootage > 0 ? (
-                                  <div className="bg-blue-50 p-1.5 rounded border border-blue-100">
-                                    <div className="text-blue-700 font-semibold">Transfer</div>
-                                    <div className="text-blue-800 font-bold">{truckload.transferFootage.toLocaleString()} ft²</div>
-                                  </div>
-                                ) : (
-                                  <div className="bg-gray-50 p-1.5 rounded border border-gray-200 opacity-50">
-                                    <div className="text-gray-500 font-semibold">Transfer</div>
-                                    <div className="text-gray-600 font-bold">0 ft²</div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                          {driver.truckloads.length === 0 && (
-                            <div className="text-center py-6">
-                              <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
-                                <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                                <p className="text-xs text-gray-500 font-medium">
-                              No truckloads assigned
-                            </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    )}
-                    </Card>
-                )
-              })}
+
+            {/* Pickup Assignment Section */}
+            {pickupCount > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-base font-semibold text-red-600">Pickup Assignments ({pickupCount})</Label>
+                  {selectedPickupTruckloadId && (
+                    <Badge variant="outline" className="text-xs">
+                      Selected
+                    </Badge>
+                  )}
+                </div>
+                <TruckloadSelectionGrid
+                  driverColumns={driverColumns}
+                  collapsedDrivers={collapsedDrivers}
+                  toggleDriverCollapse={toggleDriverCollapse}
+                  selectedTruckloadId={selectedPickupTruckloadId}
+                  onTruckloadSelect={handlePickupTruckloadSelection}
+                  selectionType="pickup"
+                />
               </div>
+            )}
+
+            {/* Delivery Assignment Section */}
+            {deliveryCount > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-base font-semibold text-gray-900">Delivery Assignments ({deliveryCount})</Label>
+                  {selectedDeliveryTruckloadId && (
+                    <Badge variant="outline" className="text-xs">
+                      Selected
+                    </Badge>
+                  )}
+                </div>
+                <TruckloadSelectionGrid
+                  driverColumns={driverColumns}
+                  collapsedDrivers={collapsedDrivers}
+                  toggleDriverCollapse={toggleDriverCollapse}
+                  selectedTruckloadId={selectedDeliveryTruckloadId}
+                  onTruckloadSelect={handleDeliveryTruckloadSelection}
+                  selectionType="delivery"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -381,7 +488,14 @@ export function BulkAssignmentDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleAssign} disabled={!selectedTruckloadId || isLoading}>
+          <Button 
+            onClick={handleAssign} 
+            disabled={
+              isLoading || 
+              (pickupCount > 0 && !selectedPickupTruckloadId) ||
+              (deliveryCount > 0 && !selectedDeliveryTruckloadId)
+            }
+          >
             {isLoading ? 'Assigning...' : `Assign All (${totalAssignments})`}
           </Button>
         </div>

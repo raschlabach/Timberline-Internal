@@ -515,6 +515,40 @@ export default function OrderEntryPage() {
                   
                   <div>
                     <Label htmlFor="paying-customer" className="mb-1 block font-medium text-sm">Paying Customer</Label>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          if (formState.pickupCustomer) {
+                            handleCustomerSelect('payingCustomer', formState.pickupCustomer)
+                          } else {
+                            toast.error('Please select a pickup customer first')
+                          }
+                        }}
+                        disabled={!formState.pickupCustomer}
+                      >
+                        Pickup
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          if (formState.deliveryCustomer) {
+                            handleCustomerSelect('payingCustomer', formState.deliveryCustomer)
+                          } else {
+                            toast.error('Please select a delivery customer first')
+                          }
+                        }}
+                        disabled={!formState.deliveryCustomer}
+                      >
+                        Delivery
+                      </Button>
+                    </div>
                     <div id="paying-customer">
                       <CustomerSelector 
                         label="Paying Customer"

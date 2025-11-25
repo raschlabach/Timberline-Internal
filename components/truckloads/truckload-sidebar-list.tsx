@@ -274,7 +274,7 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
       } else if (field === 'bol') {
         updates.bill_of_lading_number = editValues.bol
       } else if (field === 'trailer') {
-        updates.trailer_number = editValues.trailer
+        updates.trailerNumber = editValues.trailer
       } else if (field === 'dates') {
         // Send dates as YYYY-MM-DD strings to avoid timezone issues
         updates.startDate = editValues.startDate || null

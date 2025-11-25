@@ -133,8 +133,10 @@ export function CreateTruckloadDialog({
 
   function resetForm() {
     const resetSunday = startOfWeek(new Date(), { weekStartsOn: 0 })
+    // Preserve the driver selection when resetting
+    const preservedDriverId = selectedDriverId?.toString() || formData.driverId
     setFormData({
-      driverId: '',
+      driverId: preservedDriverId,
       trailerNumber: '',
       billOfLadingNumber: '',
       description: '',
