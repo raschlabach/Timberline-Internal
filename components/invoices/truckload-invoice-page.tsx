@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
-import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign } from 'lucide-react'
+import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -132,7 +132,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [selectedDriverId, setSelectedDriverId] = useState<string>('default')
   const [collapsedDrivers, setCollapsedDrivers] = useState<Set<string>>(new Set())
   const [editableCrossDriverFreight, setEditableCrossDriverFreight] = useState<CrossDriverFreightItem[]>([])
-  const [showAllQuotesFilled, setShowAllQuotesFilled] = useState<boolean>(true)
+  const [showCompleted, setShowCompleted] = useState<boolean>(true)
   const [deductByFootage, setDeductByFootage] = useState<boolean>(false)
   const [footageDeductionRate, setFootageDeductionRate] = useState<number>(0)
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
@@ -808,19 +808,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         if (!matchesSearch) {
           return false
         }
-        // Apply quotes filled filter based on toggle
-        if (showAllQuotesFilled) {
-          // Show only truckloads with all quotes filled
-          return i.allQuotesFilled === true
+        // Apply completed filter based on toggle
+        if (showCompleted) {
+          // Show only completed truckloads
+          return i.isCompleted === true
         } else {
-          // Show only truckloads without all quotes filled
-          return i.allQuotesFilled !== true
+          // Show only incomplete truckloads
+          return i.isCompleted !== true
         }
       })
       .sort((a, b) => b.startDate.localeCompare(a.startDate)) // Sort descending for most recent first
 
-    // If showing all quotes filled, limit to 5 newest
-    if (showAllQuotesFilled) {
+    // If showing completed, limit to 5 newest
+    if (showCompleted) {
       filteredItems = filteredItems.slice(0, 5)
     }
 
@@ -833,7 +833,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })
 
     return Object.values(groups)
-  }, [searchValue, truckloads, selectedDriverId, showAllQuotesFilled])
+  }, [searchValue, truckloads, selectedDriverId, showCompleted])
 
   // Auto-select first truckload when filter changes and current selection doesn't match
   useEffect(() => {
@@ -910,13 +910,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           </Select>
         </div>
         <div className="mb-2 flex items-center justify-between gap-2 border border-gray-300 rounded-md px-3 py-2">
-          <Label htmlFor="quotes-toggle" className="text-xs cursor-pointer flex-1">
-            {showAllQuotesFilled ? 'All Quotes Filled (5 newest)' : 'Missing Quotes'}
+          <Label htmlFor="completed-toggle" className="text-xs cursor-pointer flex-1">
+            {showCompleted ? 'Completed (5 newest)' : 'Incomplete'}
           </Label>
           <Switch
-            id="quotes-toggle"
-            checked={showAllQuotesFilled}
-            onCheckedChange={setShowAllQuotesFilled}
+            id="completed-toggle"
+            checked={showCompleted}
+            onCheckedChange={setShowCompleted}
           />
         </div>
         <Separator className="my-2" />
@@ -983,12 +983,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               >
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   {isCompleted ? (
-                                    <Check className="h-4 w-4 text-green-600 mt-0.5" />
+                                    item.allQuotesFilled ? (
+                                      <DollarSign className="h-4 w-4 text-green-600 mt-0.5" />
+                                    ) : (
+                                      <CheckCircle className="h-4 w-4 text-orange-600 mt-0.5" />
+                                    )
                                   ) : (
-                                    <Timer className="h-4 w-4 text-yellow-600 mt-0.5" />
-                                  )}
-                                  {isCompleted && item.allQuotesFilled && (
-                                    <DollarSign className="h-4 w-4 text-green-700 mt-0.5" />
+                                    <Timer className="h-4 w-4 text-red-600 mt-0.5" />
                                   )}
                                 </div>
                                 <div className="flex-1 min-w-0">
