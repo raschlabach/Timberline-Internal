@@ -810,11 +810,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         }
         // Apply completed filter based on toggle
         if (showCompleted) {
-          // Show only completed truckloads
-          return i.isCompleted === true
+          // Show only completed truckloads that also have all quotes filled
+          return i.isCompleted === true && i.allQuotesFilled === true
         } else {
-          // Show only incomplete truckloads
-          return i.isCompleted !== true
+          // Show incomplete truckloads or completed ones without all quotes filled
+          return i.isCompleted !== true || i.allQuotesFilled !== true
         }
       })
       .sort((a, b) => b.startDate.localeCompare(a.startDate)) // Sort descending for most recent first
