@@ -149,15 +149,25 @@ export function TruckloadDetailsDialog({
       }
       if (formData.startDate) {
         // Send date as YYYY-MM-DD string to avoid timezone issues
-        updates.startDate = typeof formData.startDate === 'string' 
-          ? formData.startDate.split('T')[0] 
-          : format(new Date(formData.startDate), 'yyyy-MM-dd')
+        // HTML date inputs return YYYY-MM-DD strings, so use directly
+        if (typeof formData.startDate === 'string') {
+          // Extract just the date part (first 10 characters) to ensure YYYY-MM-DD format
+          updates.startDate = formData.startDate.substring(0, 10)
+        } else {
+          // Fallback if somehow it's not a string (shouldn't happen with date inputs)
+          updates.startDate = format(new Date(formData.startDate), 'yyyy-MM-dd')
+        }
       }
       if (formData.endDate) {
         // Send date as YYYY-MM-DD string to avoid timezone issues
-        updates.endDate = typeof formData.endDate === 'string' 
-          ? formData.endDate.split('T')[0] 
-          : format(new Date(formData.endDate), 'yyyy-MM-dd')
+        // HTML date inputs return YYYY-MM-DD strings, so use directly
+        if (typeof formData.endDate === 'string') {
+          // Extract just the date part (first 10 characters) to ensure YYYY-MM-DD format
+          updates.endDate = formData.endDate.substring(0, 10)
+        } else {
+          // Fallback if somehow it's not a string (shouldn't happen with date inputs)
+          updates.endDate = format(new Date(formData.endDate), 'yyyy-MM-dd')
+        }
       }
       if (formData.description !== undefined) {
         updates.description = formData.description

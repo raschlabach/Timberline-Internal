@@ -172,22 +172,36 @@ export async function PATCH(
 
     if (startDate !== undefined) {
       updates.push(`start_date = $${paramIndex++}`)
-      // Ensure date is in YYYY-MM-DD format (extract date part if ISO string)
-      values.push(
-        startDate && typeof startDate === 'string' 
-          ? (startDate.includes('T') ? startDate.split('T')[0] : startDate)
-          : (startDate ? new Date(startDate).toISOString().split('T')[0] : null)
-      )
+      // Ensure date is in YYYY-MM-DD format - extract date part if ISO string, otherwise use as-is
+      // Never use new Date() as it causes timezone shifts
+      if (!startDate) {
+        values.push(null)
+      } else if (typeof startDate === 'string') {
+        // If it's already a string, extract just the date part (YYYY-MM-DD)
+        const datePart = startDate.includes('T') ? startDate.split('T')[0] : startDate.split(' ')[0]
+        // Validate it's in YYYY-MM-DD format (10 characters)
+        values.push(datePart.length === 10 ? datePart : datePart.substring(0, 10))
+      } else {
+        // If it's not a string, it shouldn't happen, but handle it safely
+        values.push(null)
+      }
     }
 
     if (endDate !== undefined) {
       updates.push(`end_date = $${paramIndex++}`)
-      // Ensure date is in YYYY-MM-DD format (extract date part if ISO string)
-      values.push(
-        endDate && typeof endDate === 'string' 
-          ? (endDate.includes('T') ? endDate.split('T')[0] : endDate)
-          : (endDate ? new Date(endDate).toISOString().split('T')[0] : null)
-      )
+      // Ensure date is in YYYY-MM-DD format - extract date part if ISO string, otherwise use as-is
+      // Never use new Date() as it causes timezone shifts
+      if (!endDate) {
+        values.push(null)
+      } else if (typeof endDate === 'string') {
+        // If it's already a string, extract just the date part (YYYY-MM-DD)
+        const datePart = endDate.includes('T') ? endDate.split('T')[0] : endDate.split(' ')[0]
+        // Validate it's in YYYY-MM-DD format (10 characters)
+        values.push(datePart.length === 10 ? datePart : datePart.substring(0, 10))
+      } else {
+        // If it's not a string, it shouldn't happen, but handle it safely
+        values.push(null)
+      }
     }
 
     if (trailerNumber !== undefined) {

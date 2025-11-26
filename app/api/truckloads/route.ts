@@ -321,13 +321,14 @@ export async function PATCH(request: Request) {
        RETURNING *`,
       [
         driverId, 
-        // Ensure dates are in YYYY-MM-DD format (extract date part if ISO string)
-        startDate && typeof startDate === 'string' 
-          ? (startDate.includes('T') ? startDate.split('T')[0] : startDate)
-          : (startDate ? new Date(startDate).toISOString().split('T')[0] : null),
-        endDate && typeof endDate === 'string' 
-          ? (endDate.includes('T') ? endDate.split('T')[0] : endDate)
-          : (endDate ? new Date(endDate).toISOString().split('T')[0] : null),
+        // Ensure dates are in YYYY-MM-DD format - extract date part if ISO string, otherwise use as-is
+        // Never use new Date() as it causes timezone shifts
+        !startDate ? null : (typeof startDate === 'string' 
+          ? (startDate.includes('T') ? startDate.split('T')[0] : startDate.split(' ')[0]).substring(0, 10)
+          : null),
+        !endDate ? null : (typeof endDate === 'string' 
+          ? (endDate.includes('T') ? endDate.split('T')[0] : endDate.split(' ')[0]).substring(0, 10)
+          : null),
         trailerNumber || null, 
         description || null, 
         id
