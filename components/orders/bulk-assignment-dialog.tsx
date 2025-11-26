@@ -94,7 +94,22 @@ function TruckloadSelectionGrid({
                       onClick={() => onTruckloadSelect(truckload.id)}
                     >
                       <div className="text-xs font-medium text-gray-700 mb-1">
-                        {format(new Date(truckload.startDate), 'MMM d')} - {format(new Date(truckload.endDate), 'MMM d, yyyy')}
+                        {(() => {
+                          // Parse date string manually to avoid timezone shifts
+                          const parseDateString = (dateString: string): Date => {
+                            if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
+                              const parts = dateString.split('-')
+                              const year = parseInt(parts[0], 10)
+                              const month = parseInt(parts[1], 10) - 1 // Month is 0-indexed
+                              const day = parseInt(parts[2], 10)
+                              return new Date(year, month, day)
+                            }
+                            return new Date(dateString)
+                          }
+                          const startDate = parseDateString(truckload.startDate)
+                          const endDate = parseDateString(truckload.endDate)
+                          return `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`
+                        })()}
                       </div>
                       {truckload.description && (
                         <div className="text-xs text-gray-600 mb-2 line-clamp-2">
