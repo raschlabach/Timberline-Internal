@@ -810,11 +810,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         }
         // Apply completed filter based on toggle
         if (showCompleted) {
-          // Show only completed truckloads that also have all quotes filled
-          return i.isCompleted === true && i.allQuotesFilled === true
+          // Show only incomplete truckloads (not completed)
+          return i.isCompleted !== true
         } else {
-          // Show incomplete truckloads or completed ones without all quotes filled
-          return i.isCompleted !== true || i.allQuotesFilled !== true
+          // Show completed truckloads (regardless of quotes filled status)
+          return i.isCompleted === true
         }
       })
       .sort((a, b) => b.startDate.localeCompare(a.startDate)) // Sort descending for most recent first
@@ -876,6 +876,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
 
   function formatDateShort(dateStr: string | null): string {
     if (!dateStr) return ''
+    // Parse date string manually to avoid timezone shifts
+    // Date strings from API are in YYYY-MM-DD format
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+      const parts = dateStr.split('-')
+      const year = parseInt(parts[0], 10)
+      const month = parseInt(parts[1], 10)
+      const day = parseInt(parts[2], 10)
+      return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${String(year).slice(-2)}`
+    }
+    // Fallback for other date formats
     const date = new Date(dateStr)
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
@@ -911,7 +921,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         </div>
         <div className="mb-2 flex items-center justify-between gap-2 border border-gray-300 rounded-md px-3 py-2">
           <Label htmlFor="completed-toggle" className="text-xs cursor-pointer flex-1">
-            {showCompleted ? 'Completed (5 newest)' : 'Incomplete'}
+            {showCompleted ? 'Incomplete (5 newest)' : 'Completed'}
           </Label>
           <Switch
             id="completed-toggle"
@@ -963,6 +973,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             
                             const formatDateShort = (dateStr: string | null): string => {
                               if (!dateStr) return ''
+                              // Parse date string manually to avoid timezone shifts
+                              // Date strings from API are in YYYY-MM-DD format
+                              if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+                                const parts = dateStr.split('-')
+                                const year = parseInt(parts[0], 10)
+                                const month = parseInt(parts[1], 10)
+                                const day = parseInt(parts[2], 10)
+                                return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${String(year).slice(-2)}`
+                              }
+                              // Fallback for other date formats
                               const date = new Date(dateStr)
                               const month = String(date.getMonth() + 1).padStart(2, '0')
                               const day = String(date.getDate()).padStart(2, '0')
