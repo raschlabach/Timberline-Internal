@@ -83,6 +83,7 @@ interface AssignedOrderRow {
   orderId: string
   assignmentType: 'pickup' | 'delivery'
   sequenceNumber: number
+  sequenceNumbers?: string // For transfer orders to show both sequence numbers
   pickupName: string
   deliveryName: string
   pickupAddress: string | null
@@ -131,7 +132,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [selectedDriverId, setSelectedDriverId] = useState<string>('default')
   const [collapsedDrivers, setCollapsedDrivers] = useState<Set<string>>(new Set())
   const [editableCrossDriverFreight, setEditableCrossDriverFreight] = useState<CrossDriverFreightItem[]>([])
-  const [showAllQuotesFilled, setShowAllQuotesFilled] = useState<boolean>(false)
+  const [showAllQuotesFilled, setShowAllQuotesFilled] = useState<boolean>(true)
   const [deductByFootage, setDeductByFootage] = useState<boolean>(false)
   const [footageDeductionRate, setFootageDeductionRate] = useState<number>(0)
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
@@ -171,10 +172,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         // For transfers, use delivery order (or pickup if delivery doesn't exist)
         const transferOrder = deliveryOrder || pickupOrder!
         
+        // Get both sequence numbers for display
+        const pickupSeq = pickupOrder?.sequenceNumber || 0
+        const deliverySeq = deliveryOrder?.sequenceNumber || 0
+        const sequenceNumbers = pickupSeq !== deliverySeq 
+          ? `${Math.min(pickupSeq, deliverySeq)}, ${Math.max(pickupSeq, deliverySeq)}`
+          : pickupSeq.toString()
+        
         combined.push({
           ...transferOrder,
           assignmentType: 'delivery', // Use delivery as primary for transfer orders
-          sequenceNumber: Math.min(...groupOrders.map(o => o.sequenceNumber)), // Use lowest sequence
+          sequenceNumber: Math.min(...groupOrders.map(o => o.sequenceNumber)), // Use lowest for sorting
+          sequenceNumbers: sequenceNumbers, // Store both for display
           isCombined: true
         })
         processedOrderIds.add(orderId)
@@ -1068,7 +1077,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map((row) => {
+                    {groupedOrders.map((row) => {
                       // Calculate total quantity of skids and vinyl combined
                       const totalSkidsQuantity = row.skidsData.reduce((sum, skid) => sum + skid.quantity, 0)
                       const totalVinylQuantity = row.vinylData.reduce((sum, vinyl) => sum + vinyl.quantity, 0)
@@ -1097,7 +1106,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           key={`${row.orderId}${isTransfer ? '-transfer' : `-${row.assignmentType}`}`} 
                           className={`${isTransfer ? 'bg-blue-50' : (row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50')} hover:bg-gray-300 transition-colors cursor-pointer hover:shadow-sm`}
                         >
-                          <TableCell className="text-sm text-center">{row.sequenceNumber}</TableCell>
+                          <TableCell className="text-sm text-center">
+                            {isTransfer && (row as any).sequenceNumbers ? (row as any).sequenceNumbers : row.sequenceNumber}
+                          </TableCell>
                           <TableCell className="text-sm">
                             {isTransfer ? (
                               <span className="font-bold">{row.pickupName}</span>
@@ -1474,7 +1485,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       
                       return (
                         <TableRow key={`${row.orderId}${isTransfer ? '-transfer' : `-${row.assignmentType}`}`} className="print-item-group">
-                          <TableCell className="text-xs">{row.sequenceNumber}</TableCell>
+                          <TableCell className="text-xs">
+                            {isTransfer && row.sequenceNumbers ? row.sequenceNumbers : row.sequenceNumber}
+                          </TableCell>
                           <TableCell className="text-xs">
                             {isTransfer ? (
                               <span className="font-bold">{row.pickupName}</span>
