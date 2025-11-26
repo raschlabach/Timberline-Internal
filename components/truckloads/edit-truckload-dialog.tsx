@@ -38,14 +38,28 @@ export function EditTruckloadDialog({
   onTruckloadUpdated 
 }: EditTruckloadDialogProps) {
   const [drivers, setDrivers] = useState<Driver[]>([])
+  // Helper function to parse date string without timezone issues
+  const parseDateString = (dateString: string): Date => {
+    // If already in YYYY-MM-DD format, parse manually to avoid timezone shifts
+    if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
+      const parts = dateString.split('-')
+      const year = parseInt(parts[0], 10)
+      const month = parseInt(parts[1], 10) - 1 // Month is 0-indexed
+      const day = parseInt(parts[2], 10)
+      return new Date(year, month, day)
+    }
+    // Fallback to regular Date parsing
+    return new Date(dateString)
+  }
+
   const [formData, setFormData] = useState({
     driverId: truckload.driverId.toString(),
     trailerNumber: truckload.trailerNumber || "",
     description: truckload.description || "",
-    startDate: format(new Date(truckload.startDate), "yyyy-MM-dd"),
-    startTime: format(new Date(truckload.startDate), "HH:mm"),
-    endDate: format(new Date(truckload.endDate), "yyyy-MM-dd"),
-    endTime: format(new Date(truckload.endDate), "HH:mm"),
+    startDate: truckload.startDate ? truckload.startDate.substring(0, 10) : "",
+    startTime: truckload.startDate ? format(parseDateString(truckload.startDate), "HH:mm") : "",
+    endDate: truckload.endDate ? truckload.endDate.substring(0, 10) : "",
+    endTime: truckload.endDate ? format(parseDateString(truckload.endDate), "HH:mm") : "",
   })
 
   // Update form data when truckload changes
@@ -54,10 +68,10 @@ export function EditTruckloadDialog({
       driverId: truckload.driverId.toString(),
       trailerNumber: truckload.trailerNumber || "",
       description: truckload.description || "",
-      startDate: format(new Date(truckload.startDate), "yyyy-MM-dd"),
-      startTime: format(new Date(truckload.startDate), "HH:mm"),
-      endDate: format(new Date(truckload.endDate), "yyyy-MM-dd"),
-      endTime: format(new Date(truckload.endDate), "HH:mm"),
+      startDate: truckload.startDate ? truckload.startDate.substring(0, 10) : "",
+      startTime: truckload.startDate ? format(parseDateString(truckload.startDate), "HH:mm") : "",
+      endDate: truckload.endDate ? truckload.endDate.substring(0, 10) : "",
+      endTime: truckload.endDate ? format(parseDateString(truckload.endDate), "HH:mm") : "",
     })
   }, [truckload])
 
