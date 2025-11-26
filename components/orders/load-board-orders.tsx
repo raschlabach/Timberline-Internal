@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, MessageSquare, Zap, Search, ChevronDown, ChevronUp, ChevronsUpDown, Truck, MapPin, ToggleLeft, ToggleRight, Paperclip } from "lucide-react";
+import { AlertCircle, MessageSquare, Zap, Search, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Truck, MapPin, ToggleLeft, ToggleRight, Paperclip, ArrowRightLeft } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Table,
@@ -192,7 +192,13 @@ interface LoadBoardOrdersProps {
   hideOnAnyAssignment?: boolean;
 }
 
-type ViewMode = 'unassigned' | 'all';
+interface ViewToggles {
+  unassigned: boolean;
+  pickup: boolean;
+  delivery: boolean;
+  assigned: boolean;
+  completed: boolean;
+}
 
 interface PoolItem {
   orderId: number
@@ -230,11 +236,20 @@ function useLoadBoardOrders(
   hideOnAnyAssignment: boolean = false
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'pickupDate', direction: 'asc' });
-  const [viewMode, setViewMode] = useState<ViewMode>('unassigned');
+  const [viewToggles, setViewToggles] = useState<ViewToggles>({
+    unassigned: true,
+    pickup: true,
+    delivery: false,
+    assigned: false,
+    completed: false
+  });
+  const [completedPage, setCompletedPage] = useState<number>(1);
+  const [completedTotalCount, setCompletedTotalCount] = useState<number>(0);
   const [activeFilters, setActiveFilters] = useState<{[key: string]: boolean}>({
     ohioToIndiana: false,
     backhaul: false,
@@ -264,9 +279,16 @@ function useLoadBoardOrders(
         }
       }
 
-      const savedView = localStorage.getItem(LOCAL_STORAGE_KEYS.view);
-      if (savedView === 'unassigned' || savedView === 'all') {
-        setViewMode(savedView);
+      const savedToggles = localStorage.getItem(LOCAL_STORAGE_KEYS.viewToggles);
+      if (savedToggles) {
+        try {
+          const parsed = JSON.parse(savedToggles) as ViewToggles;
+          if (parsed && typeof parsed === 'object') {
+            setViewToggles(parsed);
+          }
+        } catch (e) {
+          // Use default if parsing fails
+        }
       }
     } catch (storageError) {
       console.error('Error loading load board preferences:', storageError);
@@ -291,19 +313,18 @@ function useLoadBoardOrders(
 
   useEffect(() => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.view, viewMode);
+      localStorage.setItem(LOCAL_STORAGE_KEYS.viewToggles, JSON.stringify(viewToggles));
     } catch (storageError) {
-      console.error('Error saving load board view mode:', storageError);
+      console.error('Error saving load board view toggles:', storageError);
     }
-  }, [viewMode]);
+  }, [viewToggles]);
 
   const fetchOrders = useCallback(async () => {
     try {
       // Add cache-busting timestamp to prevent 304 responses
       const timestamp = new Date().getTime();
-      // Include 'all' parameter when viewMode is 'all' to fetch all orders including assigned ones
-      const allParam = viewMode === 'all' ? '&all=true' : '';
-      const response = await fetch(`/api/orders/recent?t=${timestamp}${allParam}`, {
+      // Always fetch all non-completed orders (we'll filter by toggles on the frontend)
+      const response = await fetch(`/api/orders/recent?t=${timestamp}&all=true`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -319,7 +340,26 @@ function useLoadBoardOrders(
     } finally {
       setIsLoading(false);
     }
-  }, [viewMode]);
+  }, []);
+
+  const fetchCompletedOrders = useCallback(async (page: number = 1) => {
+    try {
+      const limit = 100;
+      const offset = (page - 1) * limit;
+      const response = await fetch(`/api/orders/completed?limit=${limit}&offset=${offset}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch completed orders');
+      const data = await response.json();
+      setCompletedOrders(data.orders || []);
+      setCompletedTotalCount(data.totalCount || 0);
+    } catch (err) {
+      console.error('Error fetching completed orders:', err);
+    }
+  }, []);
 
   // Check for new orders using localStorage (works across page navigations)
   useEffect(() => {
@@ -363,10 +403,20 @@ function useLoadBoardOrders(
     return () => clearInterval(intervalId);
   }, [fetchOrders]);
 
-  // Refetch orders when viewMode changes
+  // Refetch orders when toggles change
   useEffect(() => {
     fetchOrders();
-  }, [viewMode, fetchOrders]);
+  }, [fetchOrders]);
+
+  // Fetch completed orders when completed toggle is enabled
+  useEffect(() => {
+    if (viewToggles.completed) {
+      fetchCompletedOrders(completedPage);
+    } else {
+      setCompletedOrders([]);
+      setCompletedPage(1);
+    }
+  }, [viewToggles.completed, completedPage, fetchCompletedOrders]);
 
   // Listen for orderCreated event to refresh immediately (works if on same page)
   useEffect(() => {
@@ -432,26 +482,37 @@ function useLoadBoardOrders(
     }
   };
 
-  // Function to get orders that match current view mode and search (before load type filtering)
+  // Function to get orders that match current toggles and search (before load type filtering)
   const getBaseOrders = () => {
-    return orders.filter(order => {
-      // Always exclude completed orders
-      if (order.status === 'completed') return false;
+    const allOrdersToCheck = [...orders];
+    if (viewToggles.completed) {
+      allOrdersToCheck.push(...completedOrders);
+    }
+    
+    return allOrdersToCheck.filter(order => {
+      const hasPickupAssignment = order.pickupAssignment !== null;
+      const hasDeliveryAssignment = order.deliveryAssignment !== null;
+      const isCompleted = order.status === 'completed';
 
-      // View mode filter
-      if (viewMode === 'unassigned') {
-        if (hideOnAnyAssignment) {
-          // Hide orders with ANY assignment (pickup or delivery)
-          const hasPickupAssignment = order.pickupAssignment !== null;
-          const hasDeliveryAssignment = order.deliveryAssignment !== null;
-          if (hasPickupAssignment || hasDeliveryAssignment) return false;
-        } else {
-          // Only hide orders with delivery assigned (default load board behavior)
-        const hasDeliveryAssignment = order.deliveryAssignment !== null;
-        if (hasDeliveryAssignment) return false;
+      // Filter by toggle states
+      if (isCompleted) {
+        if (!viewToggles.completed) return false;
+      } else {
+        let matchesAnyToggle = false;
+        if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
+          matchesAnyToggle = true;
         }
+        if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
+          matchesAnyToggle = true;
+        }
+        if (viewToggles.delivery && !hasPickupAssignment && hasDeliveryAssignment) {
+          matchesAnyToggle = true;
+        }
+        if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment && !order.isTransferOrder) {
+          matchesAnyToggle = true;
+        }
+        if (!matchesAnyToggle) return false;
       }
-      // For 'all' mode, we show all non-completed orders (no additional filtering needed)
 
       // Search term filter
       const searchLower = searchTerm.toLowerCase();
@@ -479,24 +540,54 @@ function useLoadBoardOrders(
 
   const filterCounts = getFilterCounts();
 
-  const filteredOrders = sortOrders(orders.filter(order => {
-    // Always exclude completed orders
-    if (order.status === 'completed') return false;
-
-    // View mode filter
-    if (viewMode === 'unassigned') {
-      if (hideOnAnyAssignment) {
-        // Hide orders with ANY assignment (pickup or delivery)
-        const hasPickupAssignment = order.pickupAssignment !== null;
-        const hasDeliveryAssignment = order.deliveryAssignment !== null;
-        if (hasPickupAssignment || hasDeliveryAssignment) return false;
-      } else {
-        // Only hide orders with delivery assigned (default load board behavior)
-      const hasDeliveryAssignment = order.deliveryAssignment !== null;
-      if (hasDeliveryAssignment) return false;
-      }
+  // Combine regular orders and completed orders based on toggles
+  const allOrdersToFilter = useMemo(() => {
+    const allOrders: Order[] = [];
+    
+    // Add non-completed orders if any toggle except completed is enabled
+    if (viewToggles.unassigned || viewToggles.pickup || viewToggles.delivery || viewToggles.assigned) {
+      allOrders.push(...orders);
     }
-    // For 'all' mode, we show all non-completed orders (no additional filtering needed)
+    
+    // Add completed orders if completed toggle is enabled
+    if (viewToggles.completed) {
+      allOrders.push(...completedOrders);
+    }
+    
+    return allOrders;
+  }, [orders, completedOrders, viewToggles]);
+
+  const filteredOrders = sortOrders(allOrdersToFilter.filter(order => {
+    const hasPickupAssignment = order.pickupAssignment !== null;
+    const hasDeliveryAssignment = order.deliveryAssignment !== null;
+    const isCompleted = order.status === 'completed';
+
+    // Filter by toggle states
+    if (isCompleted) {
+      // Only show if completed toggle is enabled
+      if (!viewToggles.completed) return false;
+    } else {
+      // Non-completed orders - check which toggle they match
+      let matchesAnyToggle = false;
+
+      if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
+        matchesAnyToggle = true;
+      }
+      if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
+        matchesAnyToggle = true;
+      }
+      if (viewToggles.delivery && !hasPickupAssignment && hasDeliveryAssignment) {
+        matchesAnyToggle = true;
+      }
+      if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
+        // Exclude transfer orders (pickup and delivery in same truckload)
+        if (!order.isTransferOrder) {
+          matchesAnyToggle = true;
+        }
+      }
+
+      if (!matchesAnyToggle) return false;
+    }
 
     // Search term filter
     const searchLower = searchTerm.toLowerCase();
@@ -526,8 +617,11 @@ function useLoadBoardOrders(
     setActiveFilters,
     sortConfig,
     setSortConfig,
-    viewMode,
-    setViewMode,
+    viewToggles,
+    setViewToggles,
+    completedPage,
+    setCompletedPage,
+    completedTotalCount,
     filterCounts
   };
 }
@@ -544,7 +638,8 @@ function formatDate(dateString: string): string {
 const LOCAL_STORAGE_KEYS = {
   filters: 'load-board-active-filters',
   sort: 'load-board-sort-config',
-  view: 'load-board-view-mode'
+  view: 'load-board-view-mode',
+  viewToggles: 'load-board-view-toggles'
 } as const;
 
 const FILTER_OPTIONS = [
@@ -602,8 +697,11 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     setActiveFilters,
     sortConfig,
     setSortConfig,
-    viewMode,
-    setViewMode,
+    viewToggles,
+    setViewToggles,
+    completedPage,
+    setCompletedPage,
+    completedTotalCount,
     filterCounts,
     refresh: fetchOrders
   } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment);
@@ -917,13 +1015,13 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
             {/* View Toggle Section */}
             <div className="flex items-center space-x-3 bg-white rounded-lg px-3 py-2 border border-gray-200 shadow-sm">
               <span className="text-sm font-semibold text-gray-700">View</span>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-1 flex-wrap gap-1">
                 <Button
-                  variant={viewMode === 'unassigned' ? 'default' : 'outline'}
+                  variant={viewToggles.unassigned ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setViewMode('unassigned')}
+                  onClick={() => setViewToggles(prev => ({ ...prev, unassigned: !prev.unassigned }))}
                   className={`text-xs h-7 px-3 transition-all duration-200 ${
-                    viewMode === 'unassigned' 
+                    viewToggles.unassigned 
                       ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
                       : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
                   }`}
@@ -931,19 +1029,92 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                   Unassigned
                 </Button>
                 <Button
-                  variant={viewMode === 'all' ? 'default' : 'outline'}
+                  variant={viewToggles.pickup ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setViewMode('all')}
+                  onClick={() => setViewToggles(prev => ({ ...prev, pickup: !prev.pickup }))}
                   className={`text-xs h-7 px-3 transition-all duration-200 ${
-                    viewMode === 'all' 
+                    viewToggles.pickup 
                       ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
                       : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
                   }`}
                 >
-                  All Orders
+                  Pickup
+                </Button>
+                <Button
+                  variant={viewToggles.delivery ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, delivery: !prev.delivery }))}
+                  className={`text-xs h-7 px-3 transition-all duration-200 ${
+                    viewToggles.delivery 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Delivery
+                </Button>
+                <Button
+                  variant={viewToggles.assigned ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, assigned: !prev.assigned }))}
+                  className={`text-xs h-7 px-3 transition-all duration-200 ${
+                    viewToggles.assigned 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Assigned
+                </Button>
+                <Button
+                  variant={viewToggles.completed ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, completed: !prev.completed }))}
+                  className={`text-xs h-7 px-3 transition-all duration-200 ${
+                    viewToggles.completed 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Completed
                 </Button>
               </div>
             </div>
+            
+            {/* Completed Orders Pagination */}
+            {viewToggles.completed && completedTotalCount > 100 && (
+              <div className="flex items-center space-x-2 bg-white rounded-lg px-3 py-2 border border-gray-200 shadow-sm">
+                <span className="text-xs text-gray-600">
+                  Page {completedPage} of {Math.ceil(completedTotalCount / 100)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newPage = completedPage - 1;
+                    if (newPage >= 1) {
+                      setCompletedPage(newPage);
+                    }
+                  }}
+                  disabled={completedPage === 1}
+                  className="h-7 px-2 text-xs"
+                >
+                  <ChevronLeft className="w-3 h-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newPage = completedPage + 1;
+                    if (newPage <= Math.ceil(completedTotalCount / 100)) {
+                      setCompletedPage(newPage);
+                    }
+                  }}
+                  disabled={completedPage >= Math.ceil(completedTotalCount / 100)}
+                  className="h-7 px-2 text-xs"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </Button>
+              </div>
+            )}
 
             {/* Sort Dropdown Section */}
             {showSortDropdown && (
@@ -1153,7 +1324,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2 w-[200px]">
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-1.5">
                         {(() => {
                           const stage = getOrderStage(order);
                           return (
@@ -1162,6 +1333,18 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                             </div>
                           );
                         })()}
+                        {order.isTransferOrder && (
+                          <TooltipProvider>
+                            <Tooltip delayDuration={100}>
+                              <TooltipTrigger>
+                                <ArrowRightLeft className="w-[12px] h-[12px] text-blue-600" />
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-[11px] bg-gray-900 text-white px-2 py-1">
+                                Transfer Order
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2 w-[120px]">

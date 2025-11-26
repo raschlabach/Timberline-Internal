@@ -1,37 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-// Force dynamic rendering to prevent caching
-export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
-    // Check if we should show all orders (including assigned ones)
-    const { searchParams } = new URL(request.url);
-    const showAll = searchParams.get('all') === 'true';
-    
-    // First test basic orders query
-    const testQuery = 'SELECT COUNT(*) FROM orders';
-    const testResult = await query(testQuery);
-    console.log('Total orders in database:', testResult.rows[0].count);
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // Build WHERE clause conditionally based on showAll parameter
-    const whereClause = showAll 
-      ? `WHERE o.status != 'completed'`
-      : `WHERE 
-        -- Show orders that don't have delivery assignments (regardless of status)
-        -- This allows orders with pickup assignments to remain visible so delivery can still be assigned
-        -- We filter by actual assignments rather than status to handle edge cases where status might be out of sync
-        NOT EXISTS (
-          SELECT 1 
-          FROM truckload_order_assignments toa_delivery
-          JOIN truckloads t_delivery ON toa_delivery.truckload_id = t_delivery.id
-          WHERE toa_delivery.order_id = o.id 
-          AND toa_delivery.assignment_type = 'delivery'
-        )
-        -- Also exclude completed orders
-        AND o.status != 'completed'`;
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '100', 10);
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
+
+    // First get total count
+    const countQuery = `SELECT COUNT(*) as total FROM orders WHERE status = 'completed'`;
+    const countResult = await query(countQuery);
+    const totalCount = parseInt(countResult.rows[0].total, 10);
 
     const sqlQuery = `
       WITH skids_summary AS (
@@ -199,7 +187,6 @@ export async function GET(request: NextRequest) {
           )
         ELSE NULL END as "deliveryAssignment",
         -- Other fields
-        -- Format pickup_date as YYYY-MM-DD string to avoid timezone issues
         TO_CHAR(o.pickup_date, 'YYYY-MM-DD') as "pickupDate",
         COALESCE(o.is_rush, false) as "isRushOrder",
         COALESCE(o.needs_attention, false) as "needsAttention",
@@ -257,19 +244,21 @@ export async function GET(request: NextRequest) {
         WHERE order_id = o.id
         GROUP BY order_id
       ) ol ON true
-      ${whereClause}
+      WHERE o.status = 'completed'
       ORDER BY 
-        -- Sort by created_at DESC (newest first)
+        o.updated_at DESC,
         o.created_at DESC
+      LIMIT $1 OFFSET $2
     `;
 
-    console.log('Fetching orders with detailed skid and vinyl data...');
-    const result = await query(sqlQuery);
-    console.log(`Found ${result.rows.length} orders`);
+    const result = await query(sqlQuery, [limit, offset]);
     
-    return NextResponse.json(result.rows);
+    return NextResponse.json({
+      orders: result.rows,
+      totalCount
+    });
   } catch (error) {
-    console.error('Error fetching recent orders:', error);
+    console.error('Error fetching completed orders:', error);
     if (error instanceof Error) {
       console.error('Error details:', {
         message: error.message,
@@ -277,8 +266,9 @@ export async function GET(request: NextRequest) {
       });
     }
     return NextResponse.json(
-      { error: 'Failed to fetch recent orders' },
+      { error: 'Failed to fetch completed orders' },
       { status: 500 }
     );
   }
-} 
+}
+
