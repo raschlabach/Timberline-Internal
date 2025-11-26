@@ -505,7 +505,7 @@ function useLoadBoardOrders(
         if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
           matchesAnyToggle = true;
         }
-        if (viewToggles.delivery && !hasPickupAssignment && hasDeliveryAssignment) {
+        if (viewToggles.delivery && hasDeliveryAssignment) {
           matchesAnyToggle = true;
         }
         if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment && !order.isTransferOrder) {
@@ -576,7 +576,7 @@ function useLoadBoardOrders(
       if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
         matchesAnyToggle = true;
       }
-      if (viewToggles.delivery && !hasPickupAssignment && hasDeliveryAssignment) {
+      if (viewToggles.delivery && hasDeliveryAssignment) {
         matchesAnyToggle = true;
       }
       if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
