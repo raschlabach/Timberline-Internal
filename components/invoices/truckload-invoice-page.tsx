@@ -810,17 +810,17 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         }
         // Apply completed filter based on toggle
         if (showCompleted) {
-          // Show only incomplete truckloads (not completed)
-          return i.isCompleted !== true
-        } else {
           // Show completed truckloads (regardless of quotes filled status)
           return i.isCompleted === true
+        } else {
+          // Show only incomplete truckloads (not completed)
+          return i.isCompleted !== true
         }
       })
       .sort((a, b) => b.startDate.localeCompare(a.startDate)) // Sort descending for most recent first
 
-    // If showing completed, limit to 5 newest
-    if (showCompleted) {
+    // If showing incomplete, limit to 5 newest
+    if (!showCompleted) {
       filteredItems = filteredItems.slice(0, 5)
     }
 
@@ -921,7 +921,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         </div>
         <div className="mb-2 flex items-center justify-between gap-2 border border-gray-300 rounded-md px-3 py-2">
           <Label htmlFor="completed-toggle" className="text-xs cursor-pointer flex-1">
-            {showCompleted ? 'Incomplete (5 newest)' : 'Completed'}
+            {showCompleted ? 'Completed' : 'Incomplete (5 newest)'}
           </Label>
           <Switch
             id="completed-toggle"
