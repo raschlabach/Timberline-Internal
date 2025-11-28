@@ -791,7 +791,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
 
-  // Check for documents on orders
+  // Check for documents on orders (with batching to avoid too many concurrent requests)
   const checkOrdersForDocuments = async () => {
     try {
       const orderIds = orders.map(order => order.id);
@@ -802,23 +802,38 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
         return;
       }
       
-      const documentChecks = await Promise.all(
-        orderIds.map(async (orderId) => {
-          try {
-            const response = await fetch(`/api/orders/${orderId}/documents`);
-            if (response.ok) {
-              const data = await response.json();
-              return { orderId, hasDocuments: data.documents && data.documents.length > 0 };
+      // Process in batches to avoid ERR_INSUFFICIENT_RESOURCES
+      const BATCH_SIZE = 5; // Process 5 orders at a time
+      const allResults: Array<{ orderId: number; hasDocuments: boolean }> = [];
+      
+      for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
+        const batch = orderIds.slice(i, i + BATCH_SIZE);
+        
+        const batchResults = await Promise.all(
+          batch.map(async (orderId) => {
+            try {
+              const response = await fetch(`/api/orders/${orderId}/documents`);
+              if (response.ok) {
+                const data = await response.json();
+                return { orderId, hasDocuments: data.documents && data.documents.length > 0 };
+              }
+            } catch (error) {
+              console.error(`Error checking documents for order ${orderId}:`, error);
             }
-          } catch (error) {
-            console.error(`Error checking documents for order ${orderId}:`, error);
-          }
-          return { orderId, hasDocuments: false };
-        })
-      );
+            return { orderId, hasDocuments: false };
+          })
+        );
+        
+        allResults.push(...batchResults);
+        
+        // Small delay between batches to avoid overwhelming the browser
+        if (i + BATCH_SIZE < orderIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
       
       const ordersWithDocs = new Set(
-        documentChecks
+        allResults
           .filter(check => check.hasDocuments)
           .map(check => check.orderId)
       );
