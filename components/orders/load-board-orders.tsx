@@ -237,6 +237,7 @@ function useLoadBoardOrders(
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+  const [truckloads, setTruckloads] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -318,6 +319,19 @@ function useLoadBoardOrders(
       console.error('Error saving load board view toggles:', storageError);
     }
   }, [viewToggles]);
+
+  // Fetch truckloads data
+  const fetchTruckloads = useCallback(async () => {
+    try {
+      const response = await fetch('/api/truckloads');
+      if (response.ok) {
+        const data = await response.json();
+        setTruckloads(data.truckloads || []);
+      }
+    } catch (error) {
+      console.error('Error fetching truckloads:', error);
+    }
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -407,6 +421,11 @@ function useLoadBoardOrders(
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Fetch truckloads on mount
+  useEffect(() => {
+    fetchTruckloads();
+  }, [fetchTruckloads]);
 
   // Fetch completed orders when completed toggle is enabled
   useEffect(() => {
@@ -560,17 +579,29 @@ function useLoadBoardOrders(
   const filteredOrders = sortOrders(allOrdersToFilter.filter(order => {
     const hasPickupAssignment = order.pickupAssignment !== null;
     const hasDeliveryAssignment = order.deliveryAssignment !== null;
-    const isCompleted = order.status === 'completed';
+    
+    // Use the same logic as getOrderStage to determine if order is completed
+    // An order is "completed" if both pickup and delivery truckloads are completed
+    const pickupTruckload = hasPickupAssignment ? truckloads.find((t: any) => t.id === order.pickupAssignment!.truckloadId) : null;
+    const deliveryTruckload = hasDeliveryAssignment ? truckloads.find((t: any) => t.id === order.deliveryAssignment!.truckloadId) : null;
+    const isPickupCompleted = pickupTruckload?.isCompleted || false;
+    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
+    // Order is completed if it has both assignments and both truckloads are completed
+    const isCompleted = hasPickupAssignment && hasDeliveryAssignment && isPickupCompleted && isDeliveryCompleted;
+    // Also check order.status === 'completed' (for manually marked delivered orders)
+    const isStatusCompleted = order.status === 'completed';
+    // Order is considered completed if either condition is true
+    const isOrderCompleted = isCompleted || isStatusCompleted;
 
     // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
     // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
     // This check happens FIRST before any other toggle logic
-    if (isCompleted && !viewToggles.completed) {
+    if (isOrderCompleted && !viewToggles.completed) {
       return false; // Immediately exclude completed orders when completed toggle is off
     }
 
     // Filter by toggle states
-    if (isCompleted) {
+    if (isOrderCompleted) {
       // If we get here, completed toggle is ON, so show the completed order
       // Continue to search/filter checks below
     } else {
@@ -631,7 +662,8 @@ function useLoadBoardOrders(
     completedPage,
     setCompletedPage,
     completedTotalCount,
-    filterCounts
+    filterCounts,
+    truckloads
   };
 }
 
@@ -712,36 +744,12 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     setCompletedPage,
     completedTotalCount,
     filterCounts,
-    refresh: fetchOrders
+    refresh: fetchOrders,
+    truckloads
   } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment);
 
-  // Add truckload data for stage determination
-  const [truckloads, setTruckloads] = useState<any[]>([]);
-  const [isLoadingTruckloads, setIsLoadingTruckloads] = useState(false);
-  
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
-
-  // Fetch truckloads data
-  const fetchTruckloads = async () => {
-    setIsLoadingTruckloads(true);
-    try {
-      const response = await fetch('/api/truckloads');
-      if (response.ok) {
-        const data = await response.json();
-        setTruckloads(data.truckloads || []);
-      }
-    } catch (error) {
-      console.error('Error fetching truckloads:', error);
-    } finally {
-      setIsLoadingTruckloads(false);
-    }
-  };
-
-  // Fetch truckloads on component mount
-  useEffect(() => {
-    fetchTruckloads();
-  }, []);
 
   // Check for documents on orders
   const checkOrdersForDocuments = async () => {
