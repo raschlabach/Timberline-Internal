@@ -1005,7 +1005,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                   {isCompleted ? (
                                     item.allQuotesFilled ? (
                                       <DollarSign className="h-4 w-4 text-green-600 mt-0.5" />
-                                    ) : (
+                                  ) : (
                                       <CheckCircle className="h-4 w-4 text-orange-600 mt-0.5" />
                                     )
                                   ) : (

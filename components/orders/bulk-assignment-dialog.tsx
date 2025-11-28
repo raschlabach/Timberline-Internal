@@ -304,13 +304,13 @@ export function BulkAssignmentDialog({
     try {
       // Assign pickups first
       if (hasPickups && selectedPickupTruckloadId) {
-        for (const item of poolItems) {
+      for (const item of poolItems) {
           if (item.assignmentTypes.includes('pickup')) {
-            const response = await fetch('/api/truckloads/assign', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                orderId: item.orderId,
+          const response = await fetch('/api/truckloads/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: item.orderId,
                 truckloadId: selectedPickupTruckloadId,
                 assignmentType: 'pickup'
               })
@@ -334,10 +334,10 @@ export function BulkAssignmentDialog({
                 orderId: item.orderId,
                 truckloadId: selectedDeliveryTruckloadId,
                 assignmentType: 'delivery'
-              })
             })
+          })
 
-            if (!response.ok) {
+          if (!response.ok) {
               throw new Error(`Failed to assign order ${item.orderId} delivery`)
             }
           }
@@ -463,7 +463,7 @@ export function BulkAssignmentDialog({
                       Selected
                     </Badge>
                   )}
-                </div>
+                        </div>
                 <TruckloadSelectionGrid
                   driverColumns={driverColumns}
                   collapsedDrivers={collapsedDrivers}
@@ -472,8 +472,8 @@ export function BulkAssignmentDialog({
                   onTruckloadSelect={handlePickupTruckloadSelection}
                   selectionType="pickup"
                 />
-              </div>
-            )}
+                                </div>
+                              )}
 
             {/* Delivery Assignment Section */}
             {deliveryCount > 0 && (
@@ -484,8 +484,8 @@ export function BulkAssignmentDialog({
                     <Badge variant="outline" className="text-xs">
                       Selected
                     </Badge>
-                  )}
-                </div>
+                                )}
+                              </div>
                 <TruckloadSelectionGrid
                   driverColumns={driverColumns}
                   collapsedDrivers={collapsedDrivers}

@@ -114,15 +114,15 @@ export function CustomerSelector({
       return customers;
     }
     
-    const searchLower = searchQuery.toLowerCase();
+        const searchLower = searchQuery.toLowerCase();
     const filtered = customers.filter((customer) => {
-      return (
-        (customer.customer_name && customer.customer_name.toLowerCase().includes(searchLower)) ||
-        (customer.city && customer.city.toLowerCase().includes(searchLower)) ||
-        (customer.state && customer.state.toLowerCase().includes(searchLower)) ||
-        (customer.address && customer.address.toLowerCase().includes(searchLower))
-      );
-    });
+        return (
+          (customer.customer_name && customer.customer_name.toLowerCase().includes(searchLower)) ||
+          (customer.city && customer.city.toLowerCase().includes(searchLower)) ||
+          (customer.state && customer.state.toLowerCase().includes(searchLower)) ||
+          (customer.address && customer.address.toLowerCase().includes(searchLower))
+        );
+      });
     
     // Sort by match score (highest first)
     return filtered.sort((a, b) => {

@@ -283,12 +283,7 @@ function useLoadBoardOrders(
       if (savedFilters) {
         const parsedFilters = JSON.parse(savedFilters);
         if (parsedFilters && typeof parsedFilters === 'object') {
-          const mergedFilters = { ...parsedFilters };
-          // Always enforce backhaul if enforceBackhaulOnly is true
-          if (enforceBackhaulOnly) {
-            mergedFilters.backhaul = true;
-          }
-          setActiveFilters(prev => ({ ...prev, ...mergedFilters }));
+          setActiveFilters(prev => ({ ...prev, ...parsedFilters }));
         }
       }
 
@@ -601,86 +596,80 @@ function useLoadBoardOrders(
     return allOrders;
   }, [orders, completedOrders, viewToggles]);
 
-  const filteredOrders = useMemo(() => {
-    if (!allOrdersToFilter || allOrdersToFilter.length === 0) {
-      return [];
-    }
+  const filteredOrders = sortOrders(allOrdersToFilter.filter(order => {
+    const hasPickupAssignment = order.pickupAssignment !== null;
+    const hasDeliveryAssignment = order.deliveryAssignment !== null;
     
-    return sortOrders(allOrdersToFilter.filter(order => {
-      const hasPickupAssignment = order.pickupAssignment !== null;
-      const hasDeliveryAssignment = order.deliveryAssignment !== null;
-      
-      // Use the same logic as getOrderStage to determine if order is completed
-      // An order is "completed" if both pickup and delivery truckloads are completed
-      const pickupTruckload = hasPickupAssignment ? truckloads.find((t: any) => t.id === order.pickupAssignment!.truckloadId) : null;
-      const deliveryTruckload = hasDeliveryAssignment ? truckloads.find((t: any) => t.id === order.deliveryAssignment!.truckloadId) : null;
-      const isPickupCompleted = pickupTruckload?.isCompleted || false;
-      const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
-      // Order is completed if it has both assignments and both truckloads are completed
-      const isCompleted = hasPickupAssignment && hasDeliveryAssignment && isPickupCompleted && isDeliveryCompleted;
-      // Also check order.status === 'completed' (for manually marked delivered orders)
-      const isStatusCompleted = order.status === 'completed';
-      // Order is considered completed if either condition is true
-      const isOrderCompleted = isCompleted || isStatusCompleted;
+    // Use the same logic as getOrderStage to determine if order is completed
+    // An order is "completed" if both pickup and delivery truckloads are completed
+    const pickupTruckload = hasPickupAssignment ? truckloads.find((t: any) => t.id === order.pickupAssignment!.truckloadId) : null;
+    const deliveryTruckload = hasDeliveryAssignment ? truckloads.find((t: any) => t.id === order.deliveryAssignment!.truckloadId) : null;
+    const isPickupCompleted = pickupTruckload?.isCompleted || false;
+    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
+    // Order is completed if it has both assignments and both truckloads are completed
+    const isCompleted = hasPickupAssignment && hasDeliveryAssignment && isPickupCompleted && isDeliveryCompleted;
+    // Also check order.status === 'completed' (for manually marked delivered orders)
+    const isStatusCompleted = order.status === 'completed';
+    // Order is considered completed if either condition is true
+    const isOrderCompleted = isCompleted || isStatusCompleted;
 
-      // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
-      // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
-      // This check happens FIRST before any other toggle logic
-      if (isOrderCompleted && !viewToggles.completed) {
-        return false; // Immediately exclude completed orders when completed toggle is off
+    // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
+    // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
+    // This check happens FIRST before any other toggle logic
+    if (isOrderCompleted && !viewToggles.completed) {
+      return false; // Immediately exclude completed orders when completed toggle is off
+    }
+
+    // Filter by toggle states
+    if (isOrderCompleted) {
+      // If we get here, completed toggle is ON, so show the completed order
+      // Continue to search/filter checks below
+    } else {
+      // Non-completed orders only - check which toggle they match
+      let matchesAnyToggle = false;
+
+      if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
+        matchesAnyToggle = true;
+      }
+      if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
+        matchesAnyToggle = true;
+      }
+      if (viewToggles.delivery && hasDeliveryAssignment) {
+        // Delivery toggle: show orders with delivery assignment that are NOT completed
+        // (isCompleted is already false here since we're in the else block)
+        matchesAnyToggle = true;
+      }
+      if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
+        // Exclude transfer orders (pickup and delivery in same truckload)
+        if (!order.isTransferOrder) {
+          matchesAnyToggle = true;
+        }
       }
 
-      // Filter by toggle states
-      if (isOrderCompleted) {
-        // If we get here, completed toggle is ON, so show the completed order
-        // Continue to search/filter checks below
-      } else {
-        // Non-completed orders only - check which toggle they match
-        let matchesAnyToggle = false;
+      if (!matchesAnyToggle) return false;
+    }
 
-        if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.delivery && hasDeliveryAssignment) {
-          // Delivery toggle: show orders with delivery assignment that are NOT completed
-          // (isCompleted is already false here since we're in the else block)
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
-          // Exclude transfer orders (pickup and delivery in same truckload)
-          if (!order.isTransferOrder) {
-            matchesAnyToggle = true;
-          }
-        }
+    // Search term filter
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = searchTerm === '' || 
+      order.pickupCustomer.name.toLowerCase().includes(searchLower) ||
+      order.deliveryCustomer.name.toLowerCase().includes(searchLower);
 
-        if (!matchesAnyToggle) return false;
-      }
+    // Load type filters
+    // If enforceBackhaulOnly is true, always require backhaul filter
+    const filtersToCheck = enforceBackhaulOnly 
+      ? { ...activeFilters, backhaul: true }
+      : activeFilters;
+    
+    const hasActiveFilters = Object.values(filtersToCheck).some(value => value);
+    if (!hasActiveFilters) return matchesSearch;
 
-      // Search term filter
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = searchTerm === '' || 
-        order.pickupCustomer.name.toLowerCase().includes(searchLower) ||
-        order.deliveryCustomer.name.toLowerCase().includes(searchLower);
+    const matchesFilters = Object.entries(filtersToCheck).some(([key, isActive]) => 
+      isActive && order.filters[key as keyof typeof order.filters]
+    );
 
-      // Load type filters
-      // If enforceBackhaulOnly is true, always require backhaul filter
-      const filtersToCheck = enforceBackhaulOnly 
-        ? { ...activeFilters, backhaul: true }
-        : activeFilters;
-      
-      const hasActiveFilters = Object.values(filtersToCheck).some(value => value);
-      if (!hasActiveFilters) return matchesSearch;
-
-      const matchesFilters = Object.entries(filtersToCheck).some(([key, isActive]) => 
-        isActive && order.filters[key as keyof typeof order.filters]
-      );
-
-      return matchesSearch && matchesFilters;
-    }));
-  }, [allOrdersToFilter, truckloads, viewToggles, searchTerm, activeFilters, enforceBackhaulOnly, sortConfig, prioritizeRushOrders]);
+    return matchesSearch && matchesFilters;
+  }));
 
   return { 
     orders: filteredOrders, 
@@ -791,11 +780,10 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
 
-  // Check for documents on orders (with batching to avoid too many concurrent requests)
+  // Check for documents on orders
   const checkOrdersForDocuments = async () => {
     try {
-      const ordersList = orders || [];
-      const orderIds = ordersList.map(order => order.id);
+      const orderIds = orders.map(order => order.id);
       
       // Only check if we have orders and they're different from what we last checked
       if (orderIds.length === 0) {
@@ -803,38 +791,23 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
         return;
       }
       
-      // Process in batches to avoid ERR_INSUFFICIENT_RESOURCES
-      const BATCH_SIZE = 5; // Process 5 orders at a time
-      const allResults: Array<{ orderId: number; hasDocuments: boolean }> = [];
-      
-      for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
-        const batch = orderIds.slice(i, i + BATCH_SIZE);
-        
-        const batchResults = await Promise.all(
-          batch.map(async (orderId) => {
-            try {
-              const response = await fetch(`/api/orders/${orderId}/documents`);
-              if (response.ok) {
-                const data = await response.json();
-                return { orderId, hasDocuments: data.documents && data.documents.length > 0 };
-              }
-            } catch (error) {
-              console.error(`Error checking documents for order ${orderId}:`, error);
+      const documentChecks = await Promise.all(
+        orderIds.map(async (orderId) => {
+          try {
+            const response = await fetch(`/api/orders/${orderId}/documents`);
+            if (response.ok) {
+              const data = await response.json();
+              return { orderId, hasDocuments: data.documents && data.documents.length > 0 };
             }
-            return { orderId, hasDocuments: false };
-          })
-        );
-        
-        allResults.push(...batchResults);
-        
-        // Small delay between batches to avoid overwhelming the browser
-        if (i + BATCH_SIZE < orderIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-      }
+          } catch (error) {
+            console.error(`Error checking documents for order ${orderId}:`, error);
+          }
+          return { orderId, hasDocuments: false };
+        })
+      );
       
       const ordersWithDocs = new Set(
-        allResults
+        documentChecks
           .filter(check => check.hasDocuments)
           .map(check => check.orderId)
       );
@@ -848,9 +821,8 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
   const [lastOrderIds, setLastOrderIds] = useState<string>('');
   
   useEffect(() => {
-    const ordersList = orders || [];
-    if (ordersList.length > 0) {
-      const currentOrderIds = ordersList.map(order => order.id).sort().join(',');
+    if (orders.length > 0) {
+      const currentOrderIds = orders.map(order => order.id).sort().join(',');
       if (currentOrderIds !== lastOrderIds) {
         setLastOrderIds(currentOrderIds);
         checkOrdersForDocuments();
@@ -954,7 +926,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
 
   // Selection pool helper functions
   const addToPool = (orderId: number, assignmentTypes: ('pickup' | 'delivery')[]) => {
-    const order = (orders || []).find(o => o.id === orderId);
+    const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
     setSelectionPool(prev => {
@@ -1261,7 +1233,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
             {/* Order Count */}
             <div className="ml-auto bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
               <span className="text-sm font-semibold text-blue-700">
-                {(orders || []).length} order{(orders || []).length !== 1 ? 's' : ''} shown
+                {orders.length} order{orders.length !== 1 ? 's' : ''} shown
               </span>
             </div>
           </div>
@@ -1276,13 +1248,12 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                     <div className="flex items-center justify-center h-full">
                       <Checkbox 
                         className="h-5 w-5" 
-                        checked={checkedOrders.size === (orders || []).length && (orders || []).length > 0}
+                        checked={checkedOrders.size === orders.length}
                         onCheckedChange={() => {
-                          const ordersList = orders || [];
-                          if (checkedOrders.size === ordersList.length && ordersList.length > 0) {
+                          if (checkedOrders.size === orders.length) {
                             setCheckedOrders(new Set());
                           } else {
-                            setCheckedOrders(new Set(ordersList.map(order => order.id)));
+                            setCheckedOrders(new Set(orders.map(order => order.id)));
                           }
                         }}
                       />
@@ -1324,16 +1295,13 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
               </TableHeader>
               <TableBody>
                 {(() => {
-                  // Safety check: ensure orders is an array
-                  const ordersList = orders || [];
-                  
-                  const rushIndices = ordersList
+                  const rushIndices = orders
                     .map((o, i) => (o.isRushOrder ? i : -1))
                     .filter(i => i !== -1);
                   const firstRushIndex = rushIndices.length > 0 ? rushIndices[0] : -1;
                   const lastRushIndex = rushIndices.length > 0 ? rushIndices[rushIndices.length - 1] : -1;
 
-                  return ordersList.map((order, index) => (
+                  return orders.map((order, index) => (
                   <TableRow 
                     key={order.id}
                     className={`
