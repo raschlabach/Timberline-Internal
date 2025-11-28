@@ -794,7 +794,8 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
   // Check for documents on orders (with batching to avoid too many concurrent requests)
   const checkOrdersForDocuments = async () => {
     try {
-      const orderIds = orders.map(order => order.id);
+      const ordersList = orders || [];
+      const orderIds = ordersList.map(order => order.id);
       
       // Only check if we have orders and they're different from what we last checked
       if (orderIds.length === 0) {
@@ -847,8 +848,9 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
   const [lastOrderIds, setLastOrderIds] = useState<string>('');
   
   useEffect(() => {
-    if (orders.length > 0) {
-      const currentOrderIds = orders.map(order => order.id).sort().join(',');
+    const ordersList = orders || [];
+    if (ordersList.length > 0) {
+      const currentOrderIds = ordersList.map(order => order.id).sort().join(',');
       if (currentOrderIds !== lastOrderIds) {
         setLastOrderIds(currentOrderIds);
         checkOrdersForDocuments();
@@ -952,7 +954,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
 
   // Selection pool helper functions
   const addToPool = (orderId: number, assignmentTypes: ('pickup' | 'delivery')[]) => {
-    const order = orders.find(o => o.id === orderId);
+    const order = (orders || []).find(o => o.id === orderId);
     if (!order) return;
 
     setSelectionPool(prev => {
@@ -1259,7 +1261,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
             {/* Order Count */}
             <div className="ml-auto bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
               <span className="text-sm font-semibold text-blue-700">
-                {orders.length} order{orders.length !== 1 ? 's' : ''} shown
+                {(orders || []).length} order{(orders || []).length !== 1 ? 's' : ''} shown
               </span>
             </div>
           </div>
@@ -1274,12 +1276,13 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                     <div className="flex items-center justify-center h-full">
                       <Checkbox 
                         className="h-5 w-5" 
-                        checked={checkedOrders.size === orders.length}
+                        checked={checkedOrders.size === (orders || []).length && (orders || []).length > 0}
                         onCheckedChange={() => {
-                          if (checkedOrders.size === orders.length) {
+                          const ordersList = orders || [];
+                          if (checkedOrders.size === ordersList.length && ordersList.length > 0) {
                             setCheckedOrders(new Set());
                           } else {
-                            setCheckedOrders(new Set(orders.map(order => order.id)));
+                            setCheckedOrders(new Set(ordersList.map(order => order.id)));
                           }
                         }}
                       />
@@ -1321,13 +1324,16 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
               </TableHeader>
               <TableBody>
                 {(() => {
-                  const rushIndices = orders
+                  // Safety check: ensure orders is an array
+                  const ordersList = orders || [];
+                  
+                  const rushIndices = ordersList
                     .map((o, i) => (o.isRushOrder ? i : -1))
                     .filter(i => i !== -1);
                   const firstRushIndex = rushIndices.length > 0 ? rushIndices[0] : -1;
                   const lastRushIndex = rushIndices.length > 0 ? rushIndices[rushIndices.length - 1] : -1;
 
-                  return orders.map((order, index) => (
+                  return ordersList.map((order, index) => (
                   <TableRow 
                     key={order.id}
                     className={`
