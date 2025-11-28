@@ -601,80 +601,86 @@ function useLoadBoardOrders(
     return allOrders;
   }, [orders, completedOrders, viewToggles]);
 
-  const filteredOrders = sortOrders(allOrdersToFilter.filter(order => {
-    const hasPickupAssignment = order.pickupAssignment !== null;
-    const hasDeliveryAssignment = order.deliveryAssignment !== null;
-    
-    // Use the same logic as getOrderStage to determine if order is completed
-    // An order is "completed" if both pickup and delivery truckloads are completed
-    const pickupTruckload = hasPickupAssignment ? truckloads.find((t: any) => t.id === order.pickupAssignment!.truckloadId) : null;
-    const deliveryTruckload = hasDeliveryAssignment ? truckloads.find((t: any) => t.id === order.deliveryAssignment!.truckloadId) : null;
-    const isPickupCompleted = pickupTruckload?.isCompleted || false;
-    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
-    // Order is completed if it has both assignments and both truckloads are completed
-    const isCompleted = hasPickupAssignment && hasDeliveryAssignment && isPickupCompleted && isDeliveryCompleted;
-    // Also check order.status === 'completed' (for manually marked delivered orders)
-    const isStatusCompleted = order.status === 'completed';
-    // Order is considered completed if either condition is true
-    const isOrderCompleted = isCompleted || isStatusCompleted;
-
-    // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
-    // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
-    // This check happens FIRST before any other toggle logic
-    if (isOrderCompleted && !viewToggles.completed) {
-      return false; // Immediately exclude completed orders when completed toggle is off
+  const filteredOrders = useMemo(() => {
+    if (!allOrdersToFilter || allOrdersToFilter.length === 0) {
+      return [];
     }
+    
+    return sortOrders(allOrdersToFilter.filter(order => {
+      const hasPickupAssignment = order.pickupAssignment !== null;
+      const hasDeliveryAssignment = order.deliveryAssignment !== null;
+      
+      // Use the same logic as getOrderStage to determine if order is completed
+      // An order is "completed" if both pickup and delivery truckloads are completed
+      const pickupTruckload = hasPickupAssignment ? truckloads.find((t: any) => t.id === order.pickupAssignment!.truckloadId) : null;
+      const deliveryTruckload = hasDeliveryAssignment ? truckloads.find((t: any) => t.id === order.deliveryAssignment!.truckloadId) : null;
+      const isPickupCompleted = pickupTruckload?.isCompleted || false;
+      const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
+      // Order is completed if it has both assignments and both truckloads are completed
+      const isCompleted = hasPickupAssignment && hasDeliveryAssignment && isPickupCompleted && isDeliveryCompleted;
+      // Also check order.status === 'completed' (for manually marked delivered orders)
+      const isStatusCompleted = order.status === 'completed';
+      // Order is considered completed if either condition is true
+      const isOrderCompleted = isCompleted || isStatusCompleted;
 
-    // Filter by toggle states
-    if (isOrderCompleted) {
-      // If we get here, completed toggle is ON, so show the completed order
-      // Continue to search/filter checks below
-    } else {
-      // Non-completed orders only - check which toggle they match
-      let matchesAnyToggle = false;
+      // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
+      // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
+      // This check happens FIRST before any other toggle logic
+      if (isOrderCompleted && !viewToggles.completed) {
+        return false; // Immediately exclude completed orders when completed toggle is off
+      }
 
-      if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
-        matchesAnyToggle = true;
-      }
-      if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
-        matchesAnyToggle = true;
-      }
-      if (viewToggles.delivery && hasDeliveryAssignment) {
-        // Delivery toggle: show orders with delivery assignment that are NOT completed
-        // (isCompleted is already false here since we're in the else block)
-        matchesAnyToggle = true;
-      }
-      if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
-        // Exclude transfer orders (pickup and delivery in same truckload)
-        if (!order.isTransferOrder) {
+      // Filter by toggle states
+      if (isOrderCompleted) {
+        // If we get here, completed toggle is ON, so show the completed order
+        // Continue to search/filter checks below
+      } else {
+        // Non-completed orders only - check which toggle they match
+        let matchesAnyToggle = false;
+
+        if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
           matchesAnyToggle = true;
         }
+        if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
+          matchesAnyToggle = true;
+        }
+        if (viewToggles.delivery && hasDeliveryAssignment) {
+          // Delivery toggle: show orders with delivery assignment that are NOT completed
+          // (isCompleted is already false here since we're in the else block)
+          matchesAnyToggle = true;
+        }
+        if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
+          // Exclude transfer orders (pickup and delivery in same truckload)
+          if (!order.isTransferOrder) {
+            matchesAnyToggle = true;
+          }
+        }
+
+        if (!matchesAnyToggle) return false;
       }
 
-      if (!matchesAnyToggle) return false;
-    }
+      // Search term filter
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm === '' || 
+        order.pickupCustomer.name.toLowerCase().includes(searchLower) ||
+        order.deliveryCustomer.name.toLowerCase().includes(searchLower);
 
-    // Search term filter
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = searchTerm === '' || 
-      order.pickupCustomer.name.toLowerCase().includes(searchLower) ||
-      order.deliveryCustomer.name.toLowerCase().includes(searchLower);
+      // Load type filters
+      // If enforceBackhaulOnly is true, always require backhaul filter
+      const filtersToCheck = enforceBackhaulOnly 
+        ? { ...activeFilters, backhaul: true }
+        : activeFilters;
+      
+      const hasActiveFilters = Object.values(filtersToCheck).some(value => value);
+      if (!hasActiveFilters) return matchesSearch;
 
-    // Load type filters
-    // If enforceBackhaulOnly is true, always require backhaul filter
-    const filtersToCheck = enforceBackhaulOnly 
-      ? { ...activeFilters, backhaul: true }
-      : activeFilters;
-    
-    const hasActiveFilters = Object.values(filtersToCheck).some(value => value);
-    if (!hasActiveFilters) return matchesSearch;
+      const matchesFilters = Object.entries(filtersToCheck).some(([key, isActive]) => 
+        isActive && order.filters[key as keyof typeof order.filters]
+      );
 
-    const matchesFilters = Object.entries(filtersToCheck).some(([key, isActive]) => 
-      isActive && order.filters[key as keyof typeof order.filters]
-    );
-
-    return matchesSearch && matchesFilters;
-  }));
+      return matchesSearch && matchesFilters;
+    }));
+  }, [allOrdersToFilter, truckloads, viewToggles, searchTerm, activeFilters, enforceBackhaulOnly, sortConfig, prioritizeRushOrders]);
 
   return { 
     orders: filteredOrders, 
