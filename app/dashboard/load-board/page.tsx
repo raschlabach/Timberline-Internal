@@ -31,7 +31,7 @@ export default function LoadBoardPage() {
   if (status === 'authenticated') {
     return (
       <div className="py-4 px-2">
-        <LoadBoardOrders showSortDropdown={true} />
+        <LoadBoardOrders showSortDropdown={true} contextId="load-board" />
       </div>
     );
   }

@@ -190,6 +190,8 @@ interface LoadBoardOrdersProps {
   showSortDropdown?: boolean;
   prioritizeRushOrders?: boolean;
   hideOnAnyAssignment?: boolean;
+  contextId?: string; // Unique identifier for localStorage keys (e.g., 'load-board' or 'backhaul-planner')
+  enforceBackhaulOnly?: boolean; // If true, always filter to only show backhaul orders
 }
 
 interface ViewToggles {
@@ -233,7 +235,9 @@ interface PoolItem {
 function useLoadBoardOrders(
   initialFilters?: LoadBoardOrdersProps['initialFilters'],
   prioritizeRushOrders: boolean = true,
-  hideOnAnyAssignment: boolean = false
+  hideOnAnyAssignment: boolean = false,
+  contextId?: string,
+  enforceBackhaulOnly?: boolean
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
@@ -251,28 +255,44 @@ function useLoadBoardOrders(
   });
   const [completedPage, setCompletedPage] = useState<number>(1);
   const [completedTotalCount, setCompletedTotalCount] = useState<number>(0);
-  const [activeFilters, setActiveFilters] = useState<{[key: string]: boolean}>({
-    ohioToIndiana: false,
-    backhaul: false,
-    localFlatbed: false,
-    rrOrder: false,
-    localSemi: false,
-    middlefield: false,
-    paNy: false,
-    ...initialFilters
+  // Get localStorage keys for this context
+  const storageKeys = getLocalStorageKeys(contextId);
+  
+  // Initialize filters - if enforceBackhaulOnly is true, always set backhaul to true
+  const [activeFilters, setActiveFilters] = useState<{[key: string]: boolean}>(() => {
+    const baseFilters = {
+      ohioToIndiana: false,
+      backhaul: enforceBackhaulOnly ? true : false,
+      localFlatbed: false,
+      rrOrder: false,
+      localSemi: false,
+      middlefield: false,
+      paNy: false,
+      ...initialFilters
+    };
+    // Always enforce backhaul if enforceBackhaulOnly is true
+    if (enforceBackhaulOnly) {
+      baseFilters.backhaul = true;
+    }
+    return baseFilters;
   });
 
   useEffect(() => {
     try {
-      const savedFilters = localStorage.getItem(LOCAL_STORAGE_KEYS.filters);
+      const savedFilters = localStorage.getItem(storageKeys.filters);
       if (savedFilters) {
         const parsedFilters = JSON.parse(savedFilters);
         if (parsedFilters && typeof parsedFilters === 'object') {
-          setActiveFilters(prev => ({ ...prev, ...parsedFilters }));
+          const mergedFilters = { ...parsedFilters };
+          // Always enforce backhaul if enforceBackhaulOnly is true
+          if (enforceBackhaulOnly) {
+            mergedFilters.backhaul = true;
+          }
+          setActiveFilters(prev => ({ ...prev, ...mergedFilters }));
         }
       }
 
-      const savedSort = localStorage.getItem(LOCAL_STORAGE_KEYS.sort);
+      const savedSort = localStorage.getItem(storageKeys.sort);
       if (savedSort) {
         const parsedSort = JSON.parse(savedSort) as SortConfig;
         if (parsedSort?.field && parsedSort?.direction) {
@@ -280,7 +300,7 @@ function useLoadBoardOrders(
         }
       }
 
-      const savedToggles = localStorage.getItem(LOCAL_STORAGE_KEYS.viewToggles);
+      const savedToggles = localStorage.getItem(storageKeys.viewToggles);
       if (savedToggles) {
         try {
           const parsed = JSON.parse(savedToggles) as ViewToggles;
@@ -294,31 +314,36 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error loading load board preferences:', storageError);
     }
-  }, []);
+  }, [storageKeys, enforceBackhaulOnly]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.filters, JSON.stringify(activeFilters));
+      // Always enforce backhaul if enforceBackhaulOnly is true
+      const filtersToSave = { ...activeFilters };
+      if (enforceBackhaulOnly) {
+        filtersToSave.backhaul = true;
+      }
+      localStorage.setItem(storageKeys.filters, JSON.stringify(filtersToSave));
     } catch (storageError) {
       console.error('Error saving load board filters:', storageError);
     }
-  }, [activeFilters]);
+  }, [activeFilters, storageKeys, enforceBackhaulOnly]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.sort, JSON.stringify(sortConfig));
+      localStorage.setItem(storageKeys.sort, JSON.stringify(sortConfig));
     } catch (storageError) {
       console.error('Error saving load board sort config:', storageError);
     }
-  }, [sortConfig]);
+  }, [sortConfig, storageKeys]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.viewToggles, JSON.stringify(viewToggles));
+      localStorage.setItem(storageKeys.viewToggles, JSON.stringify(viewToggles));
     } catch (storageError) {
       console.error('Error saving load board view toggles:', storageError);
     }
-  }, [viewToggles]);
+  }, [viewToggles, storageKeys]);
 
   // Fetch truckloads data
   const fetchTruckloads = useCallback(async () => {
@@ -636,10 +661,15 @@ function useLoadBoardOrders(
       order.deliveryCustomer.name.toLowerCase().includes(searchLower);
 
     // Load type filters
-    const hasActiveFilters = Object.values(activeFilters).some(value => value);
+    // If enforceBackhaulOnly is true, always require backhaul filter
+    const filtersToCheck = enforceBackhaulOnly 
+      ? { ...activeFilters, backhaul: true }
+      : activeFilters;
+    
+    const hasActiveFilters = Object.values(filtersToCheck).some(value => value);
     if (!hasActiveFilters) return matchesSearch;
 
-    const matchesFilters = Object.entries(activeFilters).some(([key, isActive]) => 
+    const matchesFilters = Object.entries(filtersToCheck).some(([key, isActive]) => 
       isActive && order.filters[key as keyof typeof order.filters]
     );
 
@@ -676,12 +706,16 @@ function formatDate(dateString: string): string {
   }
 }
 
-const LOCAL_STORAGE_KEYS = {
-  filters: 'load-board-active-filters',
-  sort: 'load-board-sort-config',
-  view: 'load-board-view-mode',
-  viewToggles: 'load-board-view-toggles'
-} as const;
+// Function to get localStorage keys based on context
+function getLocalStorageKeys(contextId?: string) {
+  const prefix = contextId || 'load-board';
+  return {
+    filters: `${prefix}-active-filters`,
+    sort: `${prefix}-sort-config`,
+    view: `${prefix}-view-mode`,
+    viewToggles: `${prefix}-view-toggles`
+  } as const;
+}
 
 const FILTER_OPTIONS = [
   { id: 'ohioToIndiana', label: 'OH → IN' },
@@ -727,7 +761,7 @@ function SortHeader({
   );
 }
 
-export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false }: LoadBoardOrdersProps) {
+export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false, contextId, enforceBackhaulOnly = false }: LoadBoardOrdersProps) {
   const { 
     orders, 
     isLoading, 
@@ -746,7 +780,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     filterCounts,
     refresh: fetchOrders,
     truckloads
-  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment);
+  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment, contextId, enforceBackhaulOnly);
 
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
