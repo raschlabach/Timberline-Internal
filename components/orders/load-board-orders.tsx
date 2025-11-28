@@ -190,8 +190,6 @@ interface LoadBoardOrdersProps {
   showSortDropdown?: boolean;
   prioritizeRushOrders?: boolean;
   hideOnAnyAssignment?: boolean;
-  contextId?: string; // Unique identifier for localStorage keys (e.g., 'load-board' or 'backhaul-planner')
-  enforceBackhaulOnly?: boolean; // If true, always filter to only show backhaul orders
 }
 
 interface ViewToggles {
@@ -235,13 +233,10 @@ interface PoolItem {
 function useLoadBoardOrders(
   initialFilters?: LoadBoardOrdersProps['initialFilters'],
   prioritizeRushOrders: boolean = true,
-  hideOnAnyAssignment: boolean = false,
-  contextId?: string,
-  enforceBackhaulOnly?: boolean
+  hideOnAnyAssignment: boolean = false
 ) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
-  const [truckloads, setTruckloads] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -255,31 +250,20 @@ function useLoadBoardOrders(
   });
   const [completedPage, setCompletedPage] = useState<number>(1);
   const [completedTotalCount, setCompletedTotalCount] = useState<number>(0);
-  // Get localStorage keys for this context
-  const storageKeys = getLocalStorageKeys(contextId);
-  
-  // Initialize filters - if enforceBackhaulOnly is true, always set backhaul to true
-  const [activeFilters, setActiveFilters] = useState<{[key: string]: boolean}>(() => {
-    const baseFilters = {
-      ohioToIndiana: false,
-      backhaul: enforceBackhaulOnly ? true : false,
-      localFlatbed: false,
-      rrOrder: false,
-      localSemi: false,
-      middlefield: false,
-      paNy: false,
-      ...initialFilters
-    };
-    // Always enforce backhaul if enforceBackhaulOnly is true
-    if (enforceBackhaulOnly) {
-      baseFilters.backhaul = true;
-    }
-    return baseFilters;
+  const [activeFilters, setActiveFilters] = useState<{[key: string]: boolean}>({
+    ohioToIndiana: false,
+    backhaul: false,
+    localFlatbed: false,
+    rrOrder: false,
+    localSemi: false,
+    middlefield: false,
+    paNy: false,
+    ...initialFilters
   });
 
   useEffect(() => {
     try {
-      const savedFilters = localStorage.getItem(storageKeys.filters);
+      const savedFilters = localStorage.getItem(LOCAL_STORAGE_KEYS.filters);
       if (savedFilters) {
         const parsedFilters = JSON.parse(savedFilters);
         if (parsedFilters && typeof parsedFilters === 'object') {
@@ -287,7 +271,7 @@ function useLoadBoardOrders(
         }
       }
 
-      const savedSort = localStorage.getItem(storageKeys.sort);
+      const savedSort = localStorage.getItem(LOCAL_STORAGE_KEYS.sort);
       if (savedSort) {
         const parsedSort = JSON.parse(savedSort) as SortConfig;
         if (parsedSort?.field && parsedSort?.direction) {
@@ -295,7 +279,7 @@ function useLoadBoardOrders(
         }
       }
 
-      const savedToggles = localStorage.getItem(storageKeys.viewToggles);
+      const savedToggles = localStorage.getItem(LOCAL_STORAGE_KEYS.viewToggles);
       if (savedToggles) {
         try {
           const parsed = JSON.parse(savedToggles) as ViewToggles;
@@ -309,49 +293,31 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error loading load board preferences:', storageError);
     }
-  }, [storageKeys, enforceBackhaulOnly]);
+  }, []);
 
   useEffect(() => {
     try {
-      // Always enforce backhaul if enforceBackhaulOnly is true
-      const filtersToSave = { ...activeFilters };
-      if (enforceBackhaulOnly) {
-        filtersToSave.backhaul = true;
-      }
-      localStorage.setItem(storageKeys.filters, JSON.stringify(filtersToSave));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.filters, JSON.stringify(activeFilters));
     } catch (storageError) {
       console.error('Error saving load board filters:', storageError);
     }
-  }, [activeFilters, storageKeys, enforceBackhaulOnly]);
+  }, [activeFilters]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(storageKeys.sort, JSON.stringify(sortConfig));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.sort, JSON.stringify(sortConfig));
     } catch (storageError) {
       console.error('Error saving load board sort config:', storageError);
     }
-  }, [sortConfig, storageKeys]);
+  }, [sortConfig]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(storageKeys.viewToggles, JSON.stringify(viewToggles));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.viewToggles, JSON.stringify(viewToggles));
     } catch (storageError) {
       console.error('Error saving load board view toggles:', storageError);
     }
-  }, [viewToggles, storageKeys]);
-
-  // Fetch truckloads data
-  const fetchTruckloads = useCallback(async () => {
-    try {
-      const response = await fetch('/api/truckloads');
-      if (response.ok) {
-        const data = await response.json();
-        setTruckloads(data.truckloads || []);
-      }
-    } catch (error) {
-      console.error('Error fetching truckloads:', error);
-    }
-  }, []);
+  }, [viewToggles]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -442,11 +408,6 @@ function useLoadBoardOrders(
     fetchOrders();
   }, [fetchOrders]);
 
-  // Fetch truckloads on mount
-  useEffect(() => {
-    fetchTruckloads();
-  }, [fetchTruckloads]);
-
   // Fetch completed orders when completed toggle is enabled
   useEffect(() => {
     if (viewToggles.completed) {
@@ -529,14 +490,14 @@ function useLoadBoardOrders(
     }
     
     return allOrdersToCheck.filter(order => {
-      const hasPickupAssignment = order.pickupAssignment !== null;
-      const hasDeliveryAssignment = order.deliveryAssignment !== null;
+          const hasPickupAssignment = order.pickupAssignment !== null;
+          const hasDeliveryAssignment = order.deliveryAssignment !== null;
       const isCompleted = order.status === 'completed';
 
       // Filter by toggle states
       if (isCompleted) {
         if (!viewToggles.completed) return false;
-      } else {
+        } else {
         let matchesAnyToggle = false;
         if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
           matchesAnyToggle = true;
@@ -597,34 +558,22 @@ function useLoadBoardOrders(
   }, [orders, completedOrders, viewToggles]);
 
   const filteredOrders = sortOrders(allOrdersToFilter.filter(order => {
-    const hasPickupAssignment = order.pickupAssignment !== null;
-    const hasDeliveryAssignment = order.deliveryAssignment !== null;
-    
-    // Use the same logic as getOrderStage to determine if order is completed
-    // An order is "completed" if both pickup and delivery truckloads are completed
-    const pickupTruckload = hasPickupAssignment ? truckloads.find((t: any) => t.id === order.pickupAssignment!.truckloadId) : null;
-    const deliveryTruckload = hasDeliveryAssignment ? truckloads.find((t: any) => t.id === order.deliveryAssignment!.truckloadId) : null;
-    const isPickupCompleted = pickupTruckload?.isCompleted || false;
-    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
-    // Order is completed if it has both assignments and both truckloads are completed
-    const isCompleted = hasPickupAssignment && hasDeliveryAssignment && isPickupCompleted && isDeliveryCompleted;
-    // Also check order.status === 'completed' (for manually marked delivered orders)
-    const isStatusCompleted = order.status === 'completed';
-    // Order is considered completed if either condition is true
-    const isOrderCompleted = isCompleted || isStatusCompleted;
+        const hasPickupAssignment = order.pickupAssignment !== null;
+        const hasDeliveryAssignment = order.deliveryAssignment !== null;
+    const isCompleted = order.status === 'completed';
 
     // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
     // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
     // This check happens FIRST before any other toggle logic
-    if (isOrderCompleted && !viewToggles.completed) {
+    if (isCompleted && !viewToggles.completed) {
       return false; // Immediately exclude completed orders when completed toggle is off
     }
 
     // Filter by toggle states
-    if (isOrderCompleted) {
+    if (isCompleted) {
       // If we get here, completed toggle is ON, so show the completed order
       // Continue to search/filter checks below
-    } else {
+      } else {
       // Non-completed orders only - check which toggle they match
       let matchesAnyToggle = false;
 
@@ -656,15 +605,10 @@ function useLoadBoardOrders(
       order.deliveryCustomer.name.toLowerCase().includes(searchLower);
 
     // Load type filters
-    // If enforceBackhaulOnly is true, always require backhaul filter
-    const filtersToCheck = enforceBackhaulOnly 
-      ? { ...activeFilters, backhaul: true }
-      : activeFilters;
-    
-    const hasActiveFilters = Object.values(filtersToCheck).some(value => value);
+    const hasActiveFilters = Object.values(activeFilters).some(value => value);
     if (!hasActiveFilters) return matchesSearch;
 
-    const matchesFilters = Object.entries(filtersToCheck).some(([key, isActive]) => 
+    const matchesFilters = Object.entries(activeFilters).some(([key, isActive]) => 
       isActive && order.filters[key as keyof typeof order.filters]
     );
 
@@ -687,8 +631,7 @@ function useLoadBoardOrders(
     completedPage,
     setCompletedPage,
     completedTotalCount,
-    filterCounts,
-    truckloads
+    filterCounts
   };
 }
 
@@ -701,16 +644,12 @@ function formatDate(dateString: string): string {
   }
 }
 
-// Function to get localStorage keys based on context
-function getLocalStorageKeys(contextId?: string) {
-  const prefix = contextId || 'load-board';
-  return {
-    filters: `${prefix}-active-filters`,
-    sort: `${prefix}-sort-config`,
-    view: `${prefix}-view-mode`,
-    viewToggles: `${prefix}-view-toggles`
-  } as const;
-}
+const LOCAL_STORAGE_KEYS = {
+  filters: 'load-board-active-filters',
+  sort: 'load-board-sort-config',
+  view: 'load-board-view-mode',
+  viewToggles: 'load-board-view-toggles'
+} as const;
 
 const FILTER_OPTIONS = [
   { id: 'ohioToIndiana', label: 'OH → IN' },
@@ -756,7 +695,7 @@ function SortHeader({
   );
 }
 
-export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false, contextId, enforceBackhaulOnly = false }: LoadBoardOrdersProps) {
+export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false }: LoadBoardOrdersProps) {
   const { 
     orders, 
     isLoading, 
@@ -773,12 +712,36 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     setCompletedPage,
     completedTotalCount,
     filterCounts,
-    refresh: fetchOrders,
-    truckloads
-  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment, contextId, enforceBackhaulOnly);
+    refresh: fetchOrders
+  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment);
 
+  // Add truckload data for stage determination
+  const [truckloads, setTruckloads] = useState<any[]>([]);
+  const [isLoadingTruckloads, setIsLoadingTruckloads] = useState(false);
+  
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
+
+  // Fetch truckloads data
+  const fetchTruckloads = async () => {
+    setIsLoadingTruckloads(true);
+    try {
+      const response = await fetch('/api/truckloads');
+      if (response.ok) {
+        const data = await response.json();
+        setTruckloads(data.truckloads || []);
+      }
+    } catch (error) {
+      console.error('Error fetching truckloads:', error);
+    } finally {
+      setIsLoadingTruckloads(false);
+    }
+  };
+
+  // Fetch truckloads on component mount
+  useEffect(() => {
+    fetchTruckloads();
+  }, []);
 
   // Check for documents on orders
   const checkOrdersForDocuments = async () => {
@@ -1477,8 +1440,8 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                               <Tooltip delayDuration={200}>
                                 <TooltipTrigger asChild>
                                   <span className="text-red-600 font-extrabold text-[11px] cursor-help hover:underline">
-                                    {order.pickupCustomer.name}
-                                  </span>
+                              {order.pickupCustomer.name}
+                            </span>
                                 </TooltipTrigger>
                                 <TooltipContent 
                                   className="bg-gray-900 text-white text-xs p-3 max-w-xs"
@@ -1545,8 +1508,8 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                                 <Tooltip delayDuration={200}>
                                   <TooltipTrigger asChild>
                                     <span className="text-gray-900 font-medium text-[11px] cursor-help hover:underline">
-                                      {order.deliveryCustomer.name}
-                                    </span>
+                                {order.deliveryCustomer.name}
+                              </span>
                                   </TooltipTrigger>
                                   <TooltipContent 
                                     className="bg-gray-900 text-white text-xs p-3 max-w-xs"
@@ -1558,7 +1521,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
                                         <div>
                                           <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
                                           <div className="text-white">{order.deliveryCustomer.address}</div>
-                                        </div>
+                            </div>
                                       )}
                                       {(order.deliveryCustomer.phone || order.deliveryCustomer.phone2) && (
                                         <div>

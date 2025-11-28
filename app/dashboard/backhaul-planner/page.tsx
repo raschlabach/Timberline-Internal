@@ -40,8 +40,6 @@ export default function BackhaulPlannerPage() {
           showSortDropdown={true}
           prioritizeRushOrders={false}
           hideOnAnyAssignment={true}
-          contextId="backhaul-planner"
-          enforceBackhaulOnly={true}
         />
       </div>
     </div>
