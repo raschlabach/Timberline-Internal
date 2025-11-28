@@ -562,12 +562,19 @@ function useLoadBoardOrders(
     const hasDeliveryAssignment = order.deliveryAssignment !== null;
     const isCompleted = order.status === 'completed';
 
+    // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
+    // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
+    // This check happens FIRST before any other toggle logic
+    if (isCompleted && !viewToggles.completed) {
+      return false; // Immediately exclude completed orders when completed toggle is off
+    }
+
     // Filter by toggle states
     if (isCompleted) {
-      // Only show if completed toggle is enabled
-      if (!viewToggles.completed) return false;
+      // If we get here, completed toggle is ON, so show the completed order
+      // Continue to search/filter checks below
     } else {
-      // Non-completed orders - check which toggle they match
+      // Non-completed orders only - check which toggle they match
       let matchesAnyToggle = false;
 
       if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
@@ -576,7 +583,9 @@ function useLoadBoardOrders(
       if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
         matchesAnyToggle = true;
       }
-      if (viewToggles.delivery && hasDeliveryAssignment && !isCompleted) {
+      if (viewToggles.delivery && hasDeliveryAssignment) {
+        // Delivery toggle: show orders with delivery assignment that are NOT completed
+        // (isCompleted is already false here since we're in the else block)
         matchesAnyToggle = true;
       }
       if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
