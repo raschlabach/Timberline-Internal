@@ -1404,7 +1404,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                   </TableHead>
                   <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent w-[120px]">Status</TableHead>
                   <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent w-[140px]">Load Types</TableHead>
-                  <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent min-w-[300px]">
+                  <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
                         <SortHeader
@@ -1607,11 +1607,12 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                         })}
                       </div>
                     </TableCell>
-                    <TableCell className="py-1 px-2 min-w-[300px]">
+                    <TableCell className="py-1 px-2">
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2">
-                          {/* Fixed width container for truck icon to ensure alignment */}
-                          <div className="w-[18px] flex items-center justify-start">
+                        {/* Pickup section - will grow to fit content */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* Fixed width container for truck icon */}
+                          <div className="w-[18px] flex items-center justify-start flex-shrink-0">
                             {order.pickupAssignment && (
                               <TooltipProvider>
                                 <Tooltip delayDuration={100}>
@@ -1640,121 +1641,125 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                               </TooltipProvider>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <TooltipProvider>
-                              <Tooltip delayDuration={200}>
-                                <TooltipTrigger asChild>
-                                  <span className="text-red-600 font-extrabold text-[11px] cursor-help hover:underline">
-                              {order.pickupCustomer.name}
-                            </span>
-                                </TooltipTrigger>
-                                <TooltipContent 
-                                  className="bg-gray-900 text-white text-xs p-3 max-w-xs"
-                                  side="top"
-                                >
-                                  <div className="space-y-2">
-                                    <div className="font-semibold text-sm">{order.pickupCustomer.name}</div>
-                                    {order.pickupCustomer.address && (
-                                      <div>
-                                        <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
-                                        <div className="text-white">{order.pickupCustomer.address}</div>
-                                      </div>
-                                    )}
-                                    {(order.pickupCustomer.phone || order.pickupCustomer.phone2) && (
-                                      <div>
-                                        <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
-                                        <div className="space-y-0.5">
-                                          {order.pickupCustomer.phone && (
-                                            <div className="text-white">{formatPhoneNumber(order.pickupCustomer.phone)}</div>
-                                          )}
-                                          {order.pickupCustomer.phone2 && (
-                                            <div className="text-white">{formatPhoneNumber(order.pickupCustomer.phone2)}</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {order.pickupCustomer.notes && (
-                                      <div>
-                                        <div className="text-gray-300 text-[10px] uppercase mb-0.5">Notes</div>
-                                        <div className="text-white whitespace-pre-wrap">{order.pickupCustomer.notes}</div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </div>
-                        <span className="text-gray-400 text-[11px]">→</span>
-                        {/* Fixed width container for truck icon to ensure alignment */}
-                        <div className="w-[18px] flex items-center justify-start">
-                          {order.deliveryAssignment && (
-                            <TooltipProvider>
-                              <Tooltip delayDuration={100}>
-                                <TooltipTrigger>
-                                  <Truck 
-                                    className="w-[14px] h-[14px]" 
-                                    strokeWidth={2.5}
-                                    style={{ color: order.deliveryAssignment.driverColor }}
-                                  />
-                                </TooltipTrigger>
-                                <TooltipContent 
-                                  className="bg-gray-900 text-white text-[11px] p-1.5 max-w-xs"
-                                  side="top"
-                                >
-                                  <div className="space-y-1">
-                                    <div className="font-semibold">Delivery Assignment</div>
-                                    <div>Driver: {order.deliveryAssignment.driverName}</div>
-                                    <div>Start: {formatDate(order.deliveryAssignment.startDate)}</div>
-                                    <div>End: {formatDate(order.deliveryAssignment.endDate)}</div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                        <TooltipProvider>
-                          <Tooltip delayDuration={200}>
-                            <TooltipTrigger asChild>
-                              <span className="text-black font-extrabold text-[11px] cursor-help hover:underline">
-                                {order.deliveryCustomer.name}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent 
-                              className="bg-gray-900 text-white text-xs p-3 max-w-xs"
-                              side="top"
-                            >
-                              <div className="space-y-2">
-                                <div className="font-semibold text-sm">{order.deliveryCustomer.name}</div>
-                                {order.deliveryCustomer.address && (
-                                  <div>
-                                    <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
-                                    <div className="text-white">{order.deliveryCustomer.address}</div>
-                                  </div>
-                                )}
-                                {(order.deliveryCustomer.phone || order.deliveryCustomer.phone2) && (
-                                  <div>
-                                    <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
-                                    <div className="space-y-0.5">
-                                      {order.deliveryCustomer.phone && (
-                                        <div className="text-white">{formatPhoneNumber(order.deliveryCustomer.phone)}</div>
-                                      )}
-                                      {order.deliveryCustomer.phone2 && (
-                                        <div className="text-white">{formatPhoneNumber(order.deliveryCustomer.phone2)}</div>
-                                      )}
+                          <TooltipProvider>
+                            <Tooltip delayDuration={200}>
+                              <TooltipTrigger asChild>
+                                <span className="text-red-600 font-extrabold text-[11px] cursor-help hover:underline whitespace-nowrap">
+                                  {order.pickupCustomer.name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent 
+                                className="bg-gray-900 text-white text-xs p-3 max-w-xs"
+                                side="top"
+                              >
+                                <div className="space-y-2">
+                                  <div className="font-semibold text-sm">{order.pickupCustomer.name}</div>
+                                  {order.pickupCustomer.address && (
+                                    <div>
+                                      <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
+                                      <div className="text-white">{order.pickupCustomer.address}</div>
                                     </div>
-                                  </div>
-                                )}
-                                {order.deliveryCustomer.notes && (
-                                  <div>
-                                    <div className="text-gray-300 text-[10px] uppercase mb-0.5">Notes</div>
-                                    <div className="text-white whitespace-pre-wrap">{order.deliveryCustomer.notes}</div>
-                                  </div>
-                                )}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                                  )}
+                                  {(order.pickupCustomer.phone || order.pickupCustomer.phone2) && (
+                                    <div>
+                                      <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
+                                      <div className="space-y-0.5">
+                                        {order.pickupCustomer.phone && (
+                                          <div className="text-white">{formatPhoneNumber(order.pickupCustomer.phone)}</div>
+                                        )}
+                                        {order.pickupCustomer.phone2 && (
+                                          <div className="text-white">{formatPhoneNumber(order.pickupCustomer.phone2)}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {order.pickupCustomer.notes && (
+                                    <div>
+                                      <div className="text-gray-300 text-[10px] uppercase mb-0.5">Notes</div>
+                                      <div className="text-white whitespace-pre-wrap">{order.pickupCustomer.notes}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        {/* Arrow - fixed position for vertical alignment */}
+                        <div className="w-[16px] flex items-center justify-center flex-shrink-0">
+                          <span className="text-gray-400 text-[11px]">→</span>
+                        </div>
+                        {/* Delivery section - will align consistently */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* Fixed width container for truck icon */}
+                          <div className="w-[18px] flex items-center justify-start flex-shrink-0">
+                            {order.deliveryAssignment && (
+                              <TooltipProvider>
+                                <Tooltip delayDuration={100}>
+                                  <TooltipTrigger>
+                                    <Truck 
+                                      className="w-[14px] h-[14px]" 
+                                      strokeWidth={2.5}
+                                      style={{ color: order.deliveryAssignment.driverColor }}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent 
+                                    className="bg-gray-900 text-white text-[11px] p-1.5 max-w-xs"
+                                    side="top"
+                                  >
+                                    <div className="space-y-1">
+                                      <div className="font-semibold">Delivery Assignment</div>
+                                      <div>Driver: {order.deliveryAssignment.driverName}</div>
+                                      <div>Start: {formatDate(order.deliveryAssignment.startDate)}</div>
+                                      <div>End: {formatDate(order.deliveryAssignment.endDate)}</div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                          <TooltipProvider>
+                            <Tooltip delayDuration={200}>
+                              <TooltipTrigger asChild>
+                                <span className="text-black font-extrabold text-[11px] cursor-help hover:underline whitespace-nowrap">
+                                  {order.deliveryCustomer.name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent 
+                                className="bg-gray-900 text-white text-xs p-3 max-w-xs"
+                                side="top"
+                              >
+                                <div className="space-y-2">
+                                  <div className="font-semibold text-sm">{order.deliveryCustomer.name}</div>
+                                  {order.deliveryCustomer.address && (
+                                    <div>
+                                      <div className="text-gray-300 text-[10px] uppercase mb-0.5">Address</div>
+                                      <div className="text-white">{order.deliveryCustomer.address}</div>
+                                    </div>
+                                  )}
+                                  {(order.deliveryCustomer.phone || order.deliveryCustomer.phone2) && (
+                                    <div>
+                                      <div className="text-gray-300 text-[10px] uppercase mb-0.5">Phone</div>
+                                      <div className="space-y-0.5">
+                                        {order.deliveryCustomer.phone && (
+                                          <div className="text-white">{formatPhoneNumber(order.deliveryCustomer.phone)}</div>
+                                        )}
+                                        {order.deliveryCustomer.phone2 && (
+                                          <div className="text-white">{formatPhoneNumber(order.deliveryCustomer.phone2)}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {order.deliveryCustomer.notes && (
+                                    <div>
+                                      <div className="text-gray-300 text-[10px] uppercase mb-0.5">Notes</div>
+                                      <div className="text-white whitespace-pre-wrap">{order.deliveryCustomer.notes}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">
