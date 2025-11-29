@@ -1316,6 +1316,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                   <div className="flex items-center space-x-2">
                     {FILTER_OPTIONS.map((option) => {
                       const count = filterCounts[option.id] || 0;
+                      const config = LOAD_TYPE_CONFIG[option.id as keyof typeof LOAD_TYPE_CONFIG];
                       return (
                         <Button
                           key={option.id}
@@ -1326,18 +1327,27 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                           }
                           className={`text-xs h-7 px-3 transition-all duration-200 relative ${
                             activeFilters[option.id] 
-                              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
+                              ? 'shadow-sm' 
                               : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
                           }`}
+                          style={activeFilters[option.id] && config ? {
+                            backgroundColor: config.color,
+                            color: config.textColor,
+                            borderColor: config.color,
+                          } : {}}
                         >
                           <span className="flex items-center space-x-1">
                             <span>{option.label}</span>
                             {count > 0 && (
                               <span className={`inline-flex items-center justify-center w-4 h-4 text-xs rounded-full ${
-                                activeFilters[option.id]
-                                  ? 'bg-white text-blue-600'
+                                activeFilters[option.id] && config
+                                  ? 'bg-white'
                                   : 'bg-blue-600 text-white'
-                              }`}>
+                              }`}
+                              style={activeFilters[option.id] && config ? {
+                                color: config.textColor,
+                              } : {}}
+                              >
                                 {count}
                               </span>
                             )}
@@ -1572,7 +1582,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                           return (
                             <span
                               key={key}
-                              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              className="inline-flex items-center justify-center px-1 py-0.5 rounded-full text-[9px] font-semibold"
                               style={{
                                 backgroundColor: config.color,
                                 color: config.textColor,
