@@ -190,6 +190,7 @@ interface LoadBoardOrdersProps {
   showSortDropdown?: boolean;
   prioritizeRushOrders?: boolean;
   hideOnAnyAssignment?: boolean;
+  storageKeyPrefix?: string; // Prefix for localStorage keys to make state independent per page
 }
 
 interface ViewToggles {
@@ -230,12 +231,25 @@ interface PoolItem {
   }>
 }
 
+// Default filter values
+const DEFAULT_FILTERS = {
+  ohioToIndiana: false,
+  backhaul: false,
+  localFlatbed: false,
+  rrOrder: false,
+  localSemi: false,
+  middlefield: false,
+  paNy: false,
+} as const;
+
 function useLoadBoardOrders(
   initialFilters?: LoadBoardOrdersProps['initialFilters'],
   prioritizeRushOrders: boolean = true,
   hideOnAnyAssignment: boolean = false,
-  truckloads: any[] = []
+  truckloads: any[] = [],
+  storageKeyPrefix: string = 'load-board'
 ) {
+  const LOCAL_STORAGE_KEYS = getLocalStorageKeys(storageKeyPrefix);
   const [orders, setOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -251,14 +265,9 @@ function useLoadBoardOrders(
   });
   const [completedPage, setCompletedPage] = useState<number>(1);
   const [completedTotalCount, setCompletedTotalCount] = useState<number>(0);
+  
   const [activeFilters, setActiveFilters] = useState<{[key: string]: boolean}>({
-    ohioToIndiana: false,
-    backhaul: false,
-    localFlatbed: false,
-    rrOrder: false,
-    localSemi: false,
-    middlefield: false,
-    paNy: false,
+    ...DEFAULT_FILTERS,
     ...initialFilters
   });
 
@@ -268,8 +277,12 @@ function useLoadBoardOrders(
       if (savedFilters) {
         const parsedFilters = JSON.parse(savedFilters);
         if (parsedFilters && typeof parsedFilters === 'object') {
-          setActiveFilters(prev => ({ ...prev, ...parsedFilters }));
+          // Use saved filters, merging with defaults to ensure all keys exist
+          setActiveFilters({ ...DEFAULT_FILTERS, ...parsedFilters });
         }
+      } else if (initialFilters) {
+        // If no saved filters but initialFilters provided, use them
+        setActiveFilters({ ...DEFAULT_FILTERS, ...initialFilters });
       }
 
       const savedSort = localStorage.getItem(LOCAL_STORAGE_KEYS.sort);
@@ -294,7 +307,7 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error loading load board preferences:', storageError);
     }
-  }, []);
+  }, [LOCAL_STORAGE_KEYS, initialFilters]);
 
   useEffect(() => {
     try {
@@ -302,7 +315,7 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error saving load board filters:', storageError);
     }
-  }, [activeFilters]);
+  }, [activeFilters, LOCAL_STORAGE_KEYS.filters]);
 
   useEffect(() => {
     try {
@@ -310,7 +323,7 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error saving load board sort config:', storageError);
     }
-  }, [sortConfig]);
+  }, [sortConfig, LOCAL_STORAGE_KEYS.sort]);
 
   useEffect(() => {
     try {
@@ -318,7 +331,7 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error saving load board view toggles:', storageError);
     }
-  }, [viewToggles]);
+  }, [viewToggles, LOCAL_STORAGE_KEYS.viewToggles]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -667,12 +680,13 @@ function formatDate(dateString: string): string {
   }
 }
 
-const LOCAL_STORAGE_KEYS = {
-  filters: 'load-board-active-filters',
-  sort: 'load-board-sort-config',
-  view: 'load-board-view-mode',
-  viewToggles: 'load-board-view-toggles'
-} as const;
+// Helper function to get localStorage keys with prefix
+const getLocalStorageKeys = (prefix: string = 'load-board') => ({
+  filters: `${prefix}-active-filters`,
+  sort: `${prefix}-sort-config`,
+  view: `${prefix}-view-mode`,
+  viewToggles: `${prefix}-view-toggles`
+});
 
 const FILTER_OPTIONS = [
   { id: 'ohioToIndiana', label: 'OH → IN' },
@@ -718,7 +732,7 @@ function SortHeader({
   );
 }
 
-export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false }: LoadBoardOrdersProps) {
+export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false, storageKeyPrefix = 'load-board' }: LoadBoardOrdersProps) {
   // Add truckload data for stage determination
   const [truckloads, setTruckloads] = useState<any[]>([]);
   
@@ -739,7 +753,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     completedTotalCount,
     filterCounts,
     refresh: fetchOrders
-  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment, truckloads);
+  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment, truckloads, storageKeyPrefix);
   const [isLoadingTruckloads, setIsLoadingTruckloads] = useState(false);
   
   // Track orders with documents
