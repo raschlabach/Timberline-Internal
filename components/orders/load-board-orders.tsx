@@ -1557,8 +1557,8 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                                 <TooltipTrigger>
                                   <MessageSquare className="w-[10px] h-[10px] text-blue-500" />
                                 </TooltipTrigger>
-                                <TooltipContent side="top" className="text-[11px] bg-gray-900 text-white px-2 py-1">
-                                  Has Comments
+                                <TooltipContent side="top" className="text-[11px] bg-gray-900 text-white px-2 py-1 max-w-xs">
+                                  {order.comments}
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -1582,17 +1582,27 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                           if (!isActive) return null;
                           const config = LOAD_TYPE_CONFIG[key as keyof typeof LOAD_TYPE_CONFIG];
                           if (!config) return null;
+                          const filterOption = FILTER_OPTIONS.find(opt => opt.id === key);
+                          const fullName = filterOption?.label || key;
                           return (
-                            <span
-                              key={key}
-                              className="inline-flex items-center justify-center px-1 py-0.5 rounded-full text-[9px] font-semibold"
-                              style={{
-                                backgroundColor: config.color,
-                                color: config.textColor,
-                              }}
-                            >
-                              {config.label}
-                            </span>
+                            <TooltipProvider key={key}>
+                              <Tooltip delayDuration={100}>
+                                <TooltipTrigger>
+                                  <span
+                                    className="inline-flex items-center justify-center px-1 py-0.5 rounded-full text-[9px] font-semibold cursor-help"
+                                    style={{
+                                      backgroundColor: config.color,
+                                      color: config.textColor,
+                                    }}
+                                  >
+                                    {config.label}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-[11px] bg-gray-900 text-white px-2 py-1">
+                                  {fullName}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           );
                         })}
                       </div>
