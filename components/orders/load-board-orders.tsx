@@ -727,6 +727,45 @@ const FILTER_OPTIONS = [
   { id: 'paNy', label: 'PA/NY' },
 ];
 
+// Load type configuration with colors and labels
+const LOAD_TYPE_CONFIG = {
+  ohioToIndiana: {
+    label: 'OH-IN',
+    color: '#BFDBFE', // light blue-300
+    textColor: '#1E40AF', // blue-800
+  },
+  backhaul: {
+    label: 'B',
+    color: '#FDE68A', // light amber-200
+    textColor: '#92400E', // amber-800
+  },
+  localFlatbed: {
+    label: 'LF',
+    color: '#C7D2FE', // light indigo-200
+    textColor: '#3730A3', // indigo-800
+  },
+  rrOrder: {
+    label: 'RNR',
+    color: '#FBCFE8', // light pink-200
+    textColor: '#9F1239', // rose-800
+  },
+  localSemi: {
+    label: 'LS',
+    color: '#A7F3D0', // light emerald-200
+    textColor: '#065F46', // emerald-800
+  },
+  middlefield: {
+    label: 'M',
+    color: '#FCD34D', // light yellow-300
+    textColor: '#78350F', // yellow-800
+  },
+  paNy: {
+    label: 'PA-NY',
+    color: '#DDD6FE', // light purple-200
+    textColor: '#5B21B6', // purple-800
+  },
+} as const;
+
 function SortHeader({ 
   field, 
   label, 
@@ -1351,6 +1390,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                     </div>
                   </TableHead>
                   <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent w-[120px]">Status</TableHead>
+                  <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent w-[140px]">Load Types</TableHead>
                   <TableHead className="h-6 text-xs font-medium text-gray-600 tracking-wide bg-transparent min-w-[300px]">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
@@ -1521,6 +1561,27 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                             )}
                           </div>
                         </TooltipProvider>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-1 px-2 w-[140px]">
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(order.filters).map(([key, isActive]) => {
+                          if (!isActive) return null;
+                          const config = LOAD_TYPE_CONFIG[key as keyof typeof LOAD_TYPE_CONFIG];
+                          if (!config) return null;
+                          return (
+                            <span
+                              key={key}
+                              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: config.color,
+                                color: config.textColor,
+                              }}
+                            >
+                              {config.label}
+                            </span>
+                          );
+                        })}
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2 min-w-[300px]">
