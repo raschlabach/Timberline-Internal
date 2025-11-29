@@ -1317,34 +1317,37 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                     {FILTER_OPTIONS.map((option) => {
                       const count = filterCounts[option.id] || 0;
                       const config = LOAD_TYPE_CONFIG[option.id as keyof typeof LOAD_TYPE_CONFIG];
+                      const isActive = activeFilters[option.id];
                       return (
                         <Button
                           key={option.id}
-                          variant={activeFilters[option.id] ? 'default' : 'outline'}
+                          variant="outline"
                           size="sm"
                           onClick={() => 
                             setActiveFilters(prev => ({ ...prev, [option.id]: !prev[option.id] }))
                           }
                           className={`text-xs h-7 px-3 transition-all duration-200 relative ${
-                            activeFilters[option.id] 
-                              ? 'shadow-sm' 
-                              : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                            isActive 
+                              ? 'shadow-sm border-2' 
+                              : 'border'
                           }`}
-                          style={activeFilters[option.id] && config ? {
+                          style={config ? {
                             backgroundColor: config.color,
                             color: config.textColor,
-                            borderColor: config.color,
+                            borderColor: isActive ? config.textColor : config.color,
                           } : {}}
                         >
                           <span className="flex items-center space-x-1">
                             <span>{option.label}</span>
                             {count > 0 && (
                               <span className={`inline-flex items-center justify-center w-4 h-4 text-xs rounded-full ${
-                                activeFilters[option.id] && config
+                                isActive && config
                                   ? 'bg-white'
+                                  : config
+                                  ? 'bg-white/80'
                                   : 'bg-blue-600 text-white'
                               }`}
-                              style={activeFilters[option.id] && config ? {
+                              style={config ? {
                                 color: config.textColor,
                               } : {}}
                               >
