@@ -758,6 +758,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
   
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
+  const [isCheckingDocuments, setIsCheckingDocuments] = useState(false);
 
   // Fetch truckloads data
   const fetchTruckloads = async () => {
@@ -780,8 +781,15 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     fetchTruckloads();
   }, []);
 
-  // Check for documents on orders
+  // Check for documents on orders - batched to prevent too many concurrent requests
   const checkOrdersForDocuments = async () => {
+    // Prevent concurrent executions
+    if (isCheckingDocuments) {
+      return;
+    }
+    
+    setIsCheckingDocuments(true);
+    
     try {
       const orderIds = orders.map(order => order.id);
       
@@ -791,20 +799,61 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
         return;
       }
       
-      const documentChecks = await Promise.all(
-        orderIds.map(async (orderId) => {
-          try {
-            const response = await fetch(`/api/orders/${orderId}/documents`);
-            if (response.ok) {
-              const data = await response.json();
-              return { orderId, hasDocuments: data.documents && data.documents.length > 0 };
+      // Process orders in batches to avoid ERR_INSUFFICIENT_RESOURCES
+      const BATCH_SIZE = 5; // Process 5 orders at a time
+      const DELAY_BETWEEN_BATCHES = 100; // 100ms delay between batches
+      const documentChecks: Array<{ orderId: number; hasDocuments: boolean }> = [];
+      
+      for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
+        const batch = orderIds.slice(i, i + BATCH_SIZE);
+        
+        // Process this batch with timeout handling
+        const batchResults = await Promise.allSettled(
+          batch.map(async (orderId) => {
+            try {
+              // Create abort controller for timeout (AbortSignal.timeout may not be available in all browsers)
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+              
+              try {
+                const response = await fetch(`/api/orders/${orderId}/documents`, {
+                  signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  return { orderId, hasDocuments: data.documents && data.documents.length > 0 };
+                }
+              } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw fetchError;
+              }
+            } catch (error) {
+              // Silently handle errors - don't log every failure to avoid console spam
+              if (error instanceof Error && error.name !== 'AbortError') {
+                // Only log non-timeout errors occasionally to avoid spam
+                if (Math.random() < 0.05) { // Log ~5% of errors to avoid spam
+                  console.error(`Error checking documents for order ${orderId}:`, error);
+                }
+              }
             }
-          } catch (error) {
-            console.error(`Error checking documents for order ${orderId}:`, error);
+            return { orderId, hasDocuments: false };
+          })
+        );
+        
+        // Collect results from this batch
+        batchResults.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            documentChecks.push(result.value);
           }
-          return { orderId, hasDocuments: false };
-        })
-      );
+        });
+        
+        // Add delay between batches (except for the last batch)
+        if (i + BATCH_SIZE < orderIds.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+        }
+      }
       
       const ordersWithDocs = new Set(
         documentChecks
@@ -814,6 +863,9 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
       setOrdersWithDocuments(ordersWithDocs);
     } catch (error) {
       console.error('Error checking orders for documents:', error);
+      // Don't break the app if document checking fails
+    } finally {
+      setIsCheckingDocuments(false);
     }
   };
 
