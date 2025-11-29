@@ -36,6 +36,13 @@ export default function BackhaulPlannerPage() {
             middlefield: false,
             paNy: false,
           }}
+          initialViewToggles={{
+            unassigned: true,
+            pickup: false,
+            delivery: false,
+            assigned: false,
+            completed: false
+          }}
           showFilters={false}
           showSortDropdown={true}
           prioritizeRushOrders={false}

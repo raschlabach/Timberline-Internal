@@ -186,6 +186,7 @@ interface LoadBoardOrdersProps {
     middlefield: boolean;
     paNy: boolean;
   };
+  initialViewToggles?: ViewToggles; // Custom default view toggles (overridden by localStorage if saved)
   showFilters?: boolean;
   showSortDropdown?: boolean;
   prioritizeRushOrders?: boolean;
@@ -247,23 +248,30 @@ function useLoadBoardOrders(
   prioritizeRushOrders: boolean = true,
   hideOnAnyAssignment: boolean = false,
   truckloads: any[] = [],
-  storageKeyPrefix: string = 'load-board'
+  storageKeyPrefix: string = 'load-board',
+  initialViewToggles?: ViewToggles
 ) {
   // Memoize LOCAL_STORAGE_KEYS to prevent it from changing on every render
   const LOCAL_STORAGE_KEYS = useMemo(() => getLocalStorageKeys(storageKeyPrefix), [storageKeyPrefix]);
+  
+  // Default view toggles (used if no initialViewToggles provided and no saved state)
+  const defaultViewToggles: ViewToggles = {
+    unassigned: true,
+    pickup: true,
+    delivery: false,
+    assigned: false,
+    completed: false
+  };
+  
   const [orders, setOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'pickupDate', direction: 'asc' });
-  const [viewToggles, setViewToggles] = useState<ViewToggles>({
-    unassigned: true,
-    pickup: false,
-    delivery: false,
-    assigned: false,
-    completed: false
-  });
+  const [viewToggles, setViewToggles] = useState<ViewToggles>(
+    initialViewToggles || defaultViewToggles
+  );
   const [completedPage, setCompletedPage] = useState<number>(1);
   const [completedTotalCount, setCompletedTotalCount] = useState<number>(0);
   
@@ -311,6 +319,9 @@ function useLoadBoardOrders(
         } catch (e) {
           // Use default if parsing fails
         }
+      } else if (initialViewToggles) {
+        // If no saved toggles but initialViewToggles provided, use them
+        setViewToggles(initialViewToggles);
       }
     } catch (storageError) {
       console.error('Error loading load board preferences:', storageError);
@@ -750,7 +761,7 @@ function SortHeader({
   );
 }
 
-export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false, storageKeyPrefix = 'load-board' }: LoadBoardOrdersProps) {
+export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilters = true, showSortDropdown = false, prioritizeRushOrders = true, hideOnAnyAssignment = false, storageKeyPrefix = 'load-board' }: LoadBoardOrdersProps) {
   // Add truckload data for stage determination
   const [truckloads, setTruckloads] = useState<any[]>([]);
   
@@ -771,7 +782,7 @@ export function LoadBoardOrders({ initialFilters, showFilters = true, showSortDr
     completedTotalCount,
     filterCounts,
     refresh: fetchOrders
-  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment, truckloads, storageKeyPrefix);
+  } = useLoadBoardOrders(initialFilters, prioritizeRushOrders, hideOnAnyAssignment, truckloads, storageKeyPrefix, initialViewToggles);
   const [isLoadingTruckloads, setIsLoadingTruckloads] = useState(false);
   
   // Track orders with documents
