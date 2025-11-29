@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -249,7 +249,8 @@ function useLoadBoardOrders(
   truckloads: any[] = [],
   storageKeyPrefix: string = 'load-board'
 ) {
-  const LOCAL_STORAGE_KEYS = getLocalStorageKeys(storageKeyPrefix);
+  // Memoize LOCAL_STORAGE_KEYS to prevent it from changing on every render
+  const LOCAL_STORAGE_KEYS = useMemo(() => getLocalStorageKeys(storageKeyPrefix), [storageKeyPrefix]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -271,7 +272,14 @@ function useLoadBoardOrders(
     ...initialFilters
   });
 
+  // Load from localStorage only once on mount - use ref to track if we've initialized
+  const hasInitialized = useRef(false);
+  
   useEffect(() => {
+    // Only run once on mount
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+    
     try {
       const savedFilters = localStorage.getItem(LOCAL_STORAGE_KEYS.filters);
       if (savedFilters) {
@@ -307,9 +315,13 @@ function useLoadBoardOrders(
     } catch (storageError) {
       console.error('Error loading load board preferences:', storageError);
     }
-  }, [LOCAL_STORAGE_KEYS, initialFilters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once on mount
 
   useEffect(() => {
+    // Don't save on initial mount - only save when user actually changes filters
+    if (!hasInitialized.current) return;
+    
     try {
       localStorage.setItem(LOCAL_STORAGE_KEYS.filters, JSON.stringify(activeFilters));
     } catch (storageError) {
@@ -318,6 +330,9 @@ function useLoadBoardOrders(
   }, [activeFilters, LOCAL_STORAGE_KEYS.filters]);
 
   useEffect(() => {
+    // Don't save on initial mount - only save when user actually changes sort
+    if (!hasInitialized.current) return;
+    
     try {
       localStorage.setItem(LOCAL_STORAGE_KEYS.sort, JSON.stringify(sortConfig));
     } catch (storageError) {
@@ -326,6 +341,9 @@ function useLoadBoardOrders(
   }, [sortConfig, LOCAL_STORAGE_KEYS.sort]);
 
   useEffect(() => {
+    // Don't save on initial mount - only save when user actually changes toggles
+    if (!hasInitialized.current) return;
+    
     try {
       localStorage.setItem(LOCAL_STORAGE_KEYS.viewToggles, JSON.stringify(viewToggles));
     } catch (storageError) {
