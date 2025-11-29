@@ -259,7 +259,7 @@ function useLoadBoardOrders(
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'pickupDate', direction: 'asc' });
   const [viewToggles, setViewToggles] = useState<ViewToggles>({
     unassigned: true,
-    pickup: true,
+    pickup: false,
     delivery: false,
     assigned: false,
     completed: false
