@@ -1454,7 +1454,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                   <TableRow 
                     key={order.id}
                     className={`
-                      group transition-colors duration-100 border-b border-gray-200
+                      group transition-colors duration-100 border-b border-gray-200 h-[36px]
                       ${(() => {
                         const poolStatus = getPoolStatus(order.id);
                         if (checkedOrders.has(order.id)) {
@@ -1623,8 +1623,8 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                         })}
                       </div>
                     </TableCell>
-                    <TableCell className="py-1 px-2">
-                      <div className="flex items-center gap-2">
+                    <TableCell className="py-1 px-2 h-[36px]">
+                      <div className="flex items-center gap-2 h-full">
                         {/* Pickup section - fixed width to ensure arrow alignment */}
                         <div 
                           className="flex items-center gap-2 flex-shrink-0"
@@ -1793,32 +1793,32 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="py-1 px-2">
-                      <div className="flex items-center gap-3 flex-wrap">
+                    <TableCell className="py-1 px-2 h-[36px]">
+                      <div className="flex items-center gap-3 flex-nowrap overflow-hidden h-full">
                         {order.skids > 0 && (
-                          <div className="text-[11px] whitespace-nowrap">
+                          <div className="text-[11px] whitespace-nowrap flex-shrink-0">
                             <span className="text-gray-500">Skids:</span> <span className="font-medium text-gray-900">{order.skids}</span>
                           </div>
                         )}
                         {order.vinyl > 0 && (
-                          <div className="text-[11px] whitespace-nowrap">
+                          <div className="text-[11px] whitespace-nowrap flex-shrink-0">
                             <span className="text-gray-500">Vinyl:</span> <span className="font-medium text-gray-900">{order.vinyl}</span>
                           </div>
                         )}
                         {order.footage > 0 && (
-                          <div className="text-[11px] whitespace-nowrap">
+                          <div className="text-[11px] whitespace-nowrap flex-shrink-0">
                             <span className="text-gray-500">Footage:</span> <span className="font-medium text-gray-900">{order.footage} ft²</span>
                           </div>
                         )}
                         {order.handBundles > 0 && (
-                          <div className="text-[11px] whitespace-nowrap">
+                          <div className="text-[11px] whitespace-nowrap flex-shrink-0">
                             <span className="text-gray-500">HB:</span> <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded">{order.handBundles}</span>
                           </div>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="py-1 px-2 w-[150px] text-right">
-                      <div className="flex items-center justify-end gap-1.5 transition-opacity">
+                    <TableCell className="py-1 px-2 w-[150px] text-right h-[36px]">
+                      <div className="flex items-center justify-end gap-1.5 transition-opacity h-full">
                         {(() => {
                           const poolStatus = getPoolStatus(order.id);
                           const isInPool = poolStatus !== null;
