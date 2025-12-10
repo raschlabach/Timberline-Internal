@@ -65,7 +65,6 @@ export default function OrderEntryPage() {
     statusFlags: {
       rushOrder: false,
       needsAttention: false,
-      unloadEnRoute: false,
     },
     links: []
   });
@@ -347,7 +346,6 @@ export default function OrderEntryPage() {
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
-        unloadEnRoute: false,
       },
       links: []
     };
@@ -390,7 +388,6 @@ export default function OrderEntryPage() {
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
-        unloadEnRoute: false,
       },
       links: []
     };
@@ -435,7 +432,6 @@ export default function OrderEntryPage() {
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
-        unloadEnRoute: false,
       },
       links: []
     };
@@ -762,10 +758,8 @@ export default function OrderEntryPage() {
                     <StatusFlags
                       rushOrder={formState.statusFlags.rushOrder}
                       needsAttention={formState.statusFlags.needsAttention}
-                      unloadEnRoute={formState.statusFlags.unloadEnRoute}
                       onRushOrderChange={(checked: boolean) => handleStatusFlagChange('rushOrder', checked)}
                       onNeedsAttentionChange={(checked: boolean) => handleStatusFlagChange('needsAttention', checked)}
-                      onUnloadEnRouteChange={(checked: boolean) => handleStatusFlagChange('unloadEnRoute', checked)}
                     />
                   </div>
                 </div>

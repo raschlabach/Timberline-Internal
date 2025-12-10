@@ -75,7 +75,6 @@ interface Order {
   pickupDate: string;
   isRushOrder: boolean;
   needsAttention: boolean;
-  unloadEnRoute: boolean;
   comments: string;
   freightQuote: string;
   status: string;
@@ -1565,16 +1564,6 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                                 </TooltipTrigger>
                                 <TooltipContent side="top" className="text-[11px] bg-gray-900 text-white px-2 py-1">
                                   Needs Attention
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            {order.unloadEnRoute && (
-                              <Tooltip delayDuration={100}>
-                                <TooltipTrigger>
-                                  <Truck className="w-[10px] h-[10px] text-blue-500" />
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-[11px] bg-gray-900 text-white px-2 py-1">
-                                  En Route Unload
                                 </TooltipContent>
                               </Tooltip>
                             )}

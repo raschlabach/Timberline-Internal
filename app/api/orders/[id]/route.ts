@@ -167,7 +167,6 @@ export async function GET(
         TO_CHAR(o.pickup_date, 'YYYY-MM-DD') as "pickupDate",
         COALESCE(o.is_rush, false) as "isRushOrder",
         COALESCE(o.needs_attention, false) as "needsAttention",
-        COALESCE(o.unload_en_route, false) as "unloadEnRoute",
         o.comments,
         o.freight_quote as "freightQuote",
         -- Filters
@@ -276,18 +275,17 @@ export async function PATCH(
           comments = $6,
           is_rush = COALESCE($7, is_rush),
           needs_attention = COALESCE($8, needs_attention),
-          unload_en_route = COALESCE($9, unload_en_route),
-          oh_to_in = COALESCE($10, oh_to_in),
-          backhaul = COALESCE($11, backhaul),
-          local_semi = COALESCE($12, local_semi),
-          local_flatbed = COALESCE($13, local_flatbed),
-          rr_order = COALESCE($14, rr_order),
-          middlefield = COALESCE($15, middlefield),
-          pa_ny = COALESCE($16, pa_ny),
+          oh_to_in = COALESCE($9, oh_to_in),
+          backhaul = COALESCE($10, backhaul),
+          local_semi = COALESCE($11, local_semi),
+          local_flatbed = COALESCE($12, local_flatbed),
+          rr_order = COALESCE($13, rr_order),
+          middlefield = COALESCE($14, middlefield),
+          pa_ny = COALESCE($15, pa_ny),
           updated_at = NOW(),
-          last_edited_by = $17,
+          last_edited_by = $16,
           last_edited_at = NOW()
-        WHERE id = $18
+        WHERE id = $17
         RETURNING *`,
         [
           data.pickupCustomer?.id,
@@ -305,7 +303,6 @@ export async function PATCH(
           data.comments || '',
           data.isRushOrder,
           data.needsAttention,
-          data.unloadEnRoute,
           data.filters?.ohioToIndiana,
           data.filters?.backhaul,
           data.filters?.localSemi,

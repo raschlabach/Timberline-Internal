@@ -261,11 +261,7 @@ export function PresetsList({ onSelectPreset }: PresetsListProps) {
       handBundles: preset.handBundles || [],
       comments: preset.comments || '',
       freightQuote: preset.freightQuote || '',
-      statusFlags: {
-        rushOrder: preset.statusFlags?.rushOrder || false,
-        needsAttention: preset.statusFlags?.needsAttention || false,
-        unloadEnRoute: preset.statusFlags?.unloadEnRoute || false,
-      },
+      statusFlags: preset.statusFlags,
       links: preset.links
     };
 

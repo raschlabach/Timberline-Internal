@@ -67,10 +67,8 @@ export interface DatePickerProps {
 export interface StatusFlagsProps {
   rushOrder: boolean;
   needsAttention: boolean;
-  unloadEnRoute: boolean;
   onRushOrderChange: (checked: boolean) => void;
   onNeedsAttentionChange: (checked: boolean) => void;
-  onUnloadEnRouteChange: (checked: boolean) => void;
 }
 
 export interface SkidEntryRowProps {
@@ -111,7 +109,6 @@ export interface OrderFormState {
   statusFlags: {
     rushOrder: boolean;
     needsAttention: boolean;
-    unloadEnRoute: boolean;
   };
   links: OrderLink[];
 } 

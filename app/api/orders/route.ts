@@ -162,7 +162,6 @@ export async function GET(request: NextRequest) {
         TO_CHAR(o.pickup_date, 'YYYY-MM-DD') as "pickupDate",
         COALESCE(o.is_rush, false) as "isRushOrder",
         COALESCE(o.needs_attention, false) as "needsAttention",
-        COALESCE(o.unload_en_route, false) as "unloadEnRoute",
         o.comments,
         o.freight_quote as "freightQuote",
         -- Filters
@@ -381,7 +380,6 @@ export async function POST(request: NextRequest) {
           comments,
           is_rush,
           needs_attention,
-          unload_en_route,
           oh_to_in,
           backhaul,
           local_semi,
@@ -391,7 +389,7 @@ export async function POST(request: NextRequest) {
           pa_ny,
           created_by,
           status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING id`,
         [
           data.pickupCustomer.id,
@@ -406,7 +404,6 @@ export async function POST(request: NextRequest) {
           data.comments || null,
           data.statusFlags?.rushOrder || false,
           data.statusFlags?.needsAttention || false,
-          data.statusFlags?.unloadEnRoute || false,
           data.filters?.ohioToIndiana || false,
           data.filters?.backhaul || false,
           data.filters?.localSemi || false,

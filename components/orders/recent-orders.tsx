@@ -47,7 +47,6 @@ interface RecentOrder {
   pickupDate: string;
   isRushOrder: boolean;
   needsAttention: boolean;
-  unloadEnRoute?: boolean;
   comments: string;
   freightQuote?: string;
   filters: {
@@ -174,7 +173,6 @@ export function RecentOrders({ onSelectOrder }: RecentOrdersProps) {
       statusFlags: {
         rushOrder: order.isRushOrder,
         needsAttention: order.needsAttention,
-        unloadEnRoute: order.unloadEnRoute || false,
       },
       links: order.links,
     };
