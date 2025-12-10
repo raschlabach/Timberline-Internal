@@ -64,6 +64,7 @@ export interface OrderData {
   pickupDate: string;
   isRushOrder: boolean;
   needsAttention: boolean;
+  unloadEnRoute: boolean;
   comments: string;
   freightQuote: string;
   filters: {

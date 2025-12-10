@@ -55,6 +55,20 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+// Helper function to parse date string (YYYY-MM-DD) as local date without timezone conversion
+function parseLocalDate(dateString: string): Date {
+  // If the date string is in YYYY-MM-DD format, parse it as local date
+  if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const parts = dateString.split('-')
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10) - 1 // Month is 0-indexed
+    const day = parseInt(parts[2], 10)
+    return new Date(year, month, day)
+  }
+  // Fallback to regular Date parsing
+  return new Date(dateString)
+}
+
 interface TruckloadStop {
   id: number
   assignment_type: 'pickup' | 'delivery'
@@ -323,7 +337,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                   {/* Right side: Date, flags, buttons */}
                   <div className="flex items-center gap-0.5 flex-shrink-0">
                     <div className={`text-xs mr-1 whitespace-nowrap ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>
-                      {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
+                      {stop.pickup_date && format(parseLocalDate(stop.pickup_date), 'MM/dd/yy')}
                     </div>
                     {stop.is_rush && (
                       <Tooltip>
@@ -668,7 +682,7 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
             {/* Right side: Date, flags, buttons */}
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <div className={`text-xs mr-1 whitespace-nowrap ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>
-                {stop.pickup_date && format(new Date(stop.pickup_date), 'MM/dd/yy')}
+                {stop.pickup_date && format(parseLocalDate(stop.pickup_date), 'MM/dd/yy')}
               </div>
               {stop.is_rush && (
                 <Tooltip>

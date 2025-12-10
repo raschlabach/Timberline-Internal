@@ -163,8 +163,9 @@ export function PricingNoteForm({
         <div className="space-y-2">
           <Label htmlFor="category">Category *</Label>
           <Select
-            value={formData.category_id > 0 ? formData.category_id.toString() : undefined}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: parseInt(value) }))}
+            key={note?.id || 'new'} // Force re-render when note changes
+            value={formData.category_id > 0 ? formData.category_id.toString() : ""}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value ? parseInt(value) : 0 }))}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select a category" />

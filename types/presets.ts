@@ -33,6 +33,7 @@ export interface OrderPreset {
   statusFlags: {
     rushOrder: boolean;
     needsAttention: boolean;
+    unloadEnRoute: boolean;
   };
   links: OrderLink[];
   isFavorite: boolean;
@@ -64,6 +65,7 @@ export interface CreatePresetRequest {
   statusFlags: {
     rushOrder: boolean;
     needsAttention: boolean;
+    unloadEnRoute: boolean;
   };
   links: OrderLink[];
 }

@@ -65,6 +65,7 @@ export default function OrderEntryPage() {
     statusFlags: {
       rushOrder: false,
       needsAttention: false,
+      unloadEnRoute: false,
     },
     links: []
   });
@@ -346,6 +347,7 @@ export default function OrderEntryPage() {
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
+        unloadEnRoute: false,
       },
       links: []
     };
@@ -388,6 +390,7 @@ export default function OrderEntryPage() {
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
+        unloadEnRoute: false,
       },
       links: []
     };
@@ -432,6 +435,7 @@ export default function OrderEntryPage() {
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
+        unloadEnRoute: false,
       },
       links: []
     };
@@ -736,6 +740,10 @@ export default function OrderEntryPage() {
                         placeholder="Enter quote amount"
                         value={formState.freightQuote}
                         onChange={handleFreightQuoteChange}
+                        onWheel={(e) => {
+                          // Prevent scroll from changing the input value
+                          e.currentTarget.blur();
+                        }}
                         min="0"
                         step="0.01"
                       />
@@ -754,8 +762,10 @@ export default function OrderEntryPage() {
                     <StatusFlags
                       rushOrder={formState.statusFlags.rushOrder}
                       needsAttention={formState.statusFlags.needsAttention}
+                      unloadEnRoute={formState.statusFlags.unloadEnRoute}
                       onRushOrderChange={(checked: boolean) => handleStatusFlagChange('rushOrder', checked)}
                       onNeedsAttentionChange={(checked: boolean) => handleStatusFlagChange('needsAttention', checked)}
+                      onUnloadEnRouteChange={(checked: boolean) => handleStatusFlagChange('unloadEnRoute', checked)}
                     />
                   </div>
                 </div>

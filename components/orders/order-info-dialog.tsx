@@ -152,6 +152,7 @@ export function OrderInfoDialog({
           : '',
         isRushOrder: Boolean(data.isRushOrder),
         needsAttention: Boolean(data.needsAttention),
+        unloadEnRoute: Boolean(data.unloadEnRoute),
         comments: data.comments || '',
         freightQuote: data.freightQuote || '',
         filters: {
@@ -595,6 +596,14 @@ export function OrderInfoDialog({
                       onCheckedChange={(checked) => handleInputChange('needsAttention', checked)}
                     />
                     <Label htmlFor="needsAttention" className="text-amber-600">Needs Attention</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="unloadEnRoute"
+                      checked={formData.unloadEnRoute}
+                      onCheckedChange={(checked) => handleInputChange('unloadEnRoute', checked)}
+                    />
+                    <Label htmlFor="unloadEnRoute" className="text-blue-600">En Route Unload</Label>
                   </div>
                 </div>
               </div>

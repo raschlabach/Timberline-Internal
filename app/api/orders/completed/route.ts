@@ -190,6 +190,7 @@ export async function GET(request: NextRequest) {
         TO_CHAR(o.pickup_date, 'YYYY-MM-DD') as "pickupDate",
         COALESCE(o.is_rush, false) as "isRushOrder",
         COALESCE(o.needs_attention, false) as "needsAttention",
+        COALESCE(o.unload_en_route, false) as "unloadEnRoute",
         o.comments,
         o.freight_quote as "freightQuote",
         o.status,
