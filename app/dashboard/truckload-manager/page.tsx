@@ -73,22 +73,30 @@ interface TruckloadSummary {
 
 export default function TruckloadManager() {
   const router = useRouter()
-  const { data: driversData, isLoading: isLoadingDrivers, isError: isErrorDrivers } = useQuery<{ drivers: Driver[] }>({
+  const { data: driversData, isLoading: isLoadingDrivers, isError: isErrorDrivers, isFetching: isFetchingDrivers, refetch: refetchDrivers } = useQuery<{ drivers: Driver[] }>({
     queryKey: ['drivers'],
     queryFn: async () => {
       const response = await fetch('/api/drivers')
       if (!response.ok) throw new Error('Failed to fetch drivers')
       return response.json()
-    }
+    },
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
   })
 
-  const { data: truckloadsData, isLoading: isLoadingTruckloads, isError: isErrorTruckloads } = useQuery<{ truckloads: TruckloadSummary[] }>({
+  const { data: truckloadsData, isLoading: isLoadingTruckloads, isError: isErrorTruckloads, isFetching: isFetchingTruckloads, refetch: refetchTruckloads } = useQuery<{ truckloads: TruckloadSummary[] }>({
     queryKey: ['truckloads'],
     queryFn: async () => {
       const response = await fetch('/api/truckloads')
       if (!response.ok) throw new Error('Failed to fetch truckloads')
       return response.json()
-    }
+    },
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
   })
 
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
@@ -226,7 +234,11 @@ export default function TruckloadManager() {
   })
 
 
-  if (isLoadingDrivers || isLoadingTruckloads) {
+  // Show loading state if initial load, fetching, or retrying after an error
+  const isRetrying = (isFetchingDrivers || isFetchingTruckloads) && (isErrorDrivers || isErrorTruckloads)
+  const shouldShowLoading = isLoadingDrivers || isLoadingTruckloads || isRetrying
+  
+  if (shouldShowLoading) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <div className="flex items-center justify-between">
@@ -285,11 +297,20 @@ export default function TruckloadManager() {
     )
   }
 
-  // Only show error if loading is complete AND there's an actual error or missing data
-  if ((isErrorDrivers || isErrorTruckloads) || (!isLoadingDrivers && !isLoadingTruckloads && (!driversData?.drivers || !truckloadsData?.truckloads))) {
+  // Only show error if loading/fetching is complete AND there's an actual error or missing data
+  if (!isFetchingDrivers && !isFetchingTruckloads && (isErrorDrivers || isErrorTruckloads || !driversData?.drivers || !truckloadsData?.truckloads)) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p className="text-red-500">Failed to load data</p>
+        <button
+          onClick={() => {
+            refetchDrivers()
+            refetchTruckloads()
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     )
   }
