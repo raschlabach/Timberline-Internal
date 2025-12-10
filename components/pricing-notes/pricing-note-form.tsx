@@ -63,7 +63,7 @@ export function PricingNoteForm({
     if (note) {
       setFormData({
         title: note.title,
-        category_id: note.category_id,
+        category_id: note.category_id || 0,
         content: note.content,
         tags: note.tags || [],
         is_active: note.is_active,
@@ -163,9 +163,11 @@ export function PricingNoteForm({
         <div className="space-y-2">
           <Label htmlFor="category">Category *</Label>
           <Select
-            key={note?.id || 'new'} // Force re-render when note changes
-            value={formData.category_id > 0 ? formData.category_id.toString() : ""}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value ? parseInt(value) : 0 }))}
+            key={`category-select-${note?.id || 'new'}-${formData.category_id}`}
+            value={formData.category_id > 0 ? String(formData.category_id) : undefined}
+            onValueChange={(value) => {
+              setFormData(prev => ({ ...prev, category_id: parseInt(value, 10) }));
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select a category" />
