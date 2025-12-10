@@ -46,6 +46,24 @@ interface InactiveCustomer {
   total_orders: number
 }
 
+// Type for CustomerEditModal (matches what it expects)
+interface CustomerForEdit {
+  id: number
+  customer_name: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  county: string
+  phone_number_1: string | null
+  phone_number_1_ext: string | null
+  phone_number_2: string | null
+  phone_number_2_ext: string | null
+  price_category: number
+  notes: string | null
+  quotes?: string | null
+}
+
 type UpdatableCustomer = Omit<InactiveCustomer, "last_order_date" | "total_orders">
 
 export function InactiveCustomersList({ onBack }: { onBack: () => void }) {
@@ -91,9 +109,19 @@ export function InactiveCustomersList({ onBack }: { onBack: () => void }) {
     setIsEditModalOpen(true)
   }
 
-  function handleCustomerUpdated(updatedCustomer: UpdatableCustomer) {
+  function handleCustomerUpdated(updatedCustomer: CustomerForEdit) {
+    // Map the updated customer back to InactiveCustomer format
+    const mappedCustomer: InactiveCustomer = {
+      ...updatedCustomer,
+      zip_code: updatedCustomer.zip,
+      quotes: updatedCustomer.quotes ?? null,
+      // Keep existing last_order_date and total_orders
+      last_order_date: selectedCustomer?.last_order_date || null,
+      total_orders: selectedCustomer?.total_orders || 0,
+    }
+    
     setCustomers(prev => 
-      prev.map(c => c.id === updatedCustomer.id ? { ...c, ...updatedCustomer } : c)
+      prev.map(c => c.id === mappedCustomer.id ? mappedCustomer : c)
     )
     setIsEditModalOpen(false)
     setSelectedCustomer(null)
@@ -307,8 +335,12 @@ export function InactiveCustomersList({ onBack }: { onBack: () => void }) {
             setIsEditModalOpen(false)
             setSelectedCustomer(null)
           }}
-          customer={selectedCustomer}
-          onCustomerUpdated={handleCustomerUpdated}
+          customer={{
+            ...selectedCustomer,
+            zip: selectedCustomer.zip_code,
+            price_category: 0, // Default value, as inactive customers API doesn't return this
+          }}
+          onSave={handleCustomerUpdated}
         />
       )}
 
