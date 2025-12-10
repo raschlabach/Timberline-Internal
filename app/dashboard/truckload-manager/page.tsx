@@ -73,7 +73,7 @@ interface TruckloadSummary {
 
 export default function TruckloadManager() {
   const router = useRouter()
-  const { data: driversData, isLoading: isLoadingDrivers } = useQuery<{ drivers: Driver[] }>({
+  const { data: driversData, isLoading: isLoadingDrivers, isError: isErrorDrivers } = useQuery<{ drivers: Driver[] }>({
     queryKey: ['drivers'],
     queryFn: async () => {
       const response = await fetch('/api/drivers')
@@ -82,7 +82,7 @@ export default function TruckloadManager() {
     }
   })
 
-  const { data: truckloadsData, isLoading: isLoadingTruckloads } = useQuery<{ truckloads: TruckloadSummary[] }>({
+  const { data: truckloadsData, isLoading: isLoadingTruckloads, isError: isErrorTruckloads } = useQuery<{ truckloads: TruckloadSummary[] }>({
     queryKey: ['truckloads'],
     queryFn: async () => {
       const response = await fetch('/api/truckloads')
@@ -285,6 +285,16 @@ export default function TruckloadManager() {
     )
   }
 
+  // Only show error if loading is complete AND there's an actual error or missing data
+  if ((isErrorDrivers || isErrorTruckloads) || (!isLoadingDrivers && !isLoadingTruckloads && (!driversData?.drivers || !truckloadsData?.truckloads))) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-red-500">Failed to load data</p>
+      </div>
+    )
+  }
+
+  // Type guard: ensure data exists before using it
   if (!driversData?.drivers || !truckloadsData?.truckloads) {
     return (
       <div className="flex items-center justify-center h-screen">
