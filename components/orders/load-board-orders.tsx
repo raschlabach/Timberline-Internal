@@ -1591,8 +1591,8 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                         </TooltipProvider>
                       </div>
                     </TableCell>
-                    <TableCell className="py-1 px-2 w-[140px]">
-                      <div className="flex items-center gap-0.5 flex-nowrap overflow-hidden">
+                    <TableCell className="py-1 px-2 w-[140px] h-[36px]">
+                      <div className="flex items-center gap-0.5 flex-nowrap h-full">
                         {Object.entries(order.filters).map(([key, isActive]) => {
                           if (!isActive) return null;
                           const config = LOAD_TYPE_CONFIG[key as keyof typeof LOAD_TYPE_CONFIG];
@@ -1602,12 +1602,13 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                           return (
                             <TooltipProvider key={key}>
                               <Tooltip delayDuration={100}>
-                                <TooltipTrigger>
+                                <TooltipTrigger asChild>
                                   <span
-                                    className="inline-flex items-center justify-center px-1 py-0 rounded-full text-[9px] font-semibold cursor-help leading-tight whitespace-nowrap"
+                                    className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold cursor-help leading-none whitespace-nowrap flex-shrink-0"
                                     style={{
                                       backgroundColor: config.color,
                                       color: config.textColor,
+                                      lineHeight: '1',
                                     }}
                                   >
                                     {config.label}
