@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/table"
 import { CustomerDetailsModal } from "./customer-details-modal"
 import { CustomerEditModal } from "./customer-edit-modal"
+import { InactiveCustomersList } from "./inactive-customers-list"
+import { AlertTriangle } from "lucide-react"
 
 interface Customer {
   id: number
@@ -78,6 +80,7 @@ export default function CustomerList() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [showInactiveCustomers, setShowInactiveCustomers] = useState(false);
   
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -361,15 +364,30 @@ export default function CustomerList() {
     );
   }
   
+  // If showing inactive customers, render that component instead
+  if (showInactiveCustomers) {
+    return <InactiveCustomersList onBack={() => setShowInactiveCustomers(false)} />
+  }
+
   return (
     <div className="space-y-6">
       {/* Search and Stats Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Users className="h-5 w-5" />
-            <span>Customer Directory</span>
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>Customer Directory</span>
+            </CardTitle>
+            <Button
+              variant="outline"
+              onClick={() => setShowInactiveCustomers(true)}
+              className="flex items-center gap-2"
+            >
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              View Inactive Customers
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">

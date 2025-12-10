@@ -827,6 +827,21 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
   // Track orders with documents
   const [ordersWithDocuments, setOrdersWithDocuments] = useState<Set<number>>(new Set());
   const [isCheckingDocuments, setIsCheckingDocuments] = useState(false);
+  
+  // Calculate max pickup width for arrow alignment
+  const [maxPickupWidth, setMaxPickupWidth] = useState<number>(0);
+  const pickupWidthRefs = useRef<Map<number, number>>(new Map());
+  
+  useEffect(() => {
+    if (orders.length > 0) {
+      // Calculate max width from all pickup customer names
+      const widths = Array.from(pickupWidthRefs.current.values());
+      if (widths.length > 0) {
+        const maxWidth = Math.max(...widths);
+        setMaxPickupWidth(maxWidth);
+      }
+    }
+  }, [orders]);
 
   // Fetch truckloads data
   const fetchTruckloads = async () => {
@@ -1609,8 +1624,11 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                     </TableCell>
                     <TableCell className="py-1 px-2">
                       <div className="flex items-center gap-2">
-                        {/* Pickup section - will grow to fit content */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Pickup section - fixed width to ensure arrow alignment */}
+                        <div 
+                          className="flex items-center gap-2 flex-shrink-0"
+                          style={{ width: maxPickupWidth > 0 ? `${maxPickupWidth}px` : 'auto', minWidth: '200px' }}
+                        >
                           {/* Fixed width container for truck icon */}
                           <div className="w-[18px] flex items-center justify-start flex-shrink-0">
                             {order.pickupAssignment && (
@@ -1644,7 +1662,19 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                           <TooltipProvider>
                             <Tooltip delayDuration={200}>
                               <TooltipTrigger asChild>
-                                <span className="text-red-600 font-extrabold text-[11px] cursor-help hover:underline whitespace-nowrap">
+                                <span 
+                                  ref={(el) => {
+                                    if (el) {
+                                      const width = el.offsetWidth + 18; // 18px for truck icon space
+                                      pickupWidthRefs.current.set(order.id, width);
+                                      // Update max width if this is larger
+                                      if (width > maxPickupWidth) {
+                                        setMaxPickupWidth(width);
+                                      }
+                                    }
+                                  }}
+                                  className="text-red-600 font-extrabold text-[11px] cursor-help hover:underline whitespace-nowrap"
+                                >
                                   {order.pickupCustomer.name}
                                 </span>
                               </TooltipTrigger>
@@ -1689,7 +1719,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                           <span className="text-gray-400 text-[11px]">→</span>
                         </div>
                         {/* Delivery section - will align consistently */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-1">
                           {/* Fixed width container for truck icon */}
                           <div className="w-[18px] flex items-center justify-start flex-shrink-0">
                             {order.deliveryAssignment && (

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { format, startOfWeek } from 'date-fns'
+import { format } from 'date-fns'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,15 +46,14 @@ export function CreateTruckloadDialog({
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [nextBolNumber, setNextBolNumber] = useState<string>("")
   const today = new Date()
-  const sundayOfCurrentWeek = startOfWeek(today, { weekStartsOn: 0 })
   const [formData, setFormData] = useState<FormData>({
     driverId: selectedDriverId?.toString() || "",
     trailerNumber: "",
     billOfLadingNumber: "",
     description: "",
-    startDate: format(sundayOfCurrentWeek, "yyyy-MM-dd"),
+    startDate: format(today, "yyyy-MM-dd"),
     startTime: "08:00",
-    endDate: format(sundayOfCurrentWeek, "yyyy-MM-dd"),
+    endDate: format(today, "yyyy-MM-dd"),
     endTime: "17:00",
     totalMileage: 0,
     estimatedDuration: 0,
@@ -132,7 +131,7 @@ export function CreateTruckloadDialog({
   }
 
   function resetForm() {
-    const resetSunday = startOfWeek(new Date(), { weekStartsOn: 0 })
+    const resetToday = new Date()
     // Preserve the driver selection when resetting
     const preservedDriverId = selectedDriverId?.toString() || formData.driverId
     setFormData({
@@ -140,9 +139,9 @@ export function CreateTruckloadDialog({
       trailerNumber: '',
       billOfLadingNumber: '',
       description: '',
-      startDate: format(resetSunday, "yyyy-MM-dd"),
+      startDate: format(resetToday, "yyyy-MM-dd"),
       startTime: '08:00',
-      endDate: format(resetSunday, "yyyy-MM-dd"),
+      endDate: format(resetToday, "yyyy-MM-dd"),
       endTime: '17:00',
       totalMileage: 0,
       estimatedDuration: 0,
