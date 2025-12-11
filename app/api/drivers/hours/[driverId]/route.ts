@@ -33,7 +33,8 @@ export async function GET(
         driver_id as "driverId",
         TO_CHAR(date, 'YYYY-MM-DD') as date,
         description,
-        hours
+        hours,
+        type
       FROM driver_hours
       WHERE driver_id = $1
         AND date >= $2
@@ -70,22 +71,27 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Invalid driver ID' }, { status: 400 })
     }
 
-    const { date, description, hours } = await request.json()
+    const { date, description, hours, type } = await request.json()
 
-    if (!date || hours === undefined) {
-      return NextResponse.json({ success: false, error: 'date and hours are required' }, { status: 400 })
+    if (!date || hours === undefined || !type) {
+      return NextResponse.json({ success: false, error: 'date, hours, and type are required' }, { status: 400 })
+    }
+
+    if (type !== 'misc_driving' && type !== 'maintenance') {
+      return NextResponse.json({ success: false, error: 'type must be either "misc_driving" or "maintenance"' }, { status: 400 })
     }
 
     const result = await query(`
-      INSERT INTO driver_hours (driver_id, date, description, hours)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO driver_hours (driver_id, date, description, hours, type)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING 
         id,
         driver_id as "driverId",
         TO_CHAR(date, 'YYYY-MM-DD') as date,
         description,
-        hours
-    `, [driverId, date, description || null, hours])
+        hours,
+        type
+    `, [driverId, date, description || null, hours, type])
 
     return NextResponse.json({
       success: true,

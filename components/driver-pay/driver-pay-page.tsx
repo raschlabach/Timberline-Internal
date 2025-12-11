@@ -20,7 +20,8 @@ interface DriverPayPageProps {}
 interface DriverPaySettings {
   driverId: number
   loadPercentage: number
-  hourlyRate: number
+  miscDrivingRate: number
+  maintenanceRate: number
 }
 
 interface DriverHour {
@@ -28,6 +29,7 @@ interface DriverHour {
   date: string
   description: string | null
   hours: number
+  type: 'misc_driving' | 'maintenance'
 }
 
 interface Deduction {
@@ -66,7 +68,8 @@ interface DriverData {
   driverName: string
   driverColor: string | null
   loadPercentage: number
-  hourlyRate: number
+  miscDrivingRate: number
+  maintenanceRate: number
   truckloads: Truckload[]
   hours: DriverHour[]
 }
@@ -104,7 +107,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   const [tempSettings, setTempSettings] = useState<DriverPaySettings | null>(null)
   const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
-  const [newHour, setNewHour] = useState<{ date: string; description: string; hours: number } | null>(null)
+  const [newHour, setNewHour] = useState<{ date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
 
   // Fetch driver pay data
   const fetchPayData = useCallback(async () => {
@@ -126,7 +129,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           setTempSettings({
             driverId: data.drivers[0].driverId,
             loadPercentage: data.drivers[0].loadPercentage,
-            hourlyRate: data.drivers[0].hourlyRate
+            miscDrivingRate: data.drivers[0].miscDrivingRate,
+            maintenanceRate: data.drivers[0].maintenanceRate
           })
         }
       } else {
@@ -151,7 +155,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       setTempSettings({
         driverId: drivers[0].driverId,
         loadPercentage: drivers[0].loadPercentage,
-        hourlyRate: drivers[0].hourlyRate
+        miscDrivingRate: drivers[0].miscDrivingRate,
+        maintenanceRate: drivers[0].maintenanceRate
       })
     }
   }, [drivers, selectedDriverId])
@@ -167,7 +172,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       setTempSettings({
         driverId: selectedDriver.driverId,
         loadPercentage: selectedDriver.loadPercentage,
-        hourlyRate: selectedDriver.hourlyRate
+        miscDrivingRate: selectedDriver.miscDrivingRate,
+        maintenanceRate: selectedDriver.maintenanceRate
       })
       setEditingSettings(true)
     }
@@ -179,7 +185,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       setTempSettings({
         driverId: selectedDriver.driverId,
         loadPercentage: selectedDriver.loadPercentage,
-        hourlyRate: selectedDriver.hourlyRate
+        miscDrivingRate: selectedDriver.miscDrivingRate,
+        maintenanceRate: selectedDriver.maintenanceRate
       })
     }
     setEditingSettings(false)
@@ -195,7 +202,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           loadPercentage: tempSettings.loadPercentage,
-          hourlyRate: tempSettings.hourlyRate
+          miscDrivingRate: tempSettings.miscDrivingRate,
+          maintenanceRate: tempSettings.maintenanceRate
         })
       })
 
@@ -203,7 +211,12 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       if (data.success) {
         setDrivers(prev => prev.map(driver => 
           driver.driverId === tempSettings.driverId
-            ? { ...driver, loadPercentage: tempSettings.loadPercentage, hourlyRate: tempSettings.hourlyRate }
+            ? { 
+                ...driver, 
+                loadPercentage: tempSettings.loadPercentage, 
+                miscDrivingRate: tempSettings.miscDrivingRate,
+                maintenanceRate: tempSettings.maintenanceRate
+              }
             : driver
         ))
         setEditingSettings(false)
@@ -219,8 +232,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
   // Add driver hour
   const addDriverHour = async () => {
-    if (!selectedDriver || !newHour || !newHour.date || !newHour.hours) {
-      toast.error('Please fill in date and hours')
+    if (!selectedDriver || !newHour || !newHour.date || !newHour.hours || !newHour.type) {
+      toast.error('Please fill in date, hours, and type')
       return
     }
 
@@ -231,7 +244,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         body: JSON.stringify({
           date: newHour.date,
           description: newHour.description || null,
-          hours: newHour.hours
+          hours: newHour.hours,
+          type: newHour.type
         })
       })
 
@@ -302,14 +316,23 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }, 0)
 
     const loadValue = totalQuotes - totalDeductions
-    const totalHours = selectedDriver.hours.reduce((sum, hour) => sum + hour.hours, 0)
-    const weeklyDriverPay = (loadValue * selectedDriver.loadPercentage / 100) + (totalHours * selectedDriver.hourlyRate)
+    const miscDrivingHours = selectedDriver.hours
+      .filter(h => h.type === 'misc_driving')
+      .reduce((sum, hour) => sum + hour.hours, 0)
+    const maintenanceHours = selectedDriver.hours
+      .filter(h => h.type === 'maintenance')
+      .reduce((sum, hour) => sum + hour.hours, 0)
+    const weeklyDriverPay = (loadValue * selectedDriver.loadPercentage / 100) + 
+      (miscDrivingHours * selectedDriver.miscDrivingRate) + 
+      (maintenanceHours * selectedDriver.maintenanceRate)
 
     return {
       totalQuotes,
       totalDeductions,
       loadValue,
-      totalHours,
+      miscDrivingHours,
+      maintenanceHours,
+      totalHours: miscDrivingHours + maintenanceHours,
       weeklyDriverPay
     }
   }
@@ -374,7 +397,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                   setTempSettings({
                     driverId: driver.driverId,
                     loadPercentage: driver.loadPercentage,
-                    hourlyRate: driver.hourlyRate
+                    miscDrivingRate: driver.miscDrivingRate,
+                    maintenanceRate: driver.maintenanceRate
                   })
                   setEditingSettings(false)
                 }}
@@ -428,13 +452,27 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         />
                       </div>
                       <div className="flex items-center gap-2">
-                        <Label className="text-sm">Hourly Rate:</Label>
+                        <Label className="text-sm">Misc Driving Rate:</Label>
                         <Input
                           type="number"
-                          value={tempSettings?.hourlyRate || 0}
+                          value={tempSettings?.miscDrivingRate || 0}
                           onChange={(e) => setTempSettings(prev => prev ? {
                             ...prev,
-                            hourlyRate: parseFloat(e.target.value) || 0
+                            miscDrivingRate: parseFloat(e.target.value) || 0
+                          } : null)}
+                          className="w-24 h-8"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm">Maintenance Rate:</Label>
+                        <Input
+                          type="number"
+                          value={tempSettings?.maintenanceRate || 0}
+                          onChange={(e) => setTempSettings(prev => prev ? {
+                            ...prev,
+                            maintenanceRate: parseFloat(e.target.value) || 0
                           } : null)}
                           className="w-24 h-8"
                           step="0.01"
@@ -457,8 +495,12 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         <span className="font-medium">{selectedDriver.loadPercentage}%</span>
                       </div>
                       <div className="text-sm">
-                        <span className="text-gray-600">Hourly Rate: </span>
-                        <span className="font-medium">${selectedDriver.hourlyRate.toFixed(2)}</span>
+                        <span className="text-gray-600">Misc Driving Rate: </span>
+                        <span className="font-medium">${selectedDriver.miscDrivingRate.toFixed(2)}</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className="text-gray-600">Maintenance Rate: </span>
+                        <span className="font-medium">${selectedDriver.maintenanceRate.toFixed(2)}</span>
                       </div>
                       <Button size="sm" variant="outline" onClick={startEditSettings}>
                         <Edit2 className="h-4 w-4 mr-1" />
@@ -477,7 +519,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                     <Button size="sm" onClick={() => setNewHour({
                       date: format(new Date(), 'yyyy-MM-dd'),
                       description: '',
-                      hours: 0
+                      hours: 0,
+                      type: 'misc_driving'
                     })}>
                       <Plus className="h-4 w-4 mr-1" />
                       Add Hours
@@ -506,6 +549,14 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         step="0.25"
                         min="0"
                       />
+                      <select
+                        value={newHour.type}
+                        onChange={(e) => setNewHour(prev => prev ? { ...prev, type: e.target.value as 'misc_driving' | 'maintenance' } : null)}
+                        className="w-32 h-8 border rounded px-2 text-sm"
+                      >
+                        <option value="misc_driving">Misc Driving</option>
+                        <option value="maintenance">Maintenance</option>
+                      </select>
                       <Button size="sm" onClick={addDriverHour}>
                         Save
                       </Button>
@@ -522,6 +573,13 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         <div className="flex items-center gap-4">
                           <span className="text-sm">{format(new Date(hour.date), 'MM/dd/yyyy')}</span>
                           <span className="text-sm text-gray-600">{hour.description || '—'}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            hour.type === 'maintenance' 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {hour.type === 'maintenance' ? 'Maintenance' : 'Misc Driving'}
+                          </span>
                           <span className="text-sm font-medium">{hour.hours.toFixed(2)} hours</span>
                         </div>
                         <Button
@@ -539,46 +597,48 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 )}
               </Card>
 
-              {/* Truckloads - Compact Boxes */}
+              {/* Truckloads - Vertical List */}
               <div>
-                <h3 className="font-semibold mb-4">Truckloads</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <h3 className="font-semibold mb-3">Truckloads</h3>
+                <div className="space-y-2">
                   {selectedDriver.truckloads.map(truckload => {
                     const tlTotals = calculateTruckloadTotals(truckload)
                     return (
                       <Card
                         key={truckload.id}
-                        className="p-4 cursor-pointer hover:shadow-lg transition-shadow"
+                        className="p-2 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid"
                         onClick={() => handleTruckloadClick(truckload.id)}
                       >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold">
-                              {truckload.billOfLadingNumber ? `BOL ${truckload.billOfLadingNumber}` : `TL ${truckload.id}`}
-                            </h4>
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex-shrink-0">
+                              <h4 className="font-semibold text-sm">
+                                {truckload.billOfLadingNumber ? `BOL ${truckload.billOfLadingNumber}` : `TL ${truckload.id}`}
+                              </h4>
+                              <p className="text-xs text-gray-600">
+                                {format(new Date(truckload.startDate), 'MM/dd/yyyy')} - {format(new Date(truckload.endDate), 'MM/dd/yyyy')}
+                              </p>
+                            </div>
+                            {truckload.description && (
+                              <p className="text-xs text-gray-700 truncate flex-1">{truckload.description}</p>
+                            )}
                           </div>
-                          <p className="text-sm text-gray-600">
-                            {format(new Date(truckload.startDate), 'MM/dd/yyyy')} - {format(new Date(truckload.endDate), 'MM/dd/yyyy')}
-                          </p>
-                          {truckload.description && (
-                            <p className="text-sm text-gray-700">{truckload.description}</p>
-                          )}
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                            <div>
-                              <div className="text-xs text-gray-600">Total Quotes</div>
-                              <div className="text-sm font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
+                          <div className="flex items-center gap-4 flex-shrink-0">
+                            <div className="text-right">
+                              <div className="text-[10px] text-gray-600">Quotes</div>
+                              <div className="text-xs font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
                             </div>
-                            <div>
-                              <div className="text-xs text-gray-600">Deductions</div>
-                              <div className="text-sm font-semibold text-red-600">-${tlTotals.totalDeductions.toFixed(2)}</div>
+                            <div className="text-right">
+                              <div className="text-[10px] text-gray-600">Deductions</div>
+                              <div className="text-xs font-semibold text-red-600">-${tlTotals.totalDeductions.toFixed(2)}</div>
                             </div>
-                            <div>
-                              <div className="text-xs text-gray-600">Load Value</div>
-                              <div className="text-sm font-semibold">${tlTotals.loadValue.toFixed(2)}</div>
+                            <div className="text-right">
+                              <div className="text-[10px] text-gray-600">Load Value</div>
+                              <div className="text-xs font-semibold">${tlTotals.loadValue.toFixed(2)}</div>
                             </div>
-                            <div>
-                              <div className="text-xs text-gray-600">Orders</div>
-                              <div className="text-sm font-semibold">{truckload.orders.length}</div>
+                            <div className="text-right">
+                              <div className="text-[10px] text-gray-600">Orders</div>
+                              <div className="text-xs font-semibold">{truckload.orders.length}</div>
                             </div>
                           </div>
                         </div>
@@ -595,7 +655,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
               {totals && (
                 <Card className="p-4 bg-gray-50">
                   <h3 className="font-semibold mb-4">Weekly Summary</h3>
-                  <div className="grid grid-cols-5 gap-4">
+                  <div className="grid grid-cols-7 gap-4">
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Total Quotes</div>
                       <div className="text-lg font-bold">${totals.totalQuotes.toFixed(2)}</div>
@@ -607,6 +667,14 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Load Value</div>
                       <div className="text-lg font-bold">${totals.loadValue.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5">Misc Driving Hours</div>
+                      <div className="text-lg font-bold">{totals.miscDrivingHours.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5">Maintenance Hours</div>
+                      <div className="text-lg font-bold">{totals.maintenanceHours.toFixed(2)}</div>
                     </div>
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Total Hours</div>
@@ -631,6 +699,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           onOpenChange={setIsInvoiceDialogOpen}
           truckloadId={selectedTruckloadId}
           driverId={selectedDriverId}
+          driverName={selectedDriver?.driverName}
           onDataUpdated={() => {
             // Refresh data when dialog updates quotes or deductions
             fetchPayData()

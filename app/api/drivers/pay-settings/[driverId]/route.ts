@@ -23,7 +23,8 @@ export async function GET(
       SELECT 
         driver_id as "driverId",
         load_percentage as "loadPercentage",
-        hourly_rate as "hourlyRate"
+        COALESCE(misc_driving_rate, hourly_rate, 30.00) as "miscDrivingRate",
+        COALESCE(maintenance_rate, 30.00) as "maintenanceRate"
       FROM driver_pay_settings
       WHERE driver_id = $1
     `, [driverId])
@@ -35,7 +36,8 @@ export async function GET(
         settings: {
           driverId,
           loadPercentage: 30.00,
-          hourlyRate: 30.00
+          miscDrivingRate: 30.00,
+          maintenanceRate: 30.00
         }
       })
     }
@@ -69,10 +71,10 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Invalid driver ID' }, { status: 400 })
     }
 
-    const { loadPercentage, hourlyRate } = await request.json()
+    const { loadPercentage, miscDrivingRate, maintenanceRate } = await request.json()
 
-    if (loadPercentage === undefined || hourlyRate === undefined) {
-      return NextResponse.json({ success: false, error: 'loadPercentage and hourlyRate are required' }, { status: 400 })
+    if (loadPercentage === undefined || miscDrivingRate === undefined || maintenanceRate === undefined) {
+      return NextResponse.json({ success: false, error: 'loadPercentage, miscDrivingRate, and maintenanceRate are required' }, { status: 400 })
     }
 
     const client = await getClient()
@@ -87,16 +89,16 @@ export async function PATCH(
       if (checkResult.rows.length === 0) {
         // Insert new settings
         await client.query(`
-          INSERT INTO driver_pay_settings (driver_id, load_percentage, hourly_rate)
-          VALUES ($1, $2, $3)
-        `, [driverId, loadPercentage, hourlyRate])
+          INSERT INTO driver_pay_settings (driver_id, load_percentage, misc_driving_rate, maintenance_rate)
+          VALUES ($1, $2, $3, $4)
+        `, [driverId, loadPercentage, miscDrivingRate, maintenanceRate])
       } else {
         // Update existing settings
         await client.query(`
           UPDATE driver_pay_settings
-          SET load_percentage = $1, hourly_rate = $2, updated_at = CURRENT_TIMESTAMP
-          WHERE driver_id = $3
-        `, [loadPercentage, hourlyRate, driverId])
+          SET load_percentage = $1, misc_driving_rate = $2, maintenance_rate = $3, updated_at = CURRENT_TIMESTAMP
+          WHERE driver_id = $4
+        `, [loadPercentage, miscDrivingRate, maintenanceRate, driverId])
       }
 
       await client.query('COMMIT')
@@ -106,7 +108,8 @@ export async function PATCH(
         settings: {
           driverId,
           loadPercentage,
-          hourlyRate
+          miscDrivingRate,
+          maintenanceRate
         }
       })
     } catch (error) {

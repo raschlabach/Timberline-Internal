@@ -66,6 +66,65 @@ export async function GET(request: NextRequest) {
           client.release()
         }
       }
+
+      // Check if columns exist for the new rate structure
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'driver_pay_settings'
+        AND column_name IN ('misc_driving_rate', 'maintenance_rate')
+      `)
+      const existingColumns = columnCheck.rows.map((row: any) => row.column_name)
+      if (!existingColumns.includes('misc_driving_rate') || !existingColumns.includes('maintenance_rate')) {
+        console.log('Driver pay rate columns not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const ratesSql = fs.readFileSync(
+            path.join(migrationsDir, 'update-driver-pay-settings-rates.sql'),
+            'utf8'
+          )
+          await client.query(ratesSql)
+          await client.query('COMMIT')
+          console.log('Rate columns migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying rate columns migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+
+      // Check if type column exists in driver_hours
+      const hoursColumnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'driver_hours'
+        AND column_name = 'type'
+      `)
+      if (hoursColumnCheck.rows.length === 0) {
+        console.log('Driver hours type column not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const typeSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-driver-hours-type.sql'),
+            'utf8'
+          )
+          await client.query(typeSql)
+          await client.query('COMMIT')
+          console.log('Driver hours type column migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying driver hours type migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
     } catch (migrationError) {
       console.error('Error checking/applying migrations:', migrationError)
       // Continue anyway - the error handling below will catch if tables are missing
@@ -165,8 +224,9 @@ export async function GET(request: NextRequest) {
           t.driver_id as "driverId",
           u.full_name as "driverName",
           d.color as "driverColor",
-          COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
-          COALESCE(dps.hourly_rate, 30.00) as "hourlyRate"
+        COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
+        COALESCE(dps.misc_driving_rate, dps.hourly_rate, 30.00) as "miscDrivingRate",
+        COALESCE(dps.maintenance_rate, 30.00) as "maintenanceRate"
         FROM truckloads t
         LEFT JOIN users u ON t.driver_id = u.id
         LEFT JOIN drivers d ON u.id = d.user_id
@@ -211,13 +271,14 @@ export async function GET(request: NextRequest) {
     if (driverIds.length > 0) {
       try {
         driverHoursResult = await query(`
-          SELECT 
-            id,
-            driver_id as "driverId",
-            TO_CHAR(date, 'YYYY-MM-DD') as date,
-            description,
-            hours
-          FROM driver_hours
+        SELECT 
+          id,
+          driver_id as "driverId",
+          TO_CHAR(date, 'YYYY-MM-DD') as date,
+          description,
+          hours,
+          type
+        FROM driver_hours
           WHERE driver_id = ANY($1::int[])
             AND date >= $2::date
             AND date <= $3::date
@@ -243,7 +304,8 @@ export async function GET(request: NextRequest) {
         driverName: driver.driverName,
         driverColor: driver.driverColor,
         loadPercentage: parseFloat(driver.loadPercentage),
-        hourlyRate: parseFloat(driver.hourlyRate),
+        miscDrivingRate: parseFloat(driver.miscDrivingRate || driver.hourlyRate || 30.00),
+        maintenanceRate: parseFloat(driver.maintenanceRate || 30.00),
         truckloads: [],
         hours: []
       })
@@ -316,7 +378,8 @@ export async function GET(request: NextRequest) {
           id: hour.id,
           date: hour.date,
           description: hour.description,
-          hours: parseFloat(hour.hours) || 0
+          hours: parseFloat(hour.hours) || 0,
+          type: hour.type || 'misc_driving'
         })
       }
     })
