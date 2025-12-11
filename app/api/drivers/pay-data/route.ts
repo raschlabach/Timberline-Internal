@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import fs from 'fs'
+import path from 'path'
 
 // GET /api/drivers/pay-data - Get truckloads, orders, quotes, and deductions for drivers in date range
 export async function GET(request: NextRequest) {
@@ -17,6 +19,56 @@ export async function GET(request: NextRequest) {
 
     if (!startDate || !endDate) {
       return NextResponse.json({ success: false, error: 'startDate and endDate are required' }, { status: 400 })
+    }
+
+    // Check if tables exist, if not, apply migrations automatically
+    try {
+      const tableCheck = await query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN ('driver_pay_settings', 'driver_hours')
+      `)
+      const existingTables = tableCheck.rows.map((row: any) => row.table_name)
+      if (!existingTables.includes('driver_pay_settings') || !existingTables.includes('driver_hours')) {
+        // Tables don't exist, apply migrations
+        console.log('Driver pay tables not found, applying migrations...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          
+          if (!existingTables.includes('driver_pay_settings')) {
+            const paySettingsSql = fs.readFileSync(
+              path.join(migrationsDir, 'add-driver-pay-settings-table.sql'),
+              'utf8'
+            )
+            await client.query(paySettingsSql)
+            console.log('Created driver_pay_settings table')
+          }
+
+          if (!existingTables.includes('driver_hours')) {
+            const driverHoursSql = fs.readFileSync(
+              path.join(migrationsDir, 'add-driver-hours-table.sql'),
+              'utf8'
+            )
+            await client.query(driverHoursSql)
+            console.log('Created driver_hours table')
+          }
+
+          await client.query('COMMIT')
+          console.log('Migrations applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying migrations:', migrationError)
+          // Continue anyway - the error handling below will catch if tables are missing
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationError) {
+      console.error('Error checking/applying migrations:', migrationError)
+      // Continue anyway - the error handling below will catch if tables are missing
     }
 
     // Get all truckloads for drivers in the date range
@@ -77,61 +129,108 @@ export async function GET(request: NextRequest) {
     `, [truckloadIds])
 
     // Get cross-driver freight deductions for these truckloads
-    const deductionsResult = await query(`
-      SELECT 
-        id,
-        truckload_id as "truckloadId",
-        driver_name as "driverName",
-        TO_CHAR(date, 'YYYY-MM-DD') as date,
-        action,
-        footage,
-        dimensions,
-        deduction,
-        is_manual as "isManual",
-        comment
-      FROM cross_driver_freight_deductions
-      WHERE truckload_id = ANY($1::int[])
-      ORDER BY truckload_id, date
-    `, [truckloadIds])
+    let deductionsResult
+    try {
+      deductionsResult = await query(`
+        SELECT 
+          id,
+          truckload_id as "truckloadId",
+          driver_name as "driverName",
+          TO_CHAR(date, 'YYYY-MM-DD') as date,
+          action,
+          footage,
+          dimensions,
+          deduction,
+          is_manual as "isManual",
+          comment
+        FROM cross_driver_freight_deductions
+        WHERE truckload_id = ANY($1::int[])
+        ORDER BY truckload_id, date
+      `, [truckloadIds])
+    } catch (err: any) {
+      // If table doesn't exist, return empty result
+      if (err?.message?.includes('does not exist') || err?.code === '42P01') {
+        deductionsResult = { rows: [] }
+      } else {
+        throw err
+      }
+    }
 
     // Get driver pay settings for all drivers
-    const driversResult = await query(`
-      SELECT DISTINCT
-        t.driver_id as "driverId",
-        u.full_name as "driverName",
-        d.color as "driverColor",
-        COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
-        COALESCE(dps.hourly_rate, 30.00) as "hourlyRate"
-      FROM truckloads t
-      LEFT JOIN users u ON t.driver_id = u.id
-      LEFT JOIN drivers d ON u.id = d.user_id
-      LEFT JOIN driver_pay_settings dps ON t.driver_id = dps.driver_id
-      WHERE t.driver_id IS NOT NULL
-        AND (
-          (t.start_date >= $1::date AND t.start_date <= $2::date)
-          OR (t.end_date >= $1::date AND t.end_date <= $2::date)
-          OR (t.start_date <= $1::date AND t.end_date >= $2::date)
-        )
-      ORDER BY u.full_name
-    `, [startDate, endDate])
+    // Check if driver_pay_settings table exists first
+    let driversResult
+    try {
+      driversResult = await query(`
+        SELECT DISTINCT
+          t.driver_id as "driverId",
+          u.full_name as "driverName",
+          d.color as "driverColor",
+          COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
+          COALESCE(dps.hourly_rate, 30.00) as "hourlyRate"
+        FROM truckloads t
+        LEFT JOIN users u ON t.driver_id = u.id
+        LEFT JOIN drivers d ON u.id = d.user_id
+        LEFT JOIN driver_pay_settings dps ON t.driver_id = dps.driver_id
+        WHERE t.driver_id IS NOT NULL
+          AND (
+            (t.start_date >= $1::date AND t.start_date <= $2::date)
+            OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+            OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+          )
+        ORDER BY u.full_name
+      `, [startDate, endDate])
+    } catch (err: any) {
+      // If table doesn't exist, query without the join
+      if (err?.message?.includes('does not exist') || err?.code === '42P01') {
+        driversResult = await query(`
+          SELECT DISTINCT
+            t.driver_id as "driverId",
+            u.full_name as "driverName",
+            d.color as "driverColor",
+            30.00 as "loadPercentage",
+            30.00 as "hourlyRate"
+          FROM truckloads t
+          LEFT JOIN users u ON t.driver_id = u.id
+          LEFT JOIN drivers d ON u.id = d.user_id
+          WHERE t.driver_id IS NOT NULL
+            AND (
+              (t.start_date >= $1::date AND t.start_date <= $2::date)
+              OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+              OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+            )
+          ORDER BY u.full_name
+        `, [startDate, endDate])
+      } else {
+        throw err
+      }
+    }
 
     // Get driver hours for all drivers in date range
     const driverIds = driversResult.rows.map(d => d.driverId)
     let driverHoursResult: { rows: any[] } = { rows: [] }
     if (driverIds.length > 0) {
-      driverHoursResult = await query(`
-        SELECT 
-          id,
-          driver_id as "driverId",
-          TO_CHAR(date, 'YYYY-MM-DD') as date,
-          description,
-          hours
-        FROM driver_hours
-        WHERE driver_id = ANY($1::int[])
-          AND date >= $2::date
-          AND date <= $3::date
-        ORDER BY driver_id, date, id
-      `, [driverIds, startDate, endDate])
+      try {
+        driverHoursResult = await query(`
+          SELECT 
+            id,
+            driver_id as "driverId",
+            TO_CHAR(date, 'YYYY-MM-DD') as date,
+            description,
+            hours
+          FROM driver_hours
+          WHERE driver_id = ANY($1::int[])
+            AND date >= $2::date
+            AND date <= $3::date
+          ORDER BY driver_id, date, id
+        `, [driverIds, startDate, endDate])
+      } catch (err: any) {
+        // If table doesn't exist, return empty array
+        if (err?.message?.includes('does not exist') || err?.code === '42P01') {
+          driverHoursResult = { rows: [] }
+        } else {
+          throw err
+        }
+      }
     }
 
     // Organize data by driver
@@ -228,9 +327,11 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error fetching driver pay data:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch driver pay data'
+      error: 'Failed to fetch driver pay data',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     }, { status: 500 })
   }
 }
