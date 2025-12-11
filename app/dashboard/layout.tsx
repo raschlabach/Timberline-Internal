@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -85,6 +85,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               icon={<FileText size={20} />}
               label="Invoice Page"
               isActive={isActiveSubRoute('/dashboard/invoices')}
+            />
+            <SubNavItem
+              href="/dashboard/driver-pay"
+              icon={<DollarSign size={16} />}
+              label="Driver Pay"
+              isActive={isActiveSubRoute('/dashboard/driver-pay')}
             />
             <NavItem
               href="/dashboard/pricing-notes"

@@ -1451,7 +1451,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs font-medium text-gray-600 mb-0.5">Final Driver Pay</div>
+                            <div className="text-xs font-medium text-gray-600 mb-0.5">Load Value</div>
                             <div className="text-xl font-bold">
                               ${payrollCalculations.finalDriverPay.toFixed(2)}
                             </div>
@@ -1658,7 +1658,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1">Final Driver Pay</div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Load Value</div>
                             <div className="text-xl font-bold">
                               ${payrollCalculations.finalDriverPay.toFixed(2)}
                             </div>

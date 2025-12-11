@@ -1,0 +1,237 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { query } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+// GET /api/drivers/pay-data - Get truckloads, orders, quotes, and deductions for drivers in date range
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+
+    if (!startDate || !endDate) {
+      return NextResponse.json({ success: false, error: 'startDate and endDate are required' }, { status: 400 })
+    }
+
+    // Get all truckloads for drivers in the date range
+    const truckloadsResult = await query(`
+      SELECT 
+        t.id,
+        t.driver_id as "driverId",
+        TO_CHAR(t.start_date, 'YYYY-MM-DD') as "startDate",
+        TO_CHAR(t.end_date, 'YYYY-MM-DD') as "endDate",
+        t.bill_of_lading_number as "billOfLadingNumber",
+        t.description,
+        u.full_name as "driverName",
+        d.color as "driverColor"
+      FROM truckloads t
+      LEFT JOIN users u ON t.driver_id = u.id
+      LEFT JOIN drivers d ON u.id = d.user_id
+      WHERE t.driver_id IS NOT NULL
+        AND (
+          (t.start_date >= $1::date AND t.start_date <= $2::date)
+          OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+          OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+        )
+      ORDER BY t.driver_id, t.start_date
+    `, [startDate, endDate])
+
+    const truckloads = truckloadsResult.rows
+    const truckloadIds = truckloads.map(t => t.id)
+
+    if (truckloadIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        drivers: []
+      })
+    }
+
+    // Get all orders for these truckloads
+    const ordersResult = await query(`
+      SELECT 
+        o.id as "orderId",
+        toa.truckload_id as "truckloadId",
+        toa.assignment_type as "assignmentType",
+        o.freight_quote as "freightQuote",
+        COALESCE(
+          (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
+          0
+        ) + COALESCE(
+          (SELECT SUM(v.width * v.length * v.quantity) FROM vinyl v WHERE v.order_id = o.id),
+          0
+        ) as footage,
+        pc.customer_name as "pickupCustomerName",
+        dc.customer_name as "deliveryCustomerName"
+      FROM truckload_order_assignments toa
+      JOIN orders o ON toa.order_id = o.id
+      LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+      LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+      WHERE toa.truckload_id = ANY($1::int[])
+      ORDER BY toa.truckload_id, toa.sequence_number
+    `, [truckloadIds])
+
+    // Get cross-driver freight deductions for these truckloads
+    const deductionsResult = await query(`
+      SELECT 
+        id,
+        truckload_id as "truckloadId",
+        driver_name as "driverName",
+        TO_CHAR(date, 'YYYY-MM-DD') as date,
+        action,
+        footage,
+        dimensions,
+        deduction,
+        is_manual as "isManual",
+        comment
+      FROM cross_driver_freight_deductions
+      WHERE truckload_id = ANY($1::int[])
+      ORDER BY truckload_id, date
+    `, [truckloadIds])
+
+    // Get driver pay settings for all drivers
+    const driversResult = await query(`
+      SELECT DISTINCT
+        t.driver_id as "driverId",
+        u.full_name as "driverName",
+        d.color as "driverColor",
+        COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
+        COALESCE(dps.hourly_rate, 30.00) as "hourlyRate"
+      FROM truckloads t
+      LEFT JOIN users u ON t.driver_id = u.id
+      LEFT JOIN drivers d ON u.id = d.user_id
+      LEFT JOIN driver_pay_settings dps ON t.driver_id = dps.driver_id
+      WHERE t.driver_id IS NOT NULL
+        AND (
+          (t.start_date >= $1::date AND t.start_date <= $2::date)
+          OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+          OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+        )
+      ORDER BY u.full_name
+    `, [startDate, endDate])
+
+    // Get driver hours for all drivers in date range
+    const driverIds = driversResult.rows.map(d => d.driverId)
+    let driverHoursResult: { rows: any[] } = { rows: [] }
+    if (driverIds.length > 0) {
+      driverHoursResult = await query(`
+        SELECT 
+          id,
+          driver_id as "driverId",
+          TO_CHAR(date, 'YYYY-MM-DD') as date,
+          description,
+          hours
+        FROM driver_hours
+        WHERE driver_id = ANY($1::int[])
+          AND date >= $2::date
+          AND date <= $3::date
+        ORDER BY driver_id, date, id
+      `, [driverIds, startDate, endDate])
+    }
+
+    // Organize data by driver
+    const driversMap = new Map()
+    
+    // Initialize drivers
+    driversResult.rows.forEach(driver => {
+      driversMap.set(driver.driverId, {
+        driverId: driver.driverId,
+        driverName: driver.driverName,
+        driverColor: driver.driverColor,
+        loadPercentage: parseFloat(driver.loadPercentage),
+        hourlyRate: parseFloat(driver.hourlyRate),
+        truckloads: [],
+        hours: []
+      })
+    })
+
+    // Add truckloads to drivers
+    truckloads.forEach(truckload => {
+      const driver = driversMap.get(truckload.driverId)
+      if (driver) {
+        driver.truckloads.push({
+          id: truckload.id,
+          startDate: truckload.startDate,
+          endDate: truckload.endDate,
+          billOfLadingNumber: truckload.billOfLadingNumber,
+          description: truckload.description,
+          orders: [],
+          deductions: []
+        })
+      }
+    })
+
+    // Add orders to truckloads
+    ordersResult.rows.forEach((order: any) => {
+      const driver = driversMap.get(
+        truckloads.find((t: any) => t.id === order.truckloadId)?.driverId
+      )
+      if (driver) {
+        const truckload = driver.truckloads.find((t: any) => t.id === order.truckloadId)
+        if (truckload) {
+          truckload.orders.push({
+            orderId: order.orderId,
+            assignmentType: order.assignmentType,
+            freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
+            footage: parseFloat(order.footage) || 0,
+            pickupCustomerName: order.pickupCustomerName,
+            deliveryCustomerName: order.deliveryCustomerName
+          })
+        }
+      }
+    })
+
+    // Add deductions to truckloads
+    deductionsResult.rows.forEach((deduction: any) => {
+      const driver = driversMap.get(
+        truckloads.find((t: any) => t.id === deduction.truckloadId)?.driverId
+      )
+      if (driver) {
+        const truckload = driver.truckloads.find((t: any) => t.id === deduction.truckloadId)
+        if (truckload) {
+          truckload.deductions.push({
+            id: deduction.id,
+            driverName: deduction.driverName,
+            date: deduction.date,
+            action: deduction.action,
+            footage: parseFloat(deduction.footage) || 0,
+            dimensions: deduction.dimensions,
+            deduction: parseFloat(deduction.deduction) || 0,
+            isManual: deduction.isManual,
+            comment: deduction.comment
+          })
+        }
+      }
+    })
+
+    // Add driver hours
+    driverHoursResult.rows.forEach((hour: any) => {
+      const driver = driversMap.get(hour.driverId)
+      if (driver) {
+        driver.hours.push({
+          id: hour.id,
+          date: hour.date,
+          description: hour.description,
+          hours: parseFloat(hour.hours) || 0
+        })
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      drivers: Array.from(driversMap.values())
+    })
+  } catch (error) {
+    console.error('Error fetching driver pay data:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to fetch driver pay data'
+    }, { status: 500 })
+  }
+}
+
