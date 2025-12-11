@@ -322,17 +322,20 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     const maintenanceHours = selectedDriver.hours
       .filter(h => h.type === 'maintenance')
       .reduce((sum, hour) => sum + hour.hours, 0)
+    const miscDrivingTotal = miscDrivingHours * selectedDriver.miscDrivingRate
+    const maintenanceTotal = maintenanceHours * selectedDriver.maintenanceRate
     const weeklyDriverPay = (loadValue * selectedDriver.loadPercentage / 100) + 
-      (miscDrivingHours * selectedDriver.miscDrivingRate) + 
-      (maintenanceHours * selectedDriver.maintenanceRate)
+      miscDrivingTotal + 
+      maintenanceTotal
 
     return {
       totalQuotes,
       totalDeductions,
       loadValue,
       miscDrivingHours,
+      miscDrivingTotal,
       maintenanceHours,
-      totalHours: miscDrivingHours + maintenanceHours,
+      maintenanceTotal,
       weeklyDriverPay
     }
   }
@@ -655,7 +658,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
               {totals && (
                 <Card className="p-4 bg-gray-50">
                   <h3 className="font-semibold mb-4">Weekly Summary</h3>
-                  <div className="grid grid-cols-7 gap-4">
+                  <div className="grid grid-cols-6 gap-4">
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Total Quotes</div>
                       <div className="text-lg font-bold">${totals.totalQuotes.toFixed(2)}</div>
@@ -670,15 +673,15 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                     </div>
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Misc Driving Hours</div>
-                      <div className="text-lg font-bold">{totals.miscDrivingHours.toFixed(2)}</div>
+                      <div className="text-lg font-bold">
+                        {totals.miscDrivingHours.toFixed(2)} <span className="text-sm font-normal text-gray-500">(${totals.miscDrivingTotal.toFixed(2)})</span>
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Maintenance Hours</div>
-                      <div className="text-lg font-bold">{totals.maintenanceHours.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Total Hours</div>
-                      <div className="text-lg font-bold">{totals.totalHours.toFixed(2)}</div>
+                      <div className="text-lg font-bold">
+                        {totals.maintenanceHours.toFixed(2)} <span className="text-sm font-normal text-gray-500">(${totals.maintenanceTotal.toFixed(2)})</span>
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Weekly Driver Pay</div>
