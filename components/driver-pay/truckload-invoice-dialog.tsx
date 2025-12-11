@@ -245,44 +245,142 @@ export function TruckloadInvoiceDialog({ isOpen, onOpenChange, truckloadId, driv
     loadOrders()
   }, [isOpen, truckloadId])
 
-  // Load cross-driver freight
+  // Identify cross-driver freight (skids/vinyl handled by other drivers)
+  // Only includes freight from orders in the selected truckload where the other part (pickup/delivery) was handled by a different driver
+  const crossDriverFreight = useMemo(() => {
+    if (!driverName) return []
+    const currentDriverName = driverName
+    const items: Omit<CrossDriverFreightItem, 'id' | 'deduction'>[] = []
+    const seenOrders = new Set<string>() // Track orders we've already processed to avoid duplicates
+
+    orders.forEach(order => {
+      // Skip if we've already processed this order
+      if (seenOrders.has(order.orderId)) return
+      seenOrders.add(order.orderId)
+
+      // Build dimensions string from skids and vinyl for this order
+      const dimensionGroups: { [key: string]: number } = {}
+      order.skidsData.forEach(skid => {
+        const dimension = `${skid.width}x${skid.length}`
+        dimensionGroups[dimension] = (dimensionGroups[dimension] || 0) + skid.quantity
+      })
+      order.vinylData.forEach(vinyl => {
+        const dimension = `${vinyl.width}x${vinyl.length}`
+        dimensionGroups[dimension] = (dimensionGroups[dimension] || 0) + vinyl.quantity
+      })
+      
+      const allDimensions = Object.entries(dimensionGroups)
+        .map(([dimension, quantity]) => `${quantity} ${dimension}`)
+        .join(', ')
+
+      // Only create entry if the OTHER part of the order (not the current assignment) was handled by a different driver
+      // If current assignment is pickup, check if delivery was handled by another driver
+      if (order.assignmentType === 'pickup' && 
+          order.deliveryDriverName && 
+          order.deliveryDriverName !== currentDriverName && 
+          order.deliveryAssignmentDate) {
+        items.push({
+          driverName: order.deliveryDriverName,
+          date: order.deliveryAssignmentDate,
+          action: 'Delivered',
+          footage: order.footage,
+          dimensions: allDimensions || '—',
+          isManual: false
+        })
+      }
+      // If current assignment is delivery, check if pickup was handled by another driver
+      else if (order.assignmentType === 'delivery' && 
+               order.pickupDriverName && 
+               order.pickupDriverName !== currentDriverName && 
+               order.pickupAssignmentDate) {
+        items.push({
+          driverName: order.pickupDriverName,
+          date: order.pickupAssignmentDate,
+          action: 'Picked up',
+          footage: order.footage,
+          dimensions: allDimensions || '—',
+          isManual: false
+        })
+      }
+    })
+
+    return items
+  }, [orders, driverName])
+
+  // Clear cross-driver freight immediately when truckload changes
   useEffect(() => {
-    if (!isOpen || !truckloadId) return
+    setEditableCrossDriverFreight([])
+  }, [truckloadId])
+
+  // Load cross-driver freight from database and merge with auto-detected freight
+  useEffect(() => {
+    if (!isOpen || !truckloadId || !driverName) return
 
     async function loadCrossDriverFreight() {
       try {
-        const res = await fetch(`/api/truckloads/${truckloadId}/cross-driver-freight`)
+        const res = await fetch(`/api/truckloads/${truckloadId}/cross-driver-freight`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+        
+        if (!res.ok) {
+          throw new Error('Failed to load cross-driver freight')
+        }
+        
         const data = await res.json()
         
-        if (data.success && data.items) {
-          const loadedItems = data.items.map((item: any) => ({
-            id: `db-${item.id}`,
-            driverName: item.driverName || '',
-            date: formatDateForInput(item.date || ''),
-            action: item.action || 'Picked up',
-            footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
-            dimensions: item.dimensions || '',
-            deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
-            isManual: item.isManual || false,
-            comment: item.comment || ''
+        const loadedItems = data.success && data.items ? data.items.map((item: any) => ({
+          id: `db-${item.id}`,
+          driverName: item.driverName || '',
+          date: formatDateForInput(item.date || ''),
+          action: item.action || 'Picked up',
+          footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
+          dimensions: item.dimensions || '',
+          deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
+          isManual: item.isManual || false,
+          comment: item.comment || ''
+        })) : []
+
+        const dedupedLoadedItems = dedupeFreightItems(loadedItems)
+
+        if (dedupedLoadedItems.length > 0) {
+          setEditableCrossDriverFreight(dedupedLoadedItems)
+          return
+        }
+
+        // If no items from database, use auto-detected freight
+        if (crossDriverFreight.length > 0) {
+          const autoItems = crossDriverFreight.map((item, idx) => ({
+            ...item,
+            id: `auto-${Date.now()}-${idx}`,
+            deduction: 0,
+            date: formatDateForInput(item.date),
+            isManual: false
           }))
-          const dedupedLoadedItems = dedupeFreightItems(loadedItems)
-          if (dedupedLoadedItems.length > 0) {
-            setEditableCrossDriverFreight(dedupedLoadedItems)
-          } else {
-            setEditableCrossDriverFreight([])
-          }
+          setEditableCrossDriverFreight(dedupeFreightItems(autoItems))
         } else {
           setEditableCrossDriverFreight([])
         }
       } catch (error) {
         console.error('Error loading cross-driver freight:', error)
-        setEditableCrossDriverFreight([])
+        // Fallback to auto-detected freight from current truckload only
+        if (crossDriverFreight.length > 0) {
+          const initialized = crossDriverFreight.map((item, idx) => ({
+            ...item,
+            id: `auto-${Date.now()}-${idx}`,
+            deduction: 0,
+            date: formatDateForInput(item.date),
+            isManual: false
+          }))
+          setEditableCrossDriverFreight(initialized)
+        } else {
+          setEditableCrossDriverFreight([])
+        }
       }
     }
 
     loadCrossDriverFreight()
-  }, [isOpen, truckloadId])
+  }, [isOpen, truckloadId, driverName, crossDriverFreight])
 
   // Auto-calculate deductions based on footage when in footage mode
   useEffect(() => {
