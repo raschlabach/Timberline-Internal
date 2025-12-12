@@ -428,49 +428,107 @@ export function TruckloadInvoiceDialog({ isOpen, onOpenChange, truckloadId, driv
     return { totalDeductions: Number(totalDeductions), finalDriverPay: Number(finalDriverPay) }
   }, [editableCrossDriverFreight, totals.totalQuotes])
 
-  // Update order quote
-  const updateOrderQuote = useCallback(async (orderId: string, newQuote: string) => {
+  // Function to update order quote with auto-save
+  const updateOrderQuote = useCallback(async (orderId: string, newQuote: string): Promise<void> => {
     const key = `${truckloadId}-${orderId}`
     setUpdatingQuotes(prev => new Set(prev).add(key))
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          freightQuote: newQuote // Let API handle parsing, consistent with invoice page
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update quote')
+      }
+      
+      // Update local state
+      setOrders(prev => prev.map(order => 
+        order.orderId === orderId 
+          ? { ...order, freightQuote: newQuote || null }
+          : order
+      ))
+      onDataUpdated?.()
+    } catch (error) {
+      console.error('Error updating quote:', error)
+      toast.error('Failed to update quote')
+      // Reload orders on error to revert changes, consistent with invoice page
+      if (truckloadId) {
+        const loadRes = await fetch(`/api/truckloads/${truckloadId}/orders`)
+        if (loadRes.ok) {
+          const loadData = await loadRes.json()
+          if (loadData.success) {
+            const rowsBase = loadData.orders.map((o: any) => ({
+              orderId: String(o.id),
+              assignmentType: o.assignment_type,
+              sequenceNumber: o.sequence_number,
+              pickupName: o.pickup_customer?.name || 'Unknown',
+              deliveryName: o.delivery_customer?.name || 'Unknown',
+              pickupAddress: o.pickup_customer?.address || null,
+              deliveryAddress: o.delivery_customer?.address || null,
+              payingCustomerName: null as string | null,
+              freightQuote: o.freight_quote,
+              footage: typeof o.footage === 'number' ? o.footage : (typeof o.footage === 'string' ? parseFloat(o.footage) || 0 : 0),
+              skidsData: o.skids_data || [],
+              vinylData: o.vinyl_data || [],
+              comments: o.comments || null,
+              isRush: o.is_rush,
+              needsAttention: o.needs_attention,
+              pickupDriverName: o.pickup_driver_name || null,
+              pickupAssignmentDate: o.pickup_assignment_date || null,
+              deliveryDriverName: o.delivery_driver_name || null,
+              deliveryAssignmentDate: o.delivery_assignment_date || null,
+              isTransferOrder: o.is_transfer_order || false,
+            }))
+            
+            const payingNames = await Promise.all(rowsBase.map(async (r: any) => {
+              try {
+                const res = await fetch(`/api/orders/${r.orderId}`)
+                const data = await res.json()
+                return data.payingCustomer?.name ?? null
+              } catch {
+                return null
+              }
+            }))
+            
+            const rows: AssignedOrderRow[] = rowsBase.map((r: any, idx: number) => ({ ...r, payingCustomerName: payingNames[idx] }))
+            setOrders(rows)
+          }
+        }
+      }
+    } finally {
+      setUpdatingQuotes(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(key)
+        return newSet
+      })
+    }
+  }, [truckloadId, onDataUpdated])
 
+  // Debounced quote update function - updates local state immediately, debounces API call
+  const debouncedUpdateQuote = useCallback((orderId: string, newQuote: string) => {
+    const key = `${truckloadId}-${orderId}`
+    // Clear existing timeout for this order
     if (quoteUpdateTimeouts.current[key]) {
       clearTimeout(quoteUpdateTimeouts.current[key])
     }
-
-    quoteUpdateTimeouts.current[key] = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/orders/${orderId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            freightQuote: newQuote ? parseFloat(newQuote) : null
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to update quote')
-        }
-
-        setOrders(prev => prev.map(order => 
-          order.orderId === orderId 
-            ? { ...order, freightQuote: newQuote || null }
-            : order
-        ))
-        toast.success('Quote updated')
-        onDataUpdated?.()
-      } catch (error) {
-        console.error('Error updating quote:', error)
-        toast.error('Failed to update quote')
-      } finally {
-        setUpdatingQuotes(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(key)
-          return newSet
-        })
-        delete quoteUpdateTimeouts.current[key]
-      }
-    }, 1000)
-  }, [truckloadId])
+    
+    // Update local state immediately for responsive UI and real-time calculations
+    setOrders(prev => prev.map(order => 
+      order.orderId === orderId 
+        ? { ...order, freightQuote: newQuote || null }
+        : order
+    ))
+    
+    // Debounce the API call
+    quoteUpdateTimeouts.current[key] = setTimeout(() => {
+      updateOrderQuote(orderId, newQuote)
+      delete quoteUpdateTimeouts.current[key]
+    }, 1000) // Wait 1 second after user stops typing
+  }, [truckloadId, updateOrderQuote])
 
   // Save cross-driver freight
   const saveCrossDriverFreight = useCallback(async () => {
@@ -504,32 +562,49 @@ export function TruckloadInvoiceDialog({ isOpen, onOpenChange, truckloadId, driv
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         const errorMessage = errorData.error || `HTTP ${res.status}: Failed to save cross-driver freight`
+        console.error('Error saving cross-driver freight:', errorMessage, errorData)
         throw new Error(errorMessage)
       }
       
+      const responseData = await res.json()
+      
       // Reload the data to ensure we have the latest from database
-      const reloadRes = await fetch(`/api/truckloads/${truckloadId}/cross-driver-freight`, { method: 'GET', credentials: 'include' })
-      if (reloadRes.ok) {
-        const reloadData = await reloadRes.json()
-        if (reloadData.success && reloadData.items) {
-          const reloadedItems = reloadData.items.map((item: any) => ({
-            id: `db-${item.id}`,
-            driverName: item.driverName || '',
-            date: formatDateForInput(item.date || ''),
-            action: item.action || 'Picked up',
-            footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
-            dimensions: item.dimensions || '',
-            deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
-            isManual: item.isManual || false,
-            comment: item.comment || ''
-          }))
-          
-          const dedupedReloadedItems = dedupeFreightItems(reloadedItems)
-          
-          if (dedupedReloadedItems.length > 0) {
-            setEditableCrossDriverFreight(dedupedReloadedItems)
-          } else {
-            setEditableCrossDriverFreight([])
+      // Match invoice page logic: only reload if verifiedCount > 0
+      if (responseData.success && responseData.verifiedCount > 0) {
+        const reloadRes = await fetch(`/api/truckloads/${truckloadId}/cross-driver-freight`, { method: 'GET', credentials: 'include' })
+        if (reloadRes.ok) {
+          const reloadData = await reloadRes.json()
+          if (reloadData.success && reloadData.items) {
+            const reloadedItems = reloadData.items.map((item: any) => ({
+              id: `db-${item.id}`,
+              driverName: item.driverName || '',
+              date: formatDateForInput(item.date || ''),
+              action: item.action || 'Picked up',
+              footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
+              dimensions: item.dimensions || '',
+              deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
+              isManual: item.isManual || false,
+              comment: item.comment || ''
+            }))
+            
+            const dedupedReloadedItems = dedupeFreightItems(reloadedItems)
+            
+            if (dedupedReloadedItems.length > 0) {
+              setEditableCrossDriverFreight(dedupedReloadedItems)
+            } else if (crossDriverFreight.length > 0) {
+              // Fallback to auto-detected freight if no DB items
+              const autoItems = crossDriverFreight.map((item, idx) => ({
+                ...item,
+                id: `auto-${Date.now()}-${idx}`,
+                deduction: 0,
+                date: formatDateForInput(item.date),
+                isManual: false
+              }))
+              const dedupedAuto = dedupeFreightItems(autoItems)
+              setEditableCrossDriverFreight(dedupedAuto)
+            } else {
+              setEditableCrossDriverFreight([])
+            }
           }
         }
       }
@@ -541,14 +616,16 @@ export function TruckloadInvoiceDialog({ isOpen, onOpenChange, truckloadId, driv
       const errorMessage = error instanceof Error ? error.message : 'Failed to save cross-driver freight'
       toast.error(errorMessage)
     }
-  }, [truckloadId, onDataUpdated])
+  }, [truckloadId, crossDriverFreight, onDataUpdated])
 
-  // Update deduction
+  // Update deduction - updates local state immediately, debounces API call
   const updateCrossDriverFreightItem = useCallback((id: string, updates: Partial<CrossDriverFreightItem>) => {
+    // Update local state immediately for responsive UI and real-time calculations
     setEditableCrossDriverFreight(prev => prev.map(item => 
       item.id === id ? { ...item, ...updates } : item
     ))
 
+    // Debounce the API call
     if (crossDriverFreightSaveTimeout.current) {
       clearTimeout(crossDriverFreightSaveTimeout.current)
     }
@@ -686,7 +763,7 @@ export function TruckloadInvoiceDialog({ isOpen, onOpenChange, truckloadId, driv
                               <Input
                                 type="text"
                                 value={row[0].freightQuote || ''}
-                                onChange={(e) => updateOrderQuote(row[0].orderId, e.target.value)}
+                                onChange={(e) => debouncedUpdateQuote(row[0].orderId, e.target.value)}
                                 placeholder="—"
                                 className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
                                 disabled={updatingQuotes.has(`${truckloadId}-${row[0].orderId}`)}
