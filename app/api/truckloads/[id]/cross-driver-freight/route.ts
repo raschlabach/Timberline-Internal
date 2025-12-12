@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import fs from 'fs'
+import path from 'path'
 
 // GET /api/truckloads/[id]/cross-driver-freight - Get cross-driver freight deductions for a truckload
 export async function GET(
@@ -36,6 +38,37 @@ export async function GET(
       })
     }
 
+    // Check if is_addition column exists, if not, apply migration automatically
+    const columnCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'cross_driver_freight_deductions'
+      AND column_name = 'is_addition'
+    `)
+    
+    if (columnCheck.rows.length === 0) {
+      console.log('is_addition column not found, applying migration...')
+      const client = await getClient()
+      try {
+        await client.query('BEGIN')
+        const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+        const migrationSql = fs.readFileSync(
+          path.join(migrationsDir, 'add-is-addition-to-cross-driver-freight.sql'),
+          'utf8'
+        )
+        await client.query(migrationSql)
+        await client.query('COMMIT')
+        console.log('is_addition column migration applied successfully')
+      } catch (migrationError) {
+        await client.query('ROLLBACK')
+        console.error('Error applying is_addition migration:', migrationError)
+        // Continue anyway - the column might already exist or migration might fail
+      } finally {
+        client.release()
+      }
+    }
+
     const result = await query(`
       SELECT 
         id,
@@ -46,7 +79,8 @@ export async function GET(
         dimensions,
         deduction,
         is_manual as "isManual",
-        comment
+        comment,
+        is_addition as "isAddition"
       FROM cross_driver_freight_deductions
       WHERE truckload_id = $1
       ORDER BY created_at ASC
@@ -118,6 +152,31 @@ export async function POST(
         throw new Error('Table cross_driver_freight_deductions does not exist. Please run the migration: database/migrations/add-cross-driver-freight-table.sql')
       }
 
+      // Check if is_addition column exists, if not, apply migration automatically
+      const columnCheck = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'is_addition'
+      `)
+      
+      if (columnCheck.rows.length === 0) {
+        console.log('is_addition column not found, applying migration...')
+        try {
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-is-addition-to-cross-driver-freight.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          console.log('is_addition column migration applied successfully')
+        } catch (migrationError) {
+          console.error('Error applying is_addition migration:', migrationError)
+          // Continue anyway - the column might already exist or migration might fail
+        }
+      }
+
       await client.query('BEGIN')
 
       console.log(`[Cross-Driver Freight] Saving ${items.length} items for truckload ${truckloadId}`)
@@ -144,8 +203,9 @@ export async function POST(
             dimensions,
             deduction,
             is_manual,
-            comment
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            comment,
+            is_addition
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING id
         `, [
           truckloadId,
@@ -156,7 +216,8 @@ export async function POST(
           item.dimensions || null,
           deduction,
           item.isManual || false,
-          item.comment || null
+          item.comment || null,
+          item.isAddition || false
         ])
         console.log(`[Cross-Driver Freight] Inserted item: id=${insertResult.rows[0]?.id}, driver=${item.driverName}, deduction=${deduction}`)
       }

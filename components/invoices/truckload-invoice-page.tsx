@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
-import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign } from 'lucide-react'
+import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -113,9 +114,20 @@ interface CrossDriverFreightItem {
   deduction: number
   isManual: boolean // Track if this is a manually added item
   comment?: string // For manual items
+  isAddition?: boolean // Track if this is an addition (true) or deduction (false). Only applies to manual items.
 }
 
 export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  
+  // Read URL parameters
+  const urlTruckloadId = searchParams?.get('truckloadId')
+  const urlDriverId = searchParams?.get('driverId')
+  const urlStartDate = searchParams?.get('startDate')
+  const urlEndDate = searchParams?.get('endDate')
+  const fromDriverPay = searchParams?.get('from') === 'driver-pay'
+  
   const [searchValue, setSearchValue] = useState<string>('')
   const [selectedTruckloadId, setSelectedTruckloadId] = useState<string | null>(null)
   const [truckloads, setTruckloads] = useState<TruckloadListItem[]>([])
@@ -144,6 +156,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   useEffect(() => {
     editableCrossDriverFreightRef.current = editableCrossDriverFreight
   }, [editableCrossDriverFreight])
+  
+  // Auto-select truckload from URL parameter when from driver pay
+  useEffect(() => {
+    if (fromDriverPay && urlTruckloadId && truckloads.length > 0) {
+      const truckloadExists = truckloads.some(t => t.id === urlTruckloadId)
+      if (truckloadExists) {
+        setSelectedTruckloadId(urlTruckloadId)
+      }
+    }
+  }, [fromDriverPay, urlTruckloadId, truckloads])
 
   // Group orders by orderId to combine transfer orders
   const groupedOrders = useMemo(() => {
@@ -375,7 +397,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           dimensions: item.dimensions || '',
           deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
           isManual: item.isManual || false,
-          comment: item.comment || ''
+          comment: item.comment || '',
+          isAddition: item.isAddition || false
         })) : []
 
         const dedupedLoadedItems = dedupeFreightItems(loadedItems)
@@ -436,14 +459,40 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
   }, [deductByFootage, footageDeductionRate])
 
-  // Calculate total deductions and final driver pay
+  // Calculate total adjustments (deductions are negative, additions are positive) and final driver pay
   const payrollCalculations = useMemo(() => {
-    const totalDeductions = editableCrossDriverFreight.reduce((sum, item) => {
-      const deduction = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-      return sum + deduction
+    const netAdjustment = editableCrossDriverFreight.reduce((sum, item) => {
+      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+      // For manual items: if isAddition is true, add (positive), if false or undefined, subtract (negative)
+      // For auto items: always subtract (negative, as they are deductions)
+      if (item.isManual && item.isAddition) {
+        return sum + amount // Addition: positive value
+      } else {
+        return sum - amount // Deduction: negative value
+      }
     }, 0)
-    const finalDriverPay = (totals.totalQuotes || 0) - totalDeductions
-    return { totalDeductions: Number(totalDeductions), finalDriverPay: Number(finalDriverPay) }
+    const totalDeductions = editableCrossDriverFreight.reduce((sum, item) => {
+      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+      if (item.isManual && item.isAddition) {
+        return sum // Don't count additions in total deductions
+      } else {
+        return sum + amount // Count deductions
+      }
+    }, 0)
+    const totalAdditions = editableCrossDriverFreight.reduce((sum, item) => {
+      if (item.isManual && item.isAddition) {
+        const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+        return sum + amount
+      }
+      return sum
+    }, 0)
+    const finalDriverPay = (totals.totalQuotes || 0) + netAdjustment
+    return { 
+      totalDeductions: Number(totalDeductions), 
+      totalAdditions: Number(totalAdditions),
+      netAdjustment: Number(netAdjustment),
+      finalDriverPay: Number(finalDriverPay) 
+    }
   }, [editableCrossDriverFreight, totals.totalQuotes])
 
   // Ref to store debounce timeouts
@@ -521,7 +570,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       dimensions: '',
       deduction: 0,
       isManual: true,
-      comment: ''
+      comment: '',
+      isAddition: false // Default to deduction
     }
     setEditableCrossDriverFreight([...editableCrossDriverFreight, newItem])
     // Auto-save after adding
@@ -574,7 +624,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             dimensions: item.dimensions || null,
             deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
             isManual: item.isManual || false,
-            comment: item.comment || null
+            comment: item.comment || null,
+            isAddition: item.isAddition || false
           }))
         })
       })
@@ -621,7 +672,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               dimensions: item.dimensions || '',
               deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
               isManual: item.isManual || false,
-              comment: item.comment || ''
+              comment: item.comment || '',
+              isAddition: item.isAddition || false
             }))
             
             console.log('Reloaded items from DB:', reloadedItems)
@@ -893,8 +945,23 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     return `${month}/${day}/${year}`
   }
 
+  // Handle back button navigation
+  const handleBackToDriverPay = () => {
+    if (urlDriverId && urlStartDate && urlEndDate) {
+      const params = new URLSearchParams({
+        driverId: urlDriverId,
+        startDate: urlStartDate,
+        endDate: urlEndDate
+      })
+      router.push(`/dashboard/driver-pay?${params.toString()}`)
+    } else {
+      router.push('/dashboard/driver-pay')
+    }
+  }
+
   return (
     <div className="flex h-full w-full gap-4">
+      {!fromDriverPay && (
       <div className="w-[280px] flex-shrink-0 border rounded-md bg-white p-3 flex flex-col print:hidden">
         <div className="flex items-center gap-2 mb-2">
           <Search className="h-4 w-4 text-gray-500" />
@@ -1031,12 +1098,22 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           )}
         </ScrollArea>
       </div>
+      )}
 
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${fromDriverPay ? 'w-full' : ''}`}>
         <div className="flex items-center justify-between mb-3 print:hidden">
-          <div>
-            <h2 className="text-xl font-semibold">Invoice Page</h2>
-            <p className="text-sm text-gray-500">Select a truckload to view assigned orders.</p>
+          <div className="flex items-center gap-3">
+            {fromDriverPay && (
+              <Button variant="outline" onClick={handleBackToDriverPay} className="flex items-center gap-2">
+                <ArrowLeft className="h-4 w-4" /> Back to Driver Pay
+              </Button>
+            )}
+            <div>
+              <h2 className="text-xl font-semibold">Invoice Page</h2>
+              {!fromDriverPay && (
+                <p className="text-sm text-gray-500">Select a truckload to view assigned orders.</p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" disabled={!selectedTruckloadId} onClick={() => setIsEditDialogOpen(true)}>
@@ -1343,39 +1420,51 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           <div className="space-y-1.5">
                             {editableCrossDriverFreight.map((item) => {
                             if (item.isManual) {
-                              // Manual items: comment field + deduction + delete button
+                              // Manual items: comment field + type toggle + amount + delete button
                               return (
-                                                                  <div
-                                    key={item.id}
-                                    className="grid grid-cols-[1fr_auto_auto] gap-2 items-start border border-gray-300 rounded-lg p-1.5"
+                                <div
+                                  key={item.id}
+                                  className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-start border border-gray-300 rounded-lg p-1.5"
+                                >
+                                  <Textarea
+                                    placeholder="Enter comment or description..."
+                                    value={item.comment || ''}
+                                    onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
+                                    className="min-h-[50px] text-sm resize-none"
+                                    rows={2}
+                                  />
+                                  <Select
+                                    value={item.isAddition ? 'addition' : 'deduction'}
+                                    onValueChange={(value) => updateCrossDriverFreightItem(item.id, { isAddition: value === 'addition' })}
                                   >
-                                    <Textarea
-                                      placeholder="Enter comment or description..."
-                                      value={item.comment || ''}
-                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
-                                      className="min-h-[50px] text-sm resize-none"
-                                      rows={2}
-                                    />
-                                    <Input
-                                      type="number"
-                                      placeholder="$0.00"
-                                      value={item.deduction || ''}
-                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                      className="h-8 text-sm w-24 mt-0.5"
-                                      min="0"
-                                      step="0.01"
-                                    />
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => deleteCrossDriverFreightItem(item.id)}
-                                      className="h-8 w-8 text-red-500 hover:text-red-700 mt-0.5"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                                                     </div>
-                                 )
+                                    <SelectTrigger className="h-8 w-28 mt-0.5 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="deduction">Deduction</SelectItem>
+                                      <SelectItem value="addition">Addition</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    type="number"
+                                    placeholder="$0.00"
+                                    value={item.deduction || ''}
+                                    onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
+                                    className="h-8 text-sm w-24 mt-0.5"
+                                    min="0"
+                                    step="0.01"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => deleteCrossDriverFreightItem(item.id)}
+                                    className="h-8 w-8 text-red-500 hover:text-red-700 mt-0.5"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )
                               } else {
                                 // Auto-populated items: read-only display + editable deduction (only if not in footage mode)
                                 return (
@@ -1450,6 +1539,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               -${payrollCalculations.totalDeductions.toFixed(2)}
                             </div>
                           </div>
+                          {payrollCalculations.totalAdditions > 0 && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Total Additions</div>
+                              <div className="text-lg font-bold text-green-600">
+                                +${payrollCalculations.totalAdditions.toFixed(2)}
+                              </div>
+                            </div>
+                          )}
                           <div>
                             <div className="text-xs font-medium text-gray-600 mb-0.5">Load Value</div>
                             <div className="text-xl font-bold">
@@ -1611,10 +1708,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         <div className="space-y-1">
                           {editableCrossDriverFreight.map((item) => {
                             if (item.isManual) {
+                              const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                              const isAddition = item.isAddition || false
                               return (
                                 <div key={item.id} className="border border-gray-300 rounded p-2 text-xs print-item-group">
                                   <div className="font-medium mb-1">{item.comment || 'Comment...'}</div>
-                                  <div>Deduction: ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}</div>
+                                  <div>
+                                    {isAddition ? 'Addition' : 'Deduction'}: ${amount.toFixed(2)}
+                                  </div>
                                 </div>
                               )
                             } else {
@@ -1657,6 +1758,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               -${payrollCalculations.totalDeductions.toFixed(2)}
                             </div>
                           </div>
+                          {payrollCalculations.totalAdditions > 0 && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-1">Total Additions</div>
+                              <div className="text-lg font-bold text-green-600">
+                                +${payrollCalculations.totalAdditions.toFixed(2)}
+                              </div>
+                            </div>
+                          )}
                           <div>
                             <div className="text-xs font-medium text-gray-600 mb-1">Load Value</div>
                             <div className="text-xl font-bold">

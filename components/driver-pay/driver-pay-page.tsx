@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,12 +9,10 @@ import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { format } from 'date-fns'
+import { format, parse } from 'date-fns'
 import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
-import { TruckloadInvoiceDialog } from './truckload-invoice-dialog'
 
 interface DriverPayPageProps {}
 
@@ -95,19 +94,69 @@ function getLastWeekRange(): { start: Date; end: Date } {
 }
 
 export default function DriverPayPage({}: DriverPayPageProps) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  
+  // Read URL parameters for state restoration
+  const urlDriverId = searchParams?.get('driverId')
+  const urlStartDate = searchParams?.get('startDate')
+  const urlEndDate = searchParams?.get('endDate')
+  
   const lastWeek = getLastWeekRange()
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: lastWeek.start,
-    to: lastWeek.end
-  })
+  
+  // Initialize date range from URL or default to last week
+  const initialDateRange = useMemo(() => {
+    if (urlStartDate && urlEndDate) {
+      try {
+        const start = parse(urlStartDate, 'yyyy-MM-dd', new Date())
+        const end = parse(urlEndDate, 'yyyy-MM-dd', new Date())
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          return { from: start, to: end }
+        }
+      } catch (e) {
+        // Fall back to default
+      }
+    }
+    return { from: lastWeek.start, to: lastWeek.end }
+  }, [urlStartDate, urlEndDate, lastWeek])
+  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange)
   const [drivers, setDrivers] = useState<DriverData[]>([])
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [editingSettings, setEditingSettings] = useState(false)
   const [tempSettings, setTempSettings] = useState<DriverPaySettings | null>(null)
-  const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
-  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
   const [newHour, setNewHour] = useState<{ date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
+  
+  // Restore date range from URL when params change
+  useEffect(() => {
+    if (urlStartDate && urlEndDate) {
+      try {
+        const start = parse(urlStartDate, 'yyyy-MM-dd', new Date())
+        const end = parse(urlEndDate, 'yyyy-MM-dd', new Date())
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          const currentFrom = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null
+          const currentTo = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : null
+          if (currentFrom !== urlStartDate || currentTo !== urlEndDate) {
+            setDateRange({ from: start, to: end })
+          }
+        }
+      } catch (e) {
+        // Invalid date format, ignore
+      }
+    }
+  }, [urlStartDate, urlEndDate, dateRange])
+  
+  // Restore driver selection from URL
+  useEffect(() => {
+    if (urlDriverId && drivers.length > 0) {
+      const driverIdNum = parseInt(urlDriverId, 10)
+      const driverExists = drivers.some(d => d.driverId === driverIdNum)
+      if (driverExists && selectedDriverId !== driverIdNum) {
+        setSelectedDriverId(driverIdNum)
+      }
+    }
+  }, [urlDriverId, drivers, selectedDriverId])
 
   // Fetch driver pay data
   const fetchPayData = useCallback(async () => {
@@ -341,8 +390,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   }
 
   const handleTruckloadClick = (truckloadId: number) => {
-    setSelectedTruckloadId(truckloadId)
-    setIsInvoiceDialogOpen(true)
+    if (!selectedDriverId) return
+    
+    const params = new URLSearchParams({
+      truckloadId: String(truckloadId),
+      driverId: String(selectedDriverId),
+      startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : '',
+      endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : '',
+      from: 'driver-pay'
+    })
+    router.push(`/dashboard/invoices?${params.toString()}`)
   }
 
   const totals = calculateDriverTotals()
@@ -695,20 +752,6 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         </div>
       </ScrollArea>
 
-      {/* Invoice Dialog */}
-      {selectedTruckloadId && selectedDriverId && (
-        <TruckloadInvoiceDialog
-          isOpen={isInvoiceDialogOpen}
-          onOpenChange={setIsInvoiceDialogOpen}
-          truckloadId={selectedTruckloadId}
-          driverId={selectedDriverId}
-          driverName={selectedDriver?.driverName}
-          onDataUpdated={() => {
-            // Refresh data when dialog updates quotes or deductions
-            fetchPayData()
-          }}
-        />
-      )}
     </div>
   )
 }
