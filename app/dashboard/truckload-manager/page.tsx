@@ -18,8 +18,6 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
-  ChevronDown,
-  ChevronUp
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from "@/components/ui/badge";
@@ -107,11 +105,11 @@ export default function TruckloadManager() {
   const [driverToggleStates, setDriverToggleStates] = useState<Record<number, boolean>>({})
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
-  const [collapsedDrivers, setCollapsedDrivers] = useState<Record<number, boolean>>({})
+  const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set())
 
   const queryClient = useQueryClient()
 
-  // Load driver order and collapsed state from localStorage on mount
+  // Load driver order and selected drivers from localStorage on mount
   useEffect(() => {
     if (!driversData?.drivers) return
     
@@ -150,29 +148,35 @@ export default function TruckloadManager() {
       setDriverOrder(sorted.map(d => d.id))
     }
 
-    // Load collapsed state - default to all collapsed if no saved state
-    const savedCollapsed = localStorage.getItem('truckloadManager_collapsedDrivers')
-    if (savedCollapsed) {
-      try {
-        const parsed = JSON.parse(savedCollapsed)
-        setCollapsedDrivers(parsed)
-      } catch (e) {
-        console.error('Failed to parse saved collapsed state:', e)
-        // If parsing fails, default to all collapsed
-        const allCollapsed: Record<number, boolean> = {}
-        driversData.drivers.forEach(driver => {
-          allCollapsed[driver.id] = true
-        })
-        setCollapsedDrivers(allCollapsed)
+    // Load selected drivers from localStorage (but NOT on initial page load/refresh)
+    // Check if this is a fresh page load by checking if we have a recent timestamp
+    const loadTimestamp = sessionStorage.getItem('truckloadManager_loadTime')
+    const now = Date.now()
+    
+    // If no timestamp or timestamp is older than 1 second, it's a fresh load/refresh
+    // Don't load from localStorage on fresh loads
+    if (loadTimestamp) {
+      const timeDiff = now - parseInt(loadTimestamp, 10)
+      // If loaded within the last second, it's likely navigation, not a refresh
+      if (timeDiff < 1000) {
+        const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
+        if (savedSelected) {
+          try {
+            const parsed = JSON.parse(savedSelected)
+            // Validate that all saved driver IDs still exist
+            const driverIds = new Set(driversData.drivers.map(d => d.id))
+            const validIds = parsed.filter((id: number) => driverIds.has(id))
+            if (validIds.length > 0) {
+              setSelectedDrivers(new Set(validIds))
+            }
+          } catch (e) {
+            console.error('Failed to parse saved selected drivers:', e)
+          }
+        }
       }
-    } else {
-      // No saved state - default to all collapsed
-      const allCollapsed: Record<number, boolean> = {}
-      driversData.drivers.forEach(driver => {
-        allCollapsed[driver.id] = true
-      })
-      setCollapsedDrivers(allCollapsed)
     }
+    // Update the load timestamp
+    sessionStorage.setItem('truckloadManager_loadTime', String(now))
   }, [driversData?.drivers])
 
   // Save driver order to localStorage whenever it changes
@@ -182,10 +186,15 @@ export default function TruckloadManager() {
     }
   }, [driverOrder])
 
-  // Save collapsed state to localStorage whenever it changes
+  // Save selected drivers to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('truckloadManager_collapsedDrivers', JSON.stringify(collapsedDrivers))
-  }, [collapsedDrivers])
+    if (selectedDrivers.size > 0) {
+      localStorage.setItem('truckloadManager_selectedDrivers', JSON.stringify(Array.from(selectedDrivers)))
+    } else {
+      // Remove from localStorage if empty
+      localStorage.removeItem('truckloadManager_selectedDrivers')
+    }
+  }, [selectedDrivers])
 
   // Set up drag and drop sensors
   const sensors = useSensors(
@@ -203,12 +212,17 @@ export default function TruckloadManager() {
     }))
   }
 
-  // Toggle driver column collapse
-  const toggleDriverCollapse = (driverId: number) => {
-    setCollapsedDrivers(prev => ({
-      ...prev,
-      [driverId]: !prev[driverId]
-    }))
+  // Toggle driver selection
+  const toggleDriverSelection = (driverId: number) => {
+    setSelectedDrivers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(driverId)) {
+        newSet.delete(driverId)
+      } else {
+        newSet.add(driverId)
+      }
+      return newSet
+    })
   }
 
   const updateTruckloadStatus = useMutation({
@@ -412,33 +426,57 @@ export default function TruckloadManager() {
   return (
     <div className="flex flex-col gap-6 p-6 bg-gradient-to-br from-slate-50 to-white min-h-screen">
       {/* Modern Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Truck className="h-6 w-6 text-blue-600" />
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Truck className="h-6 w-6 text-blue-600" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900">Truckload Manager</h1>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">Truckload Manager</h1>
+            <p className="text-gray-600 text-sm">
+              Manage driver assignments and track truckload progress
+            </p>
           </div>
-          <p className="text-gray-600 text-sm">
-            Manage driver assignments and track truckload progress
-          </p>
+          <div className="flex items-center gap-3">
+            <ManageDriversDialog />
+            
+            {/* Reorder Mode Toggle */}
+              <Button
+              variant={isReorderMode ? "default" : "outline"}
+                size="sm"
+              onClick={() => setIsReorderMode(!isReorderMode)}
+              className="gap-2"
+              >
+              <GripVertical className="h-4 w-4" />
+              {isReorderMode ? 'Done Reordering' : 'Reorder Columns'}
+              </Button>
+            
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <ManageDriversDialog />
-          
-          {/* Reorder Mode Toggle */}
-            <Button
-            variant={isReorderMode ? "default" : "outline"}
-              size="sm"
-            onClick={() => setIsReorderMode(!isReorderMode)}
-            className="gap-2"
-            >
-            <GripVertical className="h-4 w-4" />
-            {isReorderMode ? 'Done Reordering' : 'Reorder Columns'}
-            </Button>
-          
-        </div>
+
+        {/* Driver Selector - Horizontal */}
+        {drivers.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="text-sm font-medium text-gray-700 mr-2">Select Drivers:</span>
+            {displayDrivers.map((driver: Driver) => (
+              <Button
+                key={driver.id}
+                variant={selectedDrivers.has(driver.id) ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleDriverSelection(driver.id)}
+                className="text-xs h-7"
+              >
+                <div
+                  className="w-2 h-2 rounded-full mr-1.5"
+                  style={{ backgroundColor: driver.color }}
+                />
+                {driver.full_name}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
 
@@ -455,7 +493,9 @@ export default function TruckloadManager() {
               strategy={verticalListSortingStrategy}
             >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-            {displayDrivers.map((driver: Driver) => (
+            {displayDrivers
+              .filter((driver: Driver) => selectedDrivers.has(driver.id))
+              .map((driver: Driver) => (
                   <SortableDriverCard 
                     key={driver.id} 
                     driver={driver} 
@@ -464,8 +504,6 @@ export default function TruckloadManager() {
                     onMoveDown={() => moveDriver(driver.id, 'down')}
                     isFirst={driverOrder.indexOf(driver.id) === 0}
                     isLast={driverOrder.indexOf(driver.id) === driverOrder.length - 1}
-                    isCollapsed={collapsedDrivers[driver.id] !== undefined ? collapsedDrivers[driver.id] : true}
-                    onToggleCollapse={() => toggleDriverCollapse(driver.id)}
                   />
             ))}
           </div>
@@ -473,12 +511,12 @@ export default function TruckloadManager() {
           </DndContext>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-            {displayDrivers.map((driver: Driver) => (
+            {displayDrivers
+              .filter((driver: Driver) => selectedDrivers.has(driver.id))
+              .map((driver: Driver) => (
               <DriverCard 
                 key={driver.id} 
                 driver={driver}
-                isCollapsed={collapsedDrivers[driver.id] !== undefined ? collapsedDrivers[driver.id] : true}
-                onToggleCollapse={() => toggleDriverCollapse(driver.id)}
               />
             ))}
           </div>
@@ -678,9 +716,7 @@ export default function TruckloadManager() {
     onMoveUp,
     onMoveDown,
     isFirst,
-    isLast,
-    isCollapsed,
-    onToggleCollapse
+    isLast
   }: { 
     driver: Driver
     isReorderMode: boolean
@@ -688,8 +724,6 @@ export default function TruckloadManager() {
     onMoveDown: () => void
     isFirst: boolean
     isLast: boolean
-    isCollapsed: boolean
-    onToggleCollapse: () => void
   }) {
     const {
       attributes,
@@ -732,18 +766,6 @@ export default function TruckloadManager() {
                     <GripVertical className="h-4 w-4 text-gray-400" />
                   </div>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 -ml-1"
-                  onClick={onToggleCollapse}
-                >
-                  {isCollapsed ? (
-                    <ChevronDown className="h-4 w-4 text-gray-500" />
-                  ) : (
-                    <ChevronUp className="h-4 w-4 text-gray-500" />
-                  )}
-                </Button>
                 <div 
                   className="w-3 h-3 rounded-full shadow-sm" 
                   style={{ backgroundColor: driver.color }}
@@ -832,7 +854,7 @@ export default function TruckloadManager() {
               </div>
             )}
           </CardHeader>
-          {!isReorderMode && !isCollapsed && (
+          {!isReorderMode && (
             <CardContent className="p-3">
               <div className="space-y-3">
                 {driverTruckloads.map((truckload: TruckloadSummary) => (
@@ -863,7 +885,7 @@ export default function TruckloadManager() {
   }
 
   // Driver Card Component
-  function DriverCard({ driver, isCollapsed, onToggleCollapse }: { driver: Driver; isCollapsed: boolean; onToggleCollapse: () => void }) {
+  function DriverCard({ driver }: { driver: Driver }) {
     const driverTruckloads = getDriverTruckloads(driver.id);
     const completedTruckloads = driverTruckloads.filter(t => t.isCompleted).length;
     const showActive = driverToggleStates[driver.id] !== false;
@@ -878,18 +900,6 @@ export default function TruckloadManager() {
         <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 -ml-1"
-                onClick={onToggleCollapse}
-              >
-                {isCollapsed ? (
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                ) : (
-                  <ChevronUp className="h-4 w-4 text-gray-500" />
-                )}
-              </Button>
               <div 
                 className="w-3 h-3 rounded-full shadow-sm" 
                 style={{ backgroundColor: driver.color }}
@@ -953,7 +963,6 @@ export default function TruckloadManager() {
             </div>
           </div>
         </CardHeader>
-        {!isCollapsed && (
         <CardContent className="p-3">
           <div className="space-y-3">
             {driverTruckloads.map((truckload: TruckloadSummary) => (
@@ -977,7 +986,6 @@ export default function TruckloadManager() {
             )}
           </div>
         </CardContent>
-        )}
       </Card>
     );
   }
