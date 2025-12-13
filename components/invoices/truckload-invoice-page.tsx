@@ -1604,14 +1604,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 ${payrollCalculations.afterAutomaticDeductions.toFixed(2)}
                               </div>
                             </div>
-                            {payrollCalculations.totalAdditions > 0 && (
-                              <div>
-                                <div className="text-xs font-medium text-gray-600 mb-0.5">Total Additions</div>
-                                <div className="text-lg font-bold text-green-600">
-                                  +${payrollCalculations.totalAdditions.toFixed(2)}
-                                </div>
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Additions</div>
+                              <div className="text-lg font-bold text-green-600">
+                                +${payrollCalculations.totalAdditions.toFixed(2)}
                               </div>
-                            )}
+                            </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4 border-t-2 border-gray-400 pt-2">
                             <div>
@@ -1858,14 +1856,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               ${payrollCalculations.afterAutomaticDeductions.toFixed(2)}
                             </div>
                           </div>
-                          {payrollCalculations.totalAdditions > 0 && (
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-1">Total Additions</div>
-                              <div className="text-lg font-bold text-green-600">
-                                +${payrollCalculations.totalAdditions.toFixed(2)}
-                              </div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Manual Additions</div>
+                            <div className="text-lg font-bold text-green-600">
+                              +${payrollCalculations.totalAdditions.toFixed(2)}
                             </div>
-                          )}
+                          </div>
                           <div>
                             <div className="text-xs font-medium text-gray-600 mb-1">Load Value</div>
                             <div className="text-xl font-bold">

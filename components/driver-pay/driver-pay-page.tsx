@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format, parse } from 'date-fns'
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Calculator } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
 
@@ -902,109 +902,139 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               <div className="text-xs text-gray-600 mb-0.5">Auto Deductions</div>
                               <div className="text-sm font-semibold text-red-600">-${tlTotals.automaticDeductions.toFixed(2)}</div>
                             </div>
-                            {tlTotals.totalAdditions > 0 && (
-                              <div className="flex-shrink-0">
-                                <div className="text-xs text-gray-600 mb-0.5">Additions</div>
-                                <div className="text-sm font-semibold text-green-600">+${tlTotals.totalAdditions.toFixed(2)}</div>
-                              </div>
-                            )}
+                            <div className="flex-shrink-0">
+                              <div className="text-xs text-gray-600 mb-0.5">Manual Additions</div>
+                              <div className="text-sm font-semibold text-green-600">+${tlTotals.totalAdditions.toFixed(2)}</div>
+                            </div>
                             <div className="flex-shrink-0">
                               <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
                               <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0 pay-method-controls">
-                              <div className="flex items-center gap-2">
-                                <div>
-                                  <div className="text-xs text-gray-600 mb-0.5">
-                                    Driver Pay
-                                    {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
-                                    {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
-                                    {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
-                                  </div>
-                                  <div className="text-base font-bold text-blue-600">${tlTotals.driverPay.toFixed(2)}</div>
+                              <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                                <div className="text-xs text-gray-600 mb-0.5">
+                                  Driver Pay
+                                  {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
+                                  {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
+                                  {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
                                 </div>
-                                {editingPayMethod === truckload.id ? (
-                                  <div className="flex flex-col gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex gap-1">
-                                      <Button
-                                        size="sm"
-                                        variant={tempPayMethod?.method === 'automatic' ? 'default' : 'outline'}
-                                        className="h-6 text-xs px-2"
-                                        onClick={() => setTempPayMethod(prev => prev ? { ...prev, method: 'automatic' } : { method: 'automatic' })}
-                                      >
-                                        Auto
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant={tempPayMethod?.method === 'hourly' ? 'default' : 'outline'}
-                                        className="h-6 text-xs px-2"
-                                        onClick={() => setTempPayMethod(prev => prev ? { ...prev, method: 'hourly' } : { method: 'hourly', hours: 0 })}
-                                      >
-                                        Hourly
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant={tempPayMethod?.method === 'manual' ? 'default' : 'outline'}
-                                        className="h-6 text-xs px-2"
-                                        onClick={() => setTempPayMethod(prev => prev ? { ...prev, method: 'manual' } : { method: 'manual', amount: 0 })}
-                                      >
-                                        Manual
-                                      </Button>
-                                    </div>
-                                    {tempPayMethod?.method === 'hourly' && (
-                                      <Input
-                                        type="number"
-                                        placeholder="Hours"
-                                        value={tempPayMethod.hours || ''}
-                                        onChange={(e) => setTempPayMethod(prev => prev ? { ...prev, hours: parseFloat(e.target.value) || 0 } : { method: 'hourly', hours: parseFloat(e.target.value) || 0 })}
-                                        className="h-6 w-20 text-xs"
-                                        step="0.1"
-                                        min="0"
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    )}
-                                    {tempPayMethod?.method === 'manual' && (
-                                      <Input
-                                        type="number"
-                                        placeholder="Amount"
-                                        value={tempPayMethod.amount || ''}
-                                        onChange={(e) => setTempPayMethod(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : { method: 'manual', amount: parseFloat(e.target.value) || 0 })}
-                                        className="h-6 w-24 text-xs"
-                                        step="0.01"
-                                        min="0"
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    )}
-                                    <div className="flex gap-1">
-                                      <Button
-                                        size="sm"
-                                        className="h-6 text-xs px-2"
-                                        onClick={() => savePayMethod(truckload.id)}
-                                      >
-                                        <Save className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 text-xs px-2"
-                                        onClick={cancelEditPayMethod}
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ) : (
+                                <div className="text-base font-bold text-blue-600 mb-1">${tlTotals.driverPay.toFixed(2)}</div>
+                                <div className="flex gap-1">
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      startEditPayMethod(truckload)
+                                    variant={(editingPayMethod === truckload.id ? tempPayMethod?.method : truckload.payCalculationMethod) === 'automatic' ? 'default' : 'outline'}
+                                    className="h-6 text-xs px-2"
+                                    onClick={() => {
+                                      if (editingPayMethod !== truckload.id) {
+                                        startEditPayMethod(truckload)
+                                      }
+                                      setTempPayMethod(prev => prev ? { ...prev, method: 'automatic' } : { method: 'automatic' })
                                     }}
                                   >
-                                    <Calculator className="h-4 w-4" />
+                                    Auto
                                   </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={(editingPayMethod === truckload.id ? tempPayMethod?.method : truckload.payCalculationMethod) === 'hourly' ? 'default' : 'outline'}
+                                    className="h-6 text-xs px-2"
+                                    onClick={() => {
+                                      if (editingPayMethod !== truckload.id) {
+                                        startEditPayMethod(truckload)
+                                      }
+                                      setTempPayMethod(prev => prev ? { ...prev, method: 'hourly', hours: truckload.payHours || 0 } : { method: 'hourly', hours: truckload.payHours || 0 })
+                                    }}
+                                  >
+                                    Hourly
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={(editingPayMethod === truckload.id ? tempPayMethod?.method : truckload.payCalculationMethod) === 'manual' ? 'default' : 'outline'}
+                                    className="h-6 text-xs px-2"
+                                    onClick={() => {
+                                      if (editingPayMethod !== truckload.id) {
+                                        startEditPayMethod(truckload)
+                                      }
+                                      setTempPayMethod(prev => prev ? { ...prev, method: 'manual', amount: truckload.payManualAmount || 0 } : { method: 'manual', amount: truckload.payManualAmount || 0 })
+                                    }}
+                                  >
+                                    Manual
+                                  </Button>
+                                </div>
+                                {((editingPayMethod === truckload.id ? tempPayMethod?.method : truckload.payCalculationMethod) === 'hourly') && (
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      placeholder="Hours"
+                                      value={editingPayMethod === truckload.id ? (tempPayMethod?.hours || '') : (truckload.payHours || '')}
+                                      onChange={(e) => {
+                                        if (editingPayMethod !== truckload.id) {
+                                          startEditPayMethod(truckload)
+                                        }
+                                        setTempPayMethod(prev => prev ? { ...prev, hours: parseFloat(e.target.value) || 0 } : { method: 'hourly', hours: parseFloat(e.target.value) || 0 })
+                                      }}
+                                      className="h-6 w-20 text-xs"
+                                      step="0.1"
+                                      min="0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    {editingPayMethod === truckload.id && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          className="h-6 text-xs px-2"
+                                          onClick={() => savePayMethod(truckload.id)}
+                                        >
+                                          <Save className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 text-xs px-2"
+                                          onClick={cancelEditPayMethod}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                                {((editingPayMethod === truckload.id ? tempPayMethod?.method : truckload.payCalculationMethod) === 'manual') && (
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      placeholder="Amount"
+                                      value={editingPayMethod === truckload.id ? (tempPayMethod?.amount || '') : (truckload.payManualAmount || '')}
+                                      onChange={(e) => {
+                                        if (editingPayMethod !== truckload.id) {
+                                          startEditPayMethod(truckload)
+                                        }
+                                        setTempPayMethod(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : { method: 'manual', amount: parseFloat(e.target.value) || 0 })
+                                      }}
+                                      className="h-6 w-24 text-xs"
+                                      step="0.01"
+                                      min="0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    {editingPayMethod === truckload.id && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          className="h-6 text-xs px-2"
+                                          onClick={() => savePayMethod(truckload.id)}
+                                        >
+                                          <Save className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 text-xs px-2"
+                                          onClick={cancelEditPayMethod}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
