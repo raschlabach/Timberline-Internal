@@ -130,33 +130,8 @@ export async function GET(request: NextRequest) {
       // Continue anyway - the error handling below will catch if tables are missing
     }
 
-    // Get all truckloads for drivers in the date range
-    const truckloadsResult = await query(`
-      SELECT 
-        t.id,
-        t.driver_id as "driverId",
-        TO_CHAR(t.start_date, 'YYYY-MM-DD') as "startDate",
-        TO_CHAR(t.end_date, 'YYYY-MM-DD') as "endDate",
-        t.bill_of_lading_number as "billOfLadingNumber",
-        t.description,
-        u.full_name as "driverName",
-        d.color as "driverColor",
-        COALESCE(t.pay_calculation_method, 'automatic') as "payCalculationMethod",
-        t.pay_hours as "payHours",
-        t.pay_manual_amount as "payManualAmount"
-      FROM truckloads t
-      LEFT JOIN users u ON t.driver_id = u.id
-      LEFT JOIN drivers d ON u.id = d.user_id
-      WHERE t.driver_id IS NOT NULL
-        AND (
-          (t.start_date >= $1::date AND t.start_date <= $2::date)
-          OR (t.end_date >= $1::date AND t.end_date <= $2::date)
-          OR (t.start_date <= $1::date AND t.end_date >= $2::date)
-        )
-      ORDER BY t.driver_id, t.start_date
-    `, [startDate, endDate])
-
     // Check if pay calculation columns exist, if not, apply migration automatically
+    // This must happen BEFORE the query that uses these columns
     try {
       const columnCheck = await query(`
         SELECT column_name 
@@ -188,7 +163,77 @@ export async function GET(request: NextRequest) {
       }
     } catch (migrationCheckError) {
       console.error('Error checking pay calculation columns:', migrationCheckError)
-      // Continue anyway
+      // Continue anyway - will try to query and handle gracefully
+    }
+
+    // Get all truckloads for drivers in the date range
+    // Try query with new columns first, fallback to basic query if columns don't exist
+    let truckloadsResult
+    try {
+      truckloadsResult = await query(`
+        SELECT 
+          t.id,
+          t.driver_id as "driverId",
+          TO_CHAR(t.start_date, 'YYYY-MM-DD') as "startDate",
+          TO_CHAR(t.end_date, 'YYYY-MM-DD') as "endDate",
+          t.bill_of_lading_number as "billOfLadingNumber",
+          t.description,
+          u.full_name as "driverName",
+          d.color as "driverColor",
+          COALESCE(t.pay_calculation_method, 'automatic') as "payCalculationMethod",
+          t.pay_hours as "payHours",
+          t.pay_manual_amount as "payManualAmount"
+        FROM truckloads t
+        LEFT JOIN users u ON t.driver_id = u.id
+        LEFT JOIN drivers d ON u.id = d.user_id
+        WHERE t.driver_id IS NOT NULL
+          AND (
+            (t.start_date >= $1::date AND t.start_date <= $2::date)
+            OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+            OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+          )
+        ORDER BY t.driver_id, t.start_date
+      `, [startDate, endDate])
+    } catch (queryError: any) {
+      // If columns don't exist, use fallback query without pay calculation fields
+      const errorMessage = queryError?.message || String(queryError || '')
+      if (errorMessage.includes('pay_calculation_method') || 
+          errorMessage.includes('pay_hours') || 
+          errorMessage.includes('pay_manual_amount') ||
+          errorMessage.includes('column') && errorMessage.includes('does not exist')) {
+        console.log('Pay calculation columns not available, using fallback query...', errorMessage)
+        truckloadsResult = await query(`
+          SELECT 
+            t.id,
+            t.driver_id as "driverId",
+            TO_CHAR(t.start_date, 'YYYY-MM-DD') as "startDate",
+            TO_CHAR(t.end_date, 'YYYY-MM-DD') as "endDate",
+            t.bill_of_lading_number as "billOfLadingNumber",
+            t.description,
+            u.full_name as "driverName",
+            d.color as "driverColor"
+          FROM truckloads t
+          LEFT JOIN users u ON t.driver_id = u.id
+          LEFT JOIN drivers d ON u.id = d.user_id
+          WHERE t.driver_id IS NOT NULL
+            AND (
+              (t.start_date >= $1::date AND t.start_date <= $2::date)
+              OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+              OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+            )
+          ORDER BY t.driver_id, t.start_date
+        `, [startDate, endDate])
+        // Add default values for missing columns
+        truckloadsResult.rows = truckloadsResult.rows.map((row: any) => ({
+          ...row,
+          payCalculationMethod: 'automatic',
+          payHours: null,
+          payManualAmount: null
+        }))
+      } else {
+        console.error('Unexpected error querying truckloads:', queryError)
+        throw queryError
+      }
     }
 
     const truckloads = truckloadsResult.rows
