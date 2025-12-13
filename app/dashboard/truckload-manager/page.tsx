@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
@@ -23,7 +23,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { CreateTruckloadDialog } from "@/components/truckloads/create-truckload-dialog";
 import { EditTruckloadDialog } from "@/components/truckloads/edit-truckload-dialog";
 import { ManageDriversDialog } from "@/components/drivers/manage-drivers-dialog";
@@ -71,6 +71,7 @@ interface TruckloadSummary {
 
 export default function TruckloadManager() {
   const router = useRouter()
+  const pathname = usePathname()
   const { data: driversData, isLoading: isLoadingDrivers, isError: isErrorDrivers, isFetching: isFetchingDrivers, refetch: refetchDrivers } = useQuery<{ drivers: Driver[] }>({
     queryKey: ['drivers'],
     queryFn: async () => {
@@ -167,31 +168,43 @@ export default function TruckloadManager() {
     }
 
     // Load selected drivers from localStorage (but NOT on initial page load/refresh)
-    // Use a more reliable method: check if we're navigating from within the app
-    // by checking if there's a navigation flag set before page unload
-    const wasNavigating = sessionStorage.getItem('truckloadManager_navigating') === 'true'
-    
-    if (wasNavigating) {
-      // Clear the flag
-      sessionStorage.removeItem('truckloadManager_navigating')
+    // Use sessionStorage to track if this is the first load in this session
+    // Use pathname to detect navigation from another page
+    if (typeof window !== 'undefined' && pathname) {
+      const sessionKey = 'truckloadManager_hasLoaded'
+      const pathKey = 'truckloadManager_lastPathname'
+      const isFirstLoadInSession = !sessionStorage.getItem(sessionKey)
+      const lastPathname = sessionStorage.getItem(pathKey)
+      const isNavigation = lastPathname !== null && lastPathname !== pathname
       
-      // Load from localStorage
-      const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
-      if (savedSelected) {
-        try {
-          const parsed = JSON.parse(savedSelected)
-          // Validate that all saved driver IDs still exist
-          const driverIds = new Set(driversData.drivers.map(d => d.id))
-          const validIds = parsed.filter((id: number) => driverIds.has(id))
-          if (validIds.length > 0) {
-            setSelectedDrivers(new Set(validIds))
+      // Mark that we've loaded in this session
+      sessionStorage.setItem(sessionKey, 'true')
+      sessionStorage.setItem(pathKey, pathname)
+      
+      // Only load from localStorage if:
+      // 1. This is NOT the first load in this session (we've been here before)
+      // 2. AND we navigated from a different page (not a refresh)
+      // On first load (refresh or direct navigation), start with empty selection
+      // On subsequent navigations within the app, restore selection
+      if (!isFirstLoadInSession && isNavigation) {
+        // Load from localStorage
+        const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
+        if (savedSelected) {
+          try {
+            const parsed = JSON.parse(savedSelected)
+            // Validate that all saved driver IDs still exist
+            const driverIds = new Set(driversData.drivers.map(d => d.id))
+            const validIds = parsed.filter((id: number) => driverIds.has(id))
+            if (validIds.length > 0) {
+              setSelectedDrivers(new Set(validIds))
+            }
+          } catch (e) {
+            console.error('Failed to parse saved selected drivers:', e)
           }
-        } catch (e) {
-          console.error('Failed to parse saved selected drivers:', e)
         }
       }
+      // Otherwise, start with empty selection (fresh page load/refresh)
     }
-    // Otherwise, start with empty selection (fresh page load/refresh)
   }, [driversData?.drivers])
 
   // Save driver order to localStorage whenever it changes
@@ -214,28 +227,7 @@ export default function TruckloadManager() {
     }
   }, [selectedDrivers, driversData?.drivers])
 
-  // Set navigation flag when navigating away (for client-side navigation)
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // On actual page unload/refresh, clear the flag
-      // This ensures fresh loads don't restore selection
-      sessionStorage.removeItem('truckloadManager_navigating')
-    }
-
-    // Check if we came from another page in the app (not a direct load/refresh)
-    if (typeof window !== 'undefined') {
-      const referrer = document.referrer
-      // If we have a referrer from the same origin, it's likely navigation
-      if (referrer && referrer.includes(window.location.origin) && !referrer.includes(window.location.href)) {
-        sessionStorage.setItem('truckloadManager_navigating', 'true')
-      }
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
-  }, [])
+  // No longer needed - we check referrer directly in the localStorage loading effect
 
   // Set up drag and drop sensors
   const sensors = useSensors(
