@@ -13,21 +13,28 @@ export async function GET() {
 
     // Fetch drivers
     const driversResult = await query(`
-      SELECT 
+      SELECT DISTINCT
         u.id,
         u.full_name,
         d.color
       FROM users u
-      LEFT JOIN drivers d ON u.id = d.user_id
+      JOIN drivers d ON u.id = d.user_id
       WHERE u.role = 'driver'
       ORDER BY u.full_name ASC
     `)
 
-    const drivers = driversResult.rows.map(row => ({
-      id: row.id,
-      full_name: row.full_name,
-      color: row.color
-    }))
+    // Deduplicate drivers by id (in case of any join issues)
+    const driversMap = new Map()
+    driversResult.rows.forEach(row => {
+      if (!driversMap.has(row.id)) {
+        driversMap.set(row.id, {
+          id: row.id,
+          full_name: row.full_name,
+          color: row.color
+        })
+      }
+    })
+    const drivers = Array.from(driversMap.values())
 
     // Fetch truckloads (same query as /api/truckloads)
     const truckloadsResult = await query(`
