@@ -128,25 +128,24 @@ export default function TruckloadManager() {
 
   const queryClient = useQueryClient()
 
-  // Track pathname changes for navigation detection
-  // This runs BEFORE the drivers data loads, so we can check the previous pathname
+  // Set up beforeunload listener to mark refreshes
   useEffect(() => {
-    if (typeof window !== 'undefined' && pathname) {
-      const pathKey = 'truckloadManager_lastPathname'
-      const navigationCheckKey = 'truckloadManager_navigationCheck'
-      
-      // Clear the navigation check flag when pathname changes (new page load)
-      sessionStorage.removeItem(navigationCheckKey)
-      
-      // Store the current pathname for next time
-      sessionStorage.setItem(pathKey, pathname)
+    const handleBeforeUnload = () => {
+      // Mark that we're about to refresh/reload
+      sessionStorage.setItem('truckloadManager_isRefreshing', 'true')
     }
-  }, [pathname])
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
 
   // Load driver order and selected drivers from localStorage on mount
   useEffect(() => {
     if (!driversData?.drivers) return
     
+    // Load driver order (always load this, it's not affected by refresh)
     const savedOrder = localStorage.getItem('truckloadManager_driverOrder')
     if (savedOrder) {
       try {
@@ -182,48 +181,36 @@ export default function TruckloadManager() {
       setDriverOrder(sorted.map(d => d.id))
     }
 
-    // Load selected drivers from localStorage (but NOT on initial page load/refresh)
-    // Use pathname to detect navigation from another page vs refresh
-    if (typeof window !== 'undefined' && pathname) {
-      const pathKey = 'truckloadManager_lastPathname'
-      // Get the pathname BEFORE we updated it (from the separate effect above)
-      // We need to check what it was before this page loaded
-      const navigationCheckKey = 'truckloadManager_navigationCheck'
-      const wasNavigationChecked = sessionStorage.getItem(navigationCheckKey)
+    // Load selected drivers from localStorage (but NOT on refresh)
+    // Check if this was a refresh using the beforeunload flag
+    if (typeof window !== 'undefined') {
+      const isRefreshing = sessionStorage.getItem('truckloadManager_isRefreshing') === 'true'
       
-      // Only check once per drivers data load
-      if (!wasNavigationChecked) {
-        const lastPathname = sessionStorage.getItem(pathKey)
-        
-        // Check if this is navigation (different pathname) vs refresh (same pathname)
-        // On first load, lastPathname will be null, so we start fresh
-        // On navigation from another page, lastPathname will be different, so restore
-        // On refresh, lastPathname will be the same, so start fresh
-        const isNavigation = lastPathname !== null && lastPathname !== pathname
-        
-        if (isNavigation) {
-          // Load from localStorage when navigating from another page
-          const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
-          if (savedSelected) {
-            try {
-              const parsed = JSON.parse(savedSelected)
-              // Validate that all saved driver IDs still exist
-              const driverIds = new Set(driversData.drivers.map(d => d.id))
-              const validIds = parsed.filter((id: number) => driverIds.has(id))
-              if (validIds.length > 0) {
-                setSelectedDrivers(new Set(validIds))
-              }
-            } catch (e) {
-              console.error('Failed to parse saved selected drivers:', e)
+      // Clear the refresh flag after checking
+      sessionStorage.removeItem('truckloadManager_isRefreshing')
+      
+      // Only load from localStorage if this was NOT a refresh
+      // On refresh, start with empty selection
+      // On navigation from another page, restore selection
+      if (!isRefreshing) {
+        const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
+        if (savedSelected) {
+          try {
+            const parsed = JSON.parse(savedSelected)
+            // Validate that all saved driver IDs still exist
+            const driverIds = new Set(driversData.drivers.map(d => d.id))
+            const validIds = parsed.filter((id: number) => driverIds.has(id))
+            if (validIds.length > 0) {
+              setSelectedDrivers(new Set(validIds))
             }
+          } catch (e) {
+            console.error('Failed to parse saved selected drivers:', e)
           }
         }
-        
-        // Mark that we've checked navigation for this load
-        sessionStorage.setItem(navigationCheckKey, 'true')
       }
+      // If isRefreshing was true, we start with empty selection (default state)
     }
-  }, [driversData?.drivers, pathname])
+  }, [driversData?.drivers])
 
   // Save driver order to localStorage whenever it changes
   useEffect(() => {
@@ -245,7 +232,6 @@ export default function TruckloadManager() {
     }
   }, [selectedDrivers, driversData?.drivers])
 
-  // No longer needed - we check referrer directly in the localStorage loading effect
 
   // Set up drag and drop sensors
   const sensors = useSensors(
