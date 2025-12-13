@@ -25,7 +25,7 @@ export async function GET() {
 
     const drivers = driversResult.rows.map(row => ({
       id: row.id,
-      fullName: row.full_name,
+      full_name: row.full_name,
       color: row.color
     }))
 

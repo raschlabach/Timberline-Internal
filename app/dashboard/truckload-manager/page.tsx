@@ -143,7 +143,7 @@ export default function TruckloadManager() {
         } else {
           // Initialize with alphabetical order
           const sorted = [...data.drivers].sort((a, b) => 
-            a.full_name.localeCompare(b.full_name)
+            (a.full_name || '').localeCompare(b.full_name || '')
           )
           setDriverOrder(sorted.map(d => d.id))
         }
@@ -151,14 +151,14 @@ export default function TruckloadManager() {
         console.error('Failed to parse saved driver order:', e)
         // Initialize with alphabetical order
         const sorted = [...data.drivers].sort((a, b) => 
-          a.full_name.localeCompare(b.full_name)
+          (a.full_name || '').localeCompare(b.full_name || '')
         )
         setDriverOrder(sorted.map(d => d.id))
       }
     } else {
       // Initialize with alphabetical order
       const sorted = [...data.drivers].sort((a, b) => 
-        a.full_name.localeCompare(b.full_name)
+        (a.full_name || '').localeCompare(b.full_name || '')
       )
       setDriverOrder(sorted.map(d => d.id))
     }
@@ -396,7 +396,7 @@ export default function TruckloadManager() {
     
     // Otherwise, sort alphabetically and initialize order
     const sorted = [...drivers].sort((a, b) => {
-      return a.full_name.localeCompare(b.full_name)
+      return (a.full_name || '').localeCompare(b.full_name || '')
     })
     
     // Initialize driver order if not set
