@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format, parse } from 'date-fns'
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Calculator } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
 
@@ -62,6 +62,9 @@ interface Truckload {
   description: string | null
   orders: Order[]
   deductions: Deduction[]
+  payCalculationMethod?: 'automatic' | 'hourly' | 'manual'
+  payHours?: number | null
+  payManualAmount?: number | null
 }
 
 interface DriverData {
@@ -144,6 +147,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   const [editingSettings, setEditingSettings] = useState(false)
   const [tempSettings, setTempSettings] = useState<DriverPaySettings | null>(null)
   const [newHour, setNewHour] = useState<{ date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
+  const [editingPayMethod, setEditingPayMethod] = useState<number | null>(null)
+  const [tempPayMethod, setTempPayMethod] = useState<{ method: 'automatic' | 'hourly' | 'manual'; hours?: number; amount?: number } | null>(null)
   const hasInitializedFromUrl = useRef(false)
   
   // Restore date range from URL when params change (only on initial load, not when user changes it)
@@ -396,8 +401,20 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     const afterAutomaticDeductions = quotesPlusManualDeductions - automaticDeductions
     const loadValue = afterAutomaticDeductions + totalAdditions
     
-    // Calculate driver pay (will need driver percentage, but for now just return loadValue)
-    const driverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
+    // Calculate driver pay based on selected method
+    let driverPay = 0
+    const payMethod = truckload.payCalculationMethod || 'automatic'
+    
+    if (payMethod === 'hourly' && truckload.payHours !== null && truckload.payHours !== undefined && selectedDriver) {
+      // Hourly: hours × driver hourly rate (use misc driving rate)
+      driverPay = truckload.payHours * selectedDriver.miscDrivingRate
+    } else if (payMethod === 'manual' && truckload.payManualAmount !== null && truckload.payManualAmount !== undefined) {
+      // Manual: use entered amount
+      driverPay = truckload.payManualAmount
+    } else {
+      // Automatic: load value × driver percentage
+      driverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
+    }
     
     return { 
       totalQuotes, 
@@ -455,7 +472,13 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
   }
 
-  const handleTruckloadClick = (truckloadId: number) => {
+  const handleTruckloadClick = (truckloadId: number, e?: React.MouseEvent) => {
+    // Don't navigate if clicking on pay method controls
+    if (e && (e.target as HTMLElement).closest('.pay-method-controls')) {
+      e.stopPropagation()
+      return
+    }
+    
     if (!selectedDriverId) return
     
     const params = new URLSearchParams({
@@ -466,6 +489,79 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       from: 'driver-pay'
     })
     router.push(`/dashboard/invoices?${params.toString()}`)
+  }
+
+  const startEditPayMethod = (truckload: Truckload) => {
+    setEditingPayMethod(truckload.id)
+    setTempPayMethod({
+      method: truckload.payCalculationMethod || 'automatic',
+      hours: truckload.payHours || undefined,
+      amount: truckload.payManualAmount || undefined
+    })
+  }
+
+  const cancelEditPayMethod = () => {
+    setEditingPayMethod(null)
+    setTempPayMethod(null)
+  }
+
+  const savePayMethod = async (truckloadId: number) => {
+    if (!tempPayMethod) return
+
+    try {
+      const updateData: any = {
+        payCalculationMethod: tempPayMethod.method
+      }
+
+      if (tempPayMethod.method === 'hourly') {
+        updateData.payHours = tempPayMethod.hours || 0
+        updateData.payManualAmount = null
+      } else if (tempPayMethod.method === 'manual') {
+        updateData.payManualAmount = tempPayMethod.amount || 0
+        updateData.payHours = null
+      } else {
+        // automatic
+        updateData.payHours = null
+        updateData.payManualAmount = null
+      }
+
+      const response = await fetch(`/api/truckloads/${truckloadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(updateData)
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        // Update local state
+        setDrivers(prev => prev.map(driver =>
+          driver.driverId === selectedDriverId
+            ? {
+                ...driver,
+                truckloads: driver.truckloads.map(tl =>
+                  tl.id === truckloadId
+                    ? {
+                        ...tl,
+                        payCalculationMethod: tempPayMethod.method,
+                        payHours: tempPayMethod.method === 'hourly' ? (tempPayMethod.hours || null) : null,
+                        payManualAmount: tempPayMethod.method === 'manual' ? (tempPayMethod.amount || null) : null
+                      }
+                    : tl
+                )
+              }
+            : driver
+        ))
+        setEditingPayMethod(null)
+        setTempPayMethod(null)
+        toast.success('Pay method updated')
+      } else {
+        toast.error('Failed to update pay method')
+      }
+    } catch (error) {
+      console.error('Error updating pay method:', error)
+      toast.error('Failed to update pay method')
+    }
   }
 
   const totals = calculateDriverTotals()
@@ -756,7 +852,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         className={`p-4 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid ${
                           hasMiddlefield ? 'border-2 border-red-500' : ''
                         }`}
-                        onClick={() => handleTruckloadClick(truckload.id)}
+                        onClick={(e) => handleTruckloadClick(truckload.id, e)}
                       >
                         <div className="space-y-3">
                           {/* Header: Dates, Description, Pickups/Deliveries */}
@@ -816,11 +912,101 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
                               <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
                             </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">
-                                Driver Pay ({selectedDriver.loadPercentage}%)
+                            <div className="flex-shrink-0 pay-method-controls">
+                              <div className="flex items-center gap-2">
+                                <div>
+                                  <div className="text-xs text-gray-600 mb-0.5">
+                                    Driver Pay
+                                    {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
+                                    {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
+                                    {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
+                                  </div>
+                                  <div className="text-base font-bold text-blue-600">${tlTotals.driverPay.toFixed(2)}</div>
+                                </div>
+                                {editingPayMethod === truckload.id ? (
+                                  <div className="flex flex-col gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant={tempPayMethod?.method === 'automatic' ? 'default' : 'outline'}
+                                        className="h-6 text-xs px-2"
+                                        onClick={() => setTempPayMethod(prev => prev ? { ...prev, method: 'automatic' } : { method: 'automatic' })}
+                                      >
+                                        Auto
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant={tempPayMethod?.method === 'hourly' ? 'default' : 'outline'}
+                                        className="h-6 text-xs px-2"
+                                        onClick={() => setTempPayMethod(prev => prev ? { ...prev, method: 'hourly' } : { method: 'hourly', hours: 0 })}
+                                      >
+                                        Hourly
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant={tempPayMethod?.method === 'manual' ? 'default' : 'outline'}
+                                        className="h-6 text-xs px-2"
+                                        onClick={() => setTempPayMethod(prev => prev ? { ...prev, method: 'manual' } : { method: 'manual', amount: 0 })}
+                                      >
+                                        Manual
+                                      </Button>
+                                    </div>
+                                    {tempPayMethod?.method === 'hourly' && (
+                                      <Input
+                                        type="number"
+                                        placeholder="Hours"
+                                        value={tempPayMethod.hours || ''}
+                                        onChange={(e) => setTempPayMethod(prev => prev ? { ...prev, hours: parseFloat(e.target.value) || 0 } : { method: 'hourly', hours: parseFloat(e.target.value) || 0 })}
+                                        className="h-6 w-20 text-xs"
+                                        step="0.1"
+                                        min="0"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    )}
+                                    {tempPayMethod?.method === 'manual' && (
+                                      <Input
+                                        type="number"
+                                        placeholder="Amount"
+                                        value={tempPayMethod.amount || ''}
+                                        onChange={(e) => setTempPayMethod(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : { method: 'manual', amount: parseFloat(e.target.value) || 0 })}
+                                        className="h-6 w-24 text-xs"
+                                        step="0.01"
+                                        min="0"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    )}
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        className="h-6 text-xs px-2"
+                                        onClick={() => savePayMethod(truckload.id)}
+                                      >
+                                        <Save className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-6 text-xs px-2"
+                                        onClick={cancelEditPayMethod}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      startEditPayMethod(truckload)
+                                    }}
+                                  >
+                                    <Calculator className="h-4 w-4" />
+                                  </Button>
+                                )}
                               </div>
-                              <div className="text-base font-bold text-blue-600">${tlTotals.driverPay.toFixed(2)}</div>
                             </div>
                           </div>
                         </div>

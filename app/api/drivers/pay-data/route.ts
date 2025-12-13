@@ -140,7 +140,10 @@ export async function GET(request: NextRequest) {
         t.bill_of_lading_number as "billOfLadingNumber",
         t.description,
         u.full_name as "driverName",
-        d.color as "driverColor"
+        d.color as "driverColor",
+        COALESCE(t.pay_calculation_method, 'automatic') as "payCalculationMethod",
+        t.pay_hours as "payHours",
+        t.pay_manual_amount as "payManualAmount"
       FROM truckloads t
       LEFT JOIN users u ON t.driver_id = u.id
       LEFT JOIN drivers d ON u.id = d.user_id
@@ -152,6 +155,41 @@ export async function GET(request: NextRequest) {
         )
       ORDER BY t.driver_id, t.start_date
     `, [startDate, endDate])
+
+    // Check if pay calculation columns exist, if not, apply migration automatically
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckloads'
+        AND column_name IN ('pay_calculation_method', 'pay_hours', 'pay_manual_amount')
+      `)
+      const existingColumns = columnCheck.rows.map((row: any) => row.column_name)
+      if (!existingColumns.includes('pay_calculation_method') || !existingColumns.includes('pay_hours') || !existingColumns.includes('pay_manual_amount')) {
+        console.log('Pay calculation columns not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-truckload-pay-calculation-fields.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('Pay calculation columns migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying pay calculation migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking pay calculation columns:', migrationCheckError)
+      // Continue anyway
+    }
 
     const truckloads = truckloadsResult.rows
     const truckloadIds = truckloads.map(t => t.id)
@@ -323,7 +361,10 @@ export async function GET(request: NextRequest) {
           billOfLadingNumber: truckload.billOfLadingNumber,
           description: truckload.description,
           orders: [],
-          deductions: []
+          deductions: [],
+          payCalculationMethod: truckload.payCalculationMethod || 'automatic',
+          payHours: truckload.payHours ? parseFloat(truckload.payHours) : null,
+          payManualAmount: truckload.payManualAmount ? parseFloat(truckload.payManualAmount) : null
         })
       }
     })

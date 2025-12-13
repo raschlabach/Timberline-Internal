@@ -158,7 +158,7 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number } = data
+    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount } = data
 
     // Build dynamic update query based on what fields are provided
     const updates: string[] = []
@@ -219,6 +219,21 @@ export async function PATCH(
       values.push(bill_of_lading_number || null)
     }
 
+    if (payCalculationMethod !== undefined) {
+      updates.push(`pay_calculation_method = $${paramIndex++}`)
+      values.push(payCalculationMethod || 'automatic')
+    }
+
+    if (payHours !== undefined) {
+      updates.push(`pay_hours = $${paramIndex++}`)
+      values.push(payHours ? parseFloat(payHours) : null)
+    }
+
+    if (payManualAmount !== undefined) {
+      updates.push(`pay_manual_amount = $${paramIndex++}`)
+      values.push(payManualAmount ? parseFloat(payManualAmount) : null)
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ 
         success: false, 
@@ -243,7 +258,10 @@ export async function PATCH(
          description,
          is_completed as "isCompleted",
          total_mileage as "totalMileage",
-         estimated_duration as "estimatedDuration"`,
+         estimated_duration as "estimatedDuration",
+         COALESCE(pay_calculation_method, 'automatic') as "payCalculationMethod",
+         pay_hours as "payHours",
+         pay_manual_amount as "payManualAmount"`,
       values
     )
 
