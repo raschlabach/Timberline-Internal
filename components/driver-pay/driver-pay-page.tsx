@@ -41,6 +41,7 @@ interface Deduction {
   deduction: number
   isManual: boolean
   comment: string | null
+  isAddition?: boolean
 }
 
 interface Order {
@@ -94,6 +95,21 @@ function getLastWeekRange(): { start: Date; end: Date } {
   return { start: lastSunday, end: lastSaturday }
 }
 
+// Calculate this week (Sunday-Saturday)
+function getThisWeekRange(): { start: Date; end: Date } {
+  const today = new Date()
+  const dayOfWeek = today.getDay() // 0 = Sunday, 6 = Saturday
+  const thisSunday = new Date(today)
+  thisSunday.setDate(today.getDate() - dayOfWeek)
+  thisSunday.setHours(0, 0, 0, 0)
+  
+  const thisSaturday = new Date(thisSunday)
+  thisSaturday.setDate(thisSunday.getDate() + 6)
+  thisSaturday.setHours(23, 59, 59, 999)
+  
+  return { start: thisSunday, end: thisSaturday }
+}
+
 export default function DriverPayPage({}: DriverPayPageProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -128,25 +144,27 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   const [editingSettings, setEditingSettings] = useState(false)
   const [tempSettings, setTempSettings] = useState<DriverPaySettings | null>(null)
   const [newHour, setNewHour] = useState<{ date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
+  const hasInitializedFromUrl = useRef(false)
   
-  // Restore date range from URL when params change
+  // Restore date range from URL when params change (only on initial load, not when user changes it)
   useEffect(() => {
-    if (urlStartDate && urlEndDate) {
+    if (urlStartDate && urlEndDate && !hasInitializedFromUrl.current) {
       try {
         const start = parse(urlStartDate, 'yyyy-MM-dd', new Date())
         const end = parse(urlEndDate, 'yyyy-MM-dd', new Date())
         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-          const currentFrom = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null
-          const currentTo = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : null
-          if (currentFrom !== urlStartDate || currentTo !== urlEndDate) {
-            setDateRange({ from: start, to: end })
-          }
+          setDateRange({ from: start, to: end })
+          hasInitializedFromUrl.current = true
         }
       } catch (e) {
         // Invalid date format, ignore
+        hasInitializedFromUrl.current = true
       }
+    } else if (!urlStartDate && !urlEndDate && !hasInitializedFromUrl.current) {
+      // If no URL params, mark as initialized so we don't interfere
+      hasInitializedFromUrl.current = true
     }
-  }, [urlStartDate, urlEndDate, dateRange])
+  }, [urlStartDate, urlEndDate])
   
   // Restore driver selection from URL
   useEffect(() => {
@@ -343,12 +361,56 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
   }
 
-  // Calculate totals for a truckload
+  // Calculate totals for a truckload with detailed breakdown
   const calculateTruckloadTotals = (truckload: Truckload) => {
     const totalQuotes = truckload.orders.reduce((sum, order) => sum + (order.freightQuote || 0), 0)
-    const totalDeductions = truckload.deductions.reduce((sum, deduction) => sum + deduction.deduction, 0)
-    const loadValue = totalQuotes - totalDeductions
-    return { totalQuotes, totalDeductions, loadValue }
+    
+    // Count pickups and deliveries
+    const pickupCount = truckload.orders.filter(order => order.assignmentType === 'pickup').length
+    const deliveryCount = truckload.orders.filter(order => order.assignmentType === 'delivery').length
+    
+    // Separate manual and automatic deductions
+    const manualDeductions = truckload.deductions.reduce((sum, deduction) => {
+      if (deduction.isManual && !deduction.isAddition) {
+        return sum + deduction.deduction
+      }
+      return sum
+    }, 0)
+    
+    const automaticDeductions = truckload.deductions.reduce((sum, deduction) => {
+      if (!deduction.isManual) {
+        return sum + deduction.deduction
+      }
+      return sum
+    }, 0)
+    
+    const totalAdditions = truckload.deductions.reduce((sum, deduction) => {
+      if (deduction.isManual && deduction.isAddition) {
+        return sum + deduction.deduction
+      }
+      return sum
+    }, 0)
+    
+    // Calculate intermediate totals
+    const quotesPlusManualDeductions = totalQuotes - manualDeductions
+    const afterAutomaticDeductions = quotesPlusManualDeductions - automaticDeductions
+    const loadValue = afterAutomaticDeductions + totalAdditions
+    
+    // Calculate driver pay (will need driver percentage, but for now just return loadValue)
+    const driverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
+    
+    return { 
+      totalQuotes, 
+      manualDeductions,
+      quotesPlusManualDeductions,
+      automaticDeductions,
+      afterAutomaticDeductions,
+      totalAdditions,
+      loadValue,
+      driverPay,
+      pickupCount,
+      deliveryCount
+    }
   }
 
   // Calculate totals for selected driver
@@ -362,10 +424,13 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
     const totalDeductions = selectedDriver.truckloads.reduce((sum, tl) => {
       const tlTotals = calculateTruckloadTotals(tl)
-      return sum + tlTotals.totalDeductions
+      return sum + tlTotals.manualDeductions + tlTotals.automaticDeductions
     }, 0)
 
-    const loadValue = totalQuotes - totalDeductions
+    const loadValue = selectedDriver.truckloads.reduce((sum, tl) => {
+      const tlTotals = calculateTruckloadTotals(tl)
+      return sum + tlTotals.loadValue
+    }, 0)
     const miscDrivingHours = selectedDriver.hours
       .filter(h => h.type === 'misc_driving')
       .reduce((sum, hour) => sum + hour.hours, 0)
@@ -442,6 +507,26 @@ export default function DriverPayPage({}: DriverPayPageProps) {
               />
             </PopoverContent>
           </Popover>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const thisWeek = getThisWeekRange()
+              setDateRange({ from: thisWeek.start, to: thisWeek.end })
+            }}
+          >
+            This Week
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const lastWeek = getLastWeekRange()
+              setDateRange({ from: lastWeek.start, to: lastWeek.end })
+            }}
+          >
+            Last Week
+          </Button>
         </div>
 
         {/* Driver Selector - Horizontal */}
@@ -668,54 +753,74 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                     return (
                       <Card
                         key={truckload.id}
-                        className={`p-2 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid ${
+                        className={`p-4 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid ${
                           hasMiddlefield ? 'border-2 border-red-500' : ''
                         }`}
                         onClick={() => handleTruckloadClick(truckload.id)}
                       >
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="flex-shrink-0">
-                              <h4 className="font-semibold text-base">
-                                {format(new Date(truckload.startDate), 'MM/dd/yyyy')} - {format(new Date(truckload.endDate), 'MM/dd/yyyy')}
+                        <div className="space-y-3">
+                          {/* Header: Dates, Description, Pickups/Deliveries */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-xl mb-1">
+                                {format(new Date(truckload.startDate), 'MM/dd')} - {format(new Date(truckload.endDate), 'MM/dd')}
                               </h4>
-                              {truckload.billOfLadingNumber && (
-                                <p className="text-xs text-gray-500">
-                                  BOL {truckload.billOfLadingNumber}
-                                </p>
+                              {truckload.description && (
+                                <p className="text-sm text-gray-700 mb-1">{truckload.description}</p>
                               )}
-                              {!truckload.billOfLadingNumber && (
-                                <p className="text-xs text-gray-500">
-                                  TL {truckload.id}
-                                </p>
-                              )}
+                              <div className="flex items-center gap-3 text-xs text-gray-600">
+                                <span>{tlTotals.pickupCount} Pickups</span>
+                                <span>•</span>
+                                <span>{tlTotals.deliveryCount} Deliveries</span>
+                                {truckload.billOfLadingNumber && (
+                                  <>
+                                    <span>•</span>
+                                    <span>BOL {truckload.billOfLadingNumber}</span>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            {truckload.description && (
-                              <p className="text-sm font-medium text-gray-800 truncate flex-1">{truckload.description}</p>
-                            )}
                             {hasMiddlefield && (
                               <div className="flex items-center gap-1 text-red-600 flex-shrink-0">
-                                <AlertTriangle className="h-4 w-4" />
-                                <span className="text-xs font-semibold">Middlefield</span>
+                                <AlertTriangle className="h-5 w-5" />
+                                <span className="text-sm font-semibold">Middlefield</span>
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-4 flex-shrink-0">
-                            <div className="text-right">
-                              <div className="text-[10px] text-gray-600">Quotes</div>
-                              <div className="text-xs font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
+
+                          {/* Calculations Grid */}
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
+                            <div>
+                              <div className="text-xs text-gray-600 mb-0.5">Total Quotes</div>
+                              <div className="text-sm font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-[10px] text-gray-600">Deductions</div>
-                              <div className="text-xs font-semibold text-red-600">-${tlTotals.totalDeductions.toFixed(2)}</div>
+                            <div>
+                              <div className="text-xs text-gray-600 mb-0.5">Manual Deductions</div>
+                              <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductions.toFixed(2)}</div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-[10px] text-gray-600">Load Value</div>
-                              <div className="text-xs font-semibold">${tlTotals.loadValue.toFixed(2)}</div>
+                            <div>
+                              <div className="text-xs text-gray-600 mb-0.5">After Manual Deductions</div>
+                              <div className="text-sm font-semibold">${tlTotals.quotesPlusManualDeductions.toFixed(2)}</div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-[10px] text-gray-600">Orders</div>
-                              <div className="text-xs font-semibold">{truckload.orders.length}</div>
+                            <div>
+                              <div className="text-xs text-gray-600 mb-0.5">Automatic Deductions</div>
+                              <div className="text-sm font-semibold text-red-600">-${tlTotals.automaticDeductions.toFixed(2)}</div>
+                            </div>
+                            {tlTotals.totalAdditions > 0 && (
+                              <div>
+                                <div className="text-xs text-gray-600 mb-0.5">Additions</div>
+                                <div className="text-sm font-semibold text-green-600">+${tlTotals.totalAdditions.toFixed(2)}</div>
+                              </div>
+                            )}
+                            <div>
+                              <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
+                              <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="text-xs text-gray-600 mb-0.5">
+                                Driver Pay ({selectedDriver.loadPercentage}%)
+                              </div>
+                              <div className="text-base font-bold text-blue-600">${tlTotals.driverPay.toFixed(2)}</div>
                             </div>
                           </div>
                         </div>

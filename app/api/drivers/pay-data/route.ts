@@ -366,7 +366,8 @@ export async function GET(request: NextRequest) {
             dimensions: deduction.dimensions,
             deduction: parseFloat(deduction.deduction) || 0,
             isManual: deduction.isManual,
-            comment: deduction.comment
+            comment: deduction.comment,
+            isAddition: deduction.isAddition || false
           })
         }
       }
