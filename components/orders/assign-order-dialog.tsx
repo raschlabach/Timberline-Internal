@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TruckloadSummary } from '@/types/truckloads'
 import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp, Package, CheckCircle2, Calendar, Clock, MapPin, Truck, Info } from 'lucide-react'
+import { Package, CheckCircle2, Calendar, Clock, MapPin, Truck, Info } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 
 interface AssignOrderDialogProps {
@@ -66,31 +66,38 @@ export function AssignOrderDialog({
   isPickupCompleted = false
 }: AssignOrderDialogProps) {
   const queryClient = useQueryClient()
-  const [assignmentType, setAssignmentType] = useState<'pickup' | 'delivery'>('pickup')
   const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([])
   const [truckloads, setTruckloads] = useState<TruckloadSummary[]>([])
   const [drivers, setDrivers] = useState<DriverOption[]>([])
-  const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
+  const [selectedPickupTruckloadId, setSelectedPickupTruckloadId] = useState<number | null>(null)
+  const [selectedDeliveryTruckloadId, setSelectedDeliveryTruckloadId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isUnassigning, setIsUnassigning] = useState(false)
   const [truckloadView, setTruckloadView] = useState<TruckloadView>('current')
-  const [collapsedDrivers, setCollapsedDrivers] = useState<Record<string, boolean>>({})
+  const [selectedDrivers, setSelectedDrivers] = useState<Set<string>>(new Set())
 
   // Check if pickup assignment is locked
   const isPickupLocked = Boolean(isPickupCompleted && pickupAssignment)
 
-  // Toggle driver column collapse
-  const toggleDriverCollapse = (driverName: string) => {
-    setCollapsedDrivers(prev => ({
-      ...prev,
-      [driverName]: !prev[driverName]
-    }))
+  // Toggle driver selection
+  const toggleDriverSelection = (driverName: string) => {
+    setSelectedDrivers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(driverName)) {
+        newSet.delete(driverName)
+      } else {
+        newSet.add(driverName)
+      }
+      return newSet
+    })
   }
 
   useEffect(() => {
     if (isOpen) {
       setTruckloadView('current')
-      setSelectedTruckloadId(null)
+      setSelectedPickupTruckloadId(null)
+      setSelectedDeliveryTruckloadId(null)
+      setSelectedDrivers(new Set()) // Reset selection on dialog open
       fetchData()
     }
   }, [isOpen])
@@ -100,20 +107,29 @@ export function AssignOrderDialog({
   }, [allTruckloads, truckloadView])
 
   useEffect(() => {
-    if (selectedTruckloadId && !truckloads.some(function hasSelection(truckload) {
-      return truckload.id === selectedTruckloadId
+    if (selectedPickupTruckloadId && !truckloads.some(function hasSelection(truckload) {
+      return truckload.id === selectedPickupTruckloadId
     })) {
-      setSelectedTruckloadId(null)
+      setSelectedPickupTruckloadId(null)
     }
-  }, [truckloads, selectedTruckloadId])
+    if (selectedDeliveryTruckloadId && !truckloads.some(function hasSelection(truckload) {
+      return truckload.id === selectedDeliveryTruckloadId
+    })) {
+      setSelectedDeliveryTruckloadId(null)
+    }
+  }, [truckloads, selectedPickupTruckloadId, selectedDeliveryTruckloadId])
 
   function handleTruckloadViewChange(nextValue: string): void {
     const view = nextValue === 'completed' ? 'completed' : 'current'
     setTruckloadView(view)
   }
 
-  function handleTruckloadSelection(truckloadId: number): void {
-    setSelectedTruckloadId(truckloadId)
+  function handlePickupSelection(truckloadId: number): void {
+    setSelectedPickupTruckloadId(truckloadId)
+  }
+
+  function handleDeliverySelection(truckloadId: number): void {
+    setSelectedDeliveryTruckloadId(truckloadId)
   }
 
   async function fetchData(): Promise<void> {
@@ -156,7 +172,7 @@ export function AssignOrderDialog({
     }
   }
 
-  async function handleUnassign() {
+  async function handleUnassign(assignmentType: 'pickup' | 'delivery') {
     setIsUnassigning(true)
 
     try {
@@ -171,13 +187,13 @@ export function AssignOrderDialog({
 
       if (!response.ok) throw new Error('Failed to unassign order')
 
-      toast.success('Order unassigned successfully')
+      toast.success(`${assignmentType === 'pickup' ? 'Pickup' : 'Delivery'} unassigned successfully`)
       // Invalidate queries to refresh truckload manager and orders
       queryClient.invalidateQueries({ queryKey: ['truckloads'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['truckload-stops'] })
       onAssignmentChange()
-      onClose()
+      // Don't close dialog, allow user to continue assigning
     } catch (error) {
       console.error('Error unassigning order:', error)
       toast.error('Failed to unassign order')
@@ -187,28 +203,63 @@ export function AssignOrderDialog({
   }
 
   async function handleAssign() {
-    if (!selectedTruckloadId) {
-      toast.error('Please select a truckload')
+    // At least one assignment must be selected
+    if (!selectedPickupTruckloadId && !selectedDeliveryTruckloadId) {
+      toast.error('Please select at least one truckload for pickup or delivery')
       return
     }
 
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/truckloads/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          truckloadId: selectedTruckloadId,
-          assignmentType,
-          isTransferOrder
-        })
-      })
+      const assignments: Promise<Response>[] = []
 
-      if (!response.ok) throw new Error('Failed to assign order')
+      // Assign pickup if selected
+      if (selectedPickupTruckloadId) {
+        assignments.push(
+          fetch('/api/truckloads/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId,
+              truckloadId: selectedPickupTruckloadId,
+              assignmentType: 'pickup',
+              isTransferOrder: false
+            })
+          })
+        )
+      }
 
-      toast.success('Order assigned successfully')
+      // Assign delivery if selected
+      if (selectedDeliveryTruckloadId) {
+        assignments.push(
+          fetch('/api/truckloads/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId,
+              truckloadId: selectedDeliveryTruckloadId,
+              assignmentType: 'delivery',
+              isTransferOrder: false
+            })
+          })
+        )
+      }
+
+      const responses = await Promise.all(assignments)
+      
+      for (const response of responses) {
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to assign order')
+        }
+      }
+
+      const assignedTypes = []
+      if (selectedPickupTruckloadId) assignedTypes.push('pickup')
+      if (selectedDeliveryTruckloadId) assignedTypes.push('delivery')
+      
+      toast.success(`Order ${assignedTypes.join(' and ')} assigned successfully`)
       // Invalidate queries to refresh truckload manager and orders
       queryClient.invalidateQueries({ queryKey: ['truckloads'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
@@ -217,14 +268,13 @@ export function AssignOrderDialog({
       onClose()
     } catch (error) {
       console.error('Error assigning order:', error)
-      toast.error('Failed to assign order')
+      toast.error(error instanceof Error ? error.message : 'Failed to assign order')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Get current assignment based on type
-  const currentAssignment = assignmentType === 'pickup' ? pickupAssignment : deliveryAssignment
+  // No need for currentAssignment - we'll show both separately
 
   // Group truckloads by driver
   const truckloadsByDriver = drivers.reduce((acc, driver) => {
@@ -266,104 +316,80 @@ export function AssignOrderDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
-          {/* Assignment Type Selection */}
-          <div className="space-y-2">
-            <Label className="text-lg font-semibold">Assignment Type</Label>
-            <div className="flex gap-4">
-              <Button
-                variant={assignmentType === 'pickup' ? 'default' : 'outline'}
-                className={`flex-1 h-12 text-lg ${
-                  assignmentType === 'pickup' ? 'bg-red-600 hover:bg-red-700' : ''
-                }`}
-                onClick={() => {
-                  if (!isPickupLocked) {
-                    setAssignmentType('pickup')
-                    setSelectedTruckloadId(null)
-                  }
-                }}
-                disabled={isPickupLocked}
-              >
-                <div className="flex flex-col items-center">
-                  <span>Pickup</span>
-                  <span className="text-sm font-normal">
-                    {pickupCustomer.name}
-                    {pickupAssignment && (
-                      <span className="ml-1 text-gray-500">
-                        (Assigned to {pickupAssignment.driverName || 'Truckload ' + pickupAssignment.truckloadId})
-                      </span>
-                    )}
-                  </span>
-                  {isPickupLocked && (
-                    <span className="text-xs text-red-500 mt-1">
-                      Must unassign current pickup first
-                    </span>
+          {/* Current Assignments Status */}
+          <div className="space-y-3">
+            {pickupAssignment && (
+              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-red-800 mb-1">Pickup Assigned</div>
+                    <div className="text-base text-gray-800">
+                      {pickupCustomer.name} → {pickupAssignment.driverName || 'Truckload ' + pickupAssignment.truckloadId}
+                    </div>
+                    {(() => {
+                      const truckload = truckloads.find(t => t.id === pickupAssignment.truckloadId);
+                      if (truckload) {
+                        const startDate = format(new Date(truckload.startDate), 'MM/dd');
+                        const endDate = format(new Date(truckload.endDate), 'MM/dd');
+                        return (
+                          <div className="text-sm text-gray-600 mt-1">
+                            {truckload.description || `${startDate} - ${endDate}`}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  {!isPickupLocked && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleUnassign('pickup')}
+                      disabled={isUnassigning}
+                    >
+                      {isUnassigning ? 'Unassigning...' : 'Unassign Pickup'}
+                    </Button>
                   )}
                 </div>
-              </Button>
-              <Button
-                variant={assignmentType === 'delivery' ? 'default' : 'outline'}
-                className="flex-1 h-12 text-lg"
-                onClick={() => {
-                  setAssignmentType('delivery')
-                  setSelectedTruckloadId(null)
-                }}
-              >
-                <div className="flex flex-col items-center">
-                  <span>Delivery</span>
-                  <span className="text-sm font-normal">
-                    {deliveryCustomer.name}
-                    {deliveryAssignment && (
-                      <span className="ml-1 text-gray-500">
-                        (Assigned to {deliveryAssignment.driverName || 'Truckload ' + deliveryAssignment.truckloadId})
-                      </span>
-                    )}
-                  </span>
+              </div>
+            )}
+            {deliveryAssignment && (
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800 mb-1">Delivery Assigned</div>
+                    <div className="text-base text-gray-800">
+                      {deliveryCustomer.name} → {deliveryAssignment.driverName || 'Truckload ' + deliveryAssignment.truckloadId}
+                    </div>
+                    {(() => {
+                      const truckload = truckloads.find(t => t.id === deliveryAssignment.truckloadId);
+                      if (truckload) {
+                        const startDate = format(new Date(truckload.startDate), 'MM/dd');
+                        const endDate = format(new Date(truckload.endDate), 'MM/dd');
+                        return (
+                          <div className="text-sm text-gray-600 mt-1">
+                            {truckload.description || `${startDate} - ${endDate}`}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleUnassign('delivery')}
+                    disabled={isUnassigning}
+                  >
+                    {isUnassigning ? 'Unassigning...' : 'Unassign Delivery'}
+                  </Button>
                 </div>
-              </Button>
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Current Assignment Status */}
-          {currentAssignment && (
-            <div className="p-4 bg-gray-50 rounded-lg text-center">
-              <div className="text-lg font-semibold text-gray-800">
-                {assignmentType === 'pickup' ? 'Pickup' : 'Delivery'} assigned to{' '}
-                {currentAssignment.driverName || 'Truckload ' + currentAssignment.truckloadId}
-                {(() => {
-                  const truckload = truckloads.find(t => t.id === currentAssignment.truckloadId);
-                  if (truckload) {
-                    const startDate = format(new Date(truckload.startDate), 'MM/dd');
-                    const endDate = format(new Date(truckload.endDate), 'MM/dd');
-                    return ` ${startDate} - ${endDate}`;
-                  }
-                  return '';
-                })()}
-              </div>
-              {(() => {
-                const truckload = truckloads.find(t => t.id === currentAssignment.truckloadId);
-                if (truckload && truckload.description) {
-                  return (
-                    <div className="text-base text-gray-600 mt-2">
-                      {truckload.description}
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleUnassign}
-                disabled={isUnassigning}
-                className="mt-3"
-              >
-                {isUnassigning ? 'Unassigning...' : 'Unassign'}
-              </Button>
-            </div>
-          )}
-
           {/* Truckload Selection */}
-          {!currentAssignment && !isPickupLocked && (
+          {!isPickupLocked && (
             <div className="space-y-2 flex-1 overflow-hidden">
               <Label>Select Truckload</Label>
               <div className="flex items-center justify-between gap-4">
@@ -377,134 +403,185 @@ export function AssignOrderDialog({
                   </TabsList>
                 </Tabs>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                {driverColumns.map((driver) => {
-                  const isCollapsed = collapsedDrivers[driver.driverName] !== undefined ? collapsedDrivers[driver.driverName] : true
-                  const completedCount = driver.truckloads.filter(t => t.isCompleted).length
-                  
-                  return (
-                    <Card 
-                      key={driver.driverName} 
-                      className="w-full bg-white shadow-lg border-0 h-fit"
-                      style={{
-                        borderLeft: `4px solid ${driver.driverColor}`,
-                      }}
+
+              {/* Driver Selector - Horizontal */}
+              {driverColumns.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <span className="text-sm font-medium text-gray-700 mr-2">Select Drivers:</span>
+                  {driverColumns.map((driver) => (
+                    <Button
+                      key={driver.driverName}
+                      variant={selectedDrivers.has(driver.driverName) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleDriverSelection(driver.driverName)}
+                      className="text-xs h-7"
                     >
-                      <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 -ml-1"
-                              onClick={() => toggleDriverCollapse(driver.driverName)}
-                            >
-                              {isCollapsed ? (
-                                <ChevronDown className="h-4 w-4 text-gray-500" />
-                              ) : (
-                                <ChevronUp className="h-4 w-4 text-gray-500" />
-                              )}
-                            </Button>
-                            <div 
-                              className="w-3 h-3 rounded-full shadow-sm" 
-                              style={{ backgroundColor: driver.driverColor }}
-                            />
-                            <div className="flex-1">
-                              <CardTitle className="text-base font-semibold text-gray-900">
-                                {driver.driverName}
-                              </CardTitle>
-                              <div className="flex items-center gap-3 mt-0.5">
-                                <div className="flex items-center gap-1 text-xs text-gray-600">
-                                  <Package className="h-2.5 w-2.5" />
-                                  <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-xs text-gray-600">
-                                  <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
-                                  <span>{completedCount} complete</span>
+                      <div
+                        className="w-2 h-2 rounded-full mr-1.5"
+                        style={{ backgroundColor: driver.driverColor }}
+                      />
+                      {driver.driverName}
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                {driverColumns
+                  .filter((driver) => selectedDrivers.has(driver.driverName))
+                  .map((driver) => {
+                    const completedCount = driver.truckloads.filter(t => t.isCompleted).length
+                    
+                    return (
+                      <Card 
+                        key={driver.driverName} 
+                        className="w-full bg-white shadow-lg border-0 h-fit"
+                        style={{
+                          borderLeft: `4px solid ${driver.driverColor}`,
+                        }}
+                      >
+                        <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 flex-1">
+                              <div 
+                                className="w-3 h-3 rounded-full shadow-sm" 
+                                style={{ backgroundColor: driver.driverColor }}
+                              />
+                              <div className="flex-1">
+                                <CardTitle className="text-base font-semibold text-gray-900">
+                                  {driver.driverName}
+                                </CardTitle>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                                    <Package className="h-2.5 w-2.5" />
+                                    <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                                    <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
+                                    <span>{completedCount} complete</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </CardHeader>
-                      {!isCollapsed && (
+                        </CardHeader>
                         <CardContent className="p-3">
                           <div className="space-y-3">
-                            {driver.truckloads.map((truckload) => (
-                              <Card 
-                                key={truckload.id}
-                                className={`p-3 transition-all duration-200 cursor-pointer ${
-                                  selectedTruckloadId === truckload.id
-                                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                                    : truckload.isCompleted 
-                                      ? 'border-green-200 bg-green-50/30 hover:shadow-md' 
-                                      : 'border-orange-200 bg-orange-50/30 hover:border-orange-300 hover:shadow-md'
-                                }`}
-                                onClick={() => handleTruckloadSelection(truckload.id)}
-                              >
-                                <div className="space-y-3">
-                                  {/* Header with date and status */}
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="flex items-center gap-1">
-                                        <Calendar className="h-3 w-3 text-gray-500" />
-                                        <span className="text-xs font-semibold text-gray-900">
-                                          {(() => {
-                                            // Parse date as local date to avoid timezone conversion
-                                            const dateParts = truckload.startDate.split('-')
-                                            const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
-                                            return format(date, 'MMM dd')
-                                          })()}
-                                        </span>
+                            {driver.truckloads.map((truckload) => {
+                              const isPickupSelected = selectedPickupTruckloadId === truckload.id
+                              const isDeliverySelected = selectedDeliveryTruckloadId === truckload.id
+                              const hasPickupSelection = selectedPickupTruckloadId !== null
+                              const hasDeliverySelection = selectedDeliveryTruckloadId !== null
+                              
+                              return (
+                                <Card 
+                                  key={truckload.id}
+                                  className={`p-3 transition-all duration-200 ${
+                                    (isPickupSelected || isDeliverySelected)
+                                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                                      : truckload.isCompleted 
+                                        ? 'border-green-200 bg-green-50/30' 
+                                        : 'border-orange-200 bg-orange-50/30'
+                                  }`}
+                                >
+                                  <div className="space-y-3">
+                                    {/* Header with date and status */}
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1">
+                                          <Calendar className="h-3 w-3 text-gray-500" />
+                                          <span className="text-xs font-semibold text-gray-900">
+                                            {(() => {
+                                              // Parse date as local date to avoid timezone conversion
+                                              const dateParts = truckload.startDate.split('-')
+                                              const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
+                                              return format(date, 'MMM dd')
+                                            })()}
+                                          </span>
+                                        </div>
+                                        {truckload.isCompleted ? (
+                                          <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 text-xs px-1.5 py-0.5">
+                                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                                            Complete
+                                          </Badge>
+                                        ) : (
+                                          <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-1.5 py-0.5">
+                                            <Clock className="h-2.5 w-2.5 mr-0.5" />
+                                            In Progress
+                                          </Badge>
+                                        )}
                                       </div>
-                                      {truckload.isCompleted ? (
-                                        <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 text-xs px-1.5 py-0.5">
-                                          <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
-                                          Complete
-                                        </Badge>
-                                      ) : (
-                                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-1.5 py-0.5">
-                                          <Clock className="h-2.5 w-2.5 mr-0.5" />
-                                          In Progress
-                                        </Badge>
+                                    </div>
+
+                                    {/* Description */}
+                                    <div className="text-xs text-gray-700 leading-tight">
+                                      {truckload.description || (
+                                        <span className="text-gray-500 italic">No description provided</span>
                                       )}
                                     </div>
-                                  </div>
 
-                                  {/* Description */}
-                                  <div className="text-xs text-gray-700 leading-tight">
-                                    {truckload.description || (
-                                      <span className="text-gray-500 italic">No description provided</span>
-                                    )}
-                                  </div>
+                                    {/* Footage breakdown */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <div className="bg-red-50 p-2 rounded border border-red-100">
+                                        <div className="flex items-center gap-0.5 mb-0.5">
+                                          <MapPin className="h-2.5 w-2.5 text-red-600" />
+                                          <div className="text-xs font-semibold text-red-700 uppercase tracking-wide">Pickup</div>
+                                        </div>
+                                        <div className="text-xs font-bold text-red-800">{truckload.pickupFootage.toLocaleString()} ft²</div>
+                                      </div>
+                                      <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                                        <div className="flex items-center gap-0.5 mb-0.5">
+                                          <Truck className="h-2.5 w-2.5 text-gray-600" />
+                                          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Delivery</div>
+                                        </div>
+                                        <div className="text-xs font-bold text-gray-800">{truckload.deliveryFootage.toLocaleString()} ft²</div>
+                                      </div>
+                                      <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                                        <div className="flex items-center gap-0.5 mb-0.5">
+                                          <Package className="h-2.5 w-2.5 text-blue-600" />
+                                          <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Transfer</div>
+                                        </div>
+                                        <div className="text-xs font-bold text-blue-800">{truckload.transferFootage.toLocaleString()} ft²</div>
+                                      </div>
+                                    </div>
 
-                                  {/* Footage breakdown */}
-                                  <div className="grid grid-cols-3 gap-2">
-                                    <div className="bg-red-50 p-2 rounded border border-red-100">
-                                      <div className="flex items-center gap-0.5 mb-0.5">
-                                        <MapPin className="h-2.5 w-2.5 text-red-600" />
-                                        <div className="text-xs font-semibold text-red-700 uppercase tracking-wide">Pickup</div>
-                                      </div>
-                                      <div className="text-xs font-bold text-red-800">{truckload.pickupFootage.toLocaleString()} ft²</div>
-                                    </div>
-                                    <div className="bg-gray-50 p-2 rounded border border-gray-200">
-                                      <div className="flex items-center gap-0.5 mb-0.5">
-                                        <Truck className="h-2.5 w-2.5 text-gray-600" />
-                                        <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Delivery</div>
-                                      </div>
-                                      <div className="text-xs font-bold text-gray-800">{truckload.deliveryFootage.toLocaleString()} ft²</div>
-                                    </div>
-                                    <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                                      <div className="flex items-center gap-0.5 mb-0.5">
-                                        <Package className="h-2.5 w-2.5 text-blue-600" />
-                                        <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Transfer</div>
-                                      </div>
-                                      <div className="text-xs font-bold text-blue-800">{truckload.transferFootage.toLocaleString()} ft²</div>
+                                    {/* Pickup and Delivery Selection Buttons */}
+                                    <div className="flex gap-2 pt-2">
+                                      <Button
+                                        variant={isPickupSelected ? "default" : "outline"}
+                                        size="sm"
+                                        className={`flex-1 h-8 text-xs ${
+                                          isPickupSelected 
+                                            ? 'bg-red-600 hover:bg-red-700 text-white' 
+                                            : hasPickupSelection && !isPickupSelected
+                                              ? 'opacity-50 cursor-not-allowed'
+                                              : 'hover:bg-red-50'
+                                        }`}
+                                        onClick={() => handlePickupSelection(truckload.id)}
+                                        disabled={hasPickupSelection && !isPickupSelected}
+                                      >
+                                        Pickup
+                                      </Button>
+                                      <Button
+                                        variant={isDeliverySelected ? "default" : "outline"}
+                                        size="sm"
+                                        className={`flex-1 h-8 text-xs ${
+                                          isDeliverySelected 
+                                            ? 'bg-gray-700 hover:bg-gray-800 text-white' 
+                                            : hasDeliverySelection && !isDeliverySelected
+                                              ? 'opacity-50 cursor-not-allowed'
+                                              : 'hover:bg-gray-50'
+                                        }`}
+                                        onClick={() => handleDeliverySelection(truckload.id)}
+                                        disabled={hasDeliverySelection && !isDeliverySelected}
+                                      >
+                                        Delivery
+                                      </Button>
                                     </div>
                                   </div>
-                                </div>
-                              </Card>
-                            ))}
+                                </Card>
+                              )
+                            })}
                             {driver.truckloads.length === 0 && (
                               <div className="text-center py-6">
                                 <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
@@ -517,10 +594,9 @@ export function AssignOrderDialog({
                             )}
                           </div>
                         </CardContent>
-                      )}
                       </Card>
-                  )
-                })}
+                    )
+                  })}
                 </div>
             </div>
           )}
@@ -538,8 +614,11 @@ export function AssignOrderDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          {!currentAssignment && !isPickupLocked && (
-            <Button onClick={handleAssign} disabled={!selectedTruckloadId || isLoading}>
+          {!isPickupLocked && (
+            <Button 
+              onClick={handleAssign} 
+              disabled={(!selectedPickupTruckloadId && !selectedDeliveryTruckloadId) || isLoading}
+            >
               {isLoading ? 'Assigning...' : 'Assign'}
             </Button>
           )}

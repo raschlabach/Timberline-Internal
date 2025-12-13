@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
@@ -75,26 +75,44 @@ export default function TruckloadManager() {
     queryKey: ['drivers'],
     queryFn: async () => {
       const response = await fetch('/api/drivers')
-      if (!response.ok) throw new Error('Failed to fetch drivers')
-      return response.json()
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Failed to fetch drivers: ${response.status} ${response.statusText}`)
+      }
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch drivers')
+      }
+      // Return the data in the expected format
+      return { drivers: data.drivers || [] }
     },
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
+    staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
   const { data: truckloadsData, isLoading: isLoadingTruckloads, isError: isErrorTruckloads, isFetching: isFetchingTruckloads, refetch: refetchTruckloads } = useQuery<{ truckloads: TruckloadSummary[] }>({
     queryKey: ['truckloads'],
     queryFn: async () => {
       const response = await fetch('/api/truckloads')
-      if (!response.ok) throw new Error('Failed to fetch truckloads')
-      return response.json()
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Failed to fetch truckloads: ${response.status} ${response.statusText}`)
+      }
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch truckloads')
+      }
+      // Return the data in the expected format
+      return { truckloads: data.truckloads || [] }
     },
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
+    staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
@@ -106,7 +124,6 @@ export default function TruckloadManager() {
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
   const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set())
-  const hasInitialized = useRef(false)
 
   const queryClient = useQueryClient()
 
@@ -149,38 +166,32 @@ export default function TruckloadManager() {
       setDriverOrder(sorted.map(d => d.id))
     }
 
-    // Load selected drivers from localStorage
-    // Use a timestamp approach to distinguish refresh from navigation
-    // On refresh, the timestamp will be old (or missing), so start empty
-    // On navigation, we set a recent timestamp before navigating, so load from localStorage
-    const lastVisitTime = sessionStorage.getItem('truckloadManager_lastVisit')
-    const now = Date.now()
-    const VISIT_WINDOW = 5000 // 5 seconds - if visited within this window, it's navigation
+    // Load selected drivers from localStorage (but NOT on initial page load/refresh)
+    // Use a more reliable method: check if we're navigating from within the app
+    // by checking if there's a navigation flag set before page unload
+    const wasNavigating = sessionStorage.getItem('truckloadManager_navigating') === 'true'
     
-    if (lastVisitTime) {
-      const timeSinceLastVisit = now - parseInt(lastVisitTime, 10)
-      // If visited recently (within 5 seconds), it's likely navigation, not refresh
-      if (timeSinceLastVisit < VISIT_WINDOW) {
-        const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
-        if (savedSelected) {
-          try {
-            const parsed = JSON.parse(savedSelected)
-            // Validate that all saved driver IDs still exist
-            const driverIds = new Set(driversData.drivers.map(d => d.id))
-            const validIds = parsed.filter((id: number) => driverIds.has(id))
-            if (validIds.length > 0) {
-              setSelectedDrivers(new Set(validIds))
-            }
-          } catch (e) {
-            console.error('Failed to parse saved selected drivers:', e)
+    if (wasNavigating) {
+      // Clear the flag
+      sessionStorage.removeItem('truckloadManager_navigating')
+      
+      // Load from localStorage
+      const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
+      if (savedSelected) {
+        try {
+          const parsed = JSON.parse(savedSelected)
+          // Validate that all saved driver IDs still exist
+          const driverIds = new Set(driversData.drivers.map(d => d.id))
+          const validIds = parsed.filter((id: number) => driverIds.has(id))
+          if (validIds.length > 0) {
+            setSelectedDrivers(new Set(validIds))
           }
+        } catch (e) {
+          console.error('Failed to parse saved selected drivers:', e)
         }
       }
     }
-    
-    // Update the visit timestamp
-    sessionStorage.setItem('truckloadManager_lastVisit', String(now))
-    hasInitialized.current = true
+    // Otherwise, start with empty selection (fresh page load/refresh)
   }, [driversData?.drivers])
 
   // Save driver order to localStorage whenever it changes
@@ -191,17 +202,40 @@ export default function TruckloadManager() {
   }, [driverOrder])
 
   // Save selected drivers to localStorage whenever it changes
-  // Only save after initial load to avoid saving empty state on first render
   useEffect(() => {
-    if (hasInitialized.current) {
+    // Only save if we have drivers data loaded (avoid saving empty state on initial mount)
+    if (driversData?.drivers && driversData.drivers.length > 0) {
       if (selectedDrivers.size > 0) {
         localStorage.setItem('truckloadManager_selectedDrivers', JSON.stringify(Array.from(selectedDrivers)))
       } else {
-        // Remove from localStorage if empty
-        localStorage.removeItem('truckloadManager_selectedDrivers')
+        // Keep the last saved selection, don't remove it
+        // This way if user deselects all, we can still restore on navigation
       }
     }
-  }, [selectedDrivers])
+  }, [selectedDrivers, driversData?.drivers])
+
+  // Set navigation flag when navigating away (for client-side navigation)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // On actual page unload/refresh, clear the flag
+      // This ensures fresh loads don't restore selection
+      sessionStorage.removeItem('truckloadManager_navigating')
+    }
+
+    // Check if we came from another page in the app (not a direct load/refresh)
+    if (typeof window !== 'undefined') {
+      const referrer = document.referrer
+      // If we have a referrer from the same origin, it's likely navigation
+      if (referrer && referrer.includes(window.location.origin) && !referrer.includes(window.location.href)) {
+        sessionStorage.setItem('truckloadManager_navigating', 'true')
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
 
   // Set up drag and drop sensors
   const sensors = useSensors(
@@ -319,10 +353,21 @@ export default function TruckloadManager() {
   }
 
   // Only show error if loading/fetching is complete AND there's an actual error or missing data
-  if (!isFetchingDrivers && !isFetchingTruckloads && (isErrorDrivers || isErrorTruckloads || !driversData?.drivers || !truckloadsData?.truckloads)) {
+  // Check both error states and data availability
+  const hasError = (isErrorDrivers || isErrorTruckloads) && !isFetchingDrivers && !isFetchingTruckloads
+  const hasData = driversData?.drivers && truckloadsData?.truckloads
+  const missingData = !hasData && !isLoadingDrivers && !isLoadingTruckloads && !isFetchingDrivers && !isFetchingTruckloads
+
+  if (hasError || missingData) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p className="text-red-500">Failed to load data</p>
+        {(isErrorDrivers || !driversData?.drivers) && (
+          <p className="text-sm text-gray-600">Error loading drivers</p>
+        )}
+        {(isErrorTruckloads || !truckloadsData?.truckloads) && (
+          <p className="text-sm text-gray-600">Error loading truckloads</p>
+        )}
         <button
           onClick={() => {
             refetchDrivers()
@@ -338,11 +383,8 @@ export default function TruckloadManager() {
 
   // Type guard: ensure data exists before using it
   if (!driversData?.drivers || !truckloadsData?.truckloads) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-red-500">Failed to load data</p>
-      </div>
-    )
+    // Still loading, show loading state
+    return null
   }
 
   const drivers = driversData.drivers

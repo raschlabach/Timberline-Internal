@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, parseISO, isValid } from 'date-fns'
-import { Loader2, ChevronDown, ChevronUp, Package, CheckCircle2, Calendar, Clock, MapPin, Truck } from "lucide-react"
+import { Loader2, Package, CheckCircle2, Calendar, Clock, MapPin, Truck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { TruckloadSummary } from '@/types/truckloads'
 import { ApiDriver, ApiTruckload, DriverOption, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
@@ -35,19 +35,25 @@ export function TransferStopDialog({
   const [selectedTruckloadId, setSelectedTruckloadId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
-  const [collapsedDrivers, setCollapsedDrivers] = useState<Record<string, boolean>>({})
+  const [selectedDrivers, setSelectedDrivers] = useState<Set<string>>(new Set())
 
-  // Toggle driver column collapse
-  function toggleDriverCollapse(driverName: string): void {
-    setCollapsedDrivers(prev => ({
-      ...prev,
-      [driverName]: !prev[driverName]
-    }))
+  // Toggle driver selection
+  function toggleDriverSelection(driverName: string): void {
+    setSelectedDrivers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(driverName)) {
+        newSet.delete(driverName)
+      } else {
+        newSet.add(driverName)
+      }
+      return newSet
+    })
   }
 
   useEffect(() => {
     if (isOpen) {
       setSelectedTruckloadId(null)
+      setSelectedDrivers(new Set()) // Reset selection on dialog open
       fetchData()
     } else {
       setAllTruckloads([])
@@ -56,7 +62,7 @@ export function TransferStopDialog({
       setIsLoading(false)
       setIsTransferring(false)
       setDrivers([])
-      setCollapsedDrivers({})
+      setSelectedDrivers(new Set())
     }
   }, [isOpen])
 
@@ -226,160 +232,171 @@ export function TransferStopDialog({
                 <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                {driverColumns.map(function renderDriver(driver) {
-                  const isCollapsed = collapsedDrivers[driver.driverName] !== undefined ? collapsedDrivers[driver.driverName] : true
-                  const completedCount = driver.truckloads.filter(function filterCompleted(t) {
-                    return t.isCompleted
-                  }).length
-                  
-                  return (
-                    <Card 
-                      key={driver.driverName} 
-                      className="w-full bg-white shadow-lg border-0 h-fit"
-                      style={{
-                        borderLeft: `4px solid ${driver.driverColor}`,
-                      }}
-                    >
-                      <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 -ml-1"
-                              onClick={() => toggleDriverCollapse(driver.driverName)}
-                            >
-                              {isCollapsed ? (
-                                <ChevronDown className="h-4 w-4 text-gray-500" />
-                              ) : (
-                                <ChevronUp className="h-4 w-4 text-gray-500" />
-                              )}
-                            </Button>
-                            <div 
-                              className="w-3 h-3 rounded-full shadow-sm" 
-                              style={{ backgroundColor: driver.driverColor }}
-                            />
-                            <div className="flex-1">
-                              <CardTitle className="text-base font-semibold text-gray-900">
-                                {driver.driverName}
-                              </CardTitle>
-                              <div className="flex items-center gap-3 mt-0.5">
-                                <div className="flex items-center gap-1 text-xs text-gray-600">
-                                  <Package className="h-2.5 w-2.5" />
-                                  <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-xs text-gray-600">
-                                  <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
-                                  <span>{completedCount} complete</span>
+              <>
+                {/* Driver Selector - Horizontal */}
+                {driverColumns.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm font-medium text-gray-700 mr-2">Select Drivers:</span>
+                    {driverColumns.map((driver) => (
+                      <Button
+                        key={driver.driverName}
+                        variant={selectedDrivers.has(driver.driverName) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => toggleDriverSelection(driver.driverName)}
+                        className="text-xs h-7"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full mr-1.5"
+                          style={{ backgroundColor: driver.driverColor }}
+                        />
+                        {driver.driverName}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                  {driverColumns
+                    .filter((driver) => selectedDrivers.has(driver.driverName))
+                    .map(function renderDriver(driver) {
+                      const completedCount = driver.truckloads.filter(function filterCompleted(t) {
+                        return t.isCompleted
+                      }).length
+                      
+                      return (
+                        <Card 
+                          key={driver.driverName} 
+                          className="w-full bg-white shadow-lg border-0 h-fit"
+                          style={{
+                            borderLeft: `4px solid ${driver.driverColor}`,
+                          }}
+                        >
+                          <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 flex-1">
+                                <div 
+                                  className="w-3 h-3 rounded-full shadow-sm" 
+                                  style={{ backgroundColor: driver.driverColor }}
+                                />
+                                <div className="flex-1">
+                                  <CardTitle className="text-base font-semibold text-gray-900">
+                                    {driver.driverName}
+                                  </CardTitle>
+                                  <div className="flex items-center gap-3 mt-0.5">
+                                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                                      <Package className="h-2.5 w-2.5" />
+                                      <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                                      <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
+                                      <span>{completedCount} complete</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      {!isCollapsed && (
-                        <CardContent className="p-3">
-                          <div className="space-y-3">
-                            {driver.truckloads.map(function renderTruckload(truckload) {
-                              return (
-                                <Card
-                                  key={truckload.id}
-                                  className={`p-3 transition-all duration-200 cursor-pointer ${
-                                    selectedTruckloadId === truckload.id
-                                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                                      : truckload.isCompleted 
-                                        ? 'border-green-200 bg-green-50/30 hover:shadow-md' 
-                                        : 'border-orange-200 bg-orange-50/30 hover:border-orange-300 hover:shadow-md'
-                                  }`}
-                                  onClick={() => handleTruckloadSelection(truckload.id)}
-                                >
-                                  <div className="space-y-3">
-                                    {/* Header with date and status */}
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1.5">
-                                        <div className="flex items-center gap-1">
-                                          <Calendar className="h-3 w-3 text-gray-500" />
-                                          <span className="text-xs font-semibold text-gray-900">
-                                            {(() => {
-                                              // Parse date as local date to avoid timezone conversion
-                                              const dateParts = truckload.startDate.split('-')
-                                              const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
-                                              return format(date, 'MMM dd')
-                                            })()}
-                                          </span>
+                          </CardHeader>
+                          <CardContent className="p-3">
+                            <div className="space-y-3">
+                              {driver.truckloads.map(function renderTruckload(truckload) {
+                                return (
+                                  <Card
+                                    key={truckload.id}
+                                    className={`p-3 transition-all duration-200 cursor-pointer ${
+                                      selectedTruckloadId === truckload.id
+                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                                        : truckload.isCompleted 
+                                          ? 'border-green-200 bg-green-50/30 hover:shadow-md' 
+                                          : 'border-orange-200 bg-orange-50/30 hover:border-orange-300 hover:shadow-md'
+                                    }`}
+                                    onClick={() => handleTruckloadSelection(truckload.id)}
+                                  >
+                                    <div className="space-y-3">
+                                      {/* Header with date and status */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3 text-gray-500" />
+                                            <span className="text-xs font-semibold text-gray-900">
+                                              {(() => {
+                                                // Parse date as local date to avoid timezone conversion
+                                                const dateParts = truckload.startDate.split('-')
+                                                const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
+                                                return format(date, 'MMM dd')
+                                              })()}
+                                            </span>
+                                          </div>
+                                          {truckload.isCompleted ? (
+                                            <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 text-xs px-1.5 py-0.5">
+                                              <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                                              Complete
+                                            </Badge>
+                                          ) : (
+                                            <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-1.5 py-0.5">
+                                              <Clock className="h-2.5 w-2.5 mr-0.5" />
+                                              In Progress
+                                            </Badge>
+                                          )}
                                         </div>
-                                        {truckload.isCompleted ? (
-                                          <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 text-xs px-1.5 py-0.5">
-                                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
-                                            Complete
-                                          </Badge>
-                                        ) : (
-                                          <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-1.5 py-0.5">
-                                            <Clock className="h-2.5 w-2.5 mr-0.5" />
-                                            In Progress
-                                          </Badge>
+                                      </div>
+
+                                      {/* Description */}
+                                      <div className="text-xs text-gray-700 leading-tight">
+                                        {truckload.description || (
+                                          <span className="text-gray-500 italic">No description provided</span>
                                         )}
                                       </div>
-                                    </div>
 
-                                    {/* Description */}
-                                    <div className="text-xs text-gray-700 leading-tight">
-                                      {truckload.description || (
-                                        <span className="text-gray-500 italic">No description provided</span>
-                                      )}
-                                    </div>
-
-                                    {/* Footage breakdown */}
-                                    <div className="grid grid-cols-3 gap-2">
-                                      <div className="bg-red-50 p-2 rounded border border-red-100">
-                                        <div className="flex items-center gap-0.5 mb-0.5">
-                                          <MapPin className="h-2.5 w-2.5 text-red-600" />
-                                          <div className="text-xs font-semibold text-red-700 uppercase tracking-wide">Pickup</div>
+                                      {/* Footage breakdown */}
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <div className="bg-red-50 p-2 rounded border border-red-100">
+                                          <div className="flex items-center gap-0.5 mb-0.5">
+                                            <MapPin className="h-2.5 w-2.5 text-red-600" />
+                                            <div className="text-xs font-semibold text-red-700 uppercase tracking-wide">Pickup</div>
+                                          </div>
+                                          <div className="text-xs font-bold text-red-800">{truckload.pickupFootage.toLocaleString()} ft²</div>
                                         </div>
-                                        <div className="text-xs font-bold text-red-800">{truckload.pickupFootage.toLocaleString()} ft²</div>
-                                      </div>
-                                      <div className="bg-gray-50 p-2 rounded border border-gray-200">
-                                        <div className="flex items-center gap-0.5 mb-0.5">
-                                          <Truck className="h-2.5 w-2.5 text-gray-600" />
-                                          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Delivery</div>
+                                        <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                                          <div className="flex items-center gap-0.5 mb-0.5">
+                                            <Truck className="h-2.5 w-2.5 text-gray-600" />
+                                            <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Delivery</div>
+                                          </div>
+                                          <div className="text-xs font-bold text-gray-800">{truckload.deliveryFootage.toLocaleString()} ft²</div>
                                         </div>
-                                        <div className="text-xs font-bold text-gray-800">{truckload.deliveryFootage.toLocaleString()} ft²</div>
-                                      </div>
-                                      <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                                        <div className="flex items-center gap-0.5 mb-0.5">
-                                          <Package className="h-2.5 w-2.5 text-blue-600" />
-                                          <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Transfer</div>
+                                        <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                                          <div className="flex items-center gap-0.5 mb-0.5">
+                                            <Package className="h-2.5 w-2.5 text-blue-600" />
+                                            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Transfer</div>
+                                          </div>
+                                          <div className="text-xs font-bold text-blue-800">{truckload.transferFootage.toLocaleString()} ft²</div>
                                         </div>
-                                        <div className="text-xs font-bold text-blue-800">{truckload.transferFootage.toLocaleString()} ft²</div>
                                       </div>
                                     </div>
+                                  </Card>
+                                )
+                              })}
+                              {driver.truckloads.length === 0 && (
+                                <div className="text-center py-6">
+                                  <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                                    <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                                    <p className="text-xs text-gray-500 font-medium">
+                                      No truckloads assigned
+                                    </p>
                                   </div>
-                                </Card>
-                              )
-                            })}
-                            {driver.truckloads.length === 0 && (
-                              <div className="text-center py-6">
-                                <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
-                                  <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500 font-medium">
-                                    No truckloads assigned
-                                  </p>
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      )}
-                    </Card>
-                  )
-                })}
-                {driverColumns.length === 0 && !isLoading && (
-                  <div className="col-span-full text-center py-12">
-                    <div className="text-sm text-gray-500 italic">No available truckloads found</div>
-                  </div>
-                )}
-              </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  {driverColumns.length === 0 && !isLoading && (
+                    <div className="col-span-full text-center py-12">
+                      <div className="text-sm text-gray-500 italic">No available truckloads found</div>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
