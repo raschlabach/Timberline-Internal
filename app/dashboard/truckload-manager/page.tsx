@@ -116,6 +116,20 @@ export default function TruckloadManager() {
     staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
+  // Track when we've attempted to load data (after initial mount)
+  // Reset on mount to handle navigation from other pages
+  useEffect(() => {
+    setHasAttemptedLoad(false)
+  }, [pathname])
+
+  // Mark as attempted once we've actually started fetching or have data
+  useEffect(() => {
+    // Mark that we've attempted to load once we've started fetching or have data
+    if (isFetchingDrivers || isFetchingTruckloads || driversData || truckloadsData) {
+      setHasAttemptedLoad(true)
+    }
+  }, [isFetchingDrivers, isFetchingTruckloads, driversData, truckloadsData])
+
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedTruckload, setSelectedTruckload] = useState<TruckloadSummary | null>(null)
@@ -125,6 +139,7 @@ export default function TruckloadManager() {
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
   const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set())
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -349,19 +364,22 @@ export default function TruckloadManager() {
   }
 
   // Only show error if:
-  // 1. We're not currently loading or fetching
-  // 2. AND we have an actual error OR missing data after all retries
+  // 1. We've actually attempted to load data on this page (not just cached error state)
+  // 2. We're not currently loading or fetching
+  // 3. AND we have an actual error OR missing data after all retries
   // Don't show error during initial load or while retrying
-  // Only show error if we're completely done loading/fetching AND there's an error
-  // Wait for all retries to complete before showing error
   const isActivelyLoading = isLoadingDrivers || isLoadingTruckloads || isFetchingDrivers || isFetchingTruckloads
-  const hasActualError = (isErrorDrivers || isErrorTruckloads) && !isActivelyLoading
   const hasData = driversData?.drivers && truckloadsData?.truckloads
-  // Only show missing data error if we're done loading AND we don't have data
-  // But give it a moment - sometimes data loads slightly after the loading flag turns off
-  const missingDataAfterLoad = !hasData && !isActivelyLoading && (isErrorDrivers || isErrorTruckloads || (!isLoadingDrivers && !isLoadingTruckloads))
+  
+  // Only show error if:
+  // - We've attempted to load (started fetching or have data)
+  // - We're completely done loading/fetching
+  // - AND (we have an error OR we don't have data after loading completed)
+  const shouldShowError = hasAttemptedLoad && 
+                         !isActivelyLoading && 
+                         ((isErrorDrivers || isErrorTruckloads) || (!hasData && !isLoadingDrivers && !isLoadingTruckloads && hasAttemptedLoad))
 
-  if (hasActualError || (missingDataAfterLoad && !isFetchingDrivers && !isFetchingTruckloads)) {
+  if (shouldShowError) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p className="text-red-500">Failed to load data</p>
