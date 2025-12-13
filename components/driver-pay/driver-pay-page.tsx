@@ -788,35 +788,35 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             )}
                           </div>
 
-                          {/* Calculations Grid */}
-                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
-                            <div>
+                          {/* Calculations - Horizontal Layout */}
+                          <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-gray-200">
+                            <div className="flex-shrink-0">
                               <div className="text-xs text-gray-600 mb-0.5">Total Quotes</div>
                               <div className="text-sm font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
                             </div>
-                            <div>
+                            <div className="flex-shrink-0">
                               <div className="text-xs text-gray-600 mb-0.5">Manual Deductions</div>
                               <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductions.toFixed(2)}</div>
                             </div>
-                            <div>
-                              <div className="text-xs text-gray-600 mb-0.5">After Manual Deductions</div>
+                            <div className="flex-shrink-0">
+                              <div className="text-xs text-gray-600 mb-0.5">After Manual</div>
                               <div className="text-sm font-semibold">${tlTotals.quotesPlusManualDeductions.toFixed(2)}</div>
                             </div>
-                            <div>
-                              <div className="text-xs text-gray-600 mb-0.5">Automatic Deductions</div>
+                            <div className="flex-shrink-0">
+                              <div className="text-xs text-gray-600 mb-0.5">Auto Deductions</div>
                               <div className="text-sm font-semibold text-red-600">-${tlTotals.automaticDeductions.toFixed(2)}</div>
                             </div>
                             {tlTotals.totalAdditions > 0 && (
-                              <div>
+                              <div className="flex-shrink-0">
                                 <div className="text-xs text-gray-600 mb-0.5">Additions</div>
                                 <div className="text-sm font-semibold text-green-600">+${tlTotals.totalAdditions.toFixed(2)}</div>
                               </div>
                             )}
-                            <div>
+                            <div className="flex-shrink-0">
                               <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
                               <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
                             </div>
-                            <div className="col-span-2">
+                            <div className="flex-shrink-0">
                               <div className="text-xs text-gray-600 mb-0.5">
                                 Driver Pay ({selectedDriver.loadPercentage}%)
                               </div>
