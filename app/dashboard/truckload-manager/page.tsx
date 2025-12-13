@@ -72,20 +72,24 @@ interface TruckloadSummary {
 export default function TruckloadManager() {
   const router = useRouter()
   const pathname = usePathname()
-  const { data: driversData, isLoading: isLoadingDrivers, isError: isErrorDrivers, isFetching: isFetchingDrivers, refetch: refetchDrivers } = useQuery<{ drivers: Driver[] }>({
-    queryKey: ['drivers'],
+  
+  // Single query that gets both drivers and truckloads
+  const { data, isLoading, isError, isFetching, refetch } = useQuery<{ drivers: Driver[], truckloads: TruckloadSummary[] }>({
+    queryKey: ['truckload-manager-data'],
     queryFn: async () => {
-      const response = await fetch('/api/drivers')
+      const response = await fetch('/api/truckload-manager/data')
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Failed to fetch drivers: ${response.status} ${response.statusText}`)
+        throw new Error(errorData.error || `Failed to fetch data: ${response.status} ${response.statusText}`)
       }
-      const data = await response.json()
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch drivers')
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch data')
       }
-      // Return the data in the expected format
-      return { drivers: data.drivers || [] }
+      return {
+        drivers: result.drivers || [],
+        truckloads: result.truckloads || []
+      }
     },
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -93,42 +97,6 @@ export default function TruckloadManager() {
     refetchOnMount: true,
     staleTime: 30000, // Consider data fresh for 30 seconds
   })
-
-  const { data: truckloadsData, isLoading: isLoadingTruckloads, isError: isErrorTruckloads, isFetching: isFetchingTruckloads, refetch: refetchTruckloads } = useQuery<{ truckloads: TruckloadSummary[] }>({
-    queryKey: ['truckloads'],
-    queryFn: async () => {
-      const response = await fetch('/api/truckloads')
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Failed to fetch truckloads: ${response.status} ${response.statusText}`)
-      }
-      const data = await response.json()
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch truckloads')
-      }
-      // Return the data in the expected format
-      return { truckloads: data.truckloads || [] }
-    },
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    staleTime: 30000, // Consider data fresh for 30 seconds
-  })
-
-  // Track when we've attempted to load data (after initial mount)
-  // Reset on mount to handle navigation from other pages
-  useEffect(() => {
-    setHasAttemptedLoad(false)
-  }, [pathname])
-
-  // Mark as attempted once we've actually started fetching or have data
-  useEffect(() => {
-    // Mark that we've attempted to load once we've started fetching or have data
-    if (isFetchingDrivers || isFetchingTruckloads || driversData || truckloadsData) {
-      setHasAttemptedLoad(true)
-    }
-  }, [isFetchingDrivers, isFetchingTruckloads, driversData, truckloadsData])
 
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -139,7 +107,6 @@ export default function TruckloadManager() {
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
   const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set())
-  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -158,7 +125,7 @@ export default function TruckloadManager() {
 
   // Load driver order and selected drivers from localStorage on mount
   useEffect(() => {
-    if (!driversData?.drivers) return
+    if (!data?.drivers) return
     
     // Load driver order (always load this, it's not affected by refresh)
     const savedOrder = localStorage.getItem('truckloadManager_driverOrder')
@@ -166,7 +133,7 @@ export default function TruckloadManager() {
       try {
         const parsed = JSON.parse(savedOrder)
         // Validate that all current drivers are in the saved order
-        const driverIds = new Set(driversData.drivers.map(d => d.id))
+        const driverIds = new Set(data.drivers.map(d => d.id))
         const savedIds = new Set(parsed)
         
         // If saved order has all current drivers, use it
@@ -175,7 +142,7 @@ export default function TruckloadManager() {
           setDriverOrder(parsed)
         } else {
           // Initialize with alphabetical order
-          const sorted = [...driversData.drivers].sort((a, b) => 
+          const sorted = [...data.drivers].sort((a, b) => 
             a.full_name.localeCompare(b.full_name)
           )
           setDriverOrder(sorted.map(d => d.id))
@@ -183,14 +150,14 @@ export default function TruckloadManager() {
       } catch (e) {
         console.error('Failed to parse saved driver order:', e)
         // Initialize with alphabetical order
-        const sorted = [...driversData.drivers].sort((a, b) => 
+        const sorted = [...data.drivers].sort((a, b) => 
           a.full_name.localeCompare(b.full_name)
         )
         setDriverOrder(sorted.map(d => d.id))
       }
     } else {
       // Initialize with alphabetical order
-      const sorted = [...driversData.drivers].sort((a, b) => 
+      const sorted = [...data.drivers].sort((a, b) => 
         a.full_name.localeCompare(b.full_name)
       )
       setDriverOrder(sorted.map(d => d.id))
@@ -213,7 +180,7 @@ export default function TruckloadManager() {
           try {
             const parsed = JSON.parse(savedSelected)
             // Validate that all saved driver IDs still exist
-            const driverIds = new Set(driversData.drivers.map(d => d.id))
+            const driverIds = new Set(data.drivers.map(d => d.id))
             const validIds = parsed.filter((id: number) => driverIds.has(id))
             if (validIds.length > 0) {
               setSelectedDrivers(new Set(validIds))
@@ -225,7 +192,7 @@ export default function TruckloadManager() {
       }
       // If isRefreshing was true, we start with empty selection (default state)
     }
-  }, [driversData?.drivers])
+  }, [data?.drivers])
 
   // Save driver order to localStorage whenever it changes
   useEffect(() => {
@@ -237,7 +204,7 @@ export default function TruckloadManager() {
   // Save selected drivers to localStorage whenever it changes
   useEffect(() => {
     // Only save if we have drivers data loaded (avoid saving empty state on initial mount)
-    if (driversData?.drivers && driversData.drivers.length > 0) {
+    if (data?.drivers && data.drivers.length > 0) {
       if (selectedDrivers.size > 0) {
         localStorage.setItem('truckloadManager_selectedDrivers', JSON.stringify(Array.from(selectedDrivers)))
       } else {
@@ -245,7 +212,7 @@ export default function TruckloadManager() {
         // This way if user deselects all, we can still restore on navigation
       }
     }
-  }, [selectedDrivers, driversData?.drivers])
+  }, [selectedDrivers, data?.drivers])
 
 
   // Set up drag and drop sensors
@@ -294,17 +261,15 @@ export default function TruckloadManager() {
       return response.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['truckloads'] })
+      queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     }
   })
 
 
   // Show loading state if initial load, fetching, or retrying after an error
-  const isRetrying = (isFetchingDrivers || isFetchingTruckloads) && (isErrorDrivers || isErrorTruckloads)
-  const shouldShowLoading = isLoadingDrivers || isLoadingTruckloads || isRetrying
-  
-  if (shouldShowLoading) {
+  // Show loading skeleton while loading or fetching
+  if (isLoading || isFetching) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <div className="flex items-center justify-between">
@@ -363,37 +328,13 @@ export default function TruckloadManager() {
     )
   }
 
-  // Only show error if:
-  // 1. We've actually attempted to load data on this page (not just cached error state)
-  // 2. We're not currently loading or fetching
-  // 3. AND we have an actual error OR missing data after all retries
-  // Don't show error during initial load or while retrying
-  const isActivelyLoading = isLoadingDrivers || isLoadingTruckloads || isFetchingDrivers || isFetchingTruckloads
-  const hasData = driversData?.drivers && truckloadsData?.truckloads
-  
-  // Only show error if:
-  // - We've attempted to load (started fetching or have data)
-  // - We're completely done loading/fetching
-  // - AND (we have an error OR we don't have data after loading completed)
-  const shouldShowError = hasAttemptedLoad && 
-                         !isActivelyLoading && 
-                         ((isErrorDrivers || isErrorTruckloads) || (!hasData && !isLoadingDrivers && !isLoadingTruckloads && hasAttemptedLoad))
-
-  if (shouldShowError) {
+  // Show error if we have an error and we're not loading
+  if (isError && !isLoading && !isFetching) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p className="text-red-500">Failed to load data</p>
-        {(isErrorDrivers || !driversData?.drivers) && (
-          <p className="text-sm text-gray-600">Error loading drivers</p>
-        )}
-        {(isErrorTruckloads || !truckloadsData?.truckloads) && (
-          <p className="text-sm text-gray-600">Error loading truckloads</p>
-        )}
         <button
-          onClick={() => {
-            refetchDrivers()
-            refetchTruckloads()
-          }}
+          onClick={() => refetch()}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Retry
@@ -402,15 +343,13 @@ export default function TruckloadManager() {
     )
   }
 
-  // Type guard: ensure data exists before using it
-  // If we're still loading or don't have data yet, show loading state
-  if (!driversData?.drivers || !truckloadsData?.truckloads) {
-    // Still loading, show loading state (handled by shouldShowLoading check above)
-    return null
+  // Show loading state while fetching
+  if (isLoading || !data) {
+    return null // Loading skeleton is handled below
   }
 
-  const drivers = driversData.drivers
-  const truckloads = truckloadsData.truckloads
+  const drivers = data?.drivers || []
+  const truckloads = data?.truckloads || []
 
   const getDriverTruckloads = (driverId: number) => {
     // Default to showing active truckloads if no toggle state is set
@@ -602,7 +541,7 @@ export default function TruckloadManager() {
         }}
         selectedDriverId={selectedDriverId}
         onTruckloadCreated={() => {
-          queryClient.invalidateQueries({ queryKey: ['truckloads'] });
+          queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] });
         }}
       />
 
