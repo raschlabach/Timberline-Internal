@@ -128,6 +128,21 @@ export default function TruckloadManager() {
 
   const queryClient = useQueryClient()
 
+  // Track pathname changes for navigation detection
+  // This runs BEFORE the drivers data loads, so we can check the previous pathname
+  useEffect(() => {
+    if (typeof window !== 'undefined' && pathname) {
+      const pathKey = 'truckloadManager_lastPathname'
+      const navigationCheckKey = 'truckloadManager_navigationCheck'
+      
+      // Clear the navigation check flag when pathname changes (new page load)
+      sessionStorage.removeItem(navigationCheckKey)
+      
+      // Store the current pathname for next time
+      sessionStorage.setItem(pathKey, pathname)
+    }
+  }, [pathname])
+
   // Load driver order and selected drivers from localStorage on mount
   useEffect(() => {
     if (!driversData?.drivers) return
@@ -168,44 +183,47 @@ export default function TruckloadManager() {
     }
 
     // Load selected drivers from localStorage (but NOT on initial page load/refresh)
-    // Use sessionStorage to track if this is the first load in this session
-    // Use pathname to detect navigation from another page
+    // Use pathname to detect navigation from another page vs refresh
     if (typeof window !== 'undefined' && pathname) {
-      const sessionKey = 'truckloadManager_hasLoaded'
       const pathKey = 'truckloadManager_lastPathname'
-      const isFirstLoadInSession = !sessionStorage.getItem(sessionKey)
-      const lastPathname = sessionStorage.getItem(pathKey)
-      const isNavigation = lastPathname !== null && lastPathname !== pathname
+      // Get the pathname BEFORE we updated it (from the separate effect above)
+      // We need to check what it was before this page loaded
+      const navigationCheckKey = 'truckloadManager_navigationCheck'
+      const wasNavigationChecked = sessionStorage.getItem(navigationCheckKey)
       
-      // Mark that we've loaded in this session
-      sessionStorage.setItem(sessionKey, 'true')
-      sessionStorage.setItem(pathKey, pathname)
-      
-      // Only load from localStorage if:
-      // 1. This is NOT the first load in this session (we've been here before)
-      // 2. AND we navigated from a different page (not a refresh)
-      // On first load (refresh or direct navigation), start with empty selection
-      // On subsequent navigations within the app, restore selection
-      if (!isFirstLoadInSession && isNavigation) {
-        // Load from localStorage
-        const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
-        if (savedSelected) {
-          try {
-            const parsed = JSON.parse(savedSelected)
-            // Validate that all saved driver IDs still exist
-            const driverIds = new Set(driversData.drivers.map(d => d.id))
-            const validIds = parsed.filter((id: number) => driverIds.has(id))
-            if (validIds.length > 0) {
-              setSelectedDrivers(new Set(validIds))
+      // Only check once per drivers data load
+      if (!wasNavigationChecked) {
+        const lastPathname = sessionStorage.getItem(pathKey)
+        
+        // Check if this is navigation (different pathname) vs refresh (same pathname)
+        // On first load, lastPathname will be null, so we start fresh
+        // On navigation from another page, lastPathname will be different, so restore
+        // On refresh, lastPathname will be the same, so start fresh
+        const isNavigation = lastPathname !== null && lastPathname !== pathname
+        
+        if (isNavigation) {
+          // Load from localStorage when navigating from another page
+          const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
+          if (savedSelected) {
+            try {
+              const parsed = JSON.parse(savedSelected)
+              // Validate that all saved driver IDs still exist
+              const driverIds = new Set(driversData.drivers.map(d => d.id))
+              const validIds = parsed.filter((id: number) => driverIds.has(id))
+              if (validIds.length > 0) {
+                setSelectedDrivers(new Set(validIds))
+              }
+            } catch (e) {
+              console.error('Failed to parse saved selected drivers:', e)
             }
-          } catch (e) {
-            console.error('Failed to parse saved selected drivers:', e)
           }
         }
+        
+        // Mark that we've checked navigation for this load
+        sessionStorage.setItem(navigationCheckKey, 'true')
       }
-      // Otherwise, start with empty selection (fresh page load/refresh)
     }
-  }, [driversData?.drivers])
+  }, [driversData?.drivers, pathname])
 
   // Save driver order to localStorage whenever it changes
   useEffect(() => {
@@ -344,13 +362,20 @@ export default function TruckloadManager() {
     )
   }
 
-  // Only show error if loading/fetching is complete AND there's an actual error or missing data
-  // Check both error states and data availability
-  const hasError = (isErrorDrivers || isErrorTruckloads) && !isFetchingDrivers && !isFetchingTruckloads
+  // Only show error if:
+  // 1. We're not currently loading or fetching
+  // 2. AND we have an actual error OR missing data after all retries
+  // Don't show error during initial load or while retrying
+  // Only show error if we're completely done loading/fetching AND there's an error
+  // Wait for all retries to complete before showing error
+  const isActivelyLoading = isLoadingDrivers || isLoadingTruckloads || isFetchingDrivers || isFetchingTruckloads
+  const hasActualError = (isErrorDrivers || isErrorTruckloads) && !isActivelyLoading
   const hasData = driversData?.drivers && truckloadsData?.truckloads
-  const missingData = !hasData && !isLoadingDrivers && !isLoadingTruckloads && !isFetchingDrivers && !isFetchingTruckloads
+  // Only show missing data error if we're done loading AND we don't have data
+  // But give it a moment - sometimes data loads slightly after the loading flag turns off
+  const missingDataAfterLoad = !hasData && !isActivelyLoading && (isErrorDrivers || isErrorTruckloads || (!isLoadingDrivers && !isLoadingTruckloads))
 
-  if (hasError || missingData) {
+  if (hasActualError || (missingDataAfterLoad && !isFetchingDrivers && !isFetchingTruckloads)) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p className="text-red-500">Failed to load data</p>
@@ -374,8 +399,9 @@ export default function TruckloadManager() {
   }
 
   // Type guard: ensure data exists before using it
+  // If we're still loading or don't have data yet, show loading state
   if (!driversData?.drivers || !truckloadsData?.truckloads) {
-    // Still loading, show loading state
+    // Still loading, show loading state (handled by shouldShowLoading check above)
     return null
   }
 
