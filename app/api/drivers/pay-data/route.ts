@@ -178,7 +178,8 @@ export async function GET(request: NextRequest) {
           0
         ) as footage,
         pc.customer_name as "pickupCustomerName",
-        dc.customer_name as "deliveryCustomerName"
+        dc.customer_name as "deliveryCustomerName",
+        COALESCE(o.middlefield, false) as "middlefield"
       FROM truckload_order_assignments toa
       JOIN orders o ON toa.order_id = o.id
       LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
@@ -341,7 +342,8 @@ export async function GET(request: NextRequest) {
             freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
             footage: parseFloat(order.footage) || 0,
             pickupCustomerName: order.pickupCustomerName,
-            deliveryCustomerName: order.deliveryCustomerName
+            deliveryCustomerName: order.deliveryCustomerName,
+            middlefield: order.middlefield || false
           })
         }
       }

@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format, parse } from 'date-fns'
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
 
@@ -50,6 +50,7 @@ interface Order {
   footage: number
   pickupCustomerName: string | null
   deliveryCustomerName: string | null
+  middlefield?: boolean
 }
 
 interface Truckload {
@@ -663,24 +664,40 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 <div className="space-y-2">
                   {selectedDriver.truckloads.map(truckload => {
                     const tlTotals = calculateTruckloadTotals(truckload)
+                    const hasMiddlefield = truckload.orders.some(order => order.middlefield === true)
                     return (
                       <Card
                         key={truckload.id}
-                        className="p-2 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid"
+                        className={`p-2 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid ${
+                          hasMiddlefield ? 'border-2 border-red-500' : ''
+                        }`}
                         onClick={() => handleTruckloadClick(truckload.id)}
                       >
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <div className="flex-shrink-0">
-                              <h4 className="font-semibold text-sm">
-                                {truckload.billOfLadingNumber ? `BOL ${truckload.billOfLadingNumber}` : `TL ${truckload.id}`}
-                              </h4>
-                              <p className="text-xs text-gray-600">
+                              <h4 className="font-semibold text-base">
                                 {format(new Date(truckload.startDate), 'MM/dd/yyyy')} - {format(new Date(truckload.endDate), 'MM/dd/yyyy')}
-                              </p>
+                              </h4>
+                              {truckload.billOfLadingNumber && (
+                                <p className="text-xs text-gray-500">
+                                  BOL {truckload.billOfLadingNumber}
+                                </p>
+                              )}
+                              {!truckload.billOfLadingNumber && (
+                                <p className="text-xs text-gray-500">
+                                  TL {truckload.id}
+                                </p>
+                              )}
                             </div>
                             {truckload.description && (
-                              <p className="text-xs text-gray-700 truncate flex-1">{truckload.description}</p>
+                              <p className="text-sm font-medium text-gray-800 truncate flex-1">{truckload.description}</p>
+                            )}
+                            {hasMiddlefield && (
+                              <div className="flex items-center gap-1 text-red-600 flex-shrink-0">
+                                <AlertTriangle className="h-4 w-4" />
+                                <span className="text-xs font-semibold">Middlefield</span>
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center gap-4 flex-shrink-0">
