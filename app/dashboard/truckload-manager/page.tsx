@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
@@ -106,6 +106,7 @@ export default function TruckloadManager() {
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
   const [selectedDrivers, setSelectedDrivers] = useState<Set<number>>(new Set())
+  const hasInitialized = useRef(false)
 
   const queryClient = useQueryClient()
 
@@ -148,17 +149,18 @@ export default function TruckloadManager() {
       setDriverOrder(sorted.map(d => d.id))
     }
 
-    // Load selected drivers from localStorage (but NOT on initial page load/refresh)
-    // Check if this is a fresh page load by checking if we have a recent timestamp
-    const loadTimestamp = sessionStorage.getItem('truckloadManager_loadTime')
+    // Load selected drivers from localStorage
+    // Use a timestamp approach to distinguish refresh from navigation
+    // On refresh, the timestamp will be old (or missing), so start empty
+    // On navigation, we set a recent timestamp before navigating, so load from localStorage
+    const lastVisitTime = sessionStorage.getItem('truckloadManager_lastVisit')
     const now = Date.now()
+    const VISIT_WINDOW = 5000 // 5 seconds - if visited within this window, it's navigation
     
-    // If no timestamp or timestamp is older than 1 second, it's a fresh load/refresh
-    // Don't load from localStorage on fresh loads
-    if (loadTimestamp) {
-      const timeDiff = now - parseInt(loadTimestamp, 10)
-      // If loaded within the last second, it's likely navigation, not a refresh
-      if (timeDiff < 1000) {
+    if (lastVisitTime) {
+      const timeSinceLastVisit = now - parseInt(lastVisitTime, 10)
+      // If visited recently (within 5 seconds), it's likely navigation, not refresh
+      if (timeSinceLastVisit < VISIT_WINDOW) {
         const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
         if (savedSelected) {
           try {
@@ -175,8 +177,10 @@ export default function TruckloadManager() {
         }
       }
     }
-    // Update the load timestamp
-    sessionStorage.setItem('truckloadManager_loadTime', String(now))
+    
+    // Update the visit timestamp
+    sessionStorage.setItem('truckloadManager_lastVisit', String(now))
+    hasInitialized.current = true
   }, [driversData?.drivers])
 
   // Save driver order to localStorage whenever it changes
@@ -187,12 +191,15 @@ export default function TruckloadManager() {
   }, [driverOrder])
 
   // Save selected drivers to localStorage whenever it changes
+  // Only save after initial load to avoid saving empty state on first render
   useEffect(() => {
-    if (selectedDrivers.size > 0) {
-      localStorage.setItem('truckloadManager_selectedDrivers', JSON.stringify(Array.from(selectedDrivers)))
-    } else {
-      // Remove from localStorage if empty
-      localStorage.removeItem('truckloadManager_selectedDrivers')
+    if (hasInitialized.current) {
+      if (selectedDrivers.size > 0) {
+        localStorage.setItem('truckloadManager_selectedDrivers', JSON.stringify(Array.from(selectedDrivers)))
+      } else {
+        // Remove from localStorage if empty
+        localStorage.removeItem('truckloadManager_selectedDrivers')
+      }
     }
   }, [selectedDrivers])
 

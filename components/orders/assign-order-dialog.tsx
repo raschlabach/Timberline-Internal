@@ -11,7 +11,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TruckloadSummary } from '@/types/truckloads'
 import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp, Package, CheckCircle2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Package, CheckCircle2, Calendar, Clock, MapPin, Truck, Info } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
 
 interface AssignOrderDialogProps {
   isOpen: boolean
@@ -428,53 +429,81 @@ export function AssignOrderDialog({
                       </CardHeader>
                       {!isCollapsed && (
                         <CardContent className="p-3">
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {driver.truckloads.map((truckload) => (
-                              <div
+                              <Card 
                                 key={truckload.id}
-                                className={`
-                                  p-3 rounded-lg border cursor-pointer transition-colors
-                                  ${selectedTruckloadId === truckload.id ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'hover:bg-gray-50 border-gray-200'}
-                                `}
+                                className={`p-3 transition-all duration-200 cursor-pointer ${
+                                  selectedTruckloadId === truckload.id
+                                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                                    : truckload.isCompleted 
+                                      ? 'border-green-200 bg-green-50/30 hover:shadow-md' 
+                                      : 'border-orange-200 bg-orange-50/30 hover:border-orange-300 hover:shadow-md'
+                                }`}
                                 onClick={() => handleTruckloadSelection(truckload.id)}
                               >
-                                <div className="text-xs font-medium text-gray-700 mb-1">
-                                  {formatDateRange(truckload.startDate, truckload.endDate) || (
-                                    <span className="text-gray-400">No date range</span>
-                                  )}
-                                </div>
-                                {truckload.description && (
-                                  <div className="text-xs text-gray-600 mb-2 line-clamp-2">
-                                    {truckload.description}
-                                  </div>
-                                )}
-                                {truckload.trailerNumber && (
-                                  <div className="text-xs text-gray-500 mb-2">
-                                    Trailer: <span className="font-medium">{truckload.trailerNumber}</span>
-                                  </div>
-                                )}
-                                <div className="grid grid-cols-3 gap-1 text-xs">
-                                  <div className="bg-red-50 p-1.5 rounded border border-red-100">
-                                    <div className="text-red-700 font-semibold">Pickup</div>
-                                    <div className="text-red-800 font-bold">{truckload.pickupFootage.toLocaleString()} ft²</div>
-                                  </div>
-                                  <div className="bg-gray-50 p-1.5 rounded border border-gray-200">
-                                    <div className="text-gray-700 font-semibold">Delivery</div>
-                                    <div className="text-gray-800 font-bold">{truckload.deliveryFootage.toLocaleString()} ft²</div>
-                                  </div>
-                                  {truckload.transferFootage > 0 ? (
-                                    <div className="bg-blue-50 p-1.5 rounded border border-blue-100">
-                                      <div className="text-blue-700 font-semibold">Transfer</div>
-                                      <div className="text-blue-800 font-bold">{truckload.transferFootage.toLocaleString()} ft²</div>
+                                <div className="space-y-3">
+                                  {/* Header with date and status */}
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1">
+                                        <Calendar className="h-3 w-3 text-gray-500" />
+                                        <span className="text-xs font-semibold text-gray-900">
+                                          {(() => {
+                                            // Parse date as local date to avoid timezone conversion
+                                            const dateParts = truckload.startDate.split('-')
+                                            const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
+                                            return format(date, 'MMM dd')
+                                          })()}
+                                        </span>
+                                      </div>
+                                      {truckload.isCompleted ? (
+                                        <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 text-xs px-1.5 py-0.5">
+                                          <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                                          Complete
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200 text-xs px-1.5 py-0.5">
+                                          <Clock className="h-2.5 w-2.5 mr-0.5" />
+                                          In Progress
+                                        </Badge>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <div className="bg-gray-50 p-1.5 rounded border border-gray-200 opacity-50">
-                                      <div className="text-gray-500 font-semibold">Transfer</div>
-                                      <div className="text-gray-600 font-bold">0 ft²</div>
+                                  </div>
+
+                                  {/* Description */}
+                                  <div className="text-xs text-gray-700 leading-tight">
+                                    {truckload.description || (
+                                      <span className="text-gray-500 italic">No description provided</span>
+                                    )}
+                                  </div>
+
+                                  {/* Footage breakdown */}
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <div className="bg-red-50 p-2 rounded border border-red-100">
+                                      <div className="flex items-center gap-0.5 mb-0.5">
+                                        <MapPin className="h-2.5 w-2.5 text-red-600" />
+                                        <div className="text-xs font-semibold text-red-700 uppercase tracking-wide">Pickup</div>
+                                      </div>
+                                      <div className="text-xs font-bold text-red-800">{truckload.pickupFootage.toLocaleString()} ft²</div>
                                     </div>
-                                  )}
+                                    <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                                      <div className="flex items-center gap-0.5 mb-0.5">
+                                        <Truck className="h-2.5 w-2.5 text-gray-600" />
+                                        <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Delivery</div>
+                                      </div>
+                                      <div className="text-xs font-bold text-gray-800">{truckload.deliveryFootage.toLocaleString()} ft²</div>
+                                    </div>
+                                    <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                                      <div className="flex items-center gap-0.5 mb-0.5">
+                                        <Package className="h-2.5 w-2.5 text-blue-600" />
+                                        <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Transfer</div>
+                                      </div>
+                                      <div className="text-xs font-bold text-blue-800">{truckload.transferFootage.toLocaleString()} ft²</div>
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
+                              </Card>
                             ))}
                             {driver.truckloads.length === 0 && (
                               <div className="text-center py-6">
