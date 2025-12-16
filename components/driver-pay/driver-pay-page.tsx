@@ -932,41 +932,19 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   <span className="font-semibold">${tlTotals.totalQuotes.toFixed(2)}</span>
                                 </div>
                                 
-                                {/* Manual Deductions from Load Value - Detailed */}
-                                {truckload.deductions.filter(d => d.isManual && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0).length > 0 && (
-                                  <div className="bg-red-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-red-700 mb-0.5">Manual Deductions (LV)</div>
-                                    {truckload.deductions
-                                      .filter(d => d.isManual && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
-                                      .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-red-700 truncate flex-1">{ded.comment || 'No description'}</span>
-                                          <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
-                                        </div>
-                                      ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                      <span className="text-red-700 font-medium">Subtotal</span>
-                                      <span className="text-red-600 font-bold">-${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</span>
-                                    </div>
+                                {/* Manual Deductions from Load Value - Subtotal Only */}
+                                {tlTotals.manualDeductionsFromLoadValue > 0 && (
+                                  <div className="flex items-center justify-between text-xs bg-red-50 rounded px-2 py-1">
+                                    <span className="text-red-700 font-medium">Manual Deductions (LV)</span>
+                                    <span className="text-red-600 font-bold">-${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</span>
                                   </div>
                                 )}
                                 
-                                {/* Manual Additions to Load Value - Detailed */}
-                                {truckload.deductions.filter(d => d.isManual && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0).length > 0 && (
-                                  <div className="bg-green-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-green-700 mb-0.5">Manual Additions (LV)</div>
-                                    {truckload.deductions
-                                      .filter(d => d.isManual && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
-                                      .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-green-700 truncate flex-1">{ded.comment || 'No description'}</span>
-                                          <span className="text-green-600 font-semibold ml-1">+${ded.deduction.toFixed(2)}</span>
-                                        </div>
-                                      ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200">
-                                      <span className="text-green-700 font-medium">Subtotal</span>
-                                      <span className="text-green-600 font-bold">+${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</span>
-                                    </div>
+                                {/* Manual Additions to Load Value - Subtotal Only */}
+                                {tlTotals.manualAdditionsToLoadValue > 0 && (
+                                  <div className="flex items-center justify-between text-xs bg-green-50 rounded px-2 py-1">
+                                    <span className="text-green-700 font-medium">Manual Additions (LV)</span>
+                                    <span className="text-green-600 font-bold">+${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</span>
                                   </div>
                                 )}
                                 
@@ -983,69 +961,32 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               <div className="text-sm font-bold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
                             </div>
 
-                            {/* Step 3: Deductions & Additions - Detailed */}
-                            {(truckload.deductions.filter(d => !d.isManual && d.deduction > 0).length > 0 || 
-                              truckload.deductions.filter(d => d.isManual && !d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0).length > 0 ||
-                              truckload.deductions.filter(d => d.isManual && d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0).length > 0) && (
+                            {/* Step 3: Deductions & Additions - Subtotals Only */}
+                            {(tlTotals.automaticDeductions > 0 || tlTotals.manualDeductionsFromDriverPay > 0 || tlTotals.manualAdditionsToDriverPay > 0) && (
                               <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
                                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Adjustments</div>
                                 <div className="space-y-1">
-                                  {/* Automatic Deductions */}
-                                  {truckload.deductions.filter(d => !d.isManual && d.deduction > 0).length > 0 && (
-                                    <div className="bg-red-50 rounded px-2 py-1">
-                                      <div className="text-xs font-semibold text-red-700 mb-0.5">Auto Deductions</div>
-                                      {truckload.deductions
-                                        .filter(d => !d.isManual && d.deduction > 0)
-                                        .map((ded) => (
-                                          <div key={ded.id} className="flex items-center justify-between text-xs">
-                                            <span className="text-red-700 truncate flex-1">
-                                              {ded.driverName || 'Unknown'} - {ded.date ? new Date(ded.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }) : ''} - {ded.action || ''} from {ded.customerName || 'Unknown'}
-                                            </span>
-                                            <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
-                                          </div>
-                                        ))}
-                                      <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                        <span className="text-red-700 font-medium">Subtotal</span>
-                                        <span className="text-red-600 font-bold">-${tlTotals.automaticDeductions.toFixed(2)}</span>
-                                      </div>
+                                  {/* Automatic Deductions - Subtotal Only */}
+                                  {tlTotals.automaticDeductions > 0 && (
+                                    <div className="flex items-center justify-between text-xs bg-red-50 rounded px-2 py-1">
+                                      <span className="text-red-700 font-medium">Auto Deductions</span>
+                                      <span className="text-red-600 font-bold">-${tlTotals.automaticDeductions.toFixed(2)}</span>
                                     </div>
                                   )}
                                   
-                                  {/* Manual Deductions from Driver Pay */}
-                                  {truckload.deductions.filter(d => d.isManual && !d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0).length > 0 && (
-                                    <div className="bg-red-50 rounded px-2 py-1">
-                                      <div className="text-xs font-semibold text-red-700 mb-0.5">Manual Deductions (DP)</div>
-                                      {truckload.deductions
-                                        .filter(d => d.isManual && !d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0)
-                                        .map((ded) => (
-                                          <div key={ded.id} className="flex items-center justify-between text-xs">
-                                            <span className="text-red-700 truncate flex-1">{ded.comment || 'No description'}</span>
-                                            <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
-                                          </div>
-                                        ))}
-                                      <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                        <span className="text-red-700 font-medium">Subtotal</span>
-                                        <span className="text-red-600 font-bold">-${tlTotals.manualDeductionsFromDriverPay.toFixed(2)}</span>
-                                      </div>
+                                  {/* Manual Deductions from Driver Pay - Subtotal Only */}
+                                  {tlTotals.manualDeductionsFromDriverPay > 0 && (
+                                    <div className="flex items-center justify-between text-xs bg-red-50 rounded px-2 py-1">
+                                      <span className="text-red-700 font-medium">Manual Deductions (DP)</span>
+                                      <span className="text-red-600 font-bold">-${tlTotals.manualDeductionsFromDriverPay.toFixed(2)}</span>
                                     </div>
                                   )}
                                   
-                                  {/* Manual Additions to Driver Pay */}
-                                  {truckload.deductions.filter(d => d.isManual && d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0).length > 0 && (
-                                    <div className="bg-green-50 rounded px-2 py-1">
-                                      <div className="text-xs font-semibold text-green-700 mb-0.5">Manual Additions (DP)</div>
-                                      {truckload.deductions
-                                        .filter(d => d.isManual && d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0)
-                                        .map((ded) => (
-                                          <div key={ded.id} className="flex items-center justify-between text-xs">
-                                            <span className="text-green-700 truncate flex-1">{ded.comment || 'No description'}</span>
-                                            <span className="text-green-600 font-semibold ml-1">+${ded.deduction.toFixed(2)}</span>
-                                          </div>
-                                        ))}
-                                      <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200">
-                                        <span className="text-green-700 font-medium">Subtotal</span>
-                                        <span className="text-green-600 font-bold">+${tlTotals.manualAdditionsToDriverPay.toFixed(2)}</span>
-                                      </div>
+                                  {/* Manual Additions to Driver Pay - Subtotal Only */}
+                                  {tlTotals.manualAdditionsToDriverPay > 0 && (
+                                    <div className="flex items-center justify-between text-xs bg-green-50 rounded px-2 py-1">
+                                      <span className="text-green-700 font-medium">Manual Additions (DP)</span>
+                                      <span className="text-green-600 font-bold">+${tlTotals.manualAdditionsToDriverPay.toFixed(2)}</span>
                                     </div>
                                   )}
                                 </div>

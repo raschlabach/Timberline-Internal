@@ -1564,25 +1564,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 </div>
                               ))}
                           </div>
-                          {/* Add Line button under automatic deductions */}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => addCrossDriverFreightItem(false)}
-                            className="h-7 text-xs w-full"
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add Manual Deduction
-                          </Button>
                         </div>
                       )}
 
-                      {/* Manual Additions and Deductions - Side by Side */}
-                      {(editableCrossDriverFreight.filter(item => item.isManual && item.isAddition).length > 0 || 
-                        editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition).length > 0 ||
-                        editableCrossDriverFreight.filter(item => !item.isManual).length === 0) && (
-                        <div className="grid grid-cols-2 gap-4">
+                      {/* Manual Additions and Deductions - Side by Side (Always Visible) */}
+                      <div className="grid grid-cols-2 gap-4">
                           {/* Left: Manual Additions (Green) */}
                           <div className="bg-green-50 border-2 border-green-300 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
@@ -1723,14 +1709,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </div>
                         </div>
-                      )}
-
-                      {/* Empty state when no items at all */}
-                      {editableCrossDriverFreight.length === 0 && (
-                        <div className="text-sm text-gray-500 border border-gray-300 rounded-lg p-3">
-                          All freight handled by {selectedTruckload?.driver.driverName || 'selected driver'}
-                        </div>
-                      )}
                     </div>
 
                     {/* Payroll Summary */}
@@ -1747,53 +1725,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               <span className="text-base font-bold">${payrollCalculations.totalQuotes.toFixed(2)}</span>
                             </div>
                             
-                            {/* Manual Deductions from Load Value - Detailed */}
-                            {editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition && item.appliesTo === 'load_value').length > 0 && (
-                              <div className="bg-red-50 rounded px-3 py-2">
-                                <div className="text-xs font-semibold text-red-700 mb-1.5">Manual Deductions (from Load Value)</div>
-                                <div className="space-y-1">
-                                  {editableCrossDriverFreight
-                                    .filter(item => item.isManual && !item.isAddition && item.appliesTo === 'load_value')
-                                    .map((item) => {
-                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-                                      if (amount === 0) return null
-                                      return (
-                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
-                                          <span className="text-red-700 flex-1 truncate">{item.comment || 'No description'}</span>
-                                          <span className="text-red-600 font-semibold ml-2">-${amount.toFixed(2)}</span>
-                                        </div>
-                                      )
-                                    })}
-                                </div>
-                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-red-200">
-                                  <span className="text-sm font-medium text-red-700">Subtotal</span>
-                                  <span className="text-sm font-bold text-red-600">-${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}</span>
-                                </div>
+                            {/* Manual Deductions from Load Value - Subtotal Only */}
+                            {payrollCalculations.manualDeductionsFromLoadValue > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Manual Deductions (from Load Value)</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}</span>
                               </div>
                             )}
                             
-                            {/* Manual Additions to Load Value - Detailed */}
-                            {editableCrossDriverFreight.filter(item => item.isManual && item.isAddition && item.appliesTo === 'load_value').length > 0 && (
-                              <div className="bg-green-50 rounded px-3 py-2">
-                                <div className="text-xs font-semibold text-green-700 mb-1.5">Manual Additions (to Load Value)</div>
-                                <div className="space-y-1">
-                                  {editableCrossDriverFreight
-                                    .filter(item => item.isManual && item.isAddition && item.appliesTo === 'load_value')
-                                    .map((item) => {
-                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-                                      if (amount === 0) return null
-                                      return (
-                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
-                                          <span className="text-green-700 flex-1 truncate">{item.comment || 'No description'}</span>
-                                          <span className="text-green-600 font-semibold ml-2">+${amount.toFixed(2)}</span>
-                                        </div>
-                                      )
-                                    })}
-                                </div>
-                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-green-200">
-                                  <span className="text-sm font-medium text-green-700">Subtotal</span>
-                                  <span className="text-sm font-bold text-green-600">+${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}</span>
-                                </div>
+                            {/* Manual Additions to Load Value - Subtotal Only */}
+                            {payrollCalculations.manualAdditionsToLoadValue > 0 && (
+                              <div className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-green-700">Manual Additions (to Load Value)</span>
+                                <span className="text-base font-bold text-green-600">+${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}</span>
                               </div>
                             )}
                             
@@ -1819,80 +1763,27 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         <div className="mb-4">
                           <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Step 3: Apply Deductions & Additions</div>
                           <div className="space-y-2">
-                            {/* Automatic Deductions - Detailed */}
-                            {editableCrossDriverFreight.filter(item => !item.isManual).length > 0 && (
-                              <div className="bg-red-50 rounded px-3 py-2">
-                                <div className="text-xs font-semibold text-red-700 mb-1.5">Automatic Deductions (Cross-Driver Freight)</div>
-                                <div className="space-y-1">
-                                  {editableCrossDriverFreight
-                                    .filter(item => !item.isManual)
-                                    .map((item) => {
-                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-                                      if (amount === 0) return null
-                                      return (
-                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
-                                          <span className="text-red-700 flex-1 truncate">
-                                            {item.driverName} - {formatDateShort(item.date)} - {item.action} from {item.customerName || 'Unknown'} ({item.footage} sqft)
-                                          </span>
-                                          <span className="text-red-600 font-semibold ml-2">-${amount.toFixed(2)}</span>
-                                        </div>
-                                      )
-                                    })}
-                                </div>
-                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-red-200">
-                                  <span className="text-sm font-medium text-red-700">Subtotal</span>
-                                  <span className="text-sm font-bold text-red-600">-${payrollCalculations.automaticDeductions.toFixed(2)}</span>
-                                </div>
+                            {/* Automatic Deductions - Subtotal Only */}
+                            {payrollCalculations.automaticDeductions > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Automatic Deductions</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.automaticDeductions.toFixed(2)}</span>
                               </div>
                             )}
                             
-                            {/* Manual Deductions from Driver Pay - Detailed */}
-                            {editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)).length > 0 && (
-                              <div className="bg-red-50 rounded px-3 py-2">
-                                <div className="text-xs font-semibold text-red-700 mb-1.5">Manual Deductions (from Driver Pay)</div>
-                                <div className="space-y-1">
-                                  {editableCrossDriverFreight
-                                    .filter(item => item.isManual && !item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo))
-                                    .map((item) => {
-                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-                                      if (amount === 0) return null
-                                      return (
-                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
-                                          <span className="text-red-700 flex-1 truncate">{item.comment || 'No description'}</span>
-                                          <span className="text-red-600 font-semibold ml-2">-${amount.toFixed(2)}</span>
-                                        </div>
-                                      )
-                                    })}
-                                </div>
-                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-red-200">
-                                  <span className="text-sm font-medium text-red-700">Subtotal</span>
-                                  <span className="text-sm font-bold text-red-600">-${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}</span>
-                                </div>
+                            {/* Manual Deductions from Driver Pay - Subtotal Only */}
+                            {payrollCalculations.manualDeductionsFromDriverPay > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Manual Deductions (from Driver Pay)</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}</span>
                               </div>
                             )}
                             
-                            {/* Manual Additions to Driver Pay - Detailed */}
-                            {editableCrossDriverFreight.filter(item => item.isManual && item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)).length > 0 && (
-                              <div className="bg-green-50 rounded px-3 py-2">
-                                <div className="text-xs font-semibold text-green-700 mb-1.5">Manual Additions (to Driver Pay)</div>
-                                <div className="space-y-1">
-                                  {editableCrossDriverFreight
-                                    .filter(item => item.isManual && item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo))
-                                    .map((item) => {
-                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-                                      if (amount === 0) return null
-                                      return (
-                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
-                                          <span className="text-green-700 flex-1 truncate">{item.comment || 'No description'}</span>
-                                          <span className="text-green-600 font-semibold ml-2">+${amount.toFixed(2)}</span>
-                                        </div>
-                                      )
-                                    })}
-                                </div>
-                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-green-200">
-                                  <span className="text-sm font-medium text-green-700">Subtotal</span>
-                                  <span className="text-sm font-bold text-green-600">+${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}</span>
-                                </div>
+                            {/* Manual Additions to Driver Pay - Subtotal Only */}
+                            {payrollCalculations.manualAdditionsToDriverPay > 0 && (
+                              <div className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-green-700">Manual Additions (to Driver Pay)</span>
+                                <span className="text-base font-bold text-green-600">+${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}</span>
                               </div>
                             )}
                             
