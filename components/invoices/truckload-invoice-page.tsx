@@ -161,9 +161,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   // Auto-select truckload from URL parameter when from driver pay
   useEffect(() => {
     if (fromDriverPay && urlTruckloadId && truckloads.length > 0) {
-      const truckloadExists = truckloads.some(t => t.id === urlTruckloadId)
-      if (truckloadExists) {
-        setSelectedTruckloadId(urlTruckloadId)
+      // Find truckload by ID (handle both string and number comparisons)
+      const matchingTruckload = truckloads.find(t => 
+        String(t.id) === String(urlTruckloadId) || 
+        Number(t.id) === Number(urlTruckloadId)
+      )
+      if (matchingTruckload) {
+        setSelectedTruckloadId(String(matchingTruckload.id))
       }
     }
   }, [fromDriverPay, urlTruckloadId, truckloads])
@@ -797,7 +801,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         })
         if (!isCancelled) {
           setTruckloads(items)
-          if (items.length > 0) setSelectedTruckloadId(items[0].id)
+          // Only auto-select first truckload if not coming from driver pay
+          // (the useEffect will handle selection from URL params)
+          if (items.length > 0 && !fromDriverPay) {
+            setSelectedTruckloadId(items[0].id)
+          }
         }
       } catch (e) {
         if (!isCancelled) {
@@ -812,7 +820,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     return () => {
       isCancelled = true
     }
-  }, [])
+  }, [fromDriverPay])
 
   useEffect(function loadOrdersForTruckload() {
     let isCancelled = false

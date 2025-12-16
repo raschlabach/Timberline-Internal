@@ -10,6 +10,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format, parse } from 'date-fns'
+
+// Helper to parse YYYY-MM-DD dates as local dates (avoid timezone issues)
+function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
 import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
@@ -859,7 +865,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <h4 className="font-bold text-xl mb-1">
-                                {format(new Date(truckload.startDate), 'MM/dd')} - {format(new Date(truckload.endDate), 'MM/dd')}
+                                {format(parseLocalDate(truckload.startDate), 'MM/dd')} - {format(parseLocalDate(truckload.endDate), 'MM/dd')}
                               </h4>
                               {truckload.description && (
                                 <p className="text-sm text-gray-700 mb-1">{truckload.description}</p>
