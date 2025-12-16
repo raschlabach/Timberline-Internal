@@ -397,6 +397,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
+  const calculatedValuesSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   
   // Drag and drop sensors
   const sensors = useSensors(
@@ -838,6 +839,51 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       driverLoadPercentage: Number(driverLoadPercentage)
     }
   }, [editableCrossDriverFreight, totals.totalQuotes, driverLoadPercentage])
+
+  // Save calculated values to database when they change
+  const saveCalculatedValues = useCallback(async (loadValue: number, driverPay: number) => {
+    if (!selectedTruckloadId) return
+
+    try {
+      const response = await fetch(`/api/truckloads/${selectedTruckloadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          calculatedLoadValue: loadValue,
+          calculatedDriverPay: driverPay
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save calculated values')
+      }
+    } catch (error) {
+      console.error('Error saving calculated values:', error)
+      // Don't show error toast - this is a background save
+    }
+  }, [selectedTruckloadId])
+
+  // Auto-save calculated values when payrollCalculations change (debounced)
+  useEffect(() => {
+    if (!selectedTruckloadId || !payrollCalculations) return
+
+    // Clear existing timeout
+    if (calculatedValuesSaveTimeout.current) {
+      clearTimeout(calculatedValuesSaveTimeout.current)
+    }
+
+    // Debounce the save by 2 seconds
+    calculatedValuesSaveTimeout.current = setTimeout(() => {
+      saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
+    }, 2000)
+
+    return () => {
+      if (calculatedValuesSaveTimeout.current) {
+        clearTimeout(calculatedValuesSaveTimeout.current)
+      }
+    }
+  }, [payrollCalculations.loadValue, payrollCalculations.finalDriverPay, selectedTruckloadId, saveCalculatedValues])
 
   // Ref to store debounce timeouts
   const quoteUpdateTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})

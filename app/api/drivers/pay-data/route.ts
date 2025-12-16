@@ -97,6 +97,38 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Check if calculated values columns exist in truckloads
+      const calculatedValuesCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckloads'
+        AND column_name IN ('calculated_load_value', 'calculated_driver_pay', 'calculated_at')
+      `)
+      const existingCalculatedColumns = calculatedValuesCheck.rows.map((row: any) => row.column_name)
+      if (!existingCalculatedColumns.includes('calculated_load_value') || 
+          !existingCalculatedColumns.includes('calculated_driver_pay') || 
+          !existingCalculatedColumns.includes('calculated_at')) {
+        console.log('Calculated values columns not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const calculatedValuesSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-calculated-pay-values-to-truckloads.sql'),
+            'utf8'
+          )
+          await client.query(calculatedValuesSql)
+          await client.query('COMMIT')
+          console.log('Calculated values columns migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying calculated values migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+
       // Check if type column exists in driver_hours
       const hoursColumnCheck = await query(`
         SELECT column_name 
@@ -182,7 +214,10 @@ export async function GET(request: NextRequest) {
           d.color as "driverColor",
           COALESCE(t.pay_calculation_method, 'automatic') as "payCalculationMethod",
           t.pay_hours as "payHours",
-          t.pay_manual_amount as "payManualAmount"
+          t.pay_manual_amount as "payManualAmount",
+          t.calculated_load_value as "calculatedLoadValue",
+          t.calculated_driver_pay as "calculatedDriverPay",
+          t.calculated_at as "calculatedAt"
         FROM truckloads t
         LEFT JOIN users u ON t.driver_id = u.id
         LEFT JOIN drivers d ON u.id = d.user_id
@@ -200,6 +235,9 @@ export async function GET(request: NextRequest) {
       if (errorMessage.includes('pay_calculation_method') || 
           errorMessage.includes('pay_hours') || 
           errorMessage.includes('pay_manual_amount') ||
+          errorMessage.includes('calculated_load_value') ||
+          errorMessage.includes('calculated_driver_pay') ||
+          errorMessage.includes('calculated_at') ||
           errorMessage.includes('column') && errorMessage.includes('does not exist')) {
         console.log('Pay calculation columns not available, using fallback query...', errorMessage)
         truckloadsResult = await query(`
@@ -228,7 +266,10 @@ export async function GET(request: NextRequest) {
           ...row,
           payCalculationMethod: 'automatic',
           payHours: null,
-          payManualAmount: null
+          payManualAmount: null,
+          calculatedLoadValue: null,
+          calculatedDriverPay: null,
+          calculatedAt: null
         }))
       } else {
         console.error('Unexpected error querying truckloads:', queryError)

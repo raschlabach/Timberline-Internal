@@ -73,6 +73,9 @@ interface Truckload {
   payCalculationMethod?: 'automatic' | 'hourly' | 'manual'
   payHours?: number | null
   payManualAmount?: number | null
+  calculatedLoadValue?: number | null
+  calculatedDriverPay?: number | null
+  calculatedAt?: string | null
 }
 
 interface DriverData {
@@ -426,8 +429,11 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum
     }, 0)
     
-    // Calculate load value (quotes - manual deductions from load value + manual additions to load value)
-    const loadValue = totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue
+    // Use saved calculated values from Invoice page if available, otherwise calculate
+    // Load value: prefer saved value, fallback to calculation
+    const loadValue = truckload.calculatedLoadValue !== null && truckload.calculatedLoadValue !== undefined
+      ? truckload.calculatedLoadValue
+      : totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue
     
     // Calculate base driver pay (load value × percentage)
     const baseDriverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
@@ -443,8 +449,13 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       // Manual: use entered amount
       driverPay = truckload.payManualAmount
     } else {
-      // Automatic: base driver pay - automatic deductions - manual deductions from driver pay + manual additions to driver pay
-      driverPay = baseDriverPay - automaticDeductions - manualDeductionsFromDriverPay + manualAdditionsToDriverPay
+      // Automatic: prefer saved calculated driver pay, fallback to calculation
+      if (truckload.calculatedDriverPay !== null && truckload.calculatedDriverPay !== undefined) {
+        driverPay = truckload.calculatedDriverPay
+      } else {
+        // Fallback calculation: base driver pay - automatic deductions - manual deductions from driver pay + manual additions to driver pay
+        driverPay = baseDriverPay - automaticDeductions - manualDeductionsFromDriverPay + manualAdditionsToDriverPay
+      }
     }
     
     return { 

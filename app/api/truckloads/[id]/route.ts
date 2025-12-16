@@ -158,7 +158,7 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount } = data
+    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay } = data
 
     // Build dynamic update query based on what fields are provided
     const updates: string[] = []
@@ -234,6 +234,24 @@ export async function PATCH(
       values.push(payManualAmount ? parseFloat(payManualAmount) : null)
     }
 
+    if (calculatedLoadValue !== undefined) {
+      updates.push(`calculated_load_value = $${paramIndex++}`)
+      values.push(calculatedLoadValue ? parseFloat(calculatedLoadValue) : null)
+      // Update calculated_at timestamp when load value is saved
+      if (!updates.includes(`calculated_at = CURRENT_TIMESTAMP`)) {
+        updates.push(`calculated_at = CURRENT_TIMESTAMP`)
+      }
+    }
+
+    if (calculatedDriverPay !== undefined) {
+      updates.push(`calculated_driver_pay = $${paramIndex++}`)
+      values.push(calculatedDriverPay ? parseFloat(calculatedDriverPay) : null)
+      // Update calculated_at timestamp when driver pay is saved (only if not already added)
+      if (!updates.includes(`calculated_at = CURRENT_TIMESTAMP`)) {
+        updates.push(`calculated_at = CURRENT_TIMESTAMP`)
+      }
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ 
         success: false, 
@@ -261,7 +279,10 @@ export async function PATCH(
          estimated_duration as "estimatedDuration",
          COALESCE(pay_calculation_method, 'automatic') as "payCalculationMethod",
          pay_hours as "payHours",
-         pay_manual_amount as "payManualAmount"`,
+         pay_manual_amount as "payManualAmount",
+         calculated_load_value as "calculatedLoadValue",
+         calculated_driver_pay as "calculatedDriverPay",
+         calculated_at as "calculatedAt"`,
       values
     )
 
