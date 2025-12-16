@@ -116,6 +116,7 @@ interface CrossDriverFreightItem {
   comment?: string // For manual items
   isAddition?: boolean // Track if this is an addition (true) or deduction (false). Only applies to manual items.
   appliesTo?: 'load_value' | 'driver_pay' // For manual items: whether it applies to load value or driver pay. Defaults to 'driver_pay'
+  customerName?: string // Customer name for pickup/delivery (for automatic items)
 }
 
 export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
@@ -387,7 +388,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           action: 'Delivered',
           footage: order.footage,
           dimensions: allDimensions || '—',
-          isManual: false
+          isManual: false,
+          customerName: order.deliveryName // Delivery customer name
         })
       }
       // If current assignment is delivery, check if pickup was handled by another driver
@@ -401,7 +403,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           action: 'Picked up',
           footage: order.footage,
           dimensions: allDimensions || '—',
-          isManual: false
+          isManual: false,
+          customerName: order.pickupName // Pickup customer name
         })
       }
     })
@@ -443,7 +446,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
           isManual: item.isManual || false,
           comment: item.comment || '',
-          isAddition: item.isAddition || false
+          isAddition: item.isAddition || false,
+          appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
+          customerName: item.customerName || undefined
         })) : []
 
         const dedupedLoadedItems = dedupeFreightItems(loadedItems)
@@ -640,7 +645,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }, [updateOrderQuote])
 
   // Functions to manage editable cross-driver freight
-  function addCrossDriverFreightItem(): void {
+  function addCrossDriverFreightItem(isAddition: boolean = false): void {
     const newItem: CrossDriverFreightItem = {
       id: `manual-${Date.now()}-${Math.random()}`,
       driverName: '',
@@ -651,7 +656,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       deduction: 0,
       isManual: true,
       comment: '',
-      isAddition: false, // Default to deduction
+      isAddition: isAddition,
       appliesTo: 'driver_pay' // Default to driver pay
     }
     setEditableCrossDriverFreight([...editableCrossDriverFreight, newItem])
@@ -706,7 +711,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
             isManual: item.isManual || false,
             comment: item.comment || null,
-            isAddition: item.isAddition || false
+            isAddition: item.isAddition || false,
+            appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined)
           }))
         })
       })
@@ -754,7 +760,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
               isManual: item.isManual || false,
               comment: item.comment || '',
-              isAddition: item.isAddition || false
+              isAddition: item.isAddition || false,
+              appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
+              customerName: item.customerName || undefined
             }))
             
             console.log('Reloaded items from DB:', reloadedItems)
@@ -1485,137 +1493,242 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               />
                             )}
                           </div>
+                        </div>
+                      </div>
+                      
+                      {/* Automatic Deductions Section */}
+                      {editableCrossDriverFreight.filter(item => !item.isManual).length > 0 && (
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="h-px flex-1 bg-gray-300"></div>
+                            <h4 className="text-sm font-semibold text-gray-700 px-2">Automatic Deductions</h4>
+                            <div className="h-px flex-1 bg-gray-300"></div>
+                          </div>
+                          <div className="space-y-1.5">
+                            {editableCrossDriverFreight
+                              .filter(item => !item.isManual)
+                              .map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="grid grid-cols-[1fr_auto] gap-2 items-center border border-gray-300 rounded-lg p-1.5 text-sm"
+                                >
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium">{item.driverName}</span>
+                                    <span className="text-gray-500">-</span>
+                                    <span className="text-gray-600">{formatDateShort(item.date)}</span>
+                                    <span className="text-gray-500">-</span>
+                                    <span className="font-medium">{item.action}</span>
+                                    {item.customerName && (
+                                      <>
+                                        <span className="text-gray-500">from</span>
+                                        <span className="text-gray-700">{item.customerName}</span>
+                                      </>
+                                    )}
+                                    <span className="text-gray-500">-</span>
+                                    <span className="text-gray-700">{item.footage} sqft</span>
+                                    <span className="text-gray-500">-</span>
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {item.dimensions && item.dimensions !== '—' ? (
+                                        item.dimensions.split(', ').map((dim, idx) => {
+                                          const match = dim.match(/^(\d+)\s+(.+)$/)
+                                          if (match) {
+                                            const [, quantity, dimension] = match
+                                            return (
+                                              <span key={idx} className="inline-block bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">
+                                                {quantity} {dimension}
+                                              </span>
+                                            )
+                                          }
+                                          return <span key={idx} className="text-gray-700">{dim}</span>
+                                        })
+                                      ) : (
+                                        <span className="text-gray-700">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {deductByFootage ? (
+                                    <div className="text-sm text-gray-700 w-24 text-right">
+                                      ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}
+                                    </div>
+                                  ) : (
+                                    <Input
+                                      type="number"
+                                      placeholder="$0.00"
+                                      value={item.deduction || ''}
+                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
+                                      className="h-8 text-sm w-24"
+                                      min="0"
+                                      step="0.01"
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                          {/* Add Line button under automatic deductions */}
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={addCrossDriverFreightItem}
-                            className="h-7 text-xs"
+                            onClick={() => addCrossDriverFreightItem(false)}
+                            className="h-7 text-xs w-full"
                           >
                             <Plus className="h-3 w-3 mr-1" />
-                            Add Line
+                            Add Manual Deduction
                           </Button>
                         </div>
-                      </div>
-                      {editableCrossDriverFreight.length === 0 ? (
-                        <div className="text-sm text-gray-500 border border-gray-300 rounded-lg p-3">
-                          All freight handled by {selectedTruckload?.driver.driverName || 'selected driver'}
-                        </div>
-                                              ) : (
-                          <div className="space-y-1.5">
-                            {editableCrossDriverFreight.map((item) => {
-                            if (item.isManual) {
-                              // Manual items: comment field + type toggle + amount + delete button
-                              return (
-                                <div
-                                  key={item.id}
-                                  className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-start border border-gray-300 rounded-lg p-1.5"
-                                >
-                                  <Textarea
-                                    placeholder="Enter comment or description..."
-                                    value={item.comment || ''}
-                                    onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
-                                    className="min-h-[50px] text-sm resize-none"
-                                    rows={2}
-                                  />
-                                  <Select
-                                    value={item.isAddition ? 'addition' : 'deduction'}
-                                    onValueChange={(value) => updateCrossDriverFreightItem(item.id, { isAddition: value === 'addition' })}
-                                  >
-                                    <SelectTrigger className="h-8 w-28 mt-0.5 text-xs">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="deduction">Deduction</SelectItem>
-                                      <SelectItem value="addition">Addition</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <Select
-                                    value={item.appliesTo || 'driver_pay'}
-                                    onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
-                                  >
-                                    <SelectTrigger className="h-8 w-32 mt-0.5 text-xs">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="load_value">Load Value</SelectItem>
-                                      <SelectItem value="driver_pay">Driver Pay</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <Input
-                                    type="number"
-                                    placeholder="$0.00"
-                                    value={item.deduction || ''}
-                                    onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                    className="h-8 text-sm w-24 mt-0.5"
-                                    min="0"
-                                    step="0.01"
-                                  />
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => deleteCrossDriverFreightItem(item.id)}
-                                    className="h-8 w-8 text-red-500 hover:text-red-700 mt-0.5"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              )
-                              } else {
-                                // Auto-populated items: read-only display + editable deduction (only if not in footage mode)
-                                return (
+                      )}
+
+                      {/* Manual Additions and Deductions - Side by Side */}
+                      {(editableCrossDriverFreight.filter(item => item.isManual && item.isAddition).length > 0 || 
+                        editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition).length > 0 ||
+                        editableCrossDriverFreight.filter(item => !item.isManual).length === 0) && (
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Left: Manual Additions (Green) */}
+                          <div className="bg-green-50 border-2 border-green-300 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-semibold text-green-800">Manual Additions</h4>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => addCrossDriverFreightItem(true)}
+                                className="h-7 text-xs bg-white hover:bg-green-100 border-green-400 text-green-700"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add
+                              </Button>
+                            </div>
+                            <div className="space-y-2">
+                              {editableCrossDriverFreight
+                                .filter(item => item.isManual && item.isAddition)
+                                .map((item) => (
                                   <div
                                     key={item.id}
-                                    className="grid grid-cols-[1fr_auto] gap-2 items-center border border-gray-300 rounded-lg p-1.5 text-sm"
+                                    className="bg-white border border-green-300 rounded-lg p-2 space-y-2"
                                   >
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-medium">{item.driverName}</span>
-                                      <span className="text-gray-500">-</span>
-                                      <span className="text-gray-600">{formatDateShort(item.date)}</span>
-                                      <span className="text-gray-500">-</span>
-                                      <span className="font-medium">{item.action}</span>
-                                      <span className="text-gray-500">-</span>
-                                      <span className="text-gray-700">{item.footage} sqft</span>
-                                      <span className="text-gray-500">-</span>
-                                      <div className="flex items-center gap-1 flex-wrap">
-                                        {item.dimensions && item.dimensions !== '—' ? (
-                                          item.dimensions.split(', ').map((dim, idx) => {
-                                            const match = dim.match(/^(\d+)\s+(.+)$/)
-                                            if (match) {
-                                              const [, quantity, dimension] = match
-                                              return (
-                                                <span key={idx} className="inline-block bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">
-                                                  {quantity} {dimension}
-                                                </span>
-                                              )
-                                            }
-                                            return <span key={idx} className="text-gray-700">{dim}</span>
-                                          })
-                                        ) : (
-                                          <span className="text-gray-700">—</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {deductByFootage ? (
-                                      <div className="text-sm text-gray-700 w-24 text-right">
-                                        ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}
-                                      </div>
-                                    ) : (
+                                    <Textarea
+                                      placeholder="Enter description..."
+                                      value={item.comment || ''}
+                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
+                                      className="min-h-[50px] text-sm resize-none border-green-200"
+                                      rows={2}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <Select
+                                        value={item.appliesTo || 'driver_pay'}
+                                        onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
+                                      >
+                                        <SelectTrigger className="h-8 w-32 text-xs border-green-300">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="load_value">Load Value</SelectItem>
+                                          <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                       <Input
                                         type="number"
                                         placeholder="$0.00"
                                         value={item.deduction || ''}
                                         onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                        className="h-8 text-sm w-24"
+                                        className="h-8 text-sm w-24 border-green-300"
                                         min="0"
                                         step="0.01"
                                       />
-                                    )}
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => deleteCrossDriverFreightItem(item.id)}
+                                        className="h-8 w-8 text-red-500 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   </div>
-                                )
-                              }
-                            })}
+                                ))}
+                              {editableCrossDriverFreight.filter(item => item.isManual && item.isAddition).length === 0 && (
+                                <div className="text-xs text-green-600 italic text-center py-2">No additions yet</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right: Manual Deductions (Red) */}
+                          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-semibold text-red-800">Manual Deductions</h4>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => addCrossDriverFreightItem(false)}
+                                className="h-7 text-xs bg-white hover:bg-red-100 border-red-400 text-red-700"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add
+                              </Button>
+                            </div>
+                            <div className="space-y-2">
+                              {editableCrossDriverFreight
+                                .filter(item => item.isManual && !item.isAddition)
+                                .map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="bg-white border border-red-300 rounded-lg p-2 space-y-2"
+                                  >
+                                    <Textarea
+                                      placeholder="Enter description..."
+                                      value={item.comment || ''}
+                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
+                                      className="min-h-[50px] text-sm resize-none border-red-200"
+                                      rows={2}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <Select
+                                        value={item.appliesTo || 'driver_pay'}
+                                        onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
+                                      >
+                                        <SelectTrigger className="h-8 w-32 text-xs border-red-300">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="load_value">Load Value</SelectItem>
+                                          <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Input
+                                        type="number"
+                                        placeholder="$0.00"
+                                        value={item.deduction || ''}
+                                        onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
+                                        className="h-8 text-sm w-24 border-red-300"
+                                        min="0"
+                                        step="0.01"
+                                      />
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => deleteCrossDriverFreightItem(item.id)}
+                                        className="h-8 w-8 text-red-500 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              {editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition).length === 0 && (
+                                <div className="text-xs text-red-600 italic text-center py-2">No deductions yet</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Empty state when no items at all */}
+                      {editableCrossDriverFreight.length === 0 && (
+                        <div className="text-sm text-gray-500 border border-gray-300 rounded-lg p-3">
+                          All freight handled by {selectedTruckload?.driver.driverName || 'selected driver'}
                         </div>
                       )}
                     </div>
@@ -1633,18 +1746,57 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               <span className="text-sm font-medium text-gray-700">Total Quotes</span>
                               <span className="text-base font-bold">${payrollCalculations.totalQuotes.toFixed(2)}</span>
                             </div>
-                            {payrollCalculations.manualDeductionsFromLoadValue > 0 && (
-                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
-                                <span className="text-sm font-medium text-red-700">Manual Deductions (from Load Value)</span>
-                                <span className="text-base font-bold text-red-600">-${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}</span>
+                            
+                            {/* Manual Deductions from Load Value - Detailed */}
+                            {editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition && item.appliesTo === 'load_value').length > 0 && (
+                              <div className="bg-red-50 rounded px-3 py-2">
+                                <div className="text-xs font-semibold text-red-700 mb-1.5">Manual Deductions (from Load Value)</div>
+                                <div className="space-y-1">
+                                  {editableCrossDriverFreight
+                                    .filter(item => item.isManual && !item.isAddition && item.appliesTo === 'load_value')
+                                    .map((item) => {
+                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                                      if (amount === 0) return null
+                                      return (
+                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
+                                          <span className="text-red-700 flex-1 truncate">{item.comment || 'No description'}</span>
+                                          <span className="text-red-600 font-semibold ml-2">-${amount.toFixed(2)}</span>
+                                        </div>
+                                      )
+                                    })}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-red-200">
+                                  <span className="text-sm font-medium text-red-700">Subtotal</span>
+                                  <span className="text-sm font-bold text-red-600">-${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}</span>
+                                </div>
                               </div>
                             )}
-                            {payrollCalculations.manualAdditionsToLoadValue > 0 && (
-                              <div className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
-                                <span className="text-sm font-medium text-green-700">Manual Additions (to Load Value)</span>
-                                <span className="text-base font-bold text-green-600">+${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}</span>
+                            
+                            {/* Manual Additions to Load Value - Detailed */}
+                            {editableCrossDriverFreight.filter(item => item.isManual && item.isAddition && item.appliesTo === 'load_value').length > 0 && (
+                              <div className="bg-green-50 rounded px-3 py-2">
+                                <div className="text-xs font-semibold text-green-700 mb-1.5">Manual Additions (to Load Value)</div>
+                                <div className="space-y-1">
+                                  {editableCrossDriverFreight
+                                    .filter(item => item.isManual && item.isAddition && item.appliesTo === 'load_value')
+                                    .map((item) => {
+                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                                      if (amount === 0) return null
+                                      return (
+                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
+                                          <span className="text-green-700 flex-1 truncate">{item.comment || 'No description'}</span>
+                                          <span className="text-green-600 font-semibold ml-2">+${amount.toFixed(2)}</span>
+                                        </div>
+                                      )
+                                    })}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-green-200">
+                                  <span className="text-sm font-medium text-green-700">Subtotal</span>
+                                  <span className="text-sm font-bold text-green-600">+${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}</span>
+                                </div>
                               </div>
                             )}
+                            
                             <div className="flex items-center justify-between bg-blue-100 rounded px-3 py-2 border-2 border-blue-300">
                               <span className="text-sm font-semibold text-blue-900">Load Value</span>
                               <span className="text-lg font-bold text-blue-900">${payrollCalculations.loadValue.toFixed(2)}</span>
@@ -1667,24 +1819,83 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         <div className="mb-4">
                           <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Step 3: Apply Deductions & Additions</div>
                           <div className="space-y-2">
-                            {payrollCalculations.automaticDeductions > 0 && (
-                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
-                                <span className="text-sm font-medium text-red-700">Automatic Deductions</span>
-                                <span className="text-base font-bold text-red-600">-${payrollCalculations.automaticDeductions.toFixed(2)}</span>
+                            {/* Automatic Deductions - Detailed */}
+                            {editableCrossDriverFreight.filter(item => !item.isManual).length > 0 && (
+                              <div className="bg-red-50 rounded px-3 py-2">
+                                <div className="text-xs font-semibold text-red-700 mb-1.5">Automatic Deductions (Cross-Driver Freight)</div>
+                                <div className="space-y-1">
+                                  {editableCrossDriverFreight
+                                    .filter(item => !item.isManual)
+                                    .map((item) => {
+                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                                      if (amount === 0) return null
+                                      return (
+                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
+                                          <span className="text-red-700 flex-1 truncate">
+                                            {item.driverName} - {formatDateShort(item.date)} - {item.action} from {item.customerName || 'Unknown'} ({item.footage} sqft)
+                                          </span>
+                                          <span className="text-red-600 font-semibold ml-2">-${amount.toFixed(2)}</span>
+                                        </div>
+                                      )
+                                    })}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-red-200">
+                                  <span className="text-sm font-medium text-red-700">Subtotal</span>
+                                  <span className="text-sm font-bold text-red-600">-${payrollCalculations.automaticDeductions.toFixed(2)}</span>
+                                </div>
                               </div>
                             )}
-                            {payrollCalculations.manualDeductionsFromDriverPay > 0 && (
-                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
-                                <span className="text-sm font-medium text-red-700">Manual Deductions (from Driver Pay)</span>
-                                <span className="text-base font-bold text-red-600">-${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}</span>
+                            
+                            {/* Manual Deductions from Driver Pay - Detailed */}
+                            {editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)).length > 0 && (
+                              <div className="bg-red-50 rounded px-3 py-2">
+                                <div className="text-xs font-semibold text-red-700 mb-1.5">Manual Deductions (from Driver Pay)</div>
+                                <div className="space-y-1">
+                                  {editableCrossDriverFreight
+                                    .filter(item => item.isManual && !item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo))
+                                    .map((item) => {
+                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                                      if (amount === 0) return null
+                                      return (
+                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
+                                          <span className="text-red-700 flex-1 truncate">{item.comment || 'No description'}</span>
+                                          <span className="text-red-600 font-semibold ml-2">-${amount.toFixed(2)}</span>
+                                        </div>
+                                      )
+                                    })}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-red-200">
+                                  <span className="text-sm font-medium text-red-700">Subtotal</span>
+                                  <span className="text-sm font-bold text-red-600">-${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}</span>
+                                </div>
                               </div>
                             )}
-                            {payrollCalculations.manualAdditionsToDriverPay > 0 && (
-                              <div className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
-                                <span className="text-sm font-medium text-green-700">Manual Additions (to Driver Pay)</span>
-                                <span className="text-base font-bold text-green-600">+${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}</span>
+                            
+                            {/* Manual Additions to Driver Pay - Detailed */}
+                            {editableCrossDriverFreight.filter(item => item.isManual && item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)).length > 0 && (
+                              <div className="bg-green-50 rounded px-3 py-2">
+                                <div className="text-xs font-semibold text-green-700 mb-1.5">Manual Additions (to Driver Pay)</div>
+                                <div className="space-y-1">
+                                  {editableCrossDriverFreight
+                                    .filter(item => item.isManual && item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo))
+                                    .map((item) => {
+                                      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                                      if (amount === 0) return null
+                                      return (
+                                        <div key={item.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
+                                          <span className="text-green-700 flex-1 truncate">{item.comment || 'No description'}</span>
+                                          <span className="text-green-600 font-semibold ml-2">+${amount.toFixed(2)}</span>
+                                        </div>
+                                      )
+                                    })}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-green-200">
+                                  <span className="text-sm font-medium text-green-700">Subtotal</span>
+                                  <span className="text-sm font-bold text-green-600">+${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}</span>
+                                </div>
                               </div>
                             )}
+                            
                             {(payrollCalculations.automaticDeductions === 0 && payrollCalculations.manualDeductionsFromDriverPay === 0 && payrollCalculations.manualAdditionsToDriverPay === 0) && (
                               <div className="text-xs text-gray-500 italic text-center py-2">No deductions or additions applied</div>
                             )}

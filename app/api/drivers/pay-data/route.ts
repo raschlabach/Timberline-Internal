@@ -456,7 +456,8 @@ export async function GET(request: NextRequest) {
             isManual: deduction.isManual,
             comment: deduction.comment,
             isAddition: deduction.isAddition || false,
-            appliesTo: deduction.appliesTo || 'driver_pay'
+            appliesTo: deduction.appliesTo || 'driver_pay',
+            customerName: deduction.customerName || null
           })
         }
       }
