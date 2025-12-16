@@ -9,15 +9,33 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
-import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft } from 'lucide-react'
+import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft, GripVertical, Info, FileText, Minus } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import EditTruckloadDialog from '@/components/invoices/edit-truckload-dialog'
 import { OrderInfoDialog } from '@/components/orders/order-info-dialog'
 import { BillOfLadingDialog } from '@/app/components/BillOfLadingDialog'
 import { toast } from 'sonner'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface TruckloadInvoicePageProps {}
 
@@ -119,6 +137,225 @@ interface CrossDriverFreightItem {
   customerName?: string // Customer name for pickup/delivery (for automatic items)
 }
 
+// Sortable row component for drag-and-drop
+function SortableTableRow({
+  id,
+  row,
+  isTransfer,
+  selectedTruckload,
+  dimensionGroups,
+  allDimensions,
+  freeItems,
+  debouncedUpdateQuote,
+  updatingQuotes,
+  formatDateShort,
+  onInfoClick,
+  onAddDeduction,
+}: {
+  id: string
+  row: AssignedOrderRow & { isCombined?: boolean; sequenceNumbers?: string }
+  isTransfer: boolean
+  selectedTruckload: TruckloadListItem | null
+  dimensionGroups: { [key: string]: number }
+  allDimensions: string
+  freeItems: number
+  debouncedUpdateQuote: (orderId: string, value: string) => void
+  updatingQuotes: Set<string>
+  formatDateShort: (date: string | null) => string
+  onInfoClick: () => void
+  onAddDeduction: (orderId: string) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={style}
+      className={`${isTransfer ? 'bg-blue-50' : (row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50')} hover:bg-gray-300 transition-colors cursor-pointer hover:shadow-sm`}
+    >
+      <TableCell className="text-sm text-center">
+        <div className="flex items-center gap-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+          {isTransfer && (row as any).sequenceNumbers ? (row as any).sequenceNumbers : row.sequenceNumber}
+        </div>
+      </TableCell>
+      <TableCell className="text-sm">
+        {isTransfer ? (
+          <span className="font-bold">{row.pickupName}</span>
+        ) : (
+          row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName
+        )}
+      </TableCell>
+      <TableCell className="text-sm">
+        {isTransfer ? (
+          <span className="font-bold">{row.deliveryName}</span>
+        ) : (
+          row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName
+        )}
+      </TableCell>
+      <TableCell className="text-sm">{row.payingCustomerName || '—'}</TableCell>
+      <TableCell className="text-sm" style={{ width: '90px' }}>
+        <Input
+          type="text"
+          value={row.freightQuote || ''}
+          onChange={(e) => debouncedUpdateQuote(row.orderId, e.target.value)}
+          placeholder="—"
+          className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
+          disabled={updatingQuotes.has(row.orderId)}
+        />
+      </TableCell>
+      <TableCell className="text-sm text-right">{row.footage}</TableCell>
+      <TableCell className="text-sm">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {allDimensions ? (
+            <>
+              {Object.entries(dimensionGroups).map(([dimension, quantity], idx) => (
+                <span key={idx} className="inline-block bg-gray-100 border border-gray-300 px-1.5 py-0.5 rounded text-xs font-mono">
+                  {quantity} {dimension}
+                </span>
+              ))}
+              {freeItems > 0 && (
+                <span className="inline-flex items-center gap-0.5 bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs font-semibold animate-[pulse_2s_ease-in-out_infinite]">
+                  <Gift className="h-3 w-3" />
+                  {freeItems}
+                </span>
+              )}
+            </>
+          ) : (
+            <span>—</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-sm text-center">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddDeduction(row.orderId)
+          }}
+          className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+          title="Add manual deduction"
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+      </TableCell>
+      <TableCell className="text-sm">
+        {isTransfer ? (
+          <div className="text-xs text-blue-700 font-medium">Transfer</div>
+        ) : row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
+          <div className="text-xs flex items-center gap-1.5">
+            <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+              {row.pickupDriverName !== selectedTruckload?.driver.driverName && (
+                <AlertTriangle className="h-4 w-4 text-red-500 animate-[pulse_1s_ease-in-out_infinite]" />
+              )}
+            </div>
+            <div>
+              <div>{row.pickupDriverName}</div>
+              <div className="text-gray-500">{formatDateShort(row.pickupAssignmentDate)}</div>
+            </div>
+          </div>
+        ) : row.assignmentType === 'pickup' && row.deliveryDriverName && row.deliveryAssignmentDate ? (
+          <div className="text-xs flex items-center gap-1.5">
+            <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+              {row.deliveryDriverName !== selectedTruckload?.driver.driverName && (
+                <AlertTriangle className="h-4 w-4 text-red-500 animate-[pulse_1s_ease-in-out_infinite]" />
+              )}
+            </div>
+            <div>
+              <div>{row.deliveryDriverName}</div>
+              <div className="text-gray-500">{formatDateShort(row.deliveryAssignmentDate)}</div>
+            </div>
+          </div>
+        ) : '—'}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (row.comments) {
+                alert(row.comments)
+              }
+            }}
+            className={row.comments ? "p-1 h-7 w-7 border-yellow-500 bg-yellow-50 hover:bg-yellow-100" : "p-1 h-7 w-7 invisible"}
+            disabled={!row.comments}
+          >
+            <MessageSquare className="h-3 w-3 text-yellow-700" />
+          </Button>
+          <BillOfLadingDialog
+            order={{
+              id: row.orderId,
+              shipper: {
+                name: row.pickupName,
+                address: row.pickupAddress || '',
+                phone: '',
+                phone2: ''
+              },
+              consignee: {
+                name: row.deliveryName,
+                address: row.deliveryAddress || '',
+                phone: '',
+                phone2: ''
+              },
+              items: [
+                ...(row.skidsData?.map(skid => ({
+                  packages: skid.quantity,
+                  description: `Skid ${skid.width}x${skid.length}`,
+                  weight: 0,
+                  charges: 0
+                })) || []),
+                ...(row.vinylData?.map(vinyl => ({
+                  packages: vinyl.quantity,
+                  description: `Vinyl ${vinyl.width}x${vinyl.length}`,
+                  weight: 0,
+                  charges: 0
+                })) || [])
+              ]
+            }}
+          >
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            >
+              BOL
+            </Button>
+          </BillOfLadingDialog>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onInfoClick}
+            className="h-7 px-2 text-xs"
+          >
+            Info
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
 export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -151,9 +388,23 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [footageDeductionRate, setFootageDeductionRate] = useState<number>(0)
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
   const [driverLoadPercentage, setDriverLoadPercentage] = useState<number>(30.00) // Default 30%
+  const [isReordering, setIsReordering] = useState<boolean>(false)
+  const [deductionDialogOpen, setDeductionDialogOpen] = useState<boolean>(false)
+  const [deductionDialogOrderId, setDeductionDialogOrderId] = useState<string | null>(null)
+  const [deductionDialogComment, setDeductionDialogComment] = useState<string>('')
+  const [deductionDialogAmount, setDeductionDialogAmount] = useState<string>('')
+  const [deductionDialogAppliesTo, setDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
+  
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -317,6 +568,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     action?: string | null
     dimensions?: string | null
     footage?: number | null
+    customerName?: string | null
   }): string {
     if (item.isManual && item.id) {
       return `manual:${item.id}`
@@ -325,13 +577,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const footageValue = typeof item.footage === 'number'
       ? item.footage
       : parseFloat(String(item.footage || 0)) || 0
+    // Include customerName in the key to ensure each order gets its own deduction line
+    // This prevents multiple orders with the same driver/date/dimensions from being collapsed
     return [
       'auto',
       item.driverName || '',
       normalizedDate,
       item.action || '',
       item.dimensions || '',
-      footageValue.toFixed(2)
+      footageValue.toFixed(2),
+      item.customerName || '' // Include customer name to differentiate orders
     ].join('|')
   }
 
@@ -409,6 +664,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       }
     })
 
+    console.log(`[Cross-Driver Freight] Current driver: ${currentDriverName}, Found ${items.length} items from ${orders.length} orders`)
+
     return items
   }, [orders, selectedTruckload])
 
@@ -464,7 +721,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             id: `auto-${Date.now()}-${idx}`,
             deduction: 0,
             date: formatDateForInput(item.date),
-            isManual: false
+            isManual: false,
+            customerName: item.customerName || undefined
           }))
           setEditableCrossDriverFreight(dedupeFreightItems(autoItems))
         } else {
@@ -479,7 +737,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             id: `auto-${Date.now()}-${idx}`,
             deduction: 0,
             date: formatDateForInput(item.date),
-            isManual: false
+            isManual: false,
+            customerName: item.customerName || undefined
           }))
           setEditableCrossDriverFreight(initialized)
         } else {
@@ -644,8 +903,107 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }, 1000) // Wait 1 second after user stops typing
   }, [updateOrderQuote])
 
+  // Handle drag end for reordering stops
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    if (!over || active.id === over.id || !selectedTruckloadId) {
+      return
+    }
+
+    setIsReordering(true)
+
+    try {
+      const oldIndex = groupedOrders.findIndex(
+        row => `${row.orderId}${(row as any).isCombined ? '-transfer' : `-${row.assignmentType}`}` === String(active.id)
+      )
+      const newIndex = groupedOrders.findIndex(
+        row => `${row.orderId}${(row as any).isCombined ? '-transfer' : `-${row.assignmentType}`}` === String(over.id)
+      )
+
+      if (oldIndex === -1 || newIndex === -1) {
+        return
+      }
+
+      // Reorder the grouped orders
+      const reordered = arrayMove(groupedOrders, oldIndex, newIndex)
+
+      // Build update array - need to handle transfer orders specially
+      const updates: Array<{ id: string; assignment_type: 'pickup' | 'delivery'; sequence_number: number }> = []
+      
+      reordered.forEach((row, index) => {
+        const newSequence = index + 1
+        const isTransfer = (row as any).isCombined || false
+
+        if (isTransfer) {
+          // For transfer orders, update both pickup and delivery sequence numbers
+          const pickupOrder = orders.find(o => o.orderId === row.orderId && o.assignmentType === 'pickup')
+          const deliveryOrder = orders.find(o => o.orderId === row.orderId && o.assignmentType === 'delivery')
+          
+          if (pickupOrder) {
+            updates.push({
+              id: pickupOrder.orderId,
+              assignment_type: 'pickup',
+              sequence_number: newSequence
+            })
+          }
+          if (deliveryOrder) {
+            updates.push({
+              id: deliveryOrder.orderId,
+              assignment_type: 'delivery',
+              sequence_number: newSequence
+            })
+          }
+        } else {
+          // For regular orders, update the single assignment
+          updates.push({
+            id: row.orderId,
+            assignment_type: row.assignmentType,
+            sequence_number: newSequence
+          })
+        }
+      })
+
+      // Call API to update sequence numbers
+      const response = await fetch(`/api/truckloads/${selectedTruckloadId}/reorder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orders: updates
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to reorder stops')
+      }
+
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to reorder stops')
+      }
+
+      // Update local orders state with new sequence numbers
+      setOrders(prev => prev.map(order => {
+        const update = updates.find(u => u.id === order.orderId && u.assignment_type === order.assignmentType)
+        if (update) {
+          return { ...order, sequenceNumber: update.sequence_number }
+        }
+        return order
+      }))
+
+      toast.success('Order sequence updated')
+    } catch (error) {
+      console.error('Error reordering stops:', error)
+      toast.error('Failed to reorder stops')
+    } finally {
+      setIsReordering(false)
+    }
+  }, [groupedOrders, orders, selectedTruckloadId])
+
   // Functions to manage editable cross-driver freight
-  function addCrossDriverFreightItem(isAddition: boolean = false): void {
+  function addCrossDriverFreightItem(isAddition: boolean = false, comment?: string, deduction?: number, appliesTo?: 'load_value' | 'driver_pay'): void {
     const newItem: CrossDriverFreightItem = {
       id: `manual-${Date.now()}-${Math.random()}`,
       driverName: '',
@@ -653,11 +1011,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       action: 'Picked up',
       footage: 0,
       dimensions: '',
-      deduction: 0,
+      deduction: deduction || 0,
       isManual: true,
-      comment: '',
+      comment: comment || '',
       isAddition: isAddition,
-      appliesTo: 'driver_pay' // Default to driver pay
+      appliesTo: appliesTo || 'driver_pay' // Default to driver pay
     }
     setEditableCrossDriverFreight([...editableCrossDriverFreight, newItem])
     // Auto-save after adding
@@ -667,6 +1025,25 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       }, 500)
     }
   }
+
+  // Handle saving deduction from dialog
+  const handleSaveDeduction = useCallback(() => {
+    if (!deductionDialogOrderId) return
+    
+    const amount = parseFloat(deductionDialogAmount) || 0
+    if (amount <= 0) {
+      toast.error('Please enter a valid deduction amount')
+      return
+    }
+
+    addCrossDriverFreightItem(false, deductionDialogComment, amount, deductionDialogAppliesTo)
+    setDeductionDialogOpen(false)
+    setDeductionDialogOrderId(null)
+    setDeductionDialogComment('')
+    setDeductionDialogAmount('')
+    setDeductionDialogAppliesTo('driver_pay')
+    toast.success('Manual deduction added')
+  }, [deductionDialogOrderId, deductionDialogComment, deductionDialogAmount, deductionDialogAppliesTo])
 
   function updateCrossDriverFreightItem(id: string, updates: Partial<CrossDriverFreightItem>): void {
     setEditableCrossDriverFreight(items =>
@@ -712,7 +1089,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             isManual: item.isManual || false,
             comment: item.comment || null,
             isAddition: item.isAddition || false,
-            appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined)
+            appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
+            customerName: item.customerName || null
           }))
         })
       })
@@ -778,7 +1156,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 id: `auto-${Date.now()}-${idx}`,
                 deduction: 0,
                 date: formatDateForInput(item.date),
-                isManual: false
+                isManual: false,
+                customerName: item.customerName || undefined
               }))
               const dedupedAuto = dedupeFreightItems(autoItems)
               setEditableCrossDriverFreight(dedupedAuto)
@@ -1253,22 +1632,32 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             <>
               {/* Screen view with table */}
               <div className="print:hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-auto">#</TableHead>
-                      <TableHead className="w-auto">Pickup</TableHead>
-                      <TableHead className="w-auto">Delivery</TableHead>
-                      <TableHead className="w-auto">Paying Customer</TableHead>
-                      <TableHead style={{ width: '90px' }}>Quote</TableHead>
-                      <TableHead className="w-auto">Footage</TableHead>
-                      <TableHead className="w-auto">Dimensions</TableHead>
-                      <TableHead className="w-auto">Handled By</TableHead>
-                      <TableHead className="w-auto">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {groupedOrders.map((row) => {
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-auto">#</TableHead>
+                        <TableHead className="w-auto">Pickup</TableHead>
+                        <TableHead className="w-auto">Delivery</TableHead>
+                        <TableHead className="w-auto">Paying Customer</TableHead>
+                        <TableHead style={{ width: '90px' }}>Quote</TableHead>
+                        <TableHead className="w-auto">Footage</TableHead>
+                        <TableHead className="w-auto">Dimensions</TableHead>
+                        <TableHead className="w-auto text-center" style={{ width: '40px' }}></TableHead>
+                        <TableHead className="w-auto">Handled By</TableHead>
+                        <TableHead className="w-auto">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <SortableContext
+                      items={groupedOrders.map(row => `${row.orderId}${(row as any).isCombined ? '-transfer' : `-${row.assignmentType}`}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <TableBody>
+                        {groupedOrders.map((row) => {
                       // Calculate total quantity of skids and vinyl combined
                       const totalSkidsQuantity = row.skidsData.reduce((sum, skid) => sum + skid.quantity, 0)
                       const totalVinylQuantity = row.vinylData.reduce((sum, vinyl) => sum + vinyl.quantity, 0)
@@ -1291,163 +1680,39 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         .join(', ')
                       
                       const isTransfer = (row as any).isCombined || false
+                      const rowId = `${row.orderId}${isTransfer ? '-transfer' : `-${row.assignmentType}`}`
                       
                       return (
-                        <TableRow 
-                          key={`${row.orderId}${isTransfer ? '-transfer' : `-${row.assignmentType}`}`} 
-                          className={`${isTransfer ? 'bg-blue-50' : (row.assignmentType === 'pickup' ? 'bg-red-50' : 'bg-gray-50')} hover:bg-gray-300 transition-colors cursor-pointer hover:shadow-sm`}
-                        >
-                          <TableCell className="text-sm text-center">
-                            {isTransfer && (row as any).sequenceNumbers ? (row as any).sequenceNumbers : row.sequenceNumber}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {isTransfer ? (
-                              <span className="font-bold">{row.pickupName}</span>
-                            ) : (
-                              row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {isTransfer ? (
-                              <span className="font-bold">{row.deliveryName}</span>
-                            ) : (
-                              row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm">{row.payingCustomerName || '—'}</TableCell>
-                          <TableCell className="text-sm" style={{ width: '90px' }}>
-                            <Input
-                              type="text"
-                              value={row.freightQuote || ''}
-                              onChange={(e) => debouncedUpdateQuote(row.orderId, e.target.value)}
-                              placeholder="—"
-                              className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-                              disabled={updatingQuotes.has(row.orderId)}
-                            />
-                          </TableCell>
-                          <TableCell className="text-sm text-right">{row.footage}</TableCell>
-                          <TableCell className="text-sm">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {allDimensions ? (
-                                <>
-                                  {Object.entries(dimensionGroups).map(([dimension, quantity], idx) => (
-                                    <span key={idx} className="inline-block bg-gray-100 border border-gray-300 px-1.5 py-0.5 rounded text-xs font-mono">
-                                      {quantity} {dimension}
-                                    </span>
-                                  ))}
-                                  {freeItems > 0 && (
-                                    <span className="inline-flex items-center gap-0.5 bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs font-semibold animate-[pulse_2s_ease-in-out_infinite]">
-                                      <Gift className="h-3 w-3" />
-                                      {freeItems}
-                                    </span>
-                                  )}
-                                </>
-                              ) : (
-                                <span>—</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {isTransfer ? (
-                              <div className="text-xs text-blue-700 font-medium">Transfer</div>
-                            ) : row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupAssignmentDate ? (
-                              <div className="text-xs flex items-center gap-1.5">
-                                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                                  {row.pickupDriverName !== selectedTruckload?.driver.driverName && (
-                                    <AlertTriangle className="h-4 w-4 text-red-500 animate-[pulse_1s_ease-in-out_infinite]" />
-                                  )}
-                                </div>
-                                <div>
-                                  <div>{row.pickupDriverName}</div>
-                                  <div className="text-gray-500">{formatDateShort(row.pickupAssignmentDate)}</div>
-                                </div>
-                              </div>
-                            ) : row.assignmentType === 'pickup' && row.deliveryDriverName && row.deliveryAssignmentDate ? (
-                              <div className="text-xs flex items-center gap-1.5">
-                                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                                  {row.deliveryDriverName !== selectedTruckload?.driver.driverName && (
-                                    <AlertTriangle className="h-4 w-4 text-red-500 animate-[pulse_1s_ease-in-out_infinite]" />
-                                  )}
-                                </div>
-                                <div>
-                                  <div>{row.deliveryDriverName}</div>
-                                  <div className="text-gray-500">{formatDateShort(row.deliveryAssignmentDate)}</div>
-                                </div>
-                              </div>
-                            ) : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  if (row.comments) {
-                                    alert(row.comments)
-                                  }
-                                }}
-                                className={row.comments ? "p-1 h-7 w-7 border-yellow-500 bg-yellow-50 hover:bg-yellow-100" : "p-1 h-7 w-7 invisible"}
-                                disabled={!row.comments}
-                              >
-                                <MessageSquare className="h-3 w-3 text-yellow-700" />
-                              </Button>
-                              <BillOfLadingDialog
-                                order={{
-                                  id: row.orderId,
-                                  shipper: {
-                                    name: row.pickupName,
-                                    address: row.pickupAddress || '',
-                                    phone: '',
-                                    phone2: ''
-                                  },
-                                  consignee: {
-                                    name: row.deliveryName,
-                                    address: row.deliveryAddress || '',
-                                    phone: '',
-                                    phone2: ''
-                                  },
-                                  items: [
-                                    ...(row.skidsData?.map(skid => ({
-                                      packages: skid.quantity,
-                                      description: `Skid ${skid.width}x${skid.length}`,
-                                      weight: 0,
-                                      charges: 0
-                                    })) || []),
-                                    ...(row.vinylData?.map(vinyl => ({
-                                      packages: vinyl.quantity,
-                                      description: `Vinyl ${vinyl.width}x${vinyl.length}`,
-                                      weight: 0,
-                                      charges: 0
-                                    })) || [])
-                                  ]
-                                }}
-                              >
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                                >
-                                  BOL
-                                </Button>
-                              </BillOfLadingDialog>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedOrderIdForInfo(parseInt(row.orderId))
-                                  setIsOrderInfoDialogOpen(true)
-                                }}
-                                className="h-7 px-2 text-xs"
-                              >
-                                Info
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        <SortableTableRow
+                          key={rowId}
+                          id={rowId}
+                          row={row}
+                          isTransfer={isTransfer}
+                          selectedTruckload={selectedTruckload}
+                          dimensionGroups={dimensionGroups}
+                          allDimensions={allDimensions}
+                          freeItems={freeItems}
+                          debouncedUpdateQuote={debouncedUpdateQuote}
+                          updatingQuotes={updatingQuotes}
+                          formatDateShort={formatDateShort}
+                          onInfoClick={() => {
+                            setSelectedOrderIdForInfo(parseInt(row.orderId))
+                            setIsOrderInfoDialogOpen(true)
+                          }}
+                          onAddDeduction={(orderId) => {
+                            setDeductionDialogOrderId(orderId)
+                            setDeductionDialogComment('')
+                            setDeductionDialogAmount('')
+                            setDeductionDialogAppliesTo('driver_pay')
+                            setDeductionDialogOpen(true)
+                          }}
+                        />
                       )
                     })}
                   </TableBody>
-                </Table>
+                </SortableContext>
+              </Table>
+            </DndContext>
                 
                 {/* Totals Section */}
                 {orders.length > 0 && (
@@ -1520,8 +1785,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     <span className="font-medium">{item.action}</span>
                                     {item.customerName && (
                                       <>
-                                        <span className="text-gray-500">from</span>
-                                        <span className="text-gray-700">{item.customerName}</span>
+                                        <span className="text-gray-500">
+                                          {item.action === 'Picked up' ? 'from' : 'to'}
+                                        </span>
+                                        <span className="text-gray-700 font-medium">{item.customerName}</span>
                                       </>
                                     )}
                                     <span className="text-gray-500">-</span>
@@ -2086,6 +2353,61 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             }}
           />
         )}
+        <Dialog open={deductionDialogOpen} onOpenChange={setDeductionDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add Manual Deduction</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="deduction-comment">Description</Label>
+                <Textarea
+                  id="deduction-comment"
+                  placeholder="Enter description..."
+                  value={deductionDialogComment}
+                  onChange={(e) => setDeductionDialogComment(e.target.value)}
+                  className="min-h-[80px]"
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deduction-applies-to">Applies To</Label>
+                <Select
+                  value={deductionDialogAppliesTo}
+                  onValueChange={(value) => setDeductionDialogAppliesTo(value as 'load_value' | 'driver_pay')}
+                >
+                  <SelectTrigger id="deduction-applies-to">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="load_value">Load Value</SelectItem>
+                    <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deduction-amount">Amount ($)</Label>
+                <Input
+                  id="deduction-amount"
+                  type="number"
+                  placeholder="0.00"
+                  value={deductionDialogAmount}
+                  onChange={(e) => setDeductionDialogAmount(e.target.value)}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeductionDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveDeduction} className="bg-red-600 hover:bg-red-700">
+                Add Deduction
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
