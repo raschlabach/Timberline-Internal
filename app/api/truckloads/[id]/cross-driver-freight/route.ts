@@ -103,6 +103,40 @@ export async function GET(
     // Check if applies_to column exists (reuse the check from above)
     const hasAppliesTo = appliesToCheck.rows.length > 0
     
+    // Check if customer_name column exists
+    const customerNameCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'cross_driver_freight_deductions'
+      AND column_name = 'customer_name'
+    `)
+    let hasCustomerName = customerNameCheck.rows.length > 0
+    
+    // If customer_name column doesn't exist, apply migration automatically
+    if (!hasCustomerName) {
+      console.log('customer_name column not found, applying migration...')
+      const client = await getClient()
+      try {
+        await client.query('BEGIN')
+        const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+        const migrationSql = fs.readFileSync(
+          path.join(migrationsDir, 'add-customer-name-to-cross-driver-freight.sql'),
+          'utf8'
+        )
+        await client.query(migrationSql)
+        await client.query('COMMIT')
+        console.log('customer_name column migration applied successfully')
+        hasCustomerName = true
+      } catch (migrationError) {
+        await client.query('ROLLBACK')
+        console.error('Error applying customer_name migration:', migrationError)
+        // Continue anyway - the column might already exist or migration might fail
+      } finally {
+        client.release()
+      }
+    }
+    
     const result = await query(`
       SELECT 
         id,
@@ -114,7 +148,7 @@ export async function GET(
         deduction,
         is_manual as "isManual",
         comment,
-        is_addition as "isAddition"${hasAppliesTo ? ', applies_to as "appliesTo"' : ''}
+        is_addition as "isAddition"${hasAppliesTo ? ', applies_to as "appliesTo"' : ''}${hasCustomerName ? ', customer_name as "customerName"' : ''}
       FROM cross_driver_freight_deductions
       WHERE truckload_id = $1
       ORDER BY created_at ASC
@@ -238,6 +272,16 @@ export async function POST(
       `)
       const hasAppliesTo = appliesToCheckForInsert.rows.length > 0
 
+      // Check if customer_name column exists for INSERT
+      const customerNameCheckForInsert = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'customer_name'
+      `)
+      const hasCustomerNameForInsert = customerNameCheckForInsert.rows.length > 0
+
       // Insert new items
       for (const item of items) {
         const footage = typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0
@@ -254,8 +298,8 @@ export async function POST(
             deduction,
             is_manual,
             comment,
-            is_addition${hasAppliesTo ? ', applies_to' : ''}
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${hasAppliesTo ? ', $11' : ''})
+            is_addition${hasAppliesTo ? ', applies_to' : ''}${hasCustomerNameForInsert ? ', customer_name' : ''}
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${hasAppliesTo ? ', $11' : ''}${hasCustomerNameForInsert ? (hasAppliesTo ? ', $12' : ', $11') : ''})
           RETURNING id
         `, [
           truckloadId,
@@ -268,7 +312,8 @@ export async function POST(
           item.isManual || false,
           item.comment || null,
           item.isAddition || false,
-          ...(hasAppliesTo ? [item.appliesTo || 'driver_pay'] : [])
+          ...(hasAppliesTo ? [item.appliesTo || 'driver_pay'] : []),
+          ...(hasCustomerNameForInsert ? [item.customerName || null] : [])
         ])
         console.log(`[Cross-Driver Freight] Inserted item: id=${insertResult.rows[0]?.id}, driver=${item.driverName}, deduction=${deduction}`)
       }
