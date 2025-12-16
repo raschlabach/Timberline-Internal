@@ -159,18 +159,30 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }, [editableCrossDriverFreight])
   
   // Auto-select truckload from URL parameter when from driver pay
+  // This effect should run whenever URL params change
   useEffect(() => {
-    if (fromDriverPay && urlTruckloadId && truckloads.length > 0) {
+    // Re-read params inside effect to ensure we get latest values
+    const currentTruckloadId = searchParams?.get('truckloadId')
+    const currentFromDriverPay = searchParams?.get('from') === 'driver-pay'
+    
+    if (currentFromDriverPay && currentTruckloadId && truckloads.length > 0) {
       // Find truckload by ID (handle both string and number comparisons)
       const matchingTruckload = truckloads.find(t => 
-        String(t.id) === String(urlTruckloadId) || 
-        Number(t.id) === Number(urlTruckloadId)
+        String(t.id) === String(currentTruckloadId) || 
+        Number(t.id) === Number(currentTruckloadId)
       )
       if (matchingTruckload) {
-        setSelectedTruckloadId(String(matchingTruckload.id))
+        const matchingId = String(matchingTruckload.id)
+        // Always update if URL param differs from current selection
+        if (selectedTruckloadId !== matchingId) {
+          console.log('Setting truckload from URL:', currentTruckloadId, 'matched to:', matchingId)
+          setSelectedTruckloadId(matchingId)
+        }
+      } else {
+        console.log('No matching truckload found for ID:', currentTruckloadId, 'Available IDs:', truckloads.map(t => t.id))
       }
     }
-  }, [fromDriverPay, urlTruckloadId, truckloads])
+  }, [searchParams, truckloads, selectedTruckloadId])
 
   // Fetch driver's load percentage when truckload is selected
   useEffect(() => {
