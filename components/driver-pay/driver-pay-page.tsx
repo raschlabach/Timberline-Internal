@@ -177,16 +177,21 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
   }, [urlStartDate, urlEndDate])
   
-  // Restore driver selection from URL
+  // Restore driver selection from URL (only on initial load, not when user manually selects)
+  const hasRestoredFromUrl = useRef(false)
   useEffect(() => {
-    if (urlDriverId && drivers.length > 0) {
+    if (urlDriverId && drivers.length > 0 && !hasRestoredFromUrl.current) {
       const driverIdNum = parseInt(urlDriverId, 10)
       const driverExists = drivers.some(d => d.driverId === driverIdNum)
-      if (driverExists && selectedDriverId !== driverIdNum) {
+      if (driverExists) {
         setSelectedDriverId(driverIdNum)
+        hasRestoredFromUrl.current = true
       }
+    } else if (!urlDriverId && hasRestoredFromUrl.current) {
+      // Reset flag if URL param is removed
+      hasRestoredFromUrl.current = false
     }
-  }, [urlDriverId, drivers, selectedDriverId])
+  }, [urlDriverId, drivers])
 
   // Fetch driver pay data
   const fetchPayData = useCallback(async () => {
@@ -202,8 +207,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       
       if (data.success) {
         setDrivers(data.drivers)
-        // Select first driver by default
-        if (data.drivers.length > 0 && !selectedDriverId) {
+        // Select first driver by default (only if not restoring from URL)
+        if (data.drivers.length > 0 && !selectedDriverId && !hasRestoredFromUrl.current) {
           setSelectedDriverId(data.drivers[0].driverId)
           setTempSettings({
             driverId: data.drivers[0].driverId,
@@ -227,9 +232,9 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     fetchPayData()
   }, [fetchPayData])
 
-  // Update selected driver when drivers change
+  // Update selected driver when drivers change (only if no driver is selected and not restoring from URL)
   useEffect(() => {
-    if (drivers.length > 0 && !selectedDriverId) {
+    if (drivers.length > 0 && !selectedDriverId && !hasRestoredFromUrl.current) {
       setSelectedDriverId(drivers[0].driverId)
       setTempSettings({
         driverId: drivers[0].driverId,
@@ -641,6 +646,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 variant={selectedDriverId === driver.driverId ? "default" : "outline"}
                 size="sm"
                 onClick={() => {
+                  // Mark that we've manually selected, so URL restoration won't override
+                  hasRestoredFromUrl.current = true
                   setSelectedDriverId(driver.driverId)
                   setTempSettings({
                     driverId: driver.driverId,
