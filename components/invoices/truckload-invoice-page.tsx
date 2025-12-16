@@ -845,6 +845,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     if (!selectedTruckloadId) return
 
     try {
+      console.log(`[Invoice] Saving calculated values for truckload ${selectedTruckloadId}: loadValue=${loadValue}, driverPay=${driverPay}`)
       const response = await fetch(`/api/truckloads/${selectedTruckloadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -858,6 +859,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       if (!response.ok) {
         throw new Error('Failed to save calculated values')
       }
+      const result = await response.json()
+      console.log(`[Invoice] Successfully saved calculated values:`, result)
     } catch (error) {
       console.error('Error saving calculated values:', error)
       // Don't show error toast - this is a background save

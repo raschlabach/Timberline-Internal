@@ -384,11 +384,71 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
   // Calculate totals for a truckload with detailed breakdown
   const calculateTruckloadTotals = (truckload: Truckload) => {
-    const totalQuotes = truckload.orders.reduce((sum, order) => sum + (order.freightQuote || 0), 0)
+    // Group orders by orderId to combine transfer orders (same as Invoice page)
+    const orderGroups = new Map<number, Order[]>()
+    truckload.orders.forEach(order => {
+      const existing = orderGroups.get(order.orderId) || []
+      existing.push(order)
+      orderGroups.set(order.orderId, existing)
+    })
     
-    // Count pickups and deliveries
-    const pickupCount = truckload.orders.filter(order => order.assignmentType === 'pickup').length
-    const deliveryCount = truckload.orders.filter(order => order.assignmentType === 'delivery').length
+    // Calculate total quotes from grouped orders (each order counted once, same as Invoice page)
+    const totalQuotes = Array.from(orderGroups.values()).reduce((sum, groupOrders) => {
+      // For transfer orders (both pickup and delivery), only count once
+      // For non-transfer orders, count each one
+      const hasPickup = groupOrders.some(o => o.assignmentType === 'pickup')
+      const hasDelivery = groupOrders.some(o => o.assignmentType === 'delivery')
+      const isTransfer = hasPickup && hasDelivery
+      
+      if (isTransfer) {
+        // For transfers, use the first order's quote (they should be the same)
+        const order = groupOrders[0]
+        if (order.freightQuote) {
+          // Parse quote string (could be "$123.45" or "123.45" or a number)
+          const quoteStr = String(order.freightQuote)
+          const quoteValue = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
+          return sum + (isNaN(quoteValue) ? 0 : quoteValue)
+        }
+      } else {
+        // For non-transfers, sum all orders in the group
+        return sum + groupOrders.reduce((groupSum, order) => {
+          if (order.freightQuote) {
+            const quoteStr = String(order.freightQuote)
+            const quoteValue = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
+            return groupSum + (isNaN(quoteValue) ? 0 : quoteValue)
+          }
+          return groupSum
+        }, 0)
+      }
+      return sum
+    }, 0)
+    
+    // Count pickups and deliveries (using grouped orders to avoid double-counting transfers)
+    const pickupCount = Array.from(orderGroups.values()).reduce((count, groupOrders) => {
+      const hasPickup = groupOrders.some(o => o.assignmentType === 'pickup')
+      const hasDelivery = groupOrders.some(o => o.assignmentType === 'delivery')
+      const isTransfer = hasPickup && hasDelivery
+      // For transfers, count as 1 pickup and 1 delivery
+      // For non-transfers, count each assignment type
+      if (isTransfer) {
+        return count + 1
+      } else {
+        return count + groupOrders.filter(o => o.assignmentType === 'pickup').length
+      }
+    }, 0)
+    
+    const deliveryCount = Array.from(orderGroups.values()).reduce((count, groupOrders) => {
+      const hasPickup = groupOrders.some(o => o.assignmentType === 'pickup')
+      const hasDelivery = groupOrders.some(o => o.assignmentType === 'delivery')
+      const isTransfer = hasPickup && hasDelivery
+      // For transfers, count as 1 pickup and 1 delivery
+      // For non-transfers, count each assignment type
+      if (isTransfer) {
+        return count + 1
+      } else {
+        return count + groupOrders.filter(o => o.assignmentType === 'delivery').length
+      }
+    }, 0)
     
     // Separate deductions/additions by where they apply
     // Manual items that apply to load value
@@ -435,6 +495,12 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       ? truckload.calculatedLoadValue
       : totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue
     
+    if (truckload.calculatedLoadValue !== null && truckload.calculatedLoadValue !== undefined) {
+      console.log(`[DriverPay] Using saved loadValue=${truckload.calculatedLoadValue} for truckload ${truckload.id} (calculated would be ${totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue})`)
+    } else {
+      console.log(`[DriverPay] Calculating loadValue=${loadValue} for truckload ${truckload.id} (no saved value)`)
+    }
+    
     // Calculate base driver pay (load value × percentage)
     const baseDriverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
     
@@ -452,9 +518,11 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       // Automatic: prefer saved calculated driver pay, fallback to calculation
       if (truckload.calculatedDriverPay !== null && truckload.calculatedDriverPay !== undefined) {
         driverPay = truckload.calculatedDriverPay
+        console.log(`[DriverPay] Using saved driverPay=${truckload.calculatedDriverPay} for truckload ${truckload.id} (calculated would be ${baseDriverPay - automaticDeductions - manualDeductionsFromDriverPay + manualAdditionsToDriverPay})`)
       } else {
         // Fallback calculation: base driver pay - automatic deductions - manual deductions from driver pay + manual additions to driver pay
         driverPay = baseDriverPay - automaticDeductions - manualDeductionsFromDriverPay + manualAdditionsToDriverPay
+        console.log(`[DriverPay] Calculating driverPay=${driverPay} for truckload ${truckload.id} (no saved value, baseDriverPay=${baseDriverPay}, autoDed=${automaticDeductions}, manualDedDP=${manualDeductionsFromDriverPay}, manualAddDP=${manualAdditionsToDriverPay})`)
       }
     }
     
