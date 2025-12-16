@@ -920,40 +920,53 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             )}
                           </div>
 
-                          {/* Calculations - Horizontal Layout */}
-                          <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-gray-200">
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Total Quotes</div>
-                              <div className="text-sm font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
+                          {/* Calculations - Clearer Layout */}
+                          <div className="pt-3 border-t border-gray-200 space-y-3">
+                            {/* Step 1: Load Value Calculation */}
+                            <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                              <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Load Value</div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="font-medium">Quotes: ${tlTotals.totalQuotes.toFixed(2)}</span>
+                                {tlTotals.manualDeductionsFromLoadValue > 0 && (
+                                  <>
+                                    <span className="text-gray-400">-</span>
+                                    <span className="text-red-600 font-medium">Ded: ${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</span>
+                                  </>
+                                )}
+                                {tlTotals.manualAdditionsToLoadValue > 0 && (
+                                  <>
+                                    <span className="text-gray-400">+</span>
+                                    <span className="text-green-600 font-medium">Add: ${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</span>
+                                  </>
+                                )}
+                                <span className="text-gray-400">=</span>
+                                <span className="font-bold text-base">${tlTotals.loadValue.toFixed(2)}</span>
+                              </div>
                             </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Manual Ded (LV)</div>
-                              <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</div>
+
+                            {/* Step 2: Base Driver Pay */}
+                            <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
+                              <div className="text-xs font-semibold text-blue-700 mb-1">Base Driver Pay</div>
+                              <div className="text-sm font-bold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
                             </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Manual Add (LV)</div>
-                              <div className="text-sm font-semibold text-green-600">+${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
-                              <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Base Driver Pay</div>
-                              <div className="text-sm font-semibold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Auto Deductions</div>
-                              <div className="text-sm font-semibold text-red-600">-${tlTotals.automaticDeductions.toFixed(2)}</div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Manual Ded (DP)</div>
-                              <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductionsFromDriverPay.toFixed(2)}</div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Manual Add (DP)</div>
-                              <div className="text-sm font-semibold text-green-600">+${tlTotals.manualAdditionsToDriverPay.toFixed(2)}</div>
-                            </div>
+
+                            {/* Step 3: Deductions & Additions */}
+                            {(tlTotals.automaticDeductions > 0 || tlTotals.manualDeductionsFromDriverPay > 0 || tlTotals.manualAdditionsToDriverPay > 0) && (
+                              <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                                <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Adjustments</div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  {tlTotals.automaticDeductions > 0 && (
+                                    <span className="text-red-600 font-medium">Auto Ded: -${tlTotals.automaticDeductions.toFixed(2)}</span>
+                                  )}
+                                  {tlTotals.manualDeductionsFromDriverPay > 0 && (
+                                    <span className="text-red-600 font-medium">Manual Ded: -${tlTotals.manualDeductionsFromDriverPay.toFixed(2)}</span>
+                                  )}
+                                  {tlTotals.manualAdditionsToDriverPay > 0 && (
+                                    <span className="text-green-600 font-medium">Manual Add: +${tlTotals.manualAdditionsToDriverPay.toFixed(2)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                             <div className="flex-shrink-0 pay-method-controls">
                               <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                                 <div className="text-xs text-gray-600 mb-0.5">

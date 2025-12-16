@@ -1501,263 +1501,201 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         <div className="text-sm text-gray-500 border border-gray-300 rounded-lg p-3">
                           All freight handled by {selectedTruckload?.driver.driverName || 'selected driver'}
                         </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {/* Automatic Deductions Section */}
-                          {editableCrossDriverFreight.some(item => !item.isManual) && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <div className="h-px flex-1 bg-gray-300"></div>
-                                <h4 className="text-sm font-semibold text-gray-700 px-2">Automatic Deductions (Applied to Driver Pay)</h4>
-                                <div className="h-px flex-1 bg-gray-300"></div>
-                              </div>
-                              <div className="space-y-2">
-                                {editableCrossDriverFreight
-                                  .filter(item => !item.isManual)
-                                  .map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="bg-blue-50 border border-blue-200 rounded-lg p-3"
-                                    >
-                                      <div className="flex items-center justify-between gap-4">
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-3 flex-wrap text-sm">
-                                            <span className="font-semibold text-blue-900">{item.driverName}</span>
-                                            <span className="text-blue-700">•</span>
-                                            <span className="text-blue-800">{formatDateShort(item.date)}</span>
-                                            <span className="text-blue-700">•</span>
-                                            <span className="font-medium text-blue-900">{item.action}</span>
-                                            <span className="text-blue-700">•</span>
-                                            <span className="text-blue-800">{item.footage} sqft</span>
-                                            {item.dimensions && item.dimensions !== '—' && (
-                                              <>
-                                                <span className="text-blue-700">•</span>
-                                                <div className="flex items-center gap-1 flex-wrap">
-                                                  {item.dimensions.split(', ').map((dim, idx) => {
-                                                    const match = dim.match(/^(\d+)\s+(.+)$/)
-                                                    if (match) {
-                                                      const [, quantity, dimension] = match
-                                                      return (
-                                                        <span key={idx} className="inline-block bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-xs font-mono">
-                                                          {quantity} {dimension}
-                                                        </span>
-                                                      )
-                                                    }
-                                                    return <span key={idx} className="text-blue-800">{dim}</span>
-                                                  })}
-                                                </div>
-                                              </>
-                                            )}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          {deductByFootage ? (
-                                            <div className="text-base font-semibold text-blue-900 w-28 text-right">
-                                              ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs text-gray-600">$</span>
-                                              <Input
-                                                type="number"
-                                                placeholder="0.00"
-                                                value={item.deduction || ''}
-                                                onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                                className="h-9 text-sm w-28 font-semibold"
-                                                min="0"
-                                                step="0.01"
-                                              />
-                                            </div>
-                                          )}
-                                        </div>
+                                              ) : (
+                          <div className="space-y-1.5">
+                            {editableCrossDriverFreight.map((item) => {
+                            if (item.isManual) {
+                              // Manual items: comment field + type toggle + amount + delete button
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-start border border-gray-300 rounded-lg p-1.5"
+                                >
+                                  <Textarea
+                                    placeholder="Enter comment or description..."
+                                    value={item.comment || ''}
+                                    onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
+                                    className="min-h-[50px] text-sm resize-none"
+                                    rows={2}
+                                  />
+                                  <Select
+                                    value={item.isAddition ? 'addition' : 'deduction'}
+                                    onValueChange={(value) => updateCrossDriverFreightItem(item.id, { isAddition: value === 'addition' })}
+                                  >
+                                    <SelectTrigger className="h-8 w-28 mt-0.5 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="deduction">Deduction</SelectItem>
+                                      <SelectItem value="addition">Addition</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Select
+                                    value={item.appliesTo || 'driver_pay'}
+                                    onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
+                                  >
+                                    <SelectTrigger className="h-8 w-32 mt-0.5 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="load_value">Load Value</SelectItem>
+                                      <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    type="number"
+                                    placeholder="$0.00"
+                                    value={item.deduction || ''}
+                                    onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
+                                    className="h-8 text-sm w-24 mt-0.5"
+                                    min="0"
+                                    step="0.01"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => deleteCrossDriverFreightItem(item.id)}
+                                    className="h-8 w-8 text-red-500 hover:text-red-700 mt-0.5"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )
+                              } else {
+                                // Auto-populated items: read-only display + editable deduction (only if not in footage mode)
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="grid grid-cols-[1fr_auto] gap-2 items-center border border-gray-300 rounded-lg p-1.5 text-sm"
+                                  >
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium">{item.driverName}</span>
+                                      <span className="text-gray-500">-</span>
+                                      <span className="text-gray-600">{formatDateShort(item.date)}</span>
+                                      <span className="text-gray-500">-</span>
+                                      <span className="font-medium">{item.action}</span>
+                                      <span className="text-gray-500">-</span>
+                                      <span className="text-gray-700">{item.footage} sqft</span>
+                                      <span className="text-gray-500">-</span>
+                                      <div className="flex items-center gap-1 flex-wrap">
+                                        {item.dimensions && item.dimensions !== '—' ? (
+                                          item.dimensions.split(', ').map((dim, idx) => {
+                                            const match = dim.match(/^(\d+)\s+(.+)$/)
+                                            if (match) {
+                                              const [, quantity, dimension] = match
+                                              return (
+                                                <span key={idx} className="inline-block bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">
+                                                  {quantity} {dimension}
+                                                </span>
+                                              )
+                                            }
+                                            return <span key={idx} className="text-gray-700">{dim}</span>
+                                          })
+                                        ) : (
+                                          <span className="text-gray-700">—</span>
+                                        )}
                                       </div>
                                     </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Manual Deductions/Additions Section */}
-                          {editableCrossDriverFreight.some(item => item.isManual) && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <div className="h-px flex-1 bg-gray-300"></div>
-                                <h4 className="text-sm font-semibold text-gray-700 px-2">Manual Deductions & Additions</h4>
-                                <div className="h-px flex-1 bg-gray-300"></div>
-                              </div>
-                              <div className="space-y-3">
-                                {editableCrossDriverFreight
-                                  .filter(item => item.isManual)
-                                  .map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className={`border-2 rounded-lg p-3 ${
-                                        item.isAddition 
-                                          ? 'bg-green-50 border-green-300' 
-                                          : 'bg-red-50 border-red-300'
-                                      }`}
-                                    >
-                                      <div className="space-y-3">
-                                        {/* Description */}
-                                        <div>
-                                          <label className="text-xs font-medium text-gray-600 mb-1 block">Description</label>
-                                          <Textarea
-                                            placeholder="Enter comment or description..."
-                                            value={item.comment || ''}
-                                            onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
-                                            className="min-h-[60px] text-sm resize-none"
-                                            rows={2}
-                                          />
-                                        </div>
-                                        
-                                        {/* Controls Row */}
-                                        <div className="grid grid-cols-3 gap-3 items-end">
-                                          <div>
-                                            <label className="text-xs font-medium text-gray-600 mb-1 block">Type</label>
-                                            <Select
-                                              value={item.isAddition ? 'addition' : 'deduction'}
-                                              onValueChange={(value) => updateCrossDriverFreightItem(item.id, { isAddition: value === 'addition' })}
-                                            >
-                                              <SelectTrigger className="h-9 text-sm">
-                                                <SelectValue />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                <SelectItem value="deduction">Deduction</SelectItem>
-                                                <SelectItem value="addition">Addition</SelectItem>
-                                              </SelectContent>
-                                            </Select>
-                                          </div>
-                                          
-                                          <div>
-                                            <label className="text-xs font-medium text-gray-600 mb-1 block">Applies To</label>
-                                            <Select
-                                              value={item.appliesTo || 'driver_pay'}
-                                              onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
-                                            >
-                                              <SelectTrigger className="h-9 text-sm">
-                                                <SelectValue />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                <SelectItem value="load_value">Load Value</SelectItem>
-                                                <SelectItem value="driver_pay">Driver Pay</SelectItem>
-                                              </SelectContent>
-                                            </Select>
-                                          </div>
-                                          
-                                          <div className="flex items-end gap-2">
-                                            <div className="flex-1">
-                                              <label className="text-xs font-medium text-gray-600 mb-1 block">Amount</label>
-                                              <div className="flex items-center gap-1">
-                                                <span className="text-sm text-gray-600">$</span>
-                                                <Input
-                                                  type="number"
-                                                  placeholder="0.00"
-                                                  value={item.deduction || ''}
-                                                  onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                                  className="h-9 text-sm font-semibold"
-                                                  min="0"
-                                                  step="0.01"
-                                                />
-                                              </div>
-                                            </div>
-                                            <Button
-                                              type="button"
-                                              size="icon"
-                                              variant="ghost"
-                                              onClick={() => deleteCrossDriverFreightItem(item.id)}
-                                              className="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-100"
-                                            >
-                                              <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                        </div>
+                                    {deductByFootage ? (
+                                      <div className="text-sm text-gray-700 w-24 text-right">
+                                        ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}
                                       </div>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
+                                    ) : (
+                                      <Input
+                                        type="number"
+                                        placeholder="$0.00"
+                                        value={item.deduction || ''}
+                                        onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
+                                        className="h-8 text-sm w-24"
+                                        min="0"
+                                        step="0.01"
+                                      />
+                                    )}
+                                  </div>
+                                )
+                              }
+                            })}
                         </div>
                       )}
                     </div>
 
                     {/* Payroll Summary */}
                     <div className="px-2 mt-3">
-                      <div className="border-2 border-gray-400 rounded-lg p-3">
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Total Quotes</div>
-                              <div className="text-lg font-bold">
-                                ${payrollCalculations.totalQuotes.toFixed(2)}
-                              </div>
+                      <div className="border-2 border-gray-400 rounded-lg p-4 bg-gray-50">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-4">Payroll Calculation</h3>
+                        
+                        {/* Step 1: Calculate Load Value */}
+                        <div className="mb-4 pb-4 border-b-2 border-gray-300">
+                          <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Step 1: Calculate Load Value</div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between bg-white rounded px-3 py-2">
+                              <span className="text-sm font-medium text-gray-700">Total Quotes</span>
+                              <span className="text-base font-bold">${payrollCalculations.totalQuotes.toFixed(2)}</span>
                             </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Deductions (Load Value)</div>
-                              <div className="text-lg font-bold text-red-600">
-                                -${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}
+                            {payrollCalculations.manualDeductionsFromLoadValue > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Manual Deductions (from Load Value)</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}</span>
                               </div>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Additions (Load Value)</div>
-                              <div className="text-lg font-bold text-green-600">
-                                +${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}
+                            )}
+                            {payrollCalculations.manualAdditionsToLoadValue > 0 && (
+                              <div className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-green-700">Manual Additions (to Load Value)</span>
+                                <span className="text-base font-bold text-green-600">+${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}</span>
                               </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Combined Total</div>
-                              <div className="text-lg font-bold">
-                                ${(payrollCalculations.totalQuotes - payrollCalculations.manualDeductionsFromLoadValue + payrollCalculations.manualAdditionsToLoadValue).toFixed(2)}
-                              </div>
+                            )}
+                            <div className="flex items-center justify-between bg-blue-100 rounded px-3 py-2 border-2 border-blue-300">
+                              <span className="text-sm font-semibold text-blue-900">Load Value</span>
+                              <span className="text-lg font-bold text-blue-900">${payrollCalculations.loadValue.toFixed(2)}</span>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 border-t-2 border-gray-400 pt-2">
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Load Value</div>
-                              <div className="text-xl font-bold">
-                                ${payrollCalculations.loadValue.toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">
-                                Base Driver Pay ({payrollCalculations.driverLoadPercentage.toFixed(0)}%)
-                              </div>
-                              <div className="text-lg font-bold text-blue-600">
-                                ${payrollCalculations.baseDriverPay.toFixed(2)}
-                              </div>
-                            </div>
+                        </div>
+
+                        {/* Step 2: Calculate Base Driver Pay */}
+                        <div className="mb-4 pb-4 border-b-2 border-gray-300">
+                          <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Step 2: Calculate Base Driver Pay</div>
+                          <div className="flex items-center justify-between bg-blue-50 rounded px-3 py-2">
+                            <span className="text-sm font-medium text-blue-700">
+                              Load Value × {payrollCalculations.driverLoadPercentage.toFixed(0)}%
+                            </span>
+                            <span className="text-base font-bold text-blue-600">${payrollCalculations.baseDriverPay.toFixed(2)}</span>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Automatic Deductions</div>
-                              <div className="text-lg font-bold text-red-600">
-                                -${payrollCalculations.automaticDeductions.toFixed(2)}
+                        </div>
+
+                        {/* Step 3: Apply Deductions & Additions to Driver Pay */}
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Step 3: Apply Deductions & Additions</div>
+                          <div className="space-y-2">
+                            {payrollCalculations.automaticDeductions > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Automatic Deductions</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.automaticDeductions.toFixed(2)}</span>
                               </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Deductions (Driver Pay)</div>
-                              <div className="text-lg font-bold text-red-600">
-                                -${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}
+                            )}
+                            {payrollCalculations.manualDeductionsFromDriverPay > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Manual Deductions (from Driver Pay)</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}</span>
                               </div>
-                            </div>
+                            )}
+                            {payrollCalculations.manualAdditionsToDriverPay > 0 && (
+                              <div className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-green-700">Manual Additions (to Driver Pay)</span>
+                                <span className="text-base font-bold text-green-600">+${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {(payrollCalculations.automaticDeductions === 0 && payrollCalculations.manualDeductionsFromDriverPay === 0 && payrollCalculations.manualAdditionsToDriverPay === 0) && (
+                              <div className="text-xs text-gray-500 italic text-center py-2">No deductions or additions applied</div>
+                            )}
                           </div>
-                          <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Additions (Driver Pay)</div>
-                              <div className="text-lg font-bold text-green-600">
-                                +${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">
-                                Final Driver Pay
-                              </div>
-                              <div className="text-xl font-bold text-blue-600">
-                                ${payrollCalculations.finalDriverPay.toFixed(2)}
-                              </div>
-                            </div>
+                        </div>
+
+                        {/* Final Result */}
+                        <div className="bg-gradient-to-r from-blue-100 to-blue-200 rounded-lg px-4 py-3 border-2 border-blue-400">
+                          <div className="flex items-center justify-between">
+                            <span className="text-base font-semibold text-blue-900">Final Driver Pay</span>
+                            <span className="text-2xl font-bold text-blue-900">${payrollCalculations.finalDriverPay.toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
