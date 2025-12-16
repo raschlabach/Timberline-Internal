@@ -115,6 +115,7 @@ interface CrossDriverFreightItem {
   isManual: boolean // Track if this is a manually added item
   comment?: string // For manual items
   isAddition?: boolean // Track if this is an addition (true) or deduction (false). Only applies to manual items.
+  appliesTo?: 'load_value' | 'driver_pay' // For manual items: whether it applies to load value or driver pay. Defaults to 'driver_pay'
 }
 
 export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
@@ -507,15 +508,25 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const payrollCalculations = useMemo(() => {
     const totalQuotes = totals.totalQuotes || 0
     
-    // Separate manual and automatic deductions
-    const manualDeductions = editableCrossDriverFreight.reduce((sum, item) => {
+    // Separate deductions/additions by where they apply
+    // Manual items that apply to load value
+    const manualDeductionsFromLoadValue = editableCrossDriverFreight.reduce((sum, item) => {
       const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-      if (item.isManual && !item.isAddition) {
+      if (item.isManual && !item.isAddition && item.appliesTo === 'load_value') {
         return sum + amount
       }
       return sum
     }, 0)
     
+    const manualAdditionsToLoadValue = editableCrossDriverFreight.reduce((sum, item) => {
+      if (item.isManual && item.isAddition && item.appliesTo === 'load_value') {
+        const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+        return sum + amount
+      }
+      return sum
+    }, 0)
+    
+    // Automatic deductions (always from driver pay)
     const automaticDeductions = editableCrossDriverFreight.reduce((sum, item) => {
       const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
       if (!item.isManual) {
@@ -524,31 +535,42 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return sum
     }, 0)
     
-    const totalAdditions = editableCrossDriverFreight.reduce((sum, item) => {
-      if (item.isManual && item.isAddition) {
+    // Manual items that apply to driver pay
+    const manualDeductionsFromDriverPay = editableCrossDriverFreight.reduce((sum, item) => {
+      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+      if (item.isManual && !item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)) {
+        return sum + amount
+      }
+      return sum
+    }, 0)
+    
+    const manualAdditionsToDriverPay = editableCrossDriverFreight.reduce((sum, item) => {
+      if (item.isManual && item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)) {
         const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
         return sum + amount
       }
       return sum
     }, 0)
     
-    // Calculate intermediate totals
-    const quotesPlusManualDeductions = totalQuotes - manualDeductions
-    const afterAutomaticDeductions = quotesPlusManualDeductions - automaticDeductions
-    const loadValue = afterAutomaticDeductions + totalAdditions
+    // Calculate load value (quotes - manual deductions from load value + manual additions to load value)
+    const loadValue = totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue
     
-    // Calculate driver pay
-    const driverPay = loadValue * (driverLoadPercentage / 100)
+    // Calculate base driver pay (load value × percentage)
+    const baseDriverPay = loadValue * (driverLoadPercentage / 100)
+    
+    // Calculate final driver pay (base driver pay - automatic deductions - manual deductions from driver pay + manual additions to driver pay)
+    const finalDriverPay = baseDriverPay - automaticDeductions - manualDeductionsFromDriverPay + manualAdditionsToDriverPay
     
     return { 
       totalQuotes: Number(totalQuotes),
-      manualDeductions: Number(manualDeductions),
-      quotesPlusManualDeductions: Number(quotesPlusManualDeductions),
-      automaticDeductions: Number(automaticDeductions),
-      afterAutomaticDeductions: Number(afterAutomaticDeductions),
-      totalAdditions: Number(totalAdditions),
+      manualDeductionsFromLoadValue: Number(manualDeductionsFromLoadValue),
+      manualAdditionsToLoadValue: Number(manualAdditionsToLoadValue),
       loadValue: Number(loadValue),
-      driverPay: Number(driverPay),
+      baseDriverPay: Number(baseDriverPay),
+      automaticDeductions: Number(automaticDeductions),
+      manualDeductionsFromDriverPay: Number(manualDeductionsFromDriverPay),
+      manualAdditionsToDriverPay: Number(manualAdditionsToDriverPay),
+      finalDriverPay: Number(finalDriverPay),
       driverLoadPercentage: Number(driverLoadPercentage)
     }
   }, [editableCrossDriverFreight, totals.totalQuotes, driverLoadPercentage])
@@ -629,7 +651,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       deduction: 0,
       isManual: true,
       comment: '',
-      isAddition: false // Default to deduction
+      isAddition: false, // Default to deduction
+      appliesTo: 'driver_pay' // Default to driver pay
     }
     setEditableCrossDriverFreight([...editableCrossDriverFreight, newItem])
     // Auto-save after adding
@@ -1486,7 +1509,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               return (
                                 <div
                                   key={item.id}
-                                  className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-start border border-gray-300 rounded-lg p-1.5"
+                                  className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-start border border-gray-300 rounded-lg p-1.5"
                                 >
                                   <Textarea
                                     placeholder="Enter comment or description..."
@@ -1505,6 +1528,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     <SelectContent>
                                       <SelectItem value="deduction">Deduction</SelectItem>
                                       <SelectItem value="addition">Addition</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Select
+                                    value={item.appliesTo || 'driver_pay'}
+                                    onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
+                                  >
+                                    <SelectTrigger className="h-8 w-32 mt-0.5 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="load_value">Load Value</SelectItem>
+                                      <SelectItem value="driver_pay">Driver Pay</SelectItem>
                                     </SelectContent>
                                   </Select>
                                   <Input
@@ -1597,37 +1632,23 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               </div>
                             </div>
                             <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Total Manual Deductions</div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Deductions (Load Value)</div>
                               <div className="text-lg font-bold text-red-600">
-                                -${payrollCalculations.manualDeductions.toFixed(2)}
+                                -${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}
                               </div>
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
                             <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Quotes - Manual Deductions</div>
-                              <div className="text-lg font-bold">
-                                ${payrollCalculations.quotesPlusManualDeductions.toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Total Automatic Deductions</div>
-                              <div className="text-lg font-bold text-red-600">
-                                -${payrollCalculations.automaticDeductions.toFixed(2)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">After Automatic Deductions</div>
-                              <div className="text-lg font-bold">
-                                ${payrollCalculations.afterAutomaticDeductions.toFixed(2)}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Additions</div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Additions (Load Value)</div>
                               <div className="text-lg font-bold text-green-600">
-                                +${payrollCalculations.totalAdditions.toFixed(2)}
+                                +${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Combined Total</div>
+                              <div className="text-lg font-bold">
+                                ${(payrollCalculations.totalQuotes - payrollCalculations.manualDeductionsFromLoadValue + payrollCalculations.manualAdditionsToLoadValue).toFixed(2)}
                               </div>
                             </div>
                           </div>
@@ -1640,10 +1661,40 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                             <div>
                               <div className="text-xs font-medium text-gray-600 mb-0.5">
-                                Driver Pay ({payrollCalculations.driverLoadPercentage.toFixed(0)}%)
+                                Base Driver Pay ({payrollCalculations.driverLoadPercentage.toFixed(0)}%)
+                              </div>
+                              <div className="text-lg font-bold text-blue-600">
+                                ${payrollCalculations.baseDriverPay.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Automatic Deductions</div>
+                              <div className="text-lg font-bold text-red-600">
+                                -${payrollCalculations.automaticDeductions.toFixed(2)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Deductions (Driver Pay)</div>
+                              <div className="text-lg font-bold text-red-600">
+                                -${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 border-t border-gray-300 pt-2">
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">Manual Additions (Driver Pay)</div>
+                              <div className="text-lg font-bold text-green-600">
+                                +${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-gray-600 mb-0.5">
+                                Final Driver Pay
                               </div>
                               <div className="text-xl font-bold text-blue-600">
-                                ${payrollCalculations.driverPay.toFixed(2)}
+                                ${payrollCalculations.finalDriverPay.toFixed(2)}
                               </div>
                             </div>
                           </div>
@@ -1853,33 +1904,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1">Total Manual Deductions</div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Manual Deductions (Load Value)</div>
                             <div className="text-lg font-bold text-red-600">
-                              -${payrollCalculations.manualDeductions.toFixed(2)}
+                              -${payrollCalculations.manualDeductionsFromLoadValue.toFixed(2)}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1">Quotes - Manual Deductions</div>
-                            <div className="text-lg font-bold">
-                              ${payrollCalculations.quotesPlusManualDeductions.toFixed(2)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1">Total Automatic Deductions</div>
-                            <div className="text-lg font-bold text-red-600">
-                              -${payrollCalculations.automaticDeductions.toFixed(2)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1">After Automatic Deductions</div>
-                            <div className="text-lg font-bold">
-                              ${payrollCalculations.afterAutomaticDeductions.toFixed(2)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs font-medium text-gray-600 mb-1">Manual Additions</div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Manual Additions (Load Value)</div>
                             <div className="text-lg font-bold text-green-600">
-                              +${payrollCalculations.totalAdditions.toFixed(2)}
+                              +${payrollCalculations.manualAdditionsToLoadValue.toFixed(2)}
                             </div>
                           </div>
                           <div>
@@ -1890,10 +1923,36 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           </div>
                           <div>
                             <div className="text-xs font-medium text-gray-600 mb-1">
-                              Driver Pay ({payrollCalculations.driverLoadPercentage.toFixed(0)}%)
+                              Base Driver Pay ({payrollCalculations.driverLoadPercentage.toFixed(0)}%)
+                            </div>
+                            <div className="text-lg font-bold text-blue-600">
+                              ${payrollCalculations.baseDriverPay.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Automatic Deductions</div>
+                            <div className="text-lg font-bold text-red-600">
+                              -${payrollCalculations.automaticDeductions.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Manual Deductions (Driver Pay)</div>
+                            <div className="text-lg font-bold text-red-600">
+                              -${payrollCalculations.manualDeductionsFromDriverPay.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">Manual Additions (Driver Pay)</div>
+                            <div className="text-lg font-bold text-green-600">
+                              +${payrollCalculations.manualAdditionsToDriverPay.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-600 mb-1">
+                              Final Driver Pay
                             </div>
                             <div className="text-xl font-bold text-blue-600">
-                              ${payrollCalculations.driverPay.toFixed(2)}
+                              ${payrollCalculations.finalDriverPay.toFixed(2)}
                             </div>
                           </div>
                         </div>

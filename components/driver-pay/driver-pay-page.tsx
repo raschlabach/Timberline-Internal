@@ -48,6 +48,7 @@ interface Deduction {
   isManual: boolean
   comment: string | null
   isAddition?: boolean
+  appliesTo?: 'load_value' | 'driver_pay' // For manual items: whether it applies to load value or driver pay. Defaults to 'driver_pay'
 }
 
 interface Order {
@@ -385,14 +386,23 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     const pickupCount = truckload.orders.filter(order => order.assignmentType === 'pickup').length
     const deliveryCount = truckload.orders.filter(order => order.assignmentType === 'delivery').length
     
-    // Separate manual and automatic deductions
-    const manualDeductions = truckload.deductions.reduce((sum, deduction) => {
-      if (deduction.isManual && !deduction.isAddition) {
+    // Separate deductions/additions by where they apply
+    // Manual items that apply to load value
+    const manualDeductionsFromLoadValue = truckload.deductions.reduce((sum, deduction) => {
+      if (deduction.isManual && !deduction.isAddition && deduction.appliesTo === 'load_value') {
         return sum + deduction.deduction
       }
       return sum
     }, 0)
     
+    const manualAdditionsToLoadValue = truckload.deductions.reduce((sum, deduction) => {
+      if (deduction.isManual && deduction.isAddition && deduction.appliesTo === 'load_value') {
+        return sum + deduction.deduction
+      }
+      return sum
+    }, 0)
+    
+    // Automatic deductions (always from driver pay)
     const automaticDeductions = truckload.deductions.reduce((sum, deduction) => {
       if (!deduction.isManual) {
         return sum + deduction.deduction
@@ -400,17 +410,26 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum
     }, 0)
     
-    const totalAdditions = truckload.deductions.reduce((sum, deduction) => {
-      if (deduction.isManual && deduction.isAddition) {
+    // Manual items that apply to driver pay
+    const manualDeductionsFromDriverPay = truckload.deductions.reduce((sum, deduction) => {
+      if (deduction.isManual && !deduction.isAddition && (deduction.appliesTo === 'driver_pay' || !deduction.appliesTo)) {
         return sum + deduction.deduction
       }
       return sum
     }, 0)
     
-    // Calculate intermediate totals
-    const quotesPlusManualDeductions = totalQuotes - manualDeductions
-    const afterAutomaticDeductions = quotesPlusManualDeductions - automaticDeductions
-    const loadValue = afterAutomaticDeductions + totalAdditions
+    const manualAdditionsToDriverPay = truckload.deductions.reduce((sum, deduction) => {
+      if (deduction.isManual && deduction.isAddition && (deduction.appliesTo === 'driver_pay' || !deduction.appliesTo)) {
+        return sum + deduction.deduction
+      }
+      return sum
+    }, 0)
+    
+    // Calculate load value (quotes - manual deductions from load value + manual additions to load value)
+    const loadValue = totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue
+    
+    // Calculate base driver pay (load value × percentage)
+    const baseDriverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
     
     // Calculate driver pay based on selected method
     let driverPay = 0
@@ -423,18 +442,19 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       // Manual: use entered amount
       driverPay = truckload.payManualAmount
     } else {
-      // Automatic: load value × driver percentage
-      driverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
+      // Automatic: base driver pay - automatic deductions - manual deductions from driver pay + manual additions to driver pay
+      driverPay = baseDriverPay - automaticDeductions - manualDeductionsFromDriverPay + manualAdditionsToDriverPay
     }
     
     return { 
       totalQuotes, 
-      manualDeductions,
-      quotesPlusManualDeductions,
-      automaticDeductions,
-      afterAutomaticDeductions,
-      totalAdditions,
+      manualDeductionsFromLoadValue,
+      manualAdditionsToLoadValue,
       loadValue,
+      baseDriverPay,
+      automaticDeductions,
+      manualDeductionsFromDriverPay,
+      manualAdditionsToDriverPay,
       driverPay,
       pickupCount,
       deliveryCount
@@ -450,15 +470,17 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum + tlTotals.totalQuotes
     }, 0)
 
-    const totalDeductions = selectedDriver.truckloads.reduce((sum, tl) => {
-      const tlTotals = calculateTruckloadTotals(tl)
-      return sum + tlTotals.manualDeductions + tlTotals.automaticDeductions
-    }, 0)
-
-    const loadValue = selectedDriver.truckloads.reduce((sum, tl) => {
+    const totalLoadValue = selectedDriver.truckloads.reduce((sum, tl) => {
       const tlTotals = calculateTruckloadTotals(tl)
       return sum + tlTotals.loadValue
     }, 0)
+
+    // Sum all driver pay from truckloads (already includes all deductions/additions)
+    const totalDriverPayFromLoads = selectedDriver.truckloads.reduce((sum, tl) => {
+      const tlTotals = calculateTruckloadTotals(tl)
+      return sum + tlTotals.driverPay
+    }, 0)
+
     const miscDrivingHours = selectedDriver.hours
       .filter(h => h.type === 'misc_driving')
       .reduce((sum, hour) => sum + hour.hours, 0)
@@ -467,14 +489,15 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       .reduce((sum, hour) => sum + hour.hours, 0)
     const miscDrivingTotal = miscDrivingHours * selectedDriver.miscDrivingRate
     const maintenanceTotal = maintenanceHours * selectedDriver.maintenanceRate
-    const weeklyDriverPay = (loadValue * selectedDriver.loadPercentage / 100) + 
+    
+    // Weekly driver pay = sum of all truckload driver pays + misc driving + maintenance
+    const weeklyDriverPay = totalDriverPayFromLoads + 
       miscDrivingTotal + 
       maintenanceTotal
 
     return {
       totalQuotes,
-      totalDeductions,
-      loadValue,
+      loadValue: totalLoadValue,
       miscDrivingHours,
       miscDrivingTotal,
       maintenanceHours,
@@ -904,24 +927,32 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               <div className="text-sm font-semibold">${tlTotals.totalQuotes.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Manual Deductions</div>
-                              <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductions.toFixed(2)}</div>
+                              <div className="text-xs text-gray-600 mb-0.5">Manual Ded (LV)</div>
+                              <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">After Manual</div>
-                              <div className="text-sm font-semibold">${tlTotals.quotesPlusManualDeductions.toFixed(2)}</div>
+                              <div className="text-xs text-gray-600 mb-0.5">Manual Add (LV)</div>
+                              <div className="text-sm font-semibold text-green-600">+${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</div>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
+                              <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <div className="text-xs text-gray-600 mb-0.5">Base Driver Pay</div>
+                              <div className="text-sm font-semibold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0">
                               <div className="text-xs text-gray-600 mb-0.5">Auto Deductions</div>
                               <div className="text-sm font-semibold text-red-600">-${tlTotals.automaticDeductions.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Manual Additions</div>
-                              <div className="text-sm font-semibold text-green-600">+${tlTotals.totalAdditions.toFixed(2)}</div>
+                              <div className="text-xs text-gray-600 mb-0.5">Manual Ded (DP)</div>
+                              <div className="text-sm font-semibold text-red-600">-${tlTotals.manualDeductionsFromDriverPay.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0">
-                              <div className="text-xs text-gray-600 mb-0.5">Load Value</div>
-                              <div className="text-base font-bold">${tlTotals.loadValue.toFixed(2)}</div>
+                              <div className="text-xs text-gray-600 mb-0.5">Manual Add (DP)</div>
+                              <div className="text-sm font-semibold text-green-600">+${tlTotals.manualAdditionsToDriverPay.toFixed(2)}</div>
                             </div>
                             <div className="flex-shrink-0 pay-method-controls">
                               <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
@@ -1070,10 +1101,6 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Total Quotes</div>
                       <div className="text-lg font-bold">${totals.totalQuotes.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Total Deductions</div>
-                      <div className="text-lg font-bold text-red-600">-${totals.totalDeductions.toFixed(2)}</div>
                     </div>
                     <div>
                       <div className="text-xs font-medium text-gray-600 mb-0.5">Load Value</div>

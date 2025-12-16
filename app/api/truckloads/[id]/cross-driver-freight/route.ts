@@ -38,37 +38,71 @@ export async function GET(
       })
     }
 
-    // Check if is_addition column exists, if not, apply migration automatically
-    const columnCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'is_addition'
-    `)
-    
-    if (columnCheck.rows.length === 0) {
-      console.log('is_addition column not found, applying migration...')
-      const client = await getClient()
-      try {
-        await client.query('BEGIN')
-        const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-        const migrationSql = fs.readFileSync(
-          path.join(migrationsDir, 'add-is-addition-to-cross-driver-freight.sql'),
-          'utf8'
-        )
-        await client.query(migrationSql)
-        await client.query('COMMIT')
-        console.log('is_addition column migration applied successfully')
-      } catch (migrationError) {
-        await client.query('ROLLBACK')
-        console.error('Error applying is_addition migration:', migrationError)
-        // Continue anyway - the column might already exist or migration might fail
-      } finally {
-        client.release()
+      // Check if is_addition column exists, if not, apply migration automatically
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'is_addition'
+      `)
+      
+      if (columnCheck.rows.length === 0) {
+        console.log('is_addition column not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-is-addition-to-cross-driver-freight.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('is_addition column migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying is_addition migration:', migrationError)
+          // Continue anyway - the column might already exist or migration might fail
+        } finally {
+          client.release()
+        }
       }
-    }
 
+      // Check if applies_to column exists, if not, apply migration automatically
+      const appliesToCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'applies_to'
+      `)
+      
+      if (appliesToCheck.rows.length === 0) {
+        console.log('applies_to column not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-applies-to-cross-driver-freight.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('applies_to column migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying applies_to migration:', migrationError)
+          // Continue anyway - the column might already exist or migration might fail
+        } finally {
+          client.release()
+        }
+      }
+
+    // Check if applies_to column exists (reuse the check from above)
+    const hasAppliesTo = appliesToCheck.rows.length > 0
+    
     const result = await query(`
       SELECT 
         id,
@@ -80,15 +114,21 @@ export async function GET(
         deduction,
         is_manual as "isManual",
         comment,
-        is_addition as "isAddition"
+        is_addition as "isAddition"${hasAppliesTo ? ', applies_to as "appliesTo"' : ''}
       FROM cross_driver_freight_deductions
       WHERE truckload_id = $1
       ORDER BY created_at ASC
     `, [truckloadId])
+    
+    // Add default appliesTo for items that don't have it (for backward compatibility)
+    const items = result.rows.map((row: any) => ({
+      ...row,
+      appliesTo: row.appliesTo || 'driver_pay'
+    }))
 
     return NextResponse.json({
       success: true,
-      items: result.rows
+      items: items
     })
   } catch (error) {
     console.error('Error fetching cross-driver freight:', error)
@@ -188,6 +228,16 @@ export async function POST(
       )
       console.log(`[Cross-Driver Freight] Deleted ${deleteResult.rowCount} existing items`)
 
+      // Check if applies_to column exists for INSERT
+      const appliesToCheckForInsert = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'applies_to'
+      `)
+      const hasAppliesTo = appliesToCheckForInsert.rows.length > 0
+
       // Insert new items
       for (const item of items) {
         const footage = typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0
@@ -204,8 +254,8 @@ export async function POST(
             deduction,
             is_manual,
             comment,
-            is_addition
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            is_addition${hasAppliesTo ? ', applies_to' : ''}
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${hasAppliesTo ? ', $11' : ''})
           RETURNING id
         `, [
           truckloadId,
@@ -217,7 +267,8 @@ export async function POST(
           deduction,
           item.isManual || false,
           item.comment || null,
-          item.isAddition || false
+          item.isAddition || false,
+          ...(hasAppliesTo ? [item.appliesTo || 'driver_pay'] : [])
         ])
         console.log(`[Cross-Driver Freight] Inserted item: id=${insertResult.rows[0]?.id}, driver=${item.driverName}, deduction=${deduction}`)
       }

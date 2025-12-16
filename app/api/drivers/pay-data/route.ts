@@ -285,7 +285,9 @@ export async function GET(request: NextRequest) {
           dimensions,
           deduction,
           is_manual as "isManual",
-          comment
+          comment,
+          is_addition as "isAddition",
+          COALESCE(applies_to, 'driver_pay') as "appliesTo"
         FROM cross_driver_freight_deductions
         WHERE truckload_id = ANY($1::int[])
         ORDER BY truckload_id, date
@@ -453,7 +455,8 @@ export async function GET(request: NextRequest) {
             deduction: parseFloat(deduction.deduction) || 0,
             isManual: deduction.isManual,
             comment: deduction.comment,
-            isAddition: deduction.isAddition || false
+            isAddition: deduction.isAddition || false,
+            appliesTo: deduction.appliesTo || 'driver_pay'
           })
         }
       }
