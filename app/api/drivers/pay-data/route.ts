@@ -512,7 +512,7 @@ export async function GET(request: NextRequest) {
           id: hour.id,
           date: hour.date,
           description: hour.description,
-          hours: parseFloat(hour.hours) || 0,
+          hours: typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0,
           type: hour.type || 'misc_driving'
         })
       }

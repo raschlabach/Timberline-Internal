@@ -638,10 +638,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
     const miscDrivingHours = selectedDriver.hours
       .filter(h => h.type === 'misc_driving')
-      .reduce((sum, hour) => sum + hour.hours, 0)
+      .reduce((sum, hour) => sum + (typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0), 0)
     const maintenanceHours = selectedDriver.hours
       .filter(h => h.type === 'maintenance')
-      .reduce((sum, hour) => sum + hour.hours, 0)
+      .reduce((sum, hour) => sum + (typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0), 0)
     const miscDrivingTotal = miscDrivingHours * selectedDriver.miscDrivingRate
     const maintenanceTotal = maintenanceHours * selectedDriver.maintenanceRate
     
@@ -1056,7 +1056,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 }`}>
                                   {hour.type === 'maintenance' ? 'Maintenance' : 'Misc Driving'}
                                 </span>
-                                <span className="text-sm font-medium">{hour.hours.toFixed(2)} hours</span>
+                                <span className="text-sm font-medium">{(typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0).toFixed(2)} hours</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
