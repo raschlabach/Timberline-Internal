@@ -166,3 +166,73 @@ export async function DELETE(
   }
 }
 
+// PATCH /api/drivers/[driverId]/hours - Update driver hour entry
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { driverId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const driverId = parseInt(params.driverId)
+    if (isNaN(driverId)) {
+      return NextResponse.json({ success: false, error: 'Invalid driver ID' }, { status: 400 })
+    }
+
+    const { id, date, description, hours, type } = await request.json()
+
+    if (!id || !date || hours === undefined || !type) {
+      return NextResponse.json({ success: false, error: 'id, date, hours, and type are required' }, { status: 400 })
+    }
+
+    if (type !== 'misc_driving' && type !== 'maintenance') {
+      return NextResponse.json({ success: false, error: 'type must be either "misc_driving" or "maintenance"' }, { status: 400 })
+    }
+
+    // Parse date as local date to avoid timezone issues
+    let dateToSave = date
+    if (typeof date === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        dateToSave = date
+      } else {
+        dateToSave = date.split('T')[0]
+      }
+    }
+
+    const result = await query(`
+      UPDATE driver_hours
+      SET date = $1::date,
+          description = $2,
+          hours = $3,
+          type = $4,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5 AND driver_id = $6
+      RETURNING 
+        id,
+        driver_id as "driverId",
+        TO_CHAR(date, 'YYYY-MM-DD') as date,
+        description,
+        hours,
+        type
+    `, [dateToSave, description || null, parseFloat(String(hours)), type, id, driverId])
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Hour entry not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      hour: result.rows[0]
+    })
+  } catch (error) {
+    console.error('Error updating driver hour:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to update driver hour'
+    }, { status: 500 })
+  }
+}
+

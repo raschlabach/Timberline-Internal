@@ -394,6 +394,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [deductionDialogComment, setDeductionDialogComment] = useState<string>('')
   const [deductionDialogAmount, setDeductionDialogAmount] = useState<string>('')
   const [deductionDialogAppliesTo, setDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
+  const [deductionDialogType, setDeductionDialogType] = useState<'pickup' | 'delivery' | 'manual'>('manual')
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
@@ -1085,14 +1086,28 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return
     }
 
-    addCrossDriverFreightItem(false, deductionDialogComment, amount, deductionDialogAppliesTo)
+    // Get the order to access customer names
+    const order = orders.find(o => o.orderId === deductionDialogOrderId)
+    let comment = ''
+    
+    if (deductionDialogType === 'pickup' && order) {
+      comment = `${order.pickupName} discount`
+    } else if (deductionDialogType === 'delivery' && order) {
+      comment = `${order.deliveryName} discount`
+    } else {
+      // Manual - use the editable comment
+      comment = deductionDialogComment
+    }
+
+    addCrossDriverFreightItem(false, comment, amount, deductionDialogAppliesTo)
     setDeductionDialogOpen(false)
     setDeductionDialogOrderId(null)
     setDeductionDialogComment('')
     setDeductionDialogAmount('')
     setDeductionDialogAppliesTo('driver_pay')
+    setDeductionDialogType('manual')
     toast.success('Manual deduction added')
-  }, [deductionDialogOrderId, deductionDialogComment, deductionDialogAmount, deductionDialogAppliesTo])
+  }, [deductionDialogOrderId, deductionDialogComment, deductionDialogAmount, deductionDialogAppliesTo, deductionDialogType, orders, addCrossDriverFreightItem])
 
   function updateCrossDriverFreightItem(id: string, updates: Partial<CrossDriverFreightItem>): void {
     setEditableCrossDriverFreight(items =>
@@ -1753,6 +1768,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             setDeductionDialogComment('')
                             setDeductionDialogAmount('')
                             setDeductionDialogAppliesTo('driver_pay')
+                            setDeductionDialogType('manual')
                             setDeductionDialogOpen(true)
                           }}
                         />
@@ -2409,15 +2425,51 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
+                <Label htmlFor="deduction-type">Type</Label>
+                <Select
+                  value={deductionDialogType}
+                  onValueChange={(value) => {
+                    setDeductionDialogType(value as 'pickup' | 'delivery' | 'manual')
+                    // Clear comment when switching types
+                    setDeductionDialogComment('')
+                  }}
+                >
+                  <SelectTrigger id="deduction-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pickup">Pickup</SelectItem>
+                    <SelectItem value="delivery">Delivery</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="deduction-comment">Description</Label>
-                <Textarea
-                  id="deduction-comment"
-                  placeholder="Enter description..."
-                  value={deductionDialogComment}
-                  onChange={(e) => setDeductionDialogComment(e.target.value)}
-                  className="min-h-[80px]"
-                  rows={3}
-                />
+                {deductionDialogType === 'manual' ? (
+                  <Textarea
+                    id="deduction-comment"
+                    placeholder="Enter description..."
+                    value={deductionDialogComment}
+                    onChange={(e) => setDeductionDialogComment(e.target.value)}
+                    className="min-h-[80px]"
+                    rows={3}
+                  />
+                ) : (
+                  <div className="min-h-[80px] px-3 py-2 border rounded-md bg-gray-50 flex items-center">
+                    <span className="text-sm text-gray-700">
+                      {(() => {
+                        const order = orders.find(o => o.orderId === deductionDialogOrderId)
+                        if (deductionDialogType === 'pickup' && order) {
+                          return `${order.pickupName} discount`
+                        } else if (deductionDialogType === 'delivery' && order) {
+                          return `${order.deliveryName} discount`
+                        }
+                        return '—'
+                      })()}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deduction-applies-to">Applies To</Label>
@@ -2448,7 +2500,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDeductionDialogOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setDeductionDialogOpen(false)
+                setDeductionDialogType('manual')
+                setDeductionDialogComment('')
+              }}>
                 Cancel
               </Button>
               <Button onClick={handleSaveDeduction} className="bg-red-600 hover:bg-red-700">
