@@ -2425,24 +2425,45 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="deduction-type">Type</Label>
-                <Select
-                  value={deductionDialogType}
-                  onValueChange={(value) => {
-                    setDeductionDialogType(value as 'pickup' | 'delivery' | 'manual')
-                    // Clear comment when switching types
-                    setDeductionDialogComment('')
-                  }}
-                >
-                  <SelectTrigger id="deduction-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pickup">Pickup</SelectItem>
-                    <SelectItem value="delivery">Delivery</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={deductionDialogType === 'pickup' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setDeductionDialogType('pickup')
+                      setDeductionDialogComment('')
+                    }}
+                    className="flex-1"
+                  >
+                    Pickup
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={deductionDialogType === 'delivery' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setDeductionDialogType('delivery')
+                      setDeductionDialogComment('')
+                    }}
+                    className="flex-1"
+                  >
+                    Delivery
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={deductionDialogType === 'manual' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setDeductionDialogType('manual')
+                      setDeductionDialogComment('')
+                    }}
+                    className="flex-1"
+                  >
+                    Manual
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deduction-comment">Description</Label>
