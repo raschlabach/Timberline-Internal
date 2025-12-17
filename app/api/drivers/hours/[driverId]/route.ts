@@ -81,9 +81,23 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'type must be either "misc_driving" or "maintenance"' }, { status: 400 })
     }
 
+    // Parse date as local date to avoid timezone issues
+    // Date should be in YYYY-MM-DD format from the client
+    // Extract just the date part if it's an ISO string
+    let dateToSave = date
+    if (typeof date === 'string') {
+      // If it's already in YYYY-MM-DD format, use it directly
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        dateToSave = date
+      } else {
+        // If it's an ISO string, extract just the date part
+        dateToSave = date.split('T')[0]
+      }
+    }
+
     const result = await query(`
       INSERT INTO driver_hours (driver_id, date, description, hours, type)
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2::date, $3, $4, $5)
       RETURNING 
         id,
         driver_id as "driverId",
@@ -91,7 +105,7 @@ export async function POST(
         description,
         hours,
         type
-    `, [driverId, date, description || null, hours, type])
+    `, [driverId, dateToSave, description || null, parseFloat(String(hours)), type])
 
     return NextResponse.json({
       success: true,

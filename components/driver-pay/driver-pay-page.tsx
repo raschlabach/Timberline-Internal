@@ -158,6 +158,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   const [editingSettings, setEditingSettings] = useState(false)
   const [tempSettings, setTempSettings] = useState<DriverPaySettings | null>(null)
   const [newHour, setNewHour] = useState<{ date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
+  const [editingHour, setEditingHour] = useState<{ id: number; date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
   const [editingPayMethod, setEditingPayMethod] = useState<number | null>(null)
   const [tempPayMethod, setTempPayMethod] = useState<{ method: 'automatic' | 'hourly' | 'manual'; hours?: number; amount?: number } | null>(null)
   const hasInitializedFromUrl = useRef(false)
@@ -326,20 +327,36 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return
     }
 
+    // Validate hours is a positive number
+    if (newHour.hours <= 0) {
+      toast.error('Hours must be greater than 0')
+      return
+    }
+
     try {
+      // Parse date as local date to avoid timezone issues (YYYY-MM-DD format)
+      const dateStr = newHour.date
+      // Ensure date is in YYYY-MM-DD format (date input already provides this)
+      
       const response = await fetch(`/api/drivers/hours/${selectedDriver.driverId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          date: newHour.date,
+          date: dateStr, // Already in YYYY-MM-DD format from date input
           description: newHour.description || null,
-          hours: newHour.hours,
+          hours: parseFloat(String(newHour.hours)),
           type: newHour.type
         })
       })
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to add driver hour`)
+      }
+
       const data = await response.json()
-      if (data.success) {
+      if (data.success && data.hour) {
         setDrivers(prev => prev.map(driver =>
           driver.driverId === selectedDriver.driverId
             ? { ...driver, hours: [...driver.hours, data.hour] }
@@ -348,11 +365,63 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         setNewHour(null)
         toast.success('Driver hour added')
       } else {
-        toast.error('Failed to add driver hour')
+        throw new Error(data.error || 'Failed to add driver hour')
       }
     } catch (error) {
       console.error('Error adding driver hour:', error)
-      toast.error('Failed to add driver hour')
+      toast.error(error instanceof Error ? error.message : 'Failed to add driver hour')
+    }
+  }
+
+  // Update driver hour
+  const updateDriverHour = async () => {
+    if (!selectedDriver || !editingHour || !editingHour.date || !editingHour.hours || !editingHour.type) {
+      toast.error('Please fill in date, hours, and type')
+      return
+    }
+
+    // Validate hours is a positive number
+    if (editingHour.hours <= 0) {
+      toast.error('Hours must be greater than 0')
+      return
+    }
+
+    try {
+      const dateStr = editingHour.date
+      
+      const response = await fetch(`/api/drivers/hours/${selectedDriver.driverId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          id: editingHour.id,
+          date: dateStr,
+          description: editingHour.description || null,
+          hours: parseFloat(String(editingHour.hours)),
+          type: editingHour.type
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to update driver hour`)
+      }
+
+      const data = await response.json()
+      if (data.success && data.hour) {
+        setDrivers(prev => prev.map(driver =>
+          driver.driverId === selectedDriver.driverId
+            ? { ...driver, hours: driver.hours.map(h => h.id === editingHour.id ? data.hour : h) }
+            : driver
+        ))
+        setEditingHour(null)
+        toast.success('Driver hour updated')
+      } else {
+        throw new Error(data.error || 'Failed to update driver hour')
+      }
+    } catch (error) {
+      console.error('Error updating driver hour:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to update driver hour')
     }
   }
 
@@ -362,8 +431,14 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
     try {
       const response = await fetch(`/api/drivers/hours/${selectedDriver.driverId}?id=${hourId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to delete driver hour`)
+      }
 
       const data = await response.json()
       if (data.success) {
@@ -374,11 +449,11 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         ))
         toast.success('Driver hour deleted')
       } else {
-        toast.error('Failed to delete driver hour')
+        throw new Error(data.error || 'Failed to delete driver hour')
       }
     } catch (error) {
       console.error('Error deleting driver hour:', error)
-      toast.error('Failed to delete driver hour')
+      toast.error(error instanceof Error ? error.message : 'Failed to delete driver hour')
     }
   }
 
@@ -926,29 +1001,90 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 </div>
                 {selectedDriver.hours.length > 0 ? (
                   <div className="space-y-2">
-                    {selectedDriver.hours.map(hour => (
-                      <div key={hour.id} className="flex items-center justify-between p-2 border rounded">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm">{format(new Date(hour.date), 'MM/dd/yyyy')}</span>
-                          <span className="text-sm text-gray-600">{hour.description || '—'}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            hour.type === 'maintenance' 
-                              ? 'bg-blue-100 text-blue-700' 
-                              : 'bg-green-100 text-green-700'
-                          }`}>
-                            {hour.type === 'maintenance' ? 'Maintenance' : 'Misc Driving'}
-                          </span>
-                          <span className="text-sm font-medium">{hour.hours.toFixed(2)} hours</span>
+                    {selectedDriver.hours.map(hour => {
+                      const isEditing = editingHour?.id === hour.id
+                      return (
+                        <div key={hour.id} className="flex items-center justify-between p-2 border rounded">
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <Input
+                                type="date"
+                                value={editingHour.date}
+                                onChange={(e) => setEditingHour(prev => prev ? { ...prev, date: e.target.value } : null)}
+                                className="w-40 h-8"
+                              />
+                              <Input
+                                type="text"
+                                placeholder="Description"
+                                value={editingHour.description}
+                                onChange={(e) => setEditingHour(prev => prev ? { ...prev, description: e.target.value } : null)}
+                                className="w-48 h-8"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Hours"
+                                value={editingHour.hours || ''}
+                                onChange={(e) => setEditingHour(prev => prev ? { ...prev, hours: parseFloat(e.target.value) || 0 } : null)}
+                                className="w-24 h-8"
+                                step="0.25"
+                                min="0"
+                              />
+                              <select
+                                value={editingHour.type}
+                                onChange={(e) => setEditingHour(prev => prev ? { ...prev, type: e.target.value as 'misc_driving' | 'maintenance' } : null)}
+                                className="w-32 h-8 border rounded px-2 text-sm"
+                              >
+                                <option value="misc_driving">Misc Driving</option>
+                                <option value="maintenance">Maintenance</option>
+                              </select>
+                              <Button size="sm" onClick={updateDriverHour}>
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingHour(null)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-4">
+                                <span className="text-sm">{format(parseLocalDate(hour.date), 'MM/dd/yyyy')}</span>
+                                <span className="text-sm text-gray-600">{hour.description || '—'}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  hour.type === 'maintenance' 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {hour.type === 'maintenance' ? 'Maintenance' : 'Misc Driving'}
+                                </span>
+                                <span className="text-sm font-medium">{hour.hours.toFixed(2)} hours</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingHour({
+                                    id: hour.id,
+                                    date: hour.date,
+                                    description: hour.description || '',
+                                    hours: hour.hours,
+                                    type: hour.type
+                                  })}
+                                >
+                                  <Edit2 className="h-4 w-4 text-blue-500" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => deleteDriverHour(hour.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => deleteDriverHour(hour.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="text-sm text-gray-500 text-center py-4">No hours recorded</div>
