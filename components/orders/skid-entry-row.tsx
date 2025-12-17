@@ -164,8 +164,6 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
         <span className="text-gray-700 text-sm">{footage.toFixed(2)} ft²</span>
       </div>
       
-      <div className="col-span-1"></div>
-      
       <div className="col-span-1 flex justify-end space-x-1">
         <Button
           type="button"

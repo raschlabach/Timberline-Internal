@@ -160,10 +160,35 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
     setItems(prevItems => [...prevItems, newItem]);
   }, [getNextNumber]);
 
-  // Calculate totals
+  // Calculate totals and group by dimensions
   const totalFootage = items.reduce((sum, item) => sum + item.footage, 0);
   const totalSkids = items.filter(item => item.type === 'skid').length;
   const totalVinyl = items.filter(item => item.type === 'vinyl').length;
+
+  // Group items by type and dimensions
+  const groupByDimensions = useCallback((items: SkidData[]) => {
+    const groups: { [key: string]: { count: number; type: 'skid' | 'vinyl'; width: number; length: number } } = {};
+    
+    items.forEach(item => {
+      const key = `${item.type}-${item.width}-${item.length}`;
+      if (groups[key]) {
+        groups[key].count++;
+      } else {
+        groups[key] = {
+          count: 1,
+          type: item.type,
+          width: item.width,
+          length: item.length
+        };
+      }
+    });
+    
+    return Object.values(groups);
+  }, []);
+
+  const groupedItems = groupByDimensions(items);
+  const skidGroups = groupedItems.filter(g => g.type === 'skid');
+  const vinylGroups = groupedItems.filter(g => g.type === 'vinyl');
 
   return (
     <div className="space-y-3">
@@ -182,7 +207,7 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
               <div className="col-span-1"></div>
               <div className="col-span-3">Length</div>
               <div className="col-span-2">Footage</div>
-              <div className="col-span-1">Totals</div>
+              <div className="col-span-1"></div>
             </div>
             
             {/* Items */}
@@ -196,19 +221,36 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
               />
             ))}
             
-            {/* Totals row */}
+            {/* Totals row with grouped display */}
             <div className="grid grid-cols-12 gap-2 border-t-2 pt-2 mt-2 font-semibold text-sm bg-gray-50 px-2 py-1 rounded">
               <div className="col-span-2 text-gray-900">Totals:</div>
-              <div className="col-span-3"></div>
-              <div className="col-span-1"></div>
-              <div className="col-span-3"></div>
-              <div className="col-span-2 text-gray-900">{totalFootage.toFixed(2)} ft²</div>
-              <div className="col-span-1 text-gray-900 text-right">
-                <div className="text-xs font-normal">
-                  <div>Skids: <span className="font-semibold">{totalSkids}</span></div>
-                  <div>Vinyl: <span className="font-semibold">{totalVinyl}</span></div>
+              <div className="col-span-8 text-gray-700 text-sm font-normal">
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {skidGroups.length > 0 && (
+                    <span>
+                      <span className="font-semibold">Skids:</span>{' '}
+                      {skidGroups.map((g, idx) => (
+                        <span key={idx}>
+                          {g.count}-{g.width}x{g.length}
+                          {idx < skidGroups.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  {vinylGroups.length > 0 && (
+                    <span>
+                      <span className="font-semibold">Vinyl:</span>{' '}
+                      {vinylGroups.map((g, idx) => (
+                        <span key={idx}>
+                          {g.count}-{g.width}x{g.length}
+                          {idx < vinylGroups.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </div>
               </div>
+              <div className="col-span-2 text-gray-900 text-right">{totalFootage.toFixed(2)} ft²</div>
             </div>
           </>
         )}
