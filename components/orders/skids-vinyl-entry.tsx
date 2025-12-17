@@ -160,8 +160,10 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
     setItems(prevItems => [...prevItems, newItem]);
   }, [getNextNumber]);
 
-  // Calculate total footage
+  // Calculate totals
   const totalFootage = items.reduce((sum, item) => sum + item.footage, 0);
+  const totalSkids = items.filter(item => item.type === 'skid').length;
+  const totalVinyl = items.filter(item => item.type === 'vinyl').length;
 
   return (
     <div className="space-y-3">
@@ -180,7 +182,7 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
               <div className="col-span-1"></div>
               <div className="col-span-3">Length</div>
               <div className="col-span-2">Footage</div>
-              <div className="col-span-1"></div>
+              <div className="col-span-1">Totals</div>
             </div>
             
             {/* Items */}
@@ -194,10 +196,19 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
               />
             ))}
             
-            {/* Total footage */}
-            <div className="border-t pt-1 mt-2 flex justify-between">
-              <span className="font-medium text-sm">Total Footage:</span>
-              <span className="font-medium text-sm">{totalFootage.toFixed(2)} ft²</span>
+            {/* Totals row */}
+            <div className="grid grid-cols-12 gap-2 border-t-2 pt-2 mt-2 font-semibold text-sm bg-gray-50 px-2 py-1 rounded">
+              <div className="col-span-2 text-gray-900">Totals:</div>
+              <div className="col-span-3"></div>
+              <div className="col-span-1"></div>
+              <div className="col-span-3"></div>
+              <div className="col-span-2 text-gray-900">{totalFootage.toFixed(2)} ft²</div>
+              <div className="col-span-1 text-gray-900 text-right">
+                <div className="text-xs font-normal">
+                  <div>Skids: <span className="font-semibold">{totalSkids}</span></div>
+                  <div>Vinyl: <span className="font-semibold">{totalVinyl}</span></div>
+                </div>
+              </div>
             </div>
           </>
         )}

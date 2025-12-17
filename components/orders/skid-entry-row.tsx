@@ -123,7 +123,7 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
   return (
     <div className="grid grid-cols-12 gap-2 items-center mb-1">
       <div className="col-span-2 flex items-center">
-        <span className="font-medium mr-2 text-sm">{skid.type === 'skid' ? 'Skid' : 'Vinyl'} {skid.number}:</span>
+        <span className="font-medium mr-2 text-sm">{skid.type === 'skid' ? 'Skid' : 'Vinyl'}:</span>
       </div>
       
       <div className="col-span-3">
@@ -163,6 +163,8 @@ export function SkidEntryRow({ skid, onUpdate, onDelete, onDuplicate }: SkidEntr
       <div className="col-span-2">
         <span className="text-gray-700 text-sm">{footage.toFixed(2)} ft²</span>
       </div>
+      
+      <div className="col-span-1"></div>
       
       <div className="col-span-1 flex justify-end space-x-1">
         <Button
