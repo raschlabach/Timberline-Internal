@@ -137,7 +137,7 @@ export function TruckloadDetailsCard({ truckload, onTruckloadUpdated }: Truckloa
           description: truckload.description,
           billOfLadingNumber: truckload.billOfLadingNumber
         }}
-        onTruckloadUpdated={() => {
+        onTruckloadUpdated={async () => {
           onTruckloadUpdated?.()
         }}
       />

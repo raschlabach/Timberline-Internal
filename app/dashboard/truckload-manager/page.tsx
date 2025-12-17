@@ -561,9 +561,12 @@ export default function TruckloadManager() {
             description: selectedTruckload.description,
             billOfLadingNumber: selectedTruckload.billOfLadingNumber
           }}
-          onTruckloadUpdated={() => {
-            queryClient.invalidateQueries({ queryKey: ['truckloads'] });
-            queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] });
+          onTruckloadUpdated={async () => {
+            // Invalidate and immediately refetch to ensure UI updates
+            await queryClient.invalidateQueries({ queryKey: ['truckloads'] });
+            await queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] });
+            // Force a refetch of the truckload manager data
+            await queryClient.refetchQueries({ queryKey: ['truckload-manager-data'] });
           }}
         />
       )}
