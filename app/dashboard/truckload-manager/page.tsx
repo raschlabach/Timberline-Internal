@@ -558,10 +558,12 @@ export default function TruckloadManager() {
             startDate: selectedTruckload.startDate,
             endDate: selectedTruckload.endDate,
             trailerNumber: selectedTruckload.trailerNumber,
-            description: selectedTruckload.description
+            description: selectedTruckload.description,
+            billOfLadingNumber: selectedTruckload.billOfLadingNumber
           }}
           onTruckloadUpdated={() => {
             queryClient.invalidateQueries({ queryKey: ['truckloads'] });
+            queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] });
           }}
         />
       )}

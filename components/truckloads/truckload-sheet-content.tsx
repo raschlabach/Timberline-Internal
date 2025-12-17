@@ -316,7 +316,7 @@ export function TruckloadSheetContent({ truckload, stops, isPreview = false }: T
                       {/* Warning message after customer list */}
                       {group.stops.length > 1 && (
                         <span className="ml-2 font-bold text-red-600 print:text-red-600 text-xs">
-                          ⚠️ {group.stops.length} {group.assignmentType.toUpperCase()}S
+                          ⚠️ {group.stops.length} {group.assignmentType === 'pickup' ? 'PICKUPS' : 'DELIVERIES'}
                         </span>
                       )}
                     </div>

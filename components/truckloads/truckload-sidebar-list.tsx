@@ -609,6 +609,7 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
           <TruckloadDetailsCard 
             truckload={{
               id: truckload.id,
+              driverId: truckload.driverId,
               driverName: truckload.driverName,
               driverColor: truckload.driverColor,
               startDate: truckload.startDate,
@@ -620,6 +621,7 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
             }}
             onTruckloadUpdated={() => {
               queryClient.invalidateQueries({ queryKey: ["truckload", truckloadId] })
+              queryClient.invalidateQueries({ queryKey: ["truckloads"] })
             }}
           />
             </div>

@@ -6,11 +6,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Pencil, User, Calendar, FileText, Hash, Truck } from "lucide-react"
-import { TruckloadDetailsDialog } from "./truckload-details-dialog"
+import { EditTruckloadDialog } from "./edit-truckload-dialog"
 
 interface TruckloadDetailsCardProps {
   truckload: {
     id: number
+    driverId?: number | null
     driverName: string | null
     driverColor: string | null
     startDate: string
@@ -124,11 +125,21 @@ export function TruckloadDetailsCard({ truckload, onTruckloadUpdated }: Truckloa
         </CardContent>
       </Card>
 
-      <TruckloadDetailsDialog
+      <EditTruckloadDialog
         isOpen={isEditDialogOpen}
         onClose={() => setIsEditDialogOpen(false)}
-        truckload={truckload}
-        onTruckloadUpdated={onTruckloadUpdated}
+        truckload={{
+          id: truckload.id,
+          driverId: truckload.driverId || 0, // Use driverId if available, otherwise 0
+          startDate: truckload.startDate,
+          endDate: truckload.endDate,
+          trailerNumber: truckload.trailerNumber,
+          description: truckload.description,
+          billOfLadingNumber: truckload.billOfLadingNumber
+        }}
+        onTruckloadUpdated={() => {
+          onTruckloadUpdated?.()
+        }}
       />
     </>
   )

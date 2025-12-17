@@ -159,10 +159,10 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-[52rem] w-auto h-auto">
+      <DialogContent className="max-w-[52rem] w-auto max-h-[90vh] flex flex-col">
         <div 
           ref={printRef} 
-          className="bg-white w-full h-full flex flex-col relative z-0"
+          className="bg-white w-full flex flex-col relative z-0 overflow-y-auto flex-1 min-h-0"
           style={{
             width: '8.5in',
             minHeight: '11in',
@@ -172,7 +172,7 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
           }}
         >
           {/* Header Section */}
-          <div className="mb-4">
+          <div className="mb-4 flex-shrink-0">
             {/* Top Row - Company Info and Load Details */}
             <div className="flex justify-between items-start mb-3">
               {/* Left - Company Info */}
@@ -231,7 +231,7 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
           </div>
 
           {/* Stops List */}
-          <div className="flex-1">
+          <div className="flex-1 min-h-0">
             <div className="space-y-1">
               {sortedStops.map((stop) => (
                 <div key={stop.id} className="border-b border-gray-300 pb-2">
@@ -356,7 +356,7 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
           </div>
 
           {/* Print Button */}
-          <div className="text-center print:hidden mt-4">
+          <div className="text-center print:hidden mt-4 flex-shrink-0">
             <Button onClick={() => handlePrint && handlePrint()} className="text-base px-8">
               Print
             </Button>

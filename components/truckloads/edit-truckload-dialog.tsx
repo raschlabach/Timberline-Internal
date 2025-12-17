@@ -27,6 +27,7 @@ interface EditTruckloadDialogProps {
     endDate: string
     trailerNumber: string | null
     description: string | null
+    billOfLadingNumber?: string | null
   }
   onTruckloadUpdated: () => void
 }
@@ -56,6 +57,7 @@ export function EditTruckloadDialog({
     driverId: truckload.driverId.toString(),
     trailerNumber: truckload.trailerNumber || "",
     description: truckload.description || "",
+    billOfLadingNumber: truckload.billOfLadingNumber || "",
     startDate: truckload.startDate ? truckload.startDate.substring(0, 10) : "",
     startTime: truckload.startDate ? format(parseDateString(truckload.startDate), "HH:mm") : "",
     endDate: truckload.endDate ? truckload.endDate.substring(0, 10) : "",
@@ -68,6 +70,7 @@ export function EditTruckloadDialog({
       driverId: truckload.driverId.toString(),
       trailerNumber: truckload.trailerNumber || "",
       description: truckload.description || "",
+      billOfLadingNumber: truckload.billOfLadingNumber || "",
       startDate: truckload.startDate ? truckload.startDate.substring(0, 10) : "",
       startTime: truckload.startDate ? format(parseDateString(truckload.startDate), "HH:mm") : "",
       endDate: truckload.endDate ? truckload.endDate.substring(0, 10) : "",
@@ -75,10 +78,12 @@ export function EditTruckloadDialog({
     })
   }, [truckload])
 
-  // Fetch drivers on component mount
+  // Fetch drivers when dialog opens
   useEffect(() => {
-    fetchDrivers()
-  }, [])
+    if (isOpen) {
+      fetchDrivers()
+    }
+  }, [isOpen])
 
   async function fetchDrivers() {
     try {
@@ -101,20 +106,20 @@ export function EditTruckloadDialog({
     e.preventDefault()
     
     try {
-      const response = await fetch('/api/truckloads', {
+      const response = await fetch(`/api/truckloads/${truckload.id}`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          id: truckload.id,
           driverId: parseInt(formData.driverId),
           // Send dates as YYYY-MM-DD strings to avoid timezone issues
           startDate: formData.startDate,
           endDate: formData.endDate,
           trailerNumber: formData.trailerNumber || null,
-          description: formData.description || null
+          description: formData.description || null,
+          bill_of_lading_number: formData.billOfLadingNumber || null
         })
       })
 
@@ -255,15 +260,27 @@ export function EditTruckloadDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="trailerNumber">Trailer Number (Optional)</Label>
-            <Input
-              type="text"
-              id="trailerNumber"
-              value={formData.trailerNumber}
-              onChange={(e) => setFormData({ ...formData, trailerNumber: e.target.value })}
-              placeholder="Enter trailer number"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="billOfLadingNumber">Bill of Lading Number</Label>
+              <Input
+                type="text"
+                id="billOfLadingNumber"
+                value={formData.billOfLadingNumber}
+                onChange={(e) => setFormData({ ...formData, billOfLadingNumber: e.target.value })}
+                placeholder="BOL number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="trailerNumber">Trailer Number</Label>
+              <Input
+                type="text"
+                id="trailerNumber"
+                value={formData.trailerNumber}
+                onChange={(e) => setFormData({ ...formData, trailerNumber: e.target.value })}
+                placeholder="Enter trailer number"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
