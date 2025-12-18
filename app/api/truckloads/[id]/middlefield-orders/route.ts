@@ -7,6 +7,7 @@ import path from 'path'
 
 // GET /api/truckloads/[id]/middlefield-orders - Get all split load orders for a truckload
 // Includes middlefield orders automatically, plus any manually added orders
+// Query params: ?includeOrderId=123 to include a specific order even if it doesn't have quotes set
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -21,6 +22,11 @@ export async function GET(
     if (isNaN(truckloadId)) {
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
+
+    // Check for includeOrderId query parameter
+    const { searchParams } = new URL(request.url)
+    const includeOrderId = searchParams.get('includeOrderId')
+    const includeOrderIdNum = includeOrderId ? parseInt(includeOrderId, 10) : null
 
     // Check if middlefield_delivery_quote column exists, if not, apply migration automatically
     try {
@@ -210,11 +216,13 @@ export async function GET(
           -- OR manually added orders (have a split quote set)
           OR (o.middlefield_delivery_quote IS NOT NULL AND o.middlefield_delivery_quote > 0)
           OR (o.ohio_to_indiana_pickup_quote IS NOT NULL AND o.ohio_to_indiana_pickup_quote > 0)
+          ${includeOrderIdNum ? 'OR o.id = $2' : ''}
         )
       ORDER BY o.id
     `
 
-    const result = await query(sqlQuery, [truckloadId])
+    const queryParams = includeOrderIdNum ? [truckloadId, includeOrderIdNum] : [truckloadId]
+    const result = await query(sqlQuery, queryParams)
 
     return NextResponse.json({
       success: true,
