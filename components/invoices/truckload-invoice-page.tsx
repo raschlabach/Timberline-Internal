@@ -1639,6 +1639,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
 
   // Open middlefield management dialog
   const openMiddlefieldDialog = async (truckloadId: number) => {
+    console.log('openMiddlefieldDialog called with truckloadId:', truckloadId)
+    if (!truckloadId || isNaN(truckloadId)) {
+      console.error('Invalid truckloadId:', truckloadId)
+      toast.error('Invalid truckload ID')
+      return
+    }
+    
     setMiddlefieldTruckloadId(truckloadId)
     setMiddlefieldDialogOpen(true)
     setIsLoadingMiddlefield(true)
@@ -1647,6 +1654,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       const response = await fetch(`/api/truckloads/${truckloadId}/middlefield-orders`, {
         credentials: 'include'
       })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
       
       if (data.success) {
@@ -1974,9 +1986,20 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs"
-                      onClick={() => {
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
                         if (selectedTruckloadId) {
-                          openMiddlefieldDialog(parseInt(selectedTruckloadId))
+                          const truckloadId = parseInt(selectedTruckloadId, 10)
+                          if (!isNaN(truckloadId)) {
+                            openMiddlefieldDialog(truckloadId)
+                          } else {
+                            console.error('Invalid selectedTruckloadId:', selectedTruckloadId)
+                            toast.error('Invalid truckload ID')
+                          }
+                        } else {
+                          console.error('selectedTruckloadId is null or undefined')
+                          toast.error('No truckload selected')
                         }
                       }}
                     >
