@@ -133,7 +133,9 @@ export function EditTruckloadDialog({
         }
       }
       
+      const result = await response.json()
       toast.success('Truckload updated successfully')
+      // Call the callback before closing to ensure queries are invalidated
       onTruckloadUpdated()
       onClose()
     } catch (error) {

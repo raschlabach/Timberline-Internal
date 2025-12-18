@@ -95,7 +95,7 @@ export default function TruckloadManager() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 0, // Always refetch when invalidated
   })
 
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
@@ -562,11 +562,15 @@ export default function TruckloadManager() {
             billOfLadingNumber: selectedTruckload.billOfLadingNumber
           }}
           onTruckloadUpdated={async () => {
-            // Invalidate and immediately refetch to ensure UI updates
-            await queryClient.invalidateQueries({ queryKey: ['truckloads'] });
-            await queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] });
-            // Force a refetch of the truckload manager data
-            await queryClient.refetchQueries({ queryKey: ['truckload-manager-data'] });
+            // Invalidate all related queries
+            queryClient.invalidateQueries({ queryKey: ['truckloads'] });
+            queryClient.invalidateQueries({ queryKey: ['truckload-manager-data'] });
+            // Force an immediate refetch of all matching queries (not just active ones)
+            // This ensures the data updates even if the user navigates back to the page
+            await queryClient.refetchQueries({ 
+              queryKey: ['truckload-manager-data'],
+              type: 'all' // Refetch all queries, not just active ones
+            });
           }}
         />
       )}

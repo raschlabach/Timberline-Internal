@@ -107,7 +107,8 @@ export async function GET(
             NULLIF(pl.state, '')
           ),
           'phone_number_1', pc.phone_number_1,
-          'phone_number_2', pc.phone_number_2
+          'phone_number_2', pc.phone_number_2,
+          'notes', pc.notes
         ) as pickup_customer,
         -- Delivery customer details
         json_build_object(
@@ -119,7 +120,8 @@ export async function GET(
             NULLIF(dl.state, '')
           ),
           'phone_number_1', dc.phone_number_1,
-          'phone_number_2', dc.phone_number_2
+          'phone_number_2', dc.phone_number_2,
+          'notes', dc.notes
         ) as delivery_customer,
         -- Freight totals and details
         COALESCE(ss.skids_count, 0) as skids,

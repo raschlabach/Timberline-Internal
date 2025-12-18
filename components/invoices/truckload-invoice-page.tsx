@@ -19,6 +19,7 @@ import EditTruckloadDialog from '@/components/invoices/edit-truckload-dialog'
 import { OrderInfoDialog } from '@/components/orders/order-info-dialog'
 import { BillOfLadingDialog } from '@/app/components/BillOfLadingDialog'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DndContext,
   closestCenter,
@@ -79,8 +80,8 @@ interface TruckloadOrdersApiResponse {
     id: string
     assignment_type: 'pickup' | 'delivery'
     sequence_number: number
-    pickup_customer: { id: string | null; name: string | null; address: string | null }
-    delivery_customer: { id: string | null; name: string | null; address: string | null }
+    pickup_customer: { id: string | null; name: string | null; address: string | null; phone_number_1: string | null; phone_number_2: string | null; notes: string | null }
+    delivery_customer: { id: string | null; name: string | null; address: string | null; phone_number_1: string | null; phone_number_2: string | null; notes: string | null }
     freight_quote: string | null
     footage: number | null
     skids: number
@@ -107,6 +108,12 @@ interface AssignedOrderRow {
   deliveryName: string
   pickupAddress: string | null
   deliveryAddress: string | null
+  pickupPhone1: string | null
+  pickupPhone2: string | null
+  pickupNotes: string | null
+  deliveryPhone1: string | null
+  deliveryPhone2: string | null
+  deliveryNotes: string | null
   payingCustomerName: string | null
   freightQuote: string | null
   footage: number
@@ -135,6 +142,75 @@ interface CrossDriverFreightItem {
   isAddition?: boolean // Track if this is an addition (true) or deduction (false). Only applies to manual items.
   appliesTo?: 'load_value' | 'driver_pay' // For manual items: whether it applies to load value or driver pay. Defaults to 'driver_pay'
   customerName?: string // Customer name for pickup/delivery (for automatic items)
+}
+
+// Customer info tooltip component
+function CustomerInfoTooltip({ 
+  name, 
+  address, 
+  phone1, 
+  phone2, 
+  notes, 
+  children 
+}: { 
+  name: string
+  address: string | null
+  phone1: string | null
+  phone2: string | null
+  notes: string | null
+  children: React.ReactNode
+}) {
+  const formatPhone = (phone: string | null): string => {
+    if (!phone) return ''
+    // Remove all non-digits
+    const cleaned = phone.replace(/\D/g, '')
+    // Format as (XXX) XXX-XXXX
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+    }
+    return phone
+  }
+
+  const hasInfo = address || phone1 || phone2 || notes
+
+  if (!hasInfo) {
+    return <>{children}</>
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {children}
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs p-3 bg-white border shadow-lg">
+          <div className="space-y-2 text-sm">
+            {address && (
+              <div>
+                <div className="font-semibold text-gray-700 mb-1">Address:</div>
+                <div className="text-gray-600">{address}</div>
+              </div>
+            )}
+            {(phone1 || phone2) && (
+              <div>
+                <div className="font-semibold text-gray-700 mb-1">Phone:</div>
+                <div className="text-gray-600 space-y-1">
+                  {phone1 && <div>{formatPhone(phone1)}</div>}
+                  {phone2 && <div>{formatPhone(phone2)}</div>}
+                </div>
+              </div>
+            )}
+            {notes && (
+              <div>
+                <div className="font-semibold text-gray-700 mb-1">Notes:</div>
+                <div className="text-gray-600 whitespace-pre-wrap">{notes}</div>
+              </div>
+            )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 }
 
 // Sortable row component for drag-and-drop
@@ -199,20 +275,50 @@ function SortableTableRow({
         </div>
       </TableCell>
       <TableCell className="text-sm">
-        {isTransfer ? (
-          <span className="font-bold">{row.pickupName}</span>
-        ) : (
-          row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName
-        )}
+        <CustomerInfoTooltip
+          name={row.pickupName}
+          address={row.pickupAddress}
+          phone1={row.pickupPhone1}
+          phone2={row.pickupPhone2}
+          notes={row.pickupNotes}
+        >
+          {isTransfer ? (
+            <span className="font-bold cursor-help">{row.pickupName}</span>
+          ) : (
+            row.assignmentType === 'pickup' ? <span className="font-bold cursor-help">{row.pickupName}</span> : <span className="cursor-help">{row.pickupName}</span>
+          )}
+        </CustomerInfoTooltip>
       </TableCell>
       <TableCell className="text-sm">
-        {isTransfer ? (
-          <span className="font-bold">{row.deliveryName}</span>
+        <CustomerInfoTooltip
+          name={row.deliveryName}
+          address={row.deliveryAddress}
+          phone1={row.deliveryPhone1}
+          phone2={row.deliveryPhone2}
+          notes={row.deliveryNotes}
+        >
+          {isTransfer ? (
+            <span className="font-bold cursor-help">{row.deliveryName}</span>
+          ) : (
+            row.assignmentType === 'delivery' ? <span className="font-bold cursor-help">{row.deliveryName}</span> : <span className="cursor-help">{row.deliveryName}</span>
+          )}
+        </CustomerInfoTooltip>
+      </TableCell>
+      <TableCell className="text-sm">
+        {row.payingCustomerName ? (
+          <CustomerInfoTooltip
+            name={row.payingCustomerName}
+            address={null}
+            phone1={null}
+            phone2={null}
+            notes={null}
+          >
+            <span className="cursor-help">{row.payingCustomerName}</span>
+          </CustomerInfoTooltip>
         ) : (
-          row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName
+          '—'
         )}
       </TableCell>
-      <TableCell className="text-sm">{row.payingCustomerName || '—'}</TableCell>
       <TableCell className="text-sm" style={{ width: '90px' }}>
         <Input
           type="text"
@@ -1346,6 +1452,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deliveryName: o.delivery_customer?.name || 'Unknown',
           pickupAddress: o.pickup_customer?.address || null,
           deliveryAddress: o.delivery_customer?.address || null,
+          pickupPhone1: o.pickup_customer?.phone_number_1 || null,
+          pickupPhone2: o.pickup_customer?.phone_number_2 || null,
+          pickupNotes: o.pickup_customer?.notes || null,
+          deliveryPhone1: o.delivery_customer?.phone_number_1 || null,
+          deliveryPhone2: o.delivery_customer?.phone_number_2 || null,
+          deliveryNotes: o.delivery_customer?.notes || null,
           payingCustomerName: null as string | null,
           freightQuote: o.freight_quote,
           footage: typeof o.footage === 'number' ? o.footage : (typeof o.footage === 'string' ? parseFloat(o.footage) || 0 : 0),
@@ -2185,20 +2297,50 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             {isTransfer && row.sequenceNumbers ? row.sequenceNumbers : row.sequenceNumber}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {isTransfer ? (
-                              <span className="font-bold">{row.pickupName}</span>
-                            ) : (
-                              row.assignmentType === 'pickup' ? <span className="font-bold">{row.pickupName}</span> : row.pickupName
-                            )}
+                            <CustomerInfoTooltip
+                              name={row.pickupName}
+                              address={row.pickupAddress}
+                              phone1={row.pickupPhone1}
+                              phone2={row.pickupPhone2}
+                              notes={row.pickupNotes}
+                            >
+                              {isTransfer ? (
+                                <span className="font-bold cursor-help">{row.pickupName}</span>
+                              ) : (
+                                row.assignmentType === 'pickup' ? <span className="font-bold cursor-help">{row.pickupName}</span> : <span className="cursor-help">{row.pickupName}</span>
+                              )}
+                            </CustomerInfoTooltip>
                           </TableCell>
                           <TableCell className="text-xs">
-                            {isTransfer ? (
-                              <span className="font-bold">{row.deliveryName}</span>
+                            <CustomerInfoTooltip
+                              name={row.deliveryName}
+                              address={row.deliveryAddress}
+                              phone1={row.deliveryPhone1}
+                              phone2={row.deliveryPhone2}
+                              notes={row.deliveryNotes}
+                            >
+                              {isTransfer ? (
+                                <span className="font-bold cursor-help">{row.deliveryName}</span>
+                              ) : (
+                                row.assignmentType === 'delivery' ? <span className="font-bold cursor-help">{row.deliveryName}</span> : <span className="cursor-help">{row.deliveryName}</span>
+                              )}
+                            </CustomerInfoTooltip>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {row.payingCustomerName ? (
+                              <CustomerInfoTooltip
+                                name={row.payingCustomerName}
+                                address={null}
+                                phone1={null}
+                                phone2={null}
+                                notes={null}
+                              >
+                                <span className="cursor-help">{row.payingCustomerName}</span>
+                              </CustomerInfoTooltip>
                             ) : (
-                              row.assignmentType === 'delivery' ? <span className="font-bold">{row.deliveryName}</span> : row.deliveryName
+                              '—'
                             )}
                           </TableCell>
-                          <TableCell className="text-xs">{row.payingCustomerName || '—'}</TableCell>
                           <TableCell className="text-xs" style={{ width: '90px' }}>{row.freightQuote || '—'}</TableCell>
                           <TableCell className="text-xs text-right">{row.footage}</TableCell>
                           <TableCell className="text-xs">
