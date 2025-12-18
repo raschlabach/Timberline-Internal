@@ -198,6 +198,42 @@ export async function GET(request: NextRequest) {
       // Continue anyway - will try to query and handle gracefully
     }
 
+    // Check if middlefield_delivery_quote column exists, if not, apply migration automatically
+    try {
+      const middlefieldColumnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'orders'
+        AND column_name = 'middlefield_delivery_quote'
+      `)
+      
+      if (middlefieldColumnCheck.rows.length === 0) {
+        console.log('middlefield_delivery_quote column not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-middlefield-delivery-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('middlefield_delivery_quote column migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying middlefield_delivery_quote migration:', migrationError)
+          // Continue anyway - will use fallback query
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying middlefield_delivery_quote migration:', migrationCheckError)
+      // Continue anyway - will use fallback query
+    }
+
     // Get all truckloads for drivers in the date range
     // Try query with new columns first, fallback to basic query if columns don't exist
     let truckloadsResult
@@ -289,36 +325,74 @@ export async function GET(request: NextRequest) {
 
     // Get all orders for these truckloads
     // For middlefield delivery assignments, use middlefield_delivery_quote if available
-    const ordersResult = await query(`
-      SELECT 
-        o.id as "orderId",
-        toa.truckload_id as "truckloadId",
-        toa.assignment_type as "assignmentType",
-        CASE 
-          WHEN toa.assignment_type = 'delivery' 
-            AND o.middlefield = true 
-            AND o.backhaul = true 
-            AND o.middlefield_delivery_quote IS NOT NULL
-          THEN o.middlefield_delivery_quote
-          ELSE o.freight_quote
-        END as "freightQuote",
-        COALESCE(
-          (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
-          0
-        ) + COALESCE(
-          (SELECT SUM(v.width * v.length * v.quantity) FROM vinyl v WHERE v.order_id = o.id),
-          0
-        ) as footage,
-        pc.customer_name as "pickupCustomerName",
-        dc.customer_name as "deliveryCustomerName",
-        COALESCE(o.middlefield, false) as "middlefield"
-      FROM truckload_order_assignments toa
-      JOIN orders o ON toa.order_id = o.id
-      LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
-      LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
-      WHERE toa.truckload_id = ANY($1::int[])
-      ORDER BY toa.truckload_id, toa.sequence_number
-    `, [truckloadIds])
+    // Check if column exists first
+    const middlefieldColumnExists = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'orders'
+      AND column_name = 'middlefield_delivery_quote'
+    `)
+    const hasMiddlefieldColumn = middlefieldColumnExists.rows.length > 0
+
+    // Build query based on whether middlefield_delivery_quote column exists
+    let ordersResult
+    if (hasMiddlefieldColumn) {
+      ordersResult = await query(`
+        SELECT 
+          o.id as "orderId",
+          toa.truckload_id as "truckloadId",
+          toa.assignment_type as "assignmentType",
+          CASE 
+            WHEN toa.assignment_type = 'delivery' 
+              AND o.middlefield = true 
+              AND o.backhaul = true 
+              AND o.middlefield_delivery_quote IS NOT NULL
+            THEN o.middlefield_delivery_quote
+            ELSE o.freight_quote
+          END as "freightQuote",
+          COALESCE(
+            (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
+            0
+          ) + COALESCE(
+            (SELECT SUM(v.width * v.length * v.quantity) FROM vinyl v WHERE v.order_id = o.id),
+            0
+          ) as footage,
+          pc.customer_name as "pickupCustomerName",
+          dc.customer_name as "deliveryCustomerName",
+          COALESCE(o.middlefield, false) as "middlefield"
+        FROM truckload_order_assignments toa
+        JOIN orders o ON toa.order_id = o.id
+        LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+        LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+        WHERE toa.truckload_id = ANY($1::int[])
+        ORDER BY toa.truckload_id, toa.sequence_number
+      `, [truckloadIds])
+    } else {
+      ordersResult = await query(`
+        SELECT 
+          o.id as "orderId",
+          toa.truckload_id as "truckloadId",
+          toa.assignment_type as "assignmentType",
+          o.freight_quote as "freightQuote",
+          COALESCE(
+            (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
+            0
+          ) + COALESCE(
+            (SELECT SUM(v.width * v.length * v.quantity) FROM vinyl v WHERE v.order_id = o.id),
+            0
+          ) as footage,
+          pc.customer_name as "pickupCustomerName",
+          dc.customer_name as "deliveryCustomerName",
+          COALESCE(o.middlefield, false) as "middlefield"
+        FROM truckload_order_assignments toa
+        JOIN orders o ON toa.order_id = o.id
+        LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+        LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+        WHERE toa.truckload_id = ANY($1::int[])
+        ORDER BY toa.truckload_id, toa.sequence_number
+      `, [truckloadIds])
+    }
 
     // Get cross-driver freight deductions for these truckloads
     let deductionsResult
