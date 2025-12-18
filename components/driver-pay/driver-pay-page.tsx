@@ -61,6 +61,9 @@ interface Order {
   pickupCustomerName: string | null
   deliveryCustomerName: string | null
   middlefield?: boolean
+  backhaul?: boolean
+  ohioToIndiana?: boolean
+  middlefieldQuoteSet?: boolean
 }
 
 interface Truckload {
@@ -169,10 +172,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     assignmentType: string
     fullQuote: number | null
     deliveryQuote: number | null
+    pickupQuote: number | null
     deliveryCustomerName: string | null
     pickupCustomerName: string | null
     pickupTruckloadId: number | null
-    hasDeduction: number
+    deliveryTruckloadId: number | null
+    scenarioType: 'backhaul' | 'ohio_to_indiana' | null
+    hasDeductionBackhaul: number
+    hasDeductionOhioToIndiana: number
+    isAutoIncluded?: boolean
+    quoteType?: 'pickup' | 'delivery' | null // For manually added orders
   }>>([])
   const [isLoadingMiddlefield, setIsLoadingMiddlefield] = useState(false)
   const hasInitializedFromUrl = useRef(false)
@@ -792,14 +801,35 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 ? order.deliveryQuote 
                 : parseFloat(String(order.deliveryQuote)) || null)
             : null,
+          pickupQuote: order.pickupQuote !== null && order.pickupQuote !== undefined
+            ? (typeof order.pickupQuote === 'number' 
+                ? order.pickupQuote 
+                : parseFloat(String(order.pickupQuote)) || null)
+            : null,
           pickupTruckloadId: order.pickupTruckloadId 
             ? (typeof order.pickupTruckloadId === 'number' 
                 ? order.pickupTruckloadId 
                 : parseInt(String(order.pickupTruckloadId)))
             : null,
-          hasDeduction: typeof order.hasDeduction === 'number' 
-            ? order.hasDeduction 
-            : parseInt(String(order.hasDeduction || 0))
+          deliveryTruckloadId: order.deliveryTruckloadId 
+            ? (typeof order.deliveryTruckloadId === 'number' 
+                ? order.deliveryTruckloadId 
+                : parseInt(String(order.deliveryTruckloadId)))
+            : null,
+          scenarioType: order.scenarioType || null,
+          hasDeductionBackhaul: typeof order.hasDeductionBackhaul === 'number' 
+            ? order.hasDeductionBackhaul 
+            : parseInt(String(order.hasDeductionBackhaul || 0)),
+          hasDeductionOhioToIndiana: typeof order.hasDeductionOhioToIndiana === 'number' 
+            ? order.hasDeductionOhioToIndiana 
+            : parseInt(String(order.hasDeductionOhioToIndiana || 0)),
+          isAutoIncluded: order.isAutoIncluded !== undefined ? Boolean(order.isAutoIncluded) : false,
+          // Determine quote type for manually added orders
+          quoteType: order.scenarioType === 'backhaul' ? 'delivery' 
+            : order.scenarioType === 'ohio_to_indiana' ? 'pickup'
+            : (order.deliveryQuote !== null && order.deliveryQuote !== undefined) ? 'delivery'
+            : (order.pickupQuote !== null && order.pickupQuote !== undefined) ? 'pickup'
+            : null
         }))
         setMiddlefieldOrders(parsedOrders)
       } else {
@@ -815,7 +845,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
   }
 
-  // Update delivery quote for an order
+  // Update delivery quote for an order (backhaul scenario)
   const updateDeliveryQuote = (orderId: number, deliveryQuote: string) => {
     setMiddlefieldOrders(prev => prev.map(order => 
       order.orderId === orderId
@@ -824,17 +854,62 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     ))
   }
 
-  // Save all delivery quotes
+  // Update pickup quote for an order (ohio_to_indiana scenario)
+  const updatePickupQuote = (orderId: number, pickupQuote: string) => {
+    setMiddlefieldOrders(prev => prev.map(order => 
+      order.orderId === orderId
+        ? { ...order, pickupQuote: pickupQuote ? parseFloat(pickupQuote) : null, quoteType: 'pickup' }
+        : order
+    ))
+  }
+
+  // Update quote type for manually added orders
+  const updateQuoteType = (orderId: number, quoteType: 'pickup' | 'delivery') => {
+    setMiddlefieldOrders(prev => prev.map(order => 
+      order.orderId === orderId
+        ? { 
+            ...order, 
+            quoteType,
+            // Clear the opposite quote when switching types
+            deliveryQuote: quoteType === 'delivery' ? order.deliveryQuote : null,
+            pickupQuote: quoteType === 'pickup' ? order.pickupQuote : null
+          }
+        : order
+    ))
+  }
+
+  // Save all quotes
   const saveDeliveryQuotes = async () => {
     if (!middlefieldTruckloadId) return
 
     const updates = middlefieldOrders
-      .filter(order => order.pickupTruckloadId)
-      .map(order => ({
-        orderId: order.orderId,
-        deliveryQuote: order.deliveryQuote,
-        pickupTruckloadId: order.pickupTruckloadId
-      }))
+      .filter(order => {
+        if (order.scenarioType === 'backhaul') {
+          return order.pickupTruckloadId !== null
+        } else if (order.scenarioType === 'ohio_to_indiana') {
+          return order.deliveryTruckloadId !== null
+        }
+        return false
+      })
+      .map(order => {
+        if (order.scenarioType === 'backhaul') {
+          return {
+            orderId: order.orderId,
+            deliveryQuote: order.deliveryQuote,
+            pickupTruckloadId: order.pickupTruckloadId,
+            scenarioType: 'backhaul'
+          }
+        } else if (order.scenarioType === 'ohio_to_indiana') {
+          return {
+            orderId: order.orderId,
+            pickupQuote: order.pickupQuote,
+            deliveryTruckloadId: order.deliveryTruckloadId,
+            scenarioType: 'ohio_to_indiana'
+          }
+        }
+        return null
+      })
+      .filter(update => update !== null)
 
     if (updates.length === 0) {
       toast.error('No orders to update')
@@ -852,16 +927,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
       const data = await response.json()
       if (data.success) {
-        toast.success(data.message || 'Delivery quotes updated successfully')
+        toast.success(data.message || 'Quotes updated successfully')
         setMiddlefieldDialogOpen(false)
         // Refresh driver pay data
         fetchPayData()
       } else {
-        toast.error(data.error || 'Failed to update delivery quotes')
+        toast.error(data.error || 'Failed to update quotes')
       }
     } catch (error) {
-      console.error('Error saving delivery quotes:', error)
-      toast.error('Failed to save delivery quotes')
+      console.error('Error saving quotes:', error)
+      toast.error('Failed to save quotes')
     } finally {
       setIsLoadingMiddlefield(false)
     }
@@ -1212,11 +1287,23 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                   {selectedDriver.truckloads.map(truckload => {
                     const tlTotals = calculateTruckloadTotals(truckload)
                     const hasMiddlefield = truckload.orders.some(order => order.middlefield === true)
+                    
+                    // Check if all middlefield orders have their quotes set
+                    // The API already sets middlefieldQuoteSet based on assignment type and scenario
+                    const middlefieldOrders = truckload.orders.filter(order => order.middlefield === true)
+                    const allMiddlefieldQuotesSet = middlefieldOrders.length === 0 || middlefieldOrders.every(order => {
+                      // The API already computed this correctly based on assignment type
+                      return order.middlefieldQuoteSet === true
+                    })
+                    
+                    // Show red border only if there are middlefield orders AND not all quotes are set
+                    const showRedBorder = hasMiddlefield && !allMiddlefieldQuotesSet
+                    
                     return (
                       <Card
                         key={truckload.id}
                         className={`p-4 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid ${
-                          hasMiddlefield ? 'border-2 border-red-500' : ''
+                          showRedBorder ? 'border-2 border-red-500' : ''
                         }`}
                         onClick={(e) => handleTruckloadClick(truckload.id, e)}
                       >
@@ -1245,7 +1332,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             {hasMiddlefield && (
                               <div className="flex items-center gap-2 text-red-600 flex-shrink-0">
                                 <AlertTriangle className="h-5 w-5" />
-                                <span className="text-sm font-semibold">Middlefield</span>
+                                <span className="text-sm font-semibold">Split Loads</span>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1256,7 +1343,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   }}
                                 >
                                   <Settings className="h-3 w-3 mr-1" />
-                                  Manage
+                                  Manage Split Loads
                                 </Button>
                               </div>
                             )}
@@ -1572,16 +1659,25 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       <Dialog open={middlefieldDialogOpen} onOpenChange={setMiddlefieldDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Manage Middlefield Delivery Quotes</DialogTitle>
+            <DialogTitle>Manage Split Loads</DialogTitle>
             <DialogDescription>
-              Set delivery quotes for middlefield orders. The delivery quote amount will be deducted from the pickup driver's pay.
+              <div className="space-y-2">
+                <p>
+                  Split loads allow you to divide a single order's quote between pickup and delivery truckloads. 
+                  Middlefield orders are automatically included here.
+                </p>
+                <div className="text-sm space-y-1">
+                  <p><strong>Pickup Quote:</strong> Use when the pickup driver should receive a smaller portion. The difference is deducted from the delivery driver's pay.</p>
+                  <p><strong>Delivery Quote:</strong> Use when the delivery driver should receive a smaller portion. The difference is deducted from the pickup driver's pay.</p>
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
           
           {isLoadingMiddlefield ? (
             <div className="text-center py-8">Loading orders...</div>
           ) : middlefieldOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">No middlefield orders found in this truckload</div>
+            <div className="text-center py-8 text-gray-500">No split load orders found in this truckload</div>
           ) : (
             <div className="space-y-4">
               {middlefieldOrders.map((order) => {
@@ -1593,10 +1689,27 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                       ? order.deliveryQuote 
                       : parseFloat(String(order.deliveryQuote)) || null)
                   : null
-                // Deduction amount is simply the delivery quote value (not the difference)
-                const deductionAmount = deliveryQuote !== null && !isNaN(deliveryQuote) && deliveryQuote > 0
-                  ? deliveryQuote 
+                const pickupQuote = order.pickupQuote !== null && order.pickupQuote !== undefined
+                  ? (typeof order.pickupQuote === 'number' 
+                      ? order.pickupQuote 
+                      : parseFloat(String(order.pickupQuote)) || null)
                   : null
+                
+                const isBackhaul = order.scenarioType === 'backhaul'
+                const isOhioToIndiana = order.scenarioType === 'ohio_to_indiana'
+                
+                // Deduction amount is the quote value (delivery quote for backhaul, pickup quote for ohio_to_indiana)
+                const deductionAmount = isBackhaul 
+                  ? (deliveryQuote !== null && !isNaN(deliveryQuote) && deliveryQuote > 0 ? deliveryQuote : null)
+                  : isOhioToIndiana
+                  ? (pickupQuote !== null && !isNaN(pickupQuote) && pickupQuote > 0 ? pickupQuote : null)
+                  : null
+                
+                const hasDeduction = isBackhaul 
+                  ? (order.hasDeductionBackhaul > 0)
+                  : isOhioToIndiana
+                  ? (order.hasDeductionOhioToIndiana > 0)
+                  : false
                 
                 return (
                   <Card key={order.orderId} className="p-4">
@@ -1610,48 +1723,119 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                           <div className="text-sm text-gray-600">
                             Pickup: {order.pickupCustomerName || 'Unknown'}
                           </div>
+                          <div className="text-xs mt-1">
+                            {order.isAutoIncluded ? (
+                              <span className="text-blue-600">
+                                {isBackhaul && 'Auto: Backhaul Scenario'}
+                                {isOhioToIndiana && 'Auto: Ohio to Indiana Scenario'}
+                              </span>
+                            ) : (
+                              <span className="text-purple-600">Manually Added</span>
+                            )}
+                          </div>
                         </div>
-                        {(typeof order.hasDeduction === 'number' ? order.hasDeduction : parseInt(String(order.hasDeduction || 0))) > 0 && (
+                        {hasDeduction && (
                           <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
                             Deduction exists
                           </div>
                         )}
                       </div>
                       
+                      {!order.isAutoIncluded && (
+                        <div className="mb-3 pb-3 border-b">
+                          <Label className="text-xs text-gray-600 mb-2 block">Quote Type</Label>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={order.quoteType === 'delivery' ? 'default' : 'outline'}
+                              onClick={() => updateQuoteType(order.orderId, 'delivery')}
+                              className="h-7 text-xs"
+                            >
+                              Delivery Quote
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={order.quoteType === 'pickup' ? 'default' : 'outline'}
+                              onClick={() => updateQuoteType(order.orderId, 'pickup')}
+                              className="h-7 text-xs"
+                            >
+                              Pickup Quote
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <Label className="text-xs text-gray-600">Full Quote</Label>
                           <div className="text-sm font-medium">${fullQuote.toFixed(2)}</div>
                         </div>
-                        <div>
-                          <Label htmlFor={`delivery-quote-${order.orderId}`} className="text-xs text-gray-600">
-                            Delivery Quote
-                          </Label>
-                          <Input
-                            id={`delivery-quote-${order.orderId}`}
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={deliveryQuote !== null ? deliveryQuote : ''}
-                            onChange={(e) => updateDeliveryQuote(order.orderId, e.target.value)}
-                            placeholder="Enter amount"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-600">Deduction Amount</Label>
-                          <div className={`text-sm font-medium ${deductionAmount !== null && deductionAmount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                            {deductionAmount !== null && deductionAmount > 0 
-                              ? `-$${deductionAmount.toFixed(2)}`
-                              : 'N/A'
-                            }
-                          </div>
-                        </div>
+                        {isBackhaul || (!order.isAutoIncluded && order.quoteType === 'delivery') ? (
+                          <>
+                            <div>
+                              <Label htmlFor={`delivery-quote-${order.orderId}`} className="text-xs text-gray-600">
+                                Delivery Quote
+                              </Label>
+                              <Input
+                                id={`delivery-quote-${order.orderId}`}
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={deliveryQuote !== null ? deliveryQuote : ''}
+                                onChange={(e) => updateDeliveryQuote(order.orderId, e.target.value)}
+                                placeholder="Enter amount"
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-gray-600">Deduction (from Pickup)</Label>
+                              <div className={`text-sm font-medium ${deductionAmount !== null && deductionAmount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                {deductionAmount !== null && deductionAmount > 0 
+                                  ? `-$${deductionAmount.toFixed(2)}`
+                                  : 'N/A'
+                                }
+                              </div>
+                            </div>
+                          </>
+                        ) : isOhioToIndiana || (!order.isAutoIncluded && order.quoteType === 'pickup') ? (
+                          <>
+                            <div>
+                              <Label htmlFor={`pickup-quote-${order.orderId}`} className="text-xs text-gray-600">
+                                Pickup Quote
+                              </Label>
+                              <Input
+                                id={`pickup-quote-${order.orderId}`}
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={pickupQuote !== null ? pickupQuote : ''}
+                                onChange={(e) => updatePickupQuote(order.orderId, e.target.value)}
+                                placeholder="Enter amount"
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-gray-600">Deduction (from Delivery)</Label>
+                              <div className={`text-sm font-medium ${deductionAmount !== null && deductionAmount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                {deductionAmount !== null && deductionAmount > 0 
+                                  ? `-$${deductionAmount.toFixed(2)}`
+                                  : 'N/A'
+                                }
+                              </div>
+                            </div>
+                          </>
+                        ) : null}
                       </div>
                       
-                      {order.pickupTruckloadId && (
+                      {isBackhaul && order.pickupTruckloadId && (
                         <div className="text-xs text-gray-500">
                           Pickup Truckload ID: {order.pickupTruckloadId}
+                        </div>
+                      )}
+                      {isOhioToIndiana && order.deliveryTruckloadId && (
+                        <div className="text-xs text-gray-500">
+                          Delivery Truckload ID: {order.deliveryTruckloadId}
                         </div>
                       )}
                     </div>

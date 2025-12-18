@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
-import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft, GripVertical, Info, FileText, Minus, Settings } from 'lucide-react'
+import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft, GripVertical, Info, FileText, Minus, Settings, Split } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -117,8 +117,10 @@ interface AssignedOrderRow {
   payingCustomerName: string | null
   freightQuote: string | null
   middlefieldDeliveryQuote: number | null
+  ohioToIndianaPickupQuote: number | null
   middlefield: boolean
   backhaul: boolean
+  ohioToIndiana: boolean
   footage: number
   skidsData: Array<{ width: number; length: number; quantity: number }>
   vinylData: Array<{ width: number; length: number; quantity: number }>
@@ -397,18 +399,57 @@ function SortableTableRow({
         </div>
       </TableCell>
       <TableCell className="text-sm text-center">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation()
-            onAddDeduction(row.orderId)
-          }}
-          className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-          title="Add manual deduction"
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center justify-center gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Toggle split loads - if order has a split quote, remove it; otherwise add it
+                    // This will be handled by opening the split loads dialog
+                    if (selectedTruckload) {
+                      // Open split loads dialog - the order will be added if not already there
+                      // For now, just show a message that they should use the Manage Split Loads button
+                      toast.info('Use "Manage Split Loads" button to add/remove orders')
+                    }
+                  }}
+                  className={`h-7 w-7 p-0 ${
+                    (row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) ||
+                    (row.middlefield && row.backhaul)
+                      ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                  }`}
+                  title={
+                    (row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) ||
+                    (row.middlefield && row.backhaul)
+                      ? 'In split loads - Click to manage'
+                      : 'Add to split loads'
+                  }
+                >
+                  <Split className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{(row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) || (row.middlefield && row.backhaul) ? 'In split loads' : 'Add to split loads'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAddDeduction(row.orderId)
+            }}
+            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+            title="Add manual deduction"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+        </div>
       </TableCell>
       <TableCell className="text-sm">
         {isTransfer ? (
@@ -1519,8 +1560,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           payingCustomerName: null as string | null,
           freightQuote: o.freight_quote,
           middlefieldDeliveryQuote: (o as any).middlefield_delivery_quote ? parseFloat((o as any).middlefield_delivery_quote) : null,
+          ohioToIndianaPickupQuote: (o as any).ohio_to_indiana_pickup_quote ? parseFloat((o as any).ohio_to_indiana_pickup_quote) : null,
           middlefield: (o as any).middlefield || false,
           backhaul: (o as any).backhaul || false,
+          ohioToIndiana: (o as any).oh_to_in || false,
           footage: typeof o.footage === 'number' ? o.footage : (typeof o.footage === 'string' ? parseFloat(o.footage) || 0 : 0),
           skidsData: o.skids_data || [],
           vinylData: o.vinyl_data || [],

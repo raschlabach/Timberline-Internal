@@ -234,6 +234,42 @@ export async function GET(request: NextRequest) {
       // Continue anyway - will use fallback query
     }
 
+    // Check if ohio_to_indiana_pickup_quote column exists, if not, apply migration automatically
+    try {
+      const ohioToIndianaColumnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'orders'
+        AND column_name = 'ohio_to_indiana_pickup_quote'
+      `)
+      
+      if (ohioToIndianaColumnCheck.rows.length === 0) {
+        console.log('ohio_to_indiana_pickup_quote column not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-ohio-to-indiana-pickup-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('ohio_to_indiana_pickup_quote column migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying ohio_to_indiana_pickup_quote migration:', migrationError)
+          // Continue anyway - will use fallback query
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying ohio_to_indiana_pickup_quote migration:', migrationCheckError)
+      // Continue anyway - will use fallback query
+    }
+
     // Get all truckloads for drivers in the date range
     // Try query with new columns first, fallback to basic query if columns don't exist
     let truckloadsResult
@@ -324,8 +360,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all orders for these truckloads
-    // For middlefield delivery assignments, use middlefield_delivery_quote if available
-    // Check if column exists first
+    // For middlefield orders:
+    // - backhaul scenario: delivery uses middlefield_delivery_quote, pickup uses full quote
+    // - ohio_to_indiana scenario: pickup uses ohio_to_indiana_pickup_quote, delivery uses full quote
+    // Check if columns exist first
     const middlefieldColumnExists = await query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -335,14 +373,38 @@ export async function GET(request: NextRequest) {
     `)
     const hasMiddlefieldColumn = middlefieldColumnExists.rows.length > 0
 
-    // Build query based on whether middlefield_delivery_quote column exists
+    const ohioToIndianaColumnExists = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'orders'
+      AND column_name = 'ohio_to_indiana_pickup_quote'
+    `)
+    const hasOhioToIndianaColumn = ohioToIndianaColumnExists.rows.length > 0
+
+    // Build query based on whether columns exist
     let ordersResult
-    if (hasMiddlefieldColumn) {
-      ordersResult = await query(`
-        SELECT 
-          o.id as "orderId",
-          toa.truckload_id as "truckloadId",
-          toa.assignment_type as "assignmentType",
+    if (hasMiddlefieldColumn || hasOhioToIndianaColumn) {
+      let freightQuoteCase = 'o.freight_quote'
+      if (hasMiddlefieldColumn && hasOhioToIndianaColumn) {
+        freightQuoteCase = `
+          CASE 
+            -- Backhaul scenario: delivery uses delivery quote
+            WHEN toa.assignment_type = 'delivery' 
+              AND o.middlefield = true 
+              AND o.backhaul = true 
+              AND o.middlefield_delivery_quote IS NOT NULL
+            THEN o.middlefield_delivery_quote
+            -- Ohio to Indiana scenario: pickup uses pickup quote
+            WHEN toa.assignment_type = 'pickup' 
+              AND o.middlefield = true 
+              AND o.oh_to_in = true 
+              AND o.ohio_to_indiana_pickup_quote IS NOT NULL
+            THEN o.ohio_to_indiana_pickup_quote
+            ELSE o.freight_quote
+          END`
+      } else if (hasMiddlefieldColumn) {
+        freightQuoteCase = `
           CASE 
             WHEN toa.assignment_type = 'delivery' 
               AND o.middlefield = true 
@@ -350,7 +412,25 @@ export async function GET(request: NextRequest) {
               AND o.middlefield_delivery_quote IS NOT NULL
             THEN o.middlefield_delivery_quote
             ELSE o.freight_quote
-          END as "freightQuote",
+          END`
+      } else if (hasOhioToIndianaColumn) {
+        freightQuoteCase = `
+          CASE 
+            WHEN toa.assignment_type = 'pickup' 
+              AND o.middlefield = true 
+              AND o.oh_to_in = true 
+              AND o.ohio_to_indiana_pickup_quote IS NOT NULL
+            THEN o.ohio_to_indiana_pickup_quote
+            ELSE o.freight_quote
+          END`
+      }
+
+      ordersResult = await query(`
+        SELECT 
+          o.id as "orderId",
+          toa.truckload_id as "truckloadId",
+          toa.assignment_type as "assignmentType",
+          ${freightQuoteCase} as "freightQuote",
           COALESCE(
             (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
             0
@@ -360,7 +440,20 @@ export async function GET(request: NextRequest) {
           ) as footage,
           pc.customer_name as "pickupCustomerName",
           dc.customer_name as "deliveryCustomerName",
-          COALESCE(o.middlefield, false) as "middlefield"
+          COALESCE(o.middlefield, false) as "middlefield",
+          COALESCE(o.backhaul, false) as "backhaul",
+          COALESCE(o.oh_to_in, false) as "ohioToIndiana",
+          -- Check if quotes are set for middlefield orders based on assignment type
+          CASE 
+            -- Backhaul scenario: delivery assignments need delivery quote set
+            WHEN o.middlefield = true AND o.backhaul = true AND toa.assignment_type = 'delivery'
+              THEN (o.middlefield_delivery_quote IS NOT NULL AND o.middlefield_delivery_quote > 0)
+            -- Ohio to Indiana scenario: pickup assignments need pickup quote set
+            WHEN o.middlefield = true AND o.oh_to_in = true AND toa.assignment_type = 'pickup'
+              THEN (o.ohio_to_indiana_pickup_quote IS NOT NULL AND o.ohio_to_indiana_pickup_quote > 0)
+            -- For other assignments or non-middlefield orders, quote is always "set" (uses full quote)
+            ELSE true
+          END as "middlefieldQuoteSet"
         FROM truckload_order_assignments toa
         JOIN orders o ON toa.order_id = o.id
         LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
@@ -384,7 +477,11 @@ export async function GET(request: NextRequest) {
           ) as footage,
           pc.customer_name as "pickupCustomerName",
           dc.customer_name as "deliveryCustomerName",
-          COALESCE(o.middlefield, false) as "middlefield"
+          COALESCE(o.middlefield, false) as "middlefield",
+          COALESCE(o.backhaul, false) as "backhaul",
+          COALESCE(o.oh_to_in, false) as "ohioToIndiana",
+          -- For fallback query, assume quotes are not set (will be false)
+          false as "middlefieldQuoteSet"
         FROM truckload_order_assignments toa
         JOIN orders o ON toa.order_id = o.id
         LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
