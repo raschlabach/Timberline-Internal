@@ -118,6 +118,7 @@ export async function GET(
       WHERE toa.truckload_id = $1
         AND toa.assignment_type = 'pickup'
         AND o.middlefield = true
+        AND o.backhaul = true
       ORDER BY o.id
     `
 
