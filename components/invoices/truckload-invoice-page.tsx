@@ -9,12 +9,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
-import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft, GripVertical, Info, FileText, Minus } from 'lucide-react'
+import { Printer, Edit3, Search, MessageSquare, ChevronDown, ChevronRight, Check, CheckCircle, Timer, Plus, Trash2, Gift, AlertTriangle, DollarSign, ArrowLeft, GripVertical, Info, FileText, Minus, Settings } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import EditTruckloadDialog from '@/components/invoices/edit-truckload-dialog'
 import { OrderInfoDialog } from '@/components/orders/order-info-dialog'
 import { BillOfLadingDialog } from '@/app/components/BillOfLadingDialog'
@@ -275,6 +275,20 @@ function SortableTableRow({
             <GripVertical className="h-4 w-4" />
           </div>
           {isTransfer && (row as any).sequenceNumbers ? (row as any).sequenceNumbers : row.sequenceNumber}
+          {row.middlefield && row.backhaul && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertTriangle 
+                    className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" 
+                  />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Middlefield & Backhaul Order</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
       </TableCell>
       <TableCell className="text-sm">
@@ -532,6 +546,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [deductionDialogAmount, setDeductionDialogAmount] = useState<string>('')
   const [deductionDialogAppliesTo, setDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
   const [deductionDialogType, setDeductionDialogType] = useState<'pickup' | 'delivery' | 'manual'>('manual')
+  const [middlefieldDialogOpen, setMiddlefieldDialogOpen] = useState(false)
+  const [middlefieldTruckloadId, setMiddlefieldTruckloadId] = useState<number | null>(null)
+  const [middlefieldOrders, setMiddlefieldOrders] = useState<Array<{
+    orderId: number
+    assignmentType: string
+    fullQuote: number | null
+    deliveryQuote: number | null
+    deliveryCustomerName: string | null
+    pickupCustomerName: string | null
+    pickupTruckloadId: number | null
+    hasDeduction: number
+  }>>([])
+  const [isLoadingMiddlefield, setIsLoadingMiddlefield] = useState(false)
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
@@ -1604,6 +1631,116 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })
   }
 
+  // Check if truckload has middlefield orders
+  const hasMiddlefieldOrders = useMemo(() => {
+    if (!orders.length) return false
+    return orders.some(order => order.middlefield && order.backhaul)
+  }, [orders])
+
+  // Open middlefield management dialog
+  const openMiddlefieldDialog = async (truckloadId: number) => {
+    setMiddlefieldTruckloadId(truckloadId)
+    setMiddlefieldDialogOpen(true)
+    setIsLoadingMiddlefield(true)
+
+    try {
+      const response = await fetch(`/api/truckloads/${truckloadId}/middlefield-orders`, {
+        credentials: 'include'
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        // Parse the orders to ensure numeric values are properly typed
+        const parsedOrders = (data.orders || []).map((order: any) => ({
+          ...order,
+          orderId: typeof order.orderId === 'number' ? order.orderId : parseInt(String(order.orderId || 0)),
+          fullQuote: typeof order.fullQuote === 'number' 
+            ? order.fullQuote 
+            : (order.fullQuote ? parseFloat(String(order.fullQuote)) : null),
+          deliveryQuote: order.deliveryQuote !== null && order.deliveryQuote !== undefined
+            ? (typeof order.deliveryQuote === 'number' 
+                ? order.deliveryQuote 
+                : parseFloat(String(order.deliveryQuote)) || null)
+            : null,
+          pickupTruckloadId: order.pickupTruckloadId 
+            ? (typeof order.pickupTruckloadId === 'number' 
+                ? order.pickupTruckloadId 
+                : parseInt(String(order.pickupTruckloadId)))
+            : null,
+          hasDeduction: typeof order.hasDeduction === 'number' 
+            ? order.hasDeduction 
+            : parseInt(String(order.hasDeduction || 0))
+        }))
+        setMiddlefieldOrders(parsedOrders)
+      } else {
+        toast.error('Failed to load middlefield orders')
+        setMiddlefieldOrders([])
+      }
+    } catch (error) {
+      console.error('Error loading middlefield orders:', error)
+      toast.error('Failed to load middlefield orders')
+      setMiddlefieldOrders([])
+    } finally {
+      setIsLoadingMiddlefield(false)
+    }
+  }
+
+  // Update delivery quote for an order
+  const updateDeliveryQuote = (orderId: number, deliveryQuote: string) => {
+    setMiddlefieldOrders(prev => prev.map(order => 
+      order.orderId === orderId
+        ? { ...order, deliveryQuote: deliveryQuote ? parseFloat(deliveryQuote) : null }
+        : order
+    ))
+  }
+
+  // Save all delivery quotes
+  const saveDeliveryQuotes = async () => {
+    if (!middlefieldTruckloadId) return
+
+    const updates = middlefieldOrders
+      .filter(order => order.pickupTruckloadId)
+      .map(order => ({
+        orderId: order.orderId,
+        deliveryQuote: order.deliveryQuote,
+        pickupTruckloadId: order.pickupTruckloadId
+      }))
+
+    if (updates.length === 0) {
+      toast.error('No orders to update')
+      return
+    }
+
+    setIsLoadingMiddlefield(true)
+    try {
+      const response = await fetch('/api/orders/middlefield-delivery-quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ updates })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success(data.message || 'Delivery quotes updated successfully')
+        setMiddlefieldDialogOpen(false)
+        // Refresh orders to show updated quotes
+        if (selectedTruckloadId) {
+          const id = selectedTruckloadId
+          setSelectedTruckloadId(null)
+          setTimeout(() => setSelectedTruckloadId(id), 0)
+        }
+      } else {
+        toast.error(data.error || 'Failed to update delivery quotes')
+      }
+    } catch (error) {
+      console.error('Error saving delivery quotes:', error)
+      toast.error('Failed to save delivery quotes')
+    } finally {
+      setIsLoadingMiddlefield(false)
+    }
+  }
+
   function handlePrint(): void {
     window.print()
   }
@@ -1810,22 +1947,39 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         <Card className="flex-1 p-4">
           {selectedTruckload && (
             <div className="mb-4 pb-3 border-b">
-              <div className="flex items-center gap-3 text-lg">
-                {selectedTruckload.driver.driverColor && (
-                  <div 
-                    className="w-4 h-4 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: selectedTruckload.driver.driverColor }}
-                  />
-                )}
-                <span className="font-semibold">{selectedTruckload.driver.driverName}</span>
-                <span className="text-base text-gray-600">
-                  {formatDateShort(selectedTruckload.startDate)} - {formatDateShort(selectedTruckload.endDate)}
-                </span>
-                {selectedTruckload.description && (
-                  <span className="text-sm text-gray-600">{selectedTruckload.description}</span>
-                )}
-                {selectedTruckload.billOfLadingNumber && (
-                  <span className="text-base font-medium">BOL {selectedTruckload.billOfLadingNumber}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 text-lg">
+                  {selectedTruckload.driver.driverColor && (
+                    <div 
+                      className="w-4 h-4 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: selectedTruckload.driver.driverColor }}
+                    />
+                  )}
+                  <span className="font-semibold">{selectedTruckload.driver.driverName}</span>
+                  <span className="text-base text-gray-600">
+                    {formatDateShort(selectedTruckload.startDate)} - {formatDateShort(selectedTruckload.endDate)}
+                  </span>
+                  {selectedTruckload.description && (
+                    <span className="text-sm text-gray-600">{selectedTruckload.description}</span>
+                  )}
+                  {selectedTruckload.billOfLadingNumber && (
+                    <span className="text-base font-medium">BOL {selectedTruckload.billOfLadingNumber}</span>
+                  )}
+                </div>
+                {hasMiddlefieldOrders && selectedTruckloadId && (
+                  <div className="flex items-center gap-2 text-red-600 flex-shrink-0">
+                    <AlertTriangle className="h-5 w-5" />
+                    <span className="text-sm font-semibold">Middlefield</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => openMiddlefieldDialog(parseInt(selectedTruckloadId))}
+                    >
+                      <Settings className="h-3 w-3 mr-1" />
+                      Manage
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
@@ -2468,11 +2622,118 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 <div key={item.id} className="border border-gray-300 rounded p-2 text-xs print-item-group">
                                   <div className="font-medium mb-1">{item.comment || 'Comment...'}</div>
                                   <div>
-                                    {isAddition ? 'Addition' : 'Deduction'}: ${amount.toFixed(2)}
-                                  </div>
-                                </div>
-                              )
-                            } else {
+                                    {isAddition ? 'Addition' : 'Deduction'}: ${amount.toFixed(2        )}
+      </div>
+
+      {/* Middlefield Management Dialog */}
+      <Dialog open={middlefieldDialogOpen} onOpenChange={setMiddlefieldDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Middlefield Delivery Quotes</DialogTitle>
+            <DialogDescription>
+              Set delivery quotes for middlefield orders. The delivery quote amount will be deducted from the pickup driver's pay.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isLoadingMiddlefield ? (
+            <div className="text-center py-8">Loading orders...</div>
+          ) : middlefieldOrders.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">No middlefield orders found in this truckload</div>
+          ) : (
+            <div className="space-y-4">
+              {middlefieldOrders.map((order) => {
+                const fullQuote = typeof order.fullQuote === 'number' 
+                  ? order.fullQuote 
+                  : (order.fullQuote ? parseFloat(String(order.fullQuote)) : 0) || 0
+                const deliveryQuote = order.deliveryQuote !== null && order.deliveryQuote !== undefined
+                  ? (typeof order.deliveryQuote === 'number' 
+                      ? order.deliveryQuote 
+                      : parseFloat(String(order.deliveryQuote)) || null)
+                  : null
+                // Deduction amount is simply the delivery quote value (not the difference)
+                const deductionAmount = deliveryQuote !== null && !isNaN(deliveryQuote) && deliveryQuote > 0
+                  ? deliveryQuote 
+                  : null
+                
+                return (
+                  <Card key={order.orderId} className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-semibold">Order #{order.orderId}</div>
+                          <div className="text-sm text-gray-600">
+                            Delivery: {order.deliveryCustomerName || 'Unknown'}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Pickup: {order.pickupCustomerName || 'Unknown'}
+                          </div>
+                        </div>
+                        {(typeof order.hasDeduction === 'number' ? order.hasDeduction : parseInt(String(order.hasDeduction || 0))) > 0 && (
+                          <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                            Deduction exists
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-xs text-gray-600">Full Quote</Label>
+                          <div className="text-sm font-medium">${fullQuote.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <Label htmlFor={`delivery-quote-${order.orderId}`} className="text-xs text-gray-600">
+                            Delivery Quote
+                          </Label>
+                          <Input
+                            id={`delivery-quote-${order.orderId}`}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={deliveryQuote !== null ? deliveryQuote : ''}
+                            onChange={(e) => updateDeliveryQuote(order.orderId, e.target.value)}
+                            placeholder="Enter amount"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-600">Deduction Amount</Label>
+                          <div className={`text-sm font-medium ${deductionAmount !== null && deductionAmount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                            {deductionAmount !== null && deductionAmount > 0 
+                              ? `-$${deductionAmount.toFixed(2)}`
+                              : 'N/A'
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {order.pickupTruckloadId && (
+                        <div className="text-xs text-gray-500">
+                          Pickup Truckload ID: {order.pickupTruckloadId}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMiddlefieldDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveDeliveryQuotes} 
+              disabled={isLoadingMiddlefield || middlefieldOrders.length === 0}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+} else {
                               return (
                                 <div key={item.id} className="border border-gray-300 rounded p-2 text-xs print-item-group">
                                   <div className="flex items-center gap-2 flex-wrap">
