@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import fs from 'fs'
+import path from 'path'
 
 // POST /api/orders/middlefield-delivery-quotes - Bulk update delivery quotes and create deductions
 export async function POST(request: NextRequest) {
@@ -16,6 +18,42 @@ export async function POST(request: NextRequest) {
 
     if (!Array.isArray(updates) || updates.length === 0) {
       return NextResponse.json({ success: false, error: 'Updates array is required' }, { status: 400 })
+    }
+
+    // Check if middlefield_delivery_quote column exists, if not, apply migration automatically
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'orders'
+        AND column_name = 'middlefield_delivery_quote'
+      `)
+      
+      if (columnCheck.rows.length === 0) {
+        console.log('middlefield_delivery_quote column not found, applying migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-middlefield-delivery-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('middlefield_delivery_quote column migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying middlefield_delivery_quote migration:', migrationError)
+          // Continue anyway - the error handling below will catch if column is missing
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying migration:', migrationCheckError)
+      // Continue anyway - will try to query and handle gracefully
     }
 
     const client = await getClient()
@@ -62,24 +100,64 @@ export async function POST(request: NextRequest) {
         // Handle deduction: delete existing if delivery quote is cleared, or update/create if set
         if (newDeliveryQuote === null) {
           // Delete existing deduction if delivery quote is cleared
-          await client.query(`
-            DELETE FROM cross_driver_freight_deductions
-            WHERE truckload_id = $1
-              AND comment LIKE '%' || $2 || '%middlefield drop%'
-              AND is_manual = true
-              AND applies_to = 'load_value'
-          `, [pickupTruckloadId, deliveryCustomerName])
+          // Check if applies_to column exists first
+          const appliesToCheck = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'cross_driver_freight_deductions'
+            AND column_name = 'applies_to'
+          `)
+          
+          if (appliesToCheck.rows.length > 0) {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE truckload_id = $1
+                AND comment LIKE '%' || $2 || '%middlefield drop%'
+                AND is_manual = true
+                AND applies_to = 'load_value'
+            `, [pickupTruckloadId, deliveryCustomerName])
+          } else {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE truckload_id = $1
+                AND comment LIKE '%' || $2 || '%middlefield drop%'
+                AND is_manual = true
+            `, [pickupTruckloadId, deliveryCustomerName])
+          }
         } else if (deductionAmount !== null && deductionAmount > 0) {
+          // Check if applies_to column exists
+          const appliesToCheck = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'cross_driver_freight_deductions'
+            AND column_name = 'applies_to'
+          `)
+          const hasAppliesTo = appliesToCheck.rows.length > 0
+          
           // Check if deduction already exists
-          const existingDeduction = await client.query(`
-            SELECT id
-            FROM cross_driver_freight_deductions
-            WHERE truckload_id = $1
-              AND comment LIKE '%' || $2 || '%middlefield drop%'
-              AND is_manual = true
-              AND applies_to = 'load_value'
-            LIMIT 1
-          `, [pickupTruckloadId, deliveryCustomerName])
+          let existingDeduction
+          if (hasAppliesTo) {
+            existingDeduction = await client.query(`
+              SELECT id
+              FROM cross_driver_freight_deductions
+              WHERE truckload_id = $1
+                AND comment LIKE '%' || $2 || '%middlefield drop%'
+                AND is_manual = true
+                AND applies_to = 'load_value'
+              LIMIT 1
+            `, [pickupTruckloadId, deliveryCustomerName])
+          } else {
+            existingDeduction = await client.query(`
+              SELECT id
+              FROM cross_driver_freight_deductions
+              WHERE truckload_id = $1
+                AND comment LIKE '%' || $2 || '%middlefield drop%'
+                AND is_manual = true
+              LIMIT 1
+            `, [pickupTruckloadId, deliveryCustomerName])
+          }
 
           const comment = `${deliveryCustomerName} middlefield drop`
 
@@ -93,17 +171,6 @@ export async function POST(request: NextRequest) {
             `, [deductionAmount, existingDeduction.rows[0].id])
           } else {
             // Create new deduction
-            // Check if applies_to column exists
-            const columnCheck = await client.query(`
-              SELECT column_name 
-              FROM information_schema.columns 
-              WHERE table_schema = 'public' 
-              AND table_name = 'cross_driver_freight_deductions'
-              AND column_name = 'applies_to'
-            `)
-
-            const hasAppliesTo = columnCheck.rows.length > 0
-
             if (hasAppliesTo) {
               await client.query(`
                 INSERT INTO cross_driver_freight_deductions (
