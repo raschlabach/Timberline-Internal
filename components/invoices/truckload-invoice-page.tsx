@@ -116,8 +116,7 @@ interface AssignedOrderRow {
   deliveryNotes: string | null
   payingCustomerName: string | null
   freightQuote: string | null
-  middlefieldDeliveryQuote: number | null
-  ohioToIndianaPickupQuote: number | null
+  splitQuote: number | null
   middlefield: boolean
   backhaul: boolean
   ohioToIndiana: boolean
@@ -349,24 +348,24 @@ function SortableTableRow({
           <Input
             type="text"
             value={
-              // For middlefield delivery assignments, use delivery quote if available
-              row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null
-                ? String(row.middlefieldDeliveryQuote)
+              // For split load orders, use split quote if available
+              row.splitQuote !== null && row.splitQuote !== undefined
+                ? String(row.splitQuote)
                 : (row.freightQuote || '')
             }
             onChange={(e) => {
-              // For middlefield delivery quotes, we don't allow editing here
-              // They must be set via the driver pay page
-              if (row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null) {
-                return // Read-only for middlefield delivery quotes
+              // For split load quotes, we don't allow editing here
+              // They must be set via the split loads dialog
+              if (row.splitQuote !== null && row.splitQuote !== undefined) {
+                return // Read-only for split load quotes
               }
               debouncedUpdateQuote(row.orderId, e.target.value)
             }}
             placeholder="—"
             className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-            disabled={updatingQuotes.has(row.orderId) || (row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null)}
+            disabled={updatingQuotes.has(row.orderId) || (row.splitQuote !== null && row.splitQuote !== undefined)}
           />
-          {row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null && (
+          {row.splitQuote !== null && row.splitQuote !== undefined && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -416,8 +415,7 @@ function SortableTableRow({
                     e.stopPropagation()
                     if (selectedTruckloadId) {
                       // Check if order is already in split loads
-                      const isInSplitLoads = (row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) ||
-                        (row.ohioToIndianaPickupQuote !== null && row.ohioToIndianaPickupQuote !== undefined) ||
+                      const isInSplitLoads = (row.splitQuote !== null && row.splitQuote !== undefined) ||
                         (row.middlefield && row.backhaul) ||
                         (row.middlefield && row.ohioToIndiana)
                       
@@ -436,16 +434,14 @@ function SortableTableRow({
                     }
                   }}
                   className={`h-7 w-7 p-0 ${
-                    (row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) ||
-                    (row.ohioToIndianaPickupQuote !== null && row.ohioToIndianaPickupQuote !== undefined) ||
+                    (row.splitQuote !== null && row.splitQuote !== undefined) ||
                     (row.middlefield && row.backhaul) ||
                     (row.middlefield && row.ohioToIndiana)
                       ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
                       : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                   }`}
                   title={
-                    (row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) ||
-                    (row.ohioToIndianaPickupQuote !== null && row.ohioToIndianaPickupQuote !== undefined) ||
+                    (row.splitQuote !== null && row.splitQuote !== undefined) ||
                     (row.middlefield && row.backhaul) ||
                     (row.middlefield && row.ohioToIndiana)
                       ? 'In split loads - Click to manage'
@@ -456,7 +452,7 @@ function SortableTableRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{(row.middlefieldDeliveryQuote !== null && row.middlefieldDeliveryQuote !== undefined) || (row.middlefield && row.backhaul) ? 'In split loads' : 'Add to split loads'}</p>
+                <p>{(row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana)) ? 'In split loads' : 'Add to split loads'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -1583,8 +1579,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deliveryNotes: o.delivery_customer?.notes || null,
           payingCustomerName: null as string | null,
           freightQuote: o.freight_quote,
-          middlefieldDeliveryQuote: (o as any).middlefield_delivery_quote ? parseFloat((o as any).middlefield_delivery_quote) : null,
-          ohioToIndianaPickupQuote: (o as any).ohio_to_indiana_pickup_quote ? parseFloat((o as any).ohio_to_indiana_pickup_quote) : null,
+          splitQuote: (o as any).split_quote !== null && (o as any).split_quote !== undefined
+            ? parseFloat((o as any).split_quote) 
+            : null,
           middlefield: (o as any).middlefield || false,
           backhaul: (o as any).backhaul || false,
           ohioToIndiana: (o as any).oh_to_in || false,
@@ -1706,8 +1703,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       (order.middlefield && order.backhaul) || 
       (order.middlefield && order.ohioToIndiana) ||
       // Manually added: has a split quote set
-      (order.middlefieldDeliveryQuote !== null && order.middlefieldDeliveryQuote !== undefined) ||
-      (order.ohioToIndianaPickupQuote !== null && order.ohioToIndianaPickupQuote !== undefined)
+      (order.splitQuote !== null && order.splitQuote !== undefined)
     )
   }, [orders])
 
