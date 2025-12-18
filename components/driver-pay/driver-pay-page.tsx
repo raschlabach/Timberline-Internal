@@ -780,7 +780,28 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       const data = await response.json()
       
       if (data.success) {
-        setMiddlefieldOrders(data.orders || [])
+        // Parse the orders to ensure numeric values are properly typed
+        const parsedOrders = (data.orders || []).map((order: any) => ({
+          ...order,
+          orderId: typeof order.orderId === 'number' ? order.orderId : parseInt(String(order.orderId || 0)),
+          fullQuote: typeof order.fullQuote === 'number' 
+            ? order.fullQuote 
+            : (order.fullQuote ? parseFloat(String(order.fullQuote)) : null),
+          deliveryQuote: order.deliveryQuote !== null && order.deliveryQuote !== undefined
+            ? (typeof order.deliveryQuote === 'number' 
+                ? order.deliveryQuote 
+                : parseFloat(String(order.deliveryQuote)) || null)
+            : null,
+          pickupTruckloadId: order.pickupTruckloadId 
+            ? (typeof order.pickupTruckloadId === 'number' 
+                ? order.pickupTruckloadId 
+                : parseInt(String(order.pickupTruckloadId)))
+            : null,
+          hasDeduction: typeof order.hasDeduction === 'number' 
+            ? order.hasDeduction 
+            : parseInt(String(order.hasDeduction || 0))
+        }))
+        setMiddlefieldOrders(parsedOrders)
       } else {
         toast.error('Failed to load middlefield orders')
         setMiddlefieldOrders([])
@@ -1564,9 +1585,17 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           ) : (
             <div className="space-y-4">
               {middlefieldOrders.map((order) => {
-                const fullQuote = order.fullQuote || 0
-                const deliveryQuote = order.deliveryQuote || null
-                const deductionAmount = deliveryQuote !== null ? fullQuote - deliveryQuote : null
+                const fullQuote = typeof order.fullQuote === 'number' 
+                  ? order.fullQuote 
+                  : (order.fullQuote ? parseFloat(String(order.fullQuote)) : 0) || 0
+                const deliveryQuote = order.deliveryQuote !== null && order.deliveryQuote !== undefined
+                  ? (typeof order.deliveryQuote === 'number' 
+                      ? order.deliveryQuote 
+                      : parseFloat(String(order.deliveryQuote)) || null)
+                  : null
+                const deductionAmount = deliveryQuote !== null && !isNaN(deliveryQuote) && !isNaN(fullQuote)
+                  ? fullQuote - deliveryQuote 
+                  : null
                 
                 return (
                   <Card key={order.orderId} className="p-4">
@@ -1581,7 +1610,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             Pickup: {order.pickupCustomerName || 'Unknown'}
                           </div>
                         </div>
-                        {order.hasDeduction > 0 && (
+                        {(typeof order.hasDeduction === 'number' ? order.hasDeduction : parseInt(String(order.hasDeduction || 0))) > 0 && (
                           <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
                             Deduction exists
                           </div>
