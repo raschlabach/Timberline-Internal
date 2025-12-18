@@ -145,6 +145,9 @@ export async function GET(
         COALESCE(o.needs_attention, false) as needs_attention,
         o.comments,
         o.freight_quote,
+        o.middlefield_delivery_quote,
+        COALESCE(o.middlefield, false) as middlefield,
+        COALESCE(o.backhaul, false) as backhaul,
         COALESCE(o.is_transfer_order, false) as is_transfer_order,
         -- Pickup assignment info for delivery assignments
         pa.driver_name as pickup_driver_name,

@@ -16,9 +16,10 @@ function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number)
   return new Date(year, month - 1, day)
 }
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
 interface DriverPayPageProps {}
 
@@ -161,6 +162,19 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   const [editingHour, setEditingHour] = useState<{ id: number; date: string; description: string; hours: number; type: 'misc_driving' | 'maintenance' } | null>(null)
   const [editingPayMethod, setEditingPayMethod] = useState<number | null>(null)
   const [tempPayMethod, setTempPayMethod] = useState<{ method: 'automatic' | 'hourly' | 'manual'; hours?: number; amount?: number } | null>(null)
+  const [middlefieldDialogOpen, setMiddlefieldDialogOpen] = useState(false)
+  const [middlefieldTruckloadId, setMiddlefieldTruckloadId] = useState<number | null>(null)
+  const [middlefieldOrders, setMiddlefieldOrders] = useState<Array<{
+    orderId: number
+    assignmentType: string
+    fullQuote: number | null
+    deliveryQuote: number | null
+    deliveryCustomerName: string | null
+    pickupCustomerName: string | null
+    pickupTruckloadId: number | null
+    hasDeduction: number
+  }>>([])
+  const [isLoadingMiddlefield, setIsLoadingMiddlefield] = useState(false)
   const hasInitializedFromUrl = useRef(false)
   
   // Restore date range from URL when params change (only on initial load, not when user changes it)
@@ -753,6 +767,85 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
   }
 
+  // Open middlefield management dialog
+  const openMiddlefieldDialog = async (truckloadId: number) => {
+    setMiddlefieldTruckloadId(truckloadId)
+    setMiddlefieldDialogOpen(true)
+    setIsLoadingMiddlefield(true)
+
+    try {
+      const response = await fetch(`/api/truckloads/${truckloadId}/middlefield-orders`, {
+        credentials: 'include'
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        setMiddlefieldOrders(data.orders || [])
+      } else {
+        toast.error('Failed to load middlefield orders')
+        setMiddlefieldOrders([])
+      }
+    } catch (error) {
+      console.error('Error loading middlefield orders:', error)
+      toast.error('Failed to load middlefield orders')
+      setMiddlefieldOrders([])
+    } finally {
+      setIsLoadingMiddlefield(false)
+    }
+  }
+
+  // Update delivery quote for an order
+  const updateDeliveryQuote = (orderId: number, deliveryQuote: string) => {
+    setMiddlefieldOrders(prev => prev.map(order => 
+      order.orderId === orderId
+        ? { ...order, deliveryQuote: deliveryQuote ? parseFloat(deliveryQuote) : null }
+        : order
+    ))
+  }
+
+  // Save all delivery quotes
+  const saveDeliveryQuotes = async () => {
+    if (!middlefieldTruckloadId) return
+
+    const updates = middlefieldOrders
+      .filter(order => order.pickupTruckloadId)
+      .map(order => ({
+        orderId: order.orderId,
+        deliveryQuote: order.deliveryQuote,
+        pickupTruckloadId: order.pickupTruckloadId
+      }))
+
+    if (updates.length === 0) {
+      toast.error('No orders to update')
+      return
+    }
+
+    setIsLoadingMiddlefield(true)
+    try {
+      const response = await fetch('/api/orders/middlefield-delivery-quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ updates })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success(data.message || 'Delivery quotes updated successfully')
+        setMiddlefieldDialogOpen(false)
+        // Refresh driver pay data
+        fetchPayData()
+      } else {
+        toast.error(data.error || 'Failed to update delivery quotes')
+      }
+    } catch (error) {
+      console.error('Error saving delivery quotes:', error)
+      toast.error('Failed to save delivery quotes')
+    } finally {
+      setIsLoadingMiddlefield(false)
+    }
+  }
+
   const totals = calculateDriverTotals()
 
   return (
@@ -1129,9 +1222,21 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               </div>
                             </div>
                             {hasMiddlefield && (
-                              <div className="flex items-center gap-1 text-red-600 flex-shrink-0">
+                              <div className="flex items-center gap-2 text-red-600 flex-shrink-0">
                                 <AlertTriangle className="h-5 w-5" />
                                 <span className="text-sm font-semibold">Middlefield</span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openMiddlefieldDialog(truckload.id)
+                                  }}
+                                >
+                                  <Settings className="h-3 w-3 mr-1" />
+                                  Manage
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -1441,6 +1546,104 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           )}
         </div>
       </ScrollArea>
+
+      {/* Middlefield Management Dialog */}
+      <Dialog open={middlefieldDialogOpen} onOpenChange={setMiddlefieldDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Middlefield Delivery Quotes</DialogTitle>
+            <DialogDescription>
+              Set delivery quotes for middlefield orders. The difference between the full quote and delivery quote will be deducted from the pickup truckload.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isLoadingMiddlefield ? (
+            <div className="text-center py-8">Loading orders...</div>
+          ) : middlefieldOrders.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">No middlefield orders found in this truckload</div>
+          ) : (
+            <div className="space-y-4">
+              {middlefieldOrders.map((order) => {
+                const fullQuote = order.fullQuote || 0
+                const deliveryQuote = order.deliveryQuote || null
+                const deductionAmount = deliveryQuote !== null ? fullQuote - deliveryQuote : null
+                
+                return (
+                  <Card key={order.orderId} className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-semibold">Order #{order.orderId}</div>
+                          <div className="text-sm text-gray-600">
+                            Delivery: {order.deliveryCustomerName || 'Unknown'}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Pickup: {order.pickupCustomerName || 'Unknown'}
+                          </div>
+                        </div>
+                        {order.hasDeduction > 0 && (
+                          <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                            Deduction exists
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-xs text-gray-600">Full Quote</Label>
+                          <div className="text-sm font-medium">${fullQuote.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <Label htmlFor={`delivery-quote-${order.orderId}`} className="text-xs text-gray-600">
+                            Delivery Quote
+                          </Label>
+                          <Input
+                            id={`delivery-quote-${order.orderId}`}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={deliveryQuote !== null ? deliveryQuote : ''}
+                            onChange={(e) => updateDeliveryQuote(order.orderId, e.target.value)}
+                            placeholder="Enter amount"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-600">Deduction Amount</Label>
+                          <div className={`text-sm font-medium ${deductionAmount !== null && deductionAmount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                            {deductionAmount !== null && deductionAmount > 0 
+                              ? `-$${deductionAmount.toFixed(2)}`
+                              : 'N/A'
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {order.pickupTruckloadId && (
+                        <div className="text-xs text-gray-500">
+                          Pickup Truckload ID: {order.pickupTruckloadId}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMiddlefieldDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveDeliveryQuotes} 
+              disabled={isLoadingMiddlefield || middlefieldOrders.length === 0}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

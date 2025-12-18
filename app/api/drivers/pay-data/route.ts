@@ -288,12 +288,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all orders for these truckloads
+    // For middlefield delivery assignments, use middlefield_delivery_quote if available
     const ordersResult = await query(`
       SELECT 
         o.id as "orderId",
         toa.truckload_id as "truckloadId",
         toa.assignment_type as "assignmentType",
-        o.freight_quote as "freightQuote",
+        CASE 
+          WHEN toa.assignment_type = 'delivery' 
+            AND o.middlefield = true 
+            AND o.backhaul = true 
+            AND o.middlefield_delivery_quote IS NOT NULL
+          THEN o.middlefield_delivery_quote
+          ELSE o.freight_quote
+        END as "freightQuote",
         COALESCE(
           (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
           0

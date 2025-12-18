@@ -1,0 +1,82 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { query } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+// GET /api/truckloads/[id]/middlefield-orders - Get all middlefield orders for a truckload
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const truckloadId = parseInt(params.id)
+    if (isNaN(truckloadId)) {
+      return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
+    }
+
+    // Get all middlefield orders that are pickup assignments in this truckload
+    // These are orders that need delivery quotes set
+    const result = await query(`
+      SELECT 
+        o.id as "orderId",
+        toa.assignment_type as "assignmentType",
+        o.freight_quote as "fullQuote",
+        o.middlefield_delivery_quote as "deliveryQuote",
+        dc.customer_name as "deliveryCustomerName",
+        pc.customer_name as "pickupCustomerName",
+        -- Find the pickup truckload for this order
+        (
+          SELECT t.id
+          FROM truckload_order_assignments toa_pickup
+          JOIN truckloads t ON toa_pickup.truckload_id = t.id
+          WHERE toa_pickup.order_id = o.id
+            AND toa_pickup.assignment_type = 'pickup'
+          ORDER BY t.start_date DESC
+          LIMIT 1
+        ) as "pickupTruckloadId",
+        -- Check if deduction already exists
+        (
+          SELECT COUNT(*)
+          FROM cross_driver_freight_deductions cdfd
+          WHERE cdfd.truckload_id = (
+            SELECT t.id
+            FROM truckload_order_assignments toa_pickup
+            JOIN truckloads t ON toa_pickup.truckload_id = t.id
+            WHERE toa_pickup.order_id = o.id
+              AND toa_pickup.assignment_type = 'pickup'
+            ORDER BY t.start_date DESC
+            LIMIT 1
+          )
+          AND cdfd.comment LIKE '%' || dc.customer_name || '%middlefield drop%'
+          AND cdfd.is_manual = true
+          AND cdfd.applies_to = 'load_value'
+        ) as "hasDeduction"
+      FROM truckload_order_assignments toa
+      JOIN orders o ON toa.order_id = o.id
+      LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+      LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+      WHERE toa.truckload_id = $1
+        AND toa.assignment_type = 'pickup'
+        AND o.middlefield = true
+        AND o.backhaul = true
+      ORDER BY o.id
+    `, [truckloadId])
+
+    return NextResponse.json({
+      success: true,
+      orders: result.rows
+    })
+  } catch (error) {
+    console.error('Error fetching middlefield orders:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to fetch middlefield orders'
+    }, { status: 500 })
+  }
+}
+

@@ -116,6 +116,9 @@ interface AssignedOrderRow {
   deliveryNotes: string | null
   payingCustomerName: string | null
   freightQuote: string | null
+  middlefieldDeliveryQuote: number | null
+  middlefield: boolean
+  backhaul: boolean
   footage: number
   skidsData: Array<{ width: number; length: number; quantity: number }>
   vinylData: Array<{ width: number; length: number; quantity: number }>
@@ -320,14 +323,42 @@ function SortableTableRow({
         )}
       </TableCell>
       <TableCell className="text-sm" style={{ width: '90px' }}>
-        <Input
-          type="text"
-          value={row.freightQuote || ''}
-          onChange={(e) => debouncedUpdateQuote(row.orderId, e.target.value)}
-          placeholder="—"
-          className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-          disabled={updatingQuotes.has(row.orderId)}
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            type="text"
+            value={
+              // For middlefield delivery assignments, use delivery quote if available
+              row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null
+                ? String(row.middlefieldDeliveryQuote)
+                : (row.freightQuote || '')
+            }
+            onChange={(e) => {
+              // For middlefield delivery quotes, we don't allow editing here
+              // They must be set via the driver pay page
+              if (row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null) {
+                return // Read-only for middlefield delivery quotes
+              }
+              debouncedUpdateQuote(row.orderId, e.target.value)
+            }}
+            placeholder="—"
+            className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
+            disabled={updatingQuotes.has(row.orderId) || (row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null)}
+          />
+          {row.assignmentType === 'delivery' && row.middlefield && row.backhaul && row.middlefieldDeliveryQuote !== null && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertTriangle 
+                    className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" 
+                  />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>This is a Middlefield delivery quote</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </TableCell>
       <TableCell className="text-sm text-right">{row.footage}</TableCell>
       <TableCell className="text-sm">
@@ -1460,6 +1491,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deliveryNotes: o.delivery_customer?.notes || null,
           payingCustomerName: null as string | null,
           freightQuote: o.freight_quote,
+          middlefieldDeliveryQuote: (o as any).middlefield_delivery_quote ? parseFloat((o as any).middlefield_delivery_quote) : null,
+          middlefield: (o as any).middlefield || false,
+          backhaul: (o as any).backhaul || false,
           footage: typeof o.footage === 'number' ? o.footage : (typeof o.footage === 'string' ? parseFloat(o.footage) || 0 : 0),
           skidsData: o.skids_data || [],
           vinylData: o.vinyl_data || [],
