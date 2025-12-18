@@ -2028,10 +2028,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     <span className="text-base font-medium">BOL {selectedTruckload.billOfLadingNumber}</span>
                   )}
                 </div>
-                {hasMiddlefieldOrders && selectedTruckloadId && (
-                  <div className="flex items-center gap-2 text-red-600 flex-shrink-0">
-                    <AlertTriangle className="h-5 w-5" />
-                    <span className="text-sm font-semibold">Split Loads</span>
+                {selectedTruckloadId && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {hasMiddlefieldOrders && (
+                      <>
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                        <span className="text-sm font-semibold text-red-600">Split Loads</span>
+                      </>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
