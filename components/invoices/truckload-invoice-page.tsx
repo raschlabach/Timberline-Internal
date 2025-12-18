@@ -1974,7 +1974,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs"
-                      onClick={() => openMiddlefieldDialog(parseInt(selectedTruckloadId))}
+                      onClick={() => {
+                        if (selectedTruckloadId) {
+                          openMiddlefieldDialog(parseInt(selectedTruckloadId))
+                        }
+                      }}
                     >
                       <Settings className="h-3 w-3 mr-1" />
                       Manage

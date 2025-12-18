@@ -67,8 +67,9 @@ export async function GET(
     `)
     const hasAppliesTo = appliesToCheck.rows.length > 0
 
-    // Get all middlefield orders that are pickup assignments in this truckload
+    // Get all middlefield orders in this truckload that have both middlefield and backhaul load types
     // These are orders that need delivery quotes set
+    // Orders can have other load types as long as they have both middlefield and backhaul
     // Build query conditionally based on whether applies_to column exists
     let sqlQuery = `
       SELECT 
@@ -116,7 +117,6 @@ export async function GET(
       LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
       LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
       WHERE toa.truckload_id = $1
-        AND toa.assignment_type = 'pickup'
         AND o.middlefield = true
         AND o.backhaul = true
       ORDER BY o.id
