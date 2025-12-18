@@ -1574,7 +1574,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           <DialogHeader>
             <DialogTitle>Manage Middlefield Delivery Quotes</DialogTitle>
             <DialogDescription>
-              Set delivery quotes for middlefield orders. The difference between the full quote and delivery quote will be deducted from the pickup truckload.
+              Set delivery quotes for middlefield orders. The delivery quote amount will be deducted from the pickup driver's pay.
             </DialogDescription>
           </DialogHeader>
           
@@ -1593,8 +1593,9 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                       ? order.deliveryQuote 
                       : parseFloat(String(order.deliveryQuote)) || null)
                   : null
-                const deductionAmount = deliveryQuote !== null && !isNaN(deliveryQuote) && !isNaN(fullQuote)
-                  ? fullQuote - deliveryQuote 
+                // Deduction amount is simply the delivery quote value (not the difference)
+                const deductionAmount = deliveryQuote !== null && !isNaN(deliveryQuote) && deliveryQuote > 0
+                  ? deliveryQuote 
                   : null
                 
                 return (

@@ -84,10 +84,10 @@ export async function POST(request: NextRequest) {
         }
 
         const order = orderResult.rows[0]
-        const fullQuote = parseFloat(order.freight_quote) || 0
         const newDeliveryQuote = deliveryQuote ? parseFloat(deliveryQuote) : null
         const deliveryCustomerName = order.delivery_customer_name || 'Unknown Customer'
-        const deductionAmount = newDeliveryQuote !== null ? fullQuote - newDeliveryQuote : null
+        // Deduction amount is simply the delivery quote value (not the difference)
+        const deductionAmount = newDeliveryQuote !== null && newDeliveryQuote > 0 ? newDeliveryQuote : null
 
         // Update the order's delivery quote
         await client.query(`
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         `, [newDeliveryQuote, orderId])
 
         // Handle deduction: delete existing if delivery quote is cleared, or update/create if set
-        if (newDeliveryQuote === null) {
+        if (newDeliveryQuote === null || newDeliveryQuote <= 0) {
           // Delete existing deduction if delivery quote is cleared
           // Check if applies_to column exists first
           const appliesToCheck = await client.query(`
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
               WHERE truckload_id = $1
                 AND comment LIKE '%' || $2 || '%middlefield drop%'
                 AND is_manual = true
-                AND applies_to = 'load_value'
+                AND applies_to = 'driver_pay'
             `, [pickupTruckloadId, deliveryCustomerName])
           } else {
             await client.query(`
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
               WHERE truckload_id = $1
                 AND comment LIKE '%' || $2 || '%middlefield drop%'
                 AND is_manual = true
-                AND applies_to = 'load_value'
+                AND applies_to = 'driver_pay'
               LIMIT 1
             `, [pickupTruckloadId, deliveryCustomerName])
           } else {
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
                   comment,
                   is_addition,
                   applies_to
-                ) VALUES ($1, $2, true, $3, false, 'load_value')
+                ) VALUES ($1, $2, true, $3, false, 'driver_pay')
               `, [pickupTruckloadId, deductionAmount, comment])
             } else {
               await client.query(`

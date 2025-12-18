@@ -106,7 +106,7 @@ export async function GET(
 
     if (hasAppliesTo) {
       sqlQuery += `
-          AND cdfd.applies_to = 'load_value'`
+          AND cdfd.applies_to = 'driver_pay'`
     }
 
     sqlQuery += `
@@ -118,7 +118,6 @@ export async function GET(
       WHERE toa.truckload_id = $1
         AND toa.assignment_type = 'pickup'
         AND o.middlefield = true
-        AND o.backhaul = true
       ORDER BY o.id
     `
 
