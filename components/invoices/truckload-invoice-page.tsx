@@ -1674,10 +1674,17 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })
   }
 
-  // Check if truckload has middlefield orders
+  // Check if truckload has split load orders (middlefield orders or orders with split quotes)
   const hasMiddlefieldOrders = useMemo(() => {
     if (!orders.length) return false
-    return orders.some(order => order.middlefield && order.backhaul)
+    return orders.some(order => 
+      // Auto-included: middlefield + backhaul or middlefield + ohio_to_indiana
+      (order.middlefield && order.backhaul) || 
+      (order.middlefield && order.ohioToIndiana) ||
+      // Manually added: has a split quote set
+      (order.middlefieldDeliveryQuote !== null && order.middlefieldDeliveryQuote !== undefined) ||
+      (order.ohioToIndianaPickupQuote !== null && order.ohioToIndianaPickupQuote !== undefined)
+    )
   }, [orders])
 
   // Open middlefield management dialog
@@ -2024,7 +2031,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 {hasMiddlefieldOrders && selectedTruckloadId && (
                   <div className="flex items-center gap-2 text-red-600 flex-shrink-0">
                     <AlertTriangle className="h-5 w-5" />
-                    <span className="text-sm font-semibold">Middlefield</span>
+                    <span className="text-sm font-semibold">Split Loads</span>
                     <Button
                       size="sm"
                       variant="outline"
@@ -2047,7 +2054,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       }}
                     >
                       <Settings className="h-3 w-3 mr-1" />
-                      Manage
+                      Manage Split Loads
                     </Button>
                   </div>
                 )}
@@ -2699,9 +2706,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       <Dialog open={middlefieldDialogOpen} onOpenChange={setMiddlefieldDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Manage Middlefield Delivery Quotes</DialogTitle>
+            <DialogTitle>Manage Split Loads</DialogTitle>
             <DialogDescription>
-              Set delivery quotes for middlefield orders. The delivery quote amount will be deducted from the pickup driver's pay.
+              <div className="space-y-2">
+                <p>
+                  Split loads allow you to divide a single order's quote between pickup and delivery truckloads. 
+                  Middlefield orders are automatically included here.
+                </p>
+                <div className="text-sm space-y-1">
+                  <p><strong>Pickup Quote:</strong> Use when the pickup driver should receive a smaller portion. The difference is deducted from the delivery driver's pay.</p>
+                  <p><strong>Delivery Quote:</strong> Use when the delivery driver should receive a smaller portion. The difference is deducted from the pickup driver's pay.</p>
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
           
