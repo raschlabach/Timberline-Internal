@@ -198,76 +198,55 @@ export async function GET(request: NextRequest) {
       // Continue anyway - will try to query and handle gracefully
     }
 
-    // Check if middlefield_delivery_quote column exists, if not, apply migration automatically
+    // Check if split_quote column exists, if not, apply migration automatically
     try {
-      const middlefieldColumnCheck = await query(`
+      const splitQuoteColumnCheck = await query(`
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_schema = 'public' 
         AND table_name = 'orders'
-        AND column_name = 'middlefield_delivery_quote'
+        AND column_name IN ('split_quote', 'middlefield_delivery_quote')
       `)
       
-      if (middlefieldColumnCheck.rows.length === 0) {
-        console.log('middlefield_delivery_quote column not found, applying migration...')
+      const hasSplitQuote = splitQuoteColumnCheck.rows.some(r => r.column_name === 'split_quote')
+      const hasOldColumn = splitQuoteColumnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
+      
+      if (!hasSplitQuote && hasOldColumn) {
+        console.log('Applying split_quote migration...')
         const client = await getClient()
         try {
           await client.query('BEGIN')
           const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
           const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-middlefield-delivery-quote.sql'),
+            path.join(migrationsDir, 'simplify-split-loads.sql'),
             'utf8'
           )
           await client.query(migrationSql)
           await client.query('COMMIT')
-          console.log('middlefield_delivery_quote column migration applied successfully')
+          console.log('split_quote migration applied successfully')
         } catch (migrationError) {
           await client.query('ROLLBACK')
-          console.error('Error applying middlefield_delivery_quote migration:', migrationError)
-          // Continue anyway - will use fallback query
+          console.error('Error applying split_quote migration:', migrationError)
         } finally {
           client.release()
         }
-      }
-    } catch (migrationCheckError) {
-      console.error('Error checking/applying middlefield_delivery_quote migration:', migrationCheckError)
-      // Continue anyway - will use fallback query
-    }
-
-    // Check if ohio_to_indiana_pickup_quote column exists, if not, apply migration automatically
-    try {
-      const ohioToIndianaColumnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'orders'
-        AND column_name = 'ohio_to_indiana_pickup_quote'
-      `)
-      
-      if (ohioToIndianaColumnCheck.rows.length === 0) {
-        console.log('ohio_to_indiana_pickup_quote column not found, applying migration...')
+      } else if (!hasSplitQuote && !hasOldColumn) {
+        // Neither column exists, create split_quote
         const client = await getClient()
         try {
           await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-ohio-to-indiana-pickup-quote.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
+          await client.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_quote DECIMAL(10, 2)')
           await client.query('COMMIT')
-          console.log('ohio_to_indiana_pickup_quote column migration applied successfully')
+          console.log('split_quote column created')
         } catch (migrationError) {
           await client.query('ROLLBACK')
-          console.error('Error applying ohio_to_indiana_pickup_quote migration:', migrationError)
-          // Continue anyway - will use fallback query
+          console.error('Error creating split_quote column:', migrationError)
         } finally {
           client.release()
         }
       }
     } catch (migrationCheckError) {
-      console.error('Error checking/applying ohio_to_indiana_pickup_quote migration:', migrationCheckError)
-      // Continue anyway - will use fallback query
+      console.error('Error checking/applying split_quote migration:', migrationCheckError)
     }
 
     // Get all truckloads for drivers in the date range
@@ -445,13 +424,13 @@ export async function GET(request: NextRequest) {
           COALESCE(o.oh_to_in, false) as "ohioToIndiana",
           -- Check if quotes are set for middlefield orders based on assignment type
           CASE 
-            -- Backhaul scenario: delivery assignments need delivery quote set
-            WHEN o.middlefield = true AND o.backhaul = true AND toa.assignment_type = 'delivery'
-              THEN (o.middlefield_delivery_quote IS NOT NULL AND o.middlefield_delivery_quote > 0)
-            -- Ohio to Indiana scenario: pickup assignments need pickup quote set
-            WHEN o.middlefield = true AND o.oh_to_in = true AND toa.assignment_type = 'pickup'
-              THEN (o.ohio_to_indiana_pickup_quote IS NOT NULL AND o.ohio_to_indiana_pickup_quote > 0)
-            -- For other assignments or non-middlefield orders, quote is always "set" (uses full quote)
+            -- If split_quote is set, quote is "set"
+            WHEN o.split_quote IS NOT NULL AND o.split_quote > 0
+              THEN true
+            -- For middlefield orders, check if they need a split quote
+            WHEN o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true)
+              THEN false
+            -- For other orders, quote is always "set" (uses full quote)
             ELSE true
           END as "middlefieldQuoteSet"
         FROM truckload_order_assignments toa

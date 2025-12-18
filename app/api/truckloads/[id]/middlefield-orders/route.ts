@@ -6,7 +6,6 @@ import fs from 'fs'
 import path from 'path'
 
 // GET /api/truckloads/[id]/middlefield-orders - Get all split load orders for a truckload
-// Includes middlefield orders automatically, plus any manually added orders
 // Query params: ?includeOrderId=123 to include a specific order even if it doesn't have quotes set
 export async function GET(
   request: NextRequest,
@@ -28,76 +27,55 @@ export async function GET(
     const includeOrderId = searchParams.get('includeOrderId')
     const includeOrderIdNum = includeOrderId ? parseInt(includeOrderId, 10) : null
 
-    // Check if middlefield_delivery_quote column exists, if not, apply migration automatically
+    // Check if split_quote column exists, if not, check for old columns and apply migration
     try {
       const columnCheck = await query(`
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_schema = 'public' 
         AND table_name = 'orders'
-        AND column_name = 'middlefield_delivery_quote'
+        AND column_name IN ('split_quote', 'middlefield_delivery_quote')
       `)
       
-      if (columnCheck.rows.length === 0) {
-        console.log('middlefield_delivery_quote column not found, applying migration...')
+      const hasSplitQuote = columnCheck.rows.some(r => r.column_name === 'split_quote')
+      const hasOldColumn = columnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
+      
+      if (!hasSplitQuote && hasOldColumn) {
+        console.log('Applying split_quote migration...')
         const client = await getClient()
         try {
           await client.query('BEGIN')
           const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
           const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-middlefield-delivery-quote.sql'),
+            path.join(migrationsDir, 'simplify-split-loads.sql'),
             'utf8'
           )
           await client.query(migrationSql)
           await client.query('COMMIT')
-          console.log('middlefield_delivery_quote column migration applied successfully')
+          console.log('split_quote migration applied successfully')
         } catch (migrationError) {
           await client.query('ROLLBACK')
-          console.error('Error applying middlefield_delivery_quote migration:', migrationError)
-          // Continue anyway - the error handling below will catch if column is missing
+          console.error('Error applying split_quote migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      } else if (!hasSplitQuote && !hasOldColumn) {
+        // Neither column exists, create split_quote
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          await client.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_quote DECIMAL(10, 2)')
+          await client.query('COMMIT')
+          console.log('split_quote column created')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error creating split_quote column:', migrationError)
         } finally {
           client.release()
         }
       }
     } catch (migrationCheckError) {
       console.error('Error checking/applying migration:', migrationCheckError)
-      // Continue anyway - will try to query and handle gracefully
-    }
-
-    // Check if ohio_to_indiana_pickup_quote column exists, if not, apply migration automatically
-    try {
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'orders'
-        AND column_name = 'ohio_to_indiana_pickup_quote'
-      `)
-      
-      if (columnCheck.rows.length === 0) {
-        console.log('ohio_to_indiana_pickup_quote column not found, applying migration...')
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-ohio-to-indiana-pickup-quote.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
-          await client.query('COMMIT')
-          console.log('ohio_to_indiana_pickup_quote column migration applied successfully')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error applying ohio_to_indiana_pickup_quote migration:', migrationError)
-          // Continue anyway - the error handling below will catch if column is missing
-        } finally {
-          client.release()
-        }
-      }
-    } catch (migrationCheckError) {
-      console.error('Error checking/applying migration:', migrationCheckError)
-      // Continue anyway - will try to query and handle gracefully
     }
 
     // Check if applies_to column exists
@@ -111,59 +89,18 @@ export async function GET(
     const hasAppliesTo = appliesToCheck.rows.length > 0
 
     // Get all orders in this truckload that need split load management
-    // Automatically includes:
-    // 1. middlefield + backhaul: pickup gets full quote, delivery gets smaller delivery quote (deducted from pickup)
-    // 2. middlefield + ohio_to_indiana: delivery gets full quote, pickup gets smaller pickup quote (deducted from delivery)
-    // Also includes any orders manually added to split loads (tracked by having a quote set)
-    // Build query conditionally based on whether applies_to column exists
-    let sqlQuery = `
+    // Automatically includes middlefield orders, plus any with split_quote set
+    const sqlQuery = `
       SELECT 
         o.id as "orderId",
         toa.assignment_type as "assignmentType",
         o.freight_quote as "fullQuote",
-        -- For middlefield+backhaul: delivery quote (used on delivery truckload)
-        o.middlefield_delivery_quote as "deliveryQuote",
-        -- For middlefield+ohio_to_indiana: pickup quote (used on pickup truckload)
-        o.ohio_to_indiana_pickup_quote as "pickupQuote",
+        o.split_quote as "splitQuote",
         dc.customer_name as "deliveryCustomerName",
         pc.customer_name as "pickupCustomerName",
-        -- Determine the scenario type
-        -- If it's a middlefield order, use the load type to determine scenario
-        -- Otherwise, determine by which quote is set
+        -- Find the other truckload (pickup if viewing delivery, delivery if viewing pickup)
         CASE 
-          WHEN o.middlefield = true AND o.backhaul = true THEN 'backhaul'
-          WHEN o.middlefield = true AND o.oh_to_in = true THEN 'ohio_to_indiana'
-          WHEN o.middlefield_delivery_quote IS NOT NULL AND o.middlefield_delivery_quote > 0 THEN 'backhaul'
-          WHEN o.ohio_to_indiana_pickup_quote IS NOT NULL AND o.ohio_to_indiana_pickup_quote > 0 THEN 'ohio_to_indiana'
-          ELSE NULL
-        END as "scenarioType",
-        -- Track if this is automatically included (middlefield) or manually added
-        (o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true)) as "isAutoIncluded",
-        -- Find the pickup truckload for this order (for backhaul scenario)
-        (
-          SELECT t.id
-          FROM truckload_order_assignments toa_pickup
-          JOIN truckloads t ON toa_pickup.truckload_id = t.id
-          WHERE toa_pickup.order_id = o.id
-            AND toa_pickup.assignment_type = 'pickup'
-          ORDER BY t.start_date DESC
-          LIMIT 1
-        ) as "pickupTruckloadId",
-        -- Find the delivery truckload for this order (for ohio_to_indiana scenario)
-        (
-          SELECT t.id
-          FROM truckload_order_assignments toa_delivery
-          JOIN truckloads t ON toa_delivery.truckload_id = t.id
-          WHERE toa_delivery.order_id = o.id
-            AND toa_delivery.assignment_type = 'delivery'
-          ORDER BY t.start_date DESC
-          LIMIT 1
-        ) as "deliveryTruckloadId",
-        -- Check if deduction already exists (for backhaul scenario - deducted from pickup)
-        (
-          SELECT COUNT(*)
-          FROM cross_driver_freight_deductions cdfd
-          WHERE cdfd.truckload_id = (
+          WHEN toa.assignment_type = 'delivery' THEN (
             SELECT t.id
             FROM truckload_order_assignments toa_pickup
             JOIN truckloads t ON toa_pickup.truckload_id = t.id
@@ -172,21 +109,7 @@ export async function GET(
             ORDER BY t.start_date DESC
             LIMIT 1
           )
-          AND cdfd.comment LIKE '%' || COALESCE(dc.customer_name, '') || '%middlefield drop%'
-          AND cdfd.is_manual = true`
-
-    if (hasAppliesTo) {
-      sqlQuery += `
-          AND cdfd.applies_to = 'driver_pay'`
-    }
-
-    sqlQuery += `
-        ) as "hasDeductionBackhaul",
-        -- Check if deduction already exists (for ohio_to_indiana scenario - deducted from delivery)
-        (
-          SELECT COUNT(*)
-          FROM cross_driver_freight_deductions cdfd
-          WHERE cdfd.truckload_id = (
+          WHEN toa.assignment_type = 'pickup' THEN (
             SELECT t.id
             FROM truckload_order_assignments toa_delivery
             JOIN truckloads t ON toa_delivery.truckload_id = t.id
@@ -195,16 +118,42 @@ export async function GET(
             ORDER BY t.start_date DESC
             LIMIT 1
           )
-          AND cdfd.comment LIKE '%' || COALESCE(pc.customer_name, '') || '%ohio to indiana pickup%'
-          AND cdfd.is_manual = true`
-
-    if (hasAppliesTo) {
-      sqlQuery += `
-          AND cdfd.applies_to = 'driver_pay'`
-    }
-
-    sqlQuery += `
-        ) as "hasDeductionOhioToIndiana"
+          ELSE NULL
+        END as "otherTruckloadId",
+        -- Check if deduction already exists
+        (
+          SELECT COUNT(*)
+          FROM cross_driver_freight_deductions cdfd
+          WHERE cdfd.truckload_id = CASE 
+            WHEN toa.assignment_type = 'delivery' THEN (
+              SELECT t.id
+              FROM truckload_order_assignments toa_pickup
+              JOIN truckloads t ON toa_pickup.truckload_id = t.id
+              WHERE toa_pickup.order_id = o.id
+                AND toa_pickup.assignment_type = 'pickup'
+              ORDER BY t.start_date DESC
+              LIMIT 1
+            )
+            WHEN toa.assignment_type = 'pickup' THEN (
+              SELECT t.id
+              FROM truckload_order_assignments toa_delivery
+              JOIN truckloads t ON toa_delivery.truckload_id = t.id
+              WHERE toa_delivery.order_id = o.id
+                AND toa_delivery.assignment_type = 'delivery'
+              ORDER BY t.start_date DESC
+              LIMIT 1
+            )
+            ELSE NULL
+          END
+          AND cdfd.comment LIKE '%' || COALESCE(
+            CASE WHEN toa.assignment_type = 'delivery' THEN dc.customer_name ELSE pc.customer_name END,
+            ''
+          ) || '%split load%'
+          AND cdfd.is_manual = true
+          ${hasAppliesTo ? "AND cdfd.applies_to = 'driver_pay'" : ''}
+        ) as "hasDeduction",
+        -- Track if this is automatically included (middlefield) or manually added
+        (o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true)) as "isAutoIncluded"
       FROM truckload_order_assignments toa
       JOIN orders o ON toa.order_id = o.id
       LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
@@ -214,8 +163,7 @@ export async function GET(
           -- Automatically include middlefield orders
           (o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true))
           -- OR manually added orders (have a split quote set)
-          OR (o.middlefield_delivery_quote IS NOT NULL AND o.middlefield_delivery_quote > 0)
-          OR (o.ohio_to_indiana_pickup_quote IS NOT NULL AND o.ohio_to_indiana_pickup_quote > 0)
+          OR (o.split_quote IS NOT NULL AND o.split_quote > 0)
           ${includeOrderIdNum ? 'OR o.id = $2' : ''}
         )
       ORDER BY o.id
@@ -229,11 +177,10 @@ export async function GET(
       orders: result.rows
     })
   } catch (error) {
-    console.error('Error fetching middlefield orders:', error)
+    console.error('Error fetching split load orders:', error)
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch middlefield orders'
+      error: 'Failed to fetch split load orders'
     }, { status: 500 })
   }
 }
-
