@@ -1315,7 +1315,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               {hasMiddlefield && (
                                 <>
                                   <AlertTriangle className="h-5 w-5 text-red-600" />
-                                  <span className="text-sm font-semibold text-red-600">Split Loads</span>
+                                  <span className="text-sm font-semibold text-red-600">Middlefield</span>
                                 </>
                               )}
                             </div>

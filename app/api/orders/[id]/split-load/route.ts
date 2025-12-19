@@ -210,7 +210,7 @@ export async function POST(
     }
 
     const data = await request.json()
-    const { miscValue, fullQuoteAssignment } = data // 'pickup' or 'delivery'
+    const { miscValue, fullQuoteAssignment, fullQuoteAppliesTo, miscAppliesTo } = data // 'pickup' or 'delivery'
 
     if (!miscValue || miscValue <= 0) {
       return NextResponse.json({ success: false, error: 'Misc value must be greater than 0' }, { status: 400 })
@@ -219,6 +219,14 @@ export async function POST(
     if (!fullQuoteAssignment || !['pickup', 'delivery'].includes(fullQuoteAssignment)) {
       return NextResponse.json({ success: false, error: 'fullQuoteAssignment must be "pickup" or "delivery"' }, { status: 400 })
     }
+
+    // Validate applies_to values, default to 'driver_pay' if not provided
+    const fullQuoteAppliesToValue = fullQuoteAppliesTo && ['load_value', 'driver_pay'].includes(fullQuoteAppliesTo) 
+      ? fullQuoteAppliesTo 
+      : 'driver_pay'
+    const miscAppliesToValue = miscAppliesTo && ['load_value', 'driver_pay'].includes(miscAppliesTo) 
+      ? miscAppliesTo 
+      : 'driver_pay'
 
     const miscAmount = parseFloat(miscValue)
 
@@ -380,7 +388,7 @@ export async function POST(
       }
 
       // Create deductions/additions on both truckloads
-      // Full quote truckload (gets full quote in load value, but misc deduction from driver pay)
+      // Full quote truckload (gets full quote in load value, but misc deduction)
       const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
       if (hasAppliesTo) {
         await client.query(`
@@ -393,8 +401,8 @@ export async function POST(
             applies_to,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, true, false, 'driver_pay', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment])
+          ) VALUES ($1, $2, $3, true, false, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
       } else {
         await client.query(`
           INSERT INTO cross_driver_freight_deductions (
@@ -409,7 +417,7 @@ export async function POST(
         `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment])
       }
 
-      // Misc quote truckload (quote excluded from load value, but misc addition to driver pay)
+      // Misc quote truckload (quote excluded from load value, but misc addition)
       const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
       if (hasAppliesTo) {
         await client.query(`
@@ -422,8 +430,8 @@ export async function POST(
             applies_to,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, true, true, 'driver_pay', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment])
+          ) VALUES ($1, $2, $3, true, true, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
       } else {
         await client.query(`
           INSERT INTO cross_driver_freight_deductions (

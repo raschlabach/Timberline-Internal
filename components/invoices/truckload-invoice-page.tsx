@@ -371,7 +371,9 @@ function SortableTableRow({
                 // Middlefield orders should be split loads
                 (row.middlefield) ||
                 // Orders with 424 footage that are NOT transfers
-                (row.footage === 424 && !row.isTransferOrder)
+                (row.footage === 424 && !row.isTransferOrder) ||
+                // Transfer orders (pickup and delivery in same truckload) should be split loads
+                (row.isTransferOrder)
               
               // Only show warning if it should be split load but isn't already
               const showWarning = shouldBeSplitLoad && !hasActiveSplitLoad
@@ -404,6 +406,8 @@ function SortableTableRow({
                         <p>
                           {row.middlefield 
                             ? 'Middlefield order - should be a split load'
+                            : row.isTransferOrder
+                            ? 'Transfer order (pickup and delivery in same truckload) - should be a split load'
                             : '424 footage order - should be a split load'}
                         </p>
                       </TooltipContent>
@@ -652,6 +656,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   } | null>(null)
   const [splitLoadMiscValue, setSplitLoadMiscValue] = useState<string>('')
   const [splitLoadFullQuoteAssignment, setSplitLoadFullQuoteAssignment] = useState<'pickup' | 'delivery'>('delivery')
+  const [splitLoadFullQuoteAppliesTo, setSplitLoadFullQuoteAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
+  const [splitLoadMiscAppliesTo, setSplitLoadMiscAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
   const [isLoadingSplitLoad, setIsLoadingSplitLoad] = useState(false)
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -1814,17 +1820,26 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             const fullQuoteAssignment = pickupQuote > deliveryQuote ? 'pickup' : 'delivery'
             setSplitLoadMiscValue(String(miscValue))
             setSplitLoadFullQuoteAssignment(fullQuoteAssignment)
+            // Default applies_to to driver_pay (will need to be fetched from deductions if we want to restore)
+            setSplitLoadFullQuoteAppliesTo('driver_pay')
+            setSplitLoadMiscAppliesTo('driver_pay')
           } else if (pickupQuote !== null) {
             setSplitLoadMiscValue(String(pickupQuote))
             setSplitLoadFullQuoteAssignment('pickup')
+            setSplitLoadFullQuoteAppliesTo('driver_pay')
+            setSplitLoadMiscAppliesTo('driver_pay')
           } else if (deliveryQuote !== null) {
             setSplitLoadMiscValue(String(deliveryQuote))
             setSplitLoadFullQuoteAssignment('delivery')
+            setSplitLoadFullQuoteAppliesTo('driver_pay')
+            setSplitLoadMiscAppliesTo('driver_pay')
           }
         } else {
           // Reset form for new split load
           setSplitLoadMiscValue('')
           setSplitLoadFullQuoteAssignment('delivery')
+          setSplitLoadFullQuoteAppliesTo('driver_pay')
+          setSplitLoadMiscAppliesTo('driver_pay')
         }
       } else {
         toast.error('Failed to load split load info')
@@ -1867,7 +1882,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         credentials: 'include',
         body: JSON.stringify({
           miscValue,
-          fullQuoteAssignment: splitLoadFullQuoteAssignment
+          fullQuoteAssignment: splitLoadFullQuoteAssignment,
+          fullQuoteAppliesTo: splitLoadFullQuoteAppliesTo,
+          miscAppliesTo: splitLoadMiscAppliesTo
         })
       })
 
@@ -3119,6 +3136,46 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     </div>
                   </div>
 
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="space-y-2">
+                      <Label>Full Quote Assignment Applies To</Label>
+                      <Select
+                        value={splitLoadFullQuoteAppliesTo}
+                        onValueChange={(value) => setSplitLoadFullQuoteAppliesTo(value as 'load_value' | 'driver_pay')}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="load_value">Load Value</SelectItem>
+                          <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        The deduction for the misc portion will apply to {splitLoadFullQuoteAppliesTo === 'load_value' ? 'load value' : 'driver pay'} for the {splitLoadFullQuoteAssignment === 'pickup' ? 'pickup' : 'delivery'} truckload.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Misc Assignment Applies To</Label>
+                      <Select
+                        value={splitLoadMiscAppliesTo}
+                        onValueChange={(value) => setSplitLoadMiscAppliesTo(value as 'load_value' | 'driver_pay')}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="load_value">Load Value</SelectItem>
+                          <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        The addition for the misc portion will apply to {splitLoadMiscAppliesTo === 'load_value' ? 'load value' : 'driver pay'} for the {splitLoadFullQuoteAssignment === 'pickup' ? 'delivery' : 'pickup'} truckload.
+                      </p>
+                    </div>
+                  </div>
+
                   {splitLoadData.fullQuote && splitLoadMiscValue && (
                     <div className="border rounded-lg p-4 bg-blue-50">
                       <div className="text-sm font-semibold mb-2">Preview:</div>
@@ -3128,15 +3185,21 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           <span className="font-medium ml-2">
                             ${((typeof splitLoadData.fullQuote === 'number' ? splitLoadData.fullQuote : parseFloat(String(splitLoadData.fullQuote || 0)) || 0) - parseFloat(splitLoadMiscValue || '0')).toFixed(2)}
                           </span>
+                          <span className="text-xs text-gray-600 ml-2">
+                            (deduction: ${parseFloat(splitLoadMiscValue || '0').toFixed(2)} to {splitLoadFullQuoteAppliesTo === 'load_value' ? 'load value' : 'driver pay'})
+                          </span>
                         </div>
                         <div>
                           {splitLoadFullQuoteAssignment === 'pickup' ? 'Delivery' : 'Pickup'}: 
                           <span className="font-medium ml-2">
                             ${parseFloat(splitLoadMiscValue || '0').toFixed(2)}
                           </span>
+                          <span className="text-xs text-gray-600 ml-2">
+                            (addition: ${parseFloat(splitLoadMiscValue || '0').toFixed(2)} to {splitLoadMiscAppliesTo === 'load_value' ? 'load value' : 'driver pay'})
+                          </span>
                         </div>
                         <div className="pt-2 border-t text-xs text-gray-600">
-                          Both truckloads will show the full quote (${(typeof splitLoadData.fullQuote === 'number' ? splitLoadData.fullQuote : parseFloat(String(splitLoadData.fullQuote || 0)) || 0).toFixed(2)}) with manual deductions applied.
+                          Both truckloads will show the full quote (${(typeof splitLoadData.fullQuote === 'number' ? splitLoadData.fullQuote : parseFloat(String(splitLoadData.fullQuote || 0)) || 0).toFixed(2)}) with manual deductions/additions applied.
                         </div>
                       </div>
                     </div>
