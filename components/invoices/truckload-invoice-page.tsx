@@ -351,18 +351,16 @@ function SortableTableRow({
               onChange={(e) => {
                 // For split load orders, we don't allow editing here
                 // They must be set via the split loads dialog
-                const hasSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
-                  (row.splitQuote !== null && row.splitQuote !== undefined) ||
-                  (row.middlefield && row.backhaul) ||
-                  (row.middlefield && row.ohioToIndiana)
-                if (hasSplitLoad) {
-                  return // Read-only for split load quotes
+                const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
+                  (row.splitQuote !== null && row.splitQuote !== undefined)
+                if (hasConfirmedSplitLoad) {
+                  return // Read-only for confirmed split load quotes
                 }
                 debouncedUpdateQuote(row.orderId, e.target.value)
               }}
               placeholder="—"
               className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-              disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))}
+              disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined)}
             />
             {(() => {
               // Check if this order has an active split load
@@ -419,13 +417,26 @@ function SortableTableRow({
               return null
             })()}
           </div>
-          {/* Show deduction amount for split loads */}
-          {((row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined)) && (() => {
+          {/* Show deduction amount for confirmed split loads only */}
+          {(() => {
+            // Only show deduction if there's a confirmed split load
+            const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
+              (row.splitQuote !== null && row.splitQuote !== undefined)
+            
+            if (!hasConfirmedSplitLoad) {
+              return null
+            }
+            
             const fullQuote = parseFloat(row.freightQuote || '0') || 0
             const assignmentQuote = row.assignmentQuote !== null && row.assignmentQuote !== undefined 
               ? row.assignmentQuote 
               : (row.splitQuote !== null && row.splitQuote !== undefined ? row.splitQuote : null)
-            const deduction = assignmentQuote !== null ? fullQuote - assignmentQuote : 0
+            
+            if (assignmentQuote === null) {
+              return null
+            }
+            
+            const deduction = fullQuote - assignmentQuote
             return deduction > 0 ? (
               <span className="text-[10px] text-red-600 font-medium leading-tight">
                 -${deduction.toFixed(2)}
