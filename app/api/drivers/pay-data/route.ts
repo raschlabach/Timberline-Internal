@@ -342,6 +342,8 @@ export async function GET(request: NextRequest) {
           o.id as "orderId",
           toa.truckload_id as "truckloadId",
           toa.assignment_type as "assignmentType",
+          o.freight_quote as "fullQuote",
+          toa.assignment_quote as "assignmentQuote",
           COALESCE(toa.assignment_quote, o.freight_quote) as "freightQuote",
           COALESCE(
             (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
@@ -560,6 +562,8 @@ export async function GET(request: NextRequest) {
             orderId: order.orderId,
             assignmentType: order.assignmentType,
             freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
+            fullQuote: order.fullQuote ? parseFloat(order.fullQuote) : null,
+            assignmentQuote: order.assignmentQuote ? parseFloat(order.assignmentQuote) : null,
             footage: parseFloat(order.footage) || 0,
             pickupCustomerName: order.pickupCustomerName,
             deliveryCustomerName: order.deliveryCustomerName,

@@ -57,6 +57,8 @@ interface Order {
   orderId: number
   assignmentType: 'pickup' | 'delivery'
   freightQuote: number | null
+  fullQuote?: number | null
+  assignmentQuote?: number | null
   footage: number
   pickupCustomerName: string | null
   deliveryCustomerName: string | null
@@ -488,6 +490,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     })
     
     // Calculate total quotes from grouped orders (each order counted once, same as Invoice page)
+    // Exclude orders where assignment_quote is the misc value (the smaller portion)
     const totalQuotes = Array.from(orderGroups.values()).reduce((sum, groupOrders) => {
       // For transfer orders (both pickup and delivery), only count once
       // For non-transfer orders, count each one
@@ -501,16 +504,52 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         if (order.freightQuote) {
           // Parse quote string (could be "$123.45" or "123.45" or a number)
           const quoteStr = String(order.freightQuote)
-          const quoteValue = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
-          return sum + (isNaN(quoteValue) ? 0 : quoteValue)
+          const fullQuote = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
+          if (isNaN(fullQuote)) return sum
+          
+          // Check if this is a split load with assignment_quote
+          const assignmentQuote = order.assignmentQuote
+          const orderFullQuote = order.fullQuote || fullQuote
+          if (assignmentQuote !== null && assignmentQuote !== undefined && orderFullQuote) {
+            const aq = typeof assignmentQuote === 'number' ? assignmentQuote : parseFloat(String(assignmentQuote)) || 0
+            const otherPortion = orderFullQuote - aq
+            
+            // If assignment_quote is the smaller value (misc), exclude from load value
+            if (aq < otherPortion) {
+              return sum
+            } else {
+              // This is the "full quote - misc" assignment - include full quote in load value
+              return sum + orderFullQuote
+            }
+          }
+          
+          return sum + fullQuote
         }
       } else {
         // For non-transfers, sum all orders in the group
         return sum + groupOrders.reduce((groupSum, order) => {
           if (order.freightQuote) {
             const quoteStr = String(order.freightQuote)
-            const quoteValue = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
-            return groupSum + (isNaN(quoteValue) ? 0 : quoteValue)
+            const fullQuote = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
+            if (isNaN(fullQuote)) return groupSum
+            
+            // Check if this is a split load with assignment_quote
+            const assignmentQuote = order.assignmentQuote
+            const orderFullQuote = order.fullQuote || fullQuote
+            if (assignmentQuote !== null && assignmentQuote !== undefined && orderFullQuote) {
+              const aq = typeof assignmentQuote === 'number' ? assignmentQuote : parseFloat(String(assignmentQuote)) || 0
+              const otherPortion = orderFullQuote - aq
+              
+              // If assignment_quote is the smaller value (misc), exclude from load value
+              if (aq < otherPortion) {
+                return groupSum
+              } else {
+                // This is the "full quote - misc" assignment - include full quote in load value
+                return groupSum + orderFullQuote
+              }
+            }
+            
+            return groupSum + fullQuote
           }
           return groupSum
         }, 0)

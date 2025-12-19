@@ -364,20 +364,60 @@ function SortableTableRow({
               className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
               disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))}
             />
-            {((row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))) && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AlertTriangle 
-                      className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" 
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Split load - managed via split icon</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            {(() => {
+              // Check if this order has an active split load
+              const hasActiveSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
+                (row.splitQuote !== null && row.splitQuote !== undefined) ||
+                (row.middlefield && row.backhaul) ||
+                (row.middlefield && row.ohioToIndiana)
+              
+              // Check if this order should be a split load (warning conditions)
+              const shouldBeSplitLoad = 
+                // Middlefield orders should be split loads
+                (row.middlefield) ||
+                // Orders with 424 footage that are NOT transfers
+                (row.footage === 424 && !row.isTransferOrder)
+              
+              // Only show warning if it should be split load but isn't already
+              const showWarning = shouldBeSplitLoad && !hasActiveSplitLoad
+              
+              if (hasActiveSplitLoad) {
+                return (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertTriangle 
+                          className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" 
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Split load - managed via split icon</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              } else if (showWarning) {
+                return (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertTriangle 
+                          className="h-4 w-4 text-orange-600 flex-shrink-0 cursor-help" 
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          {row.middlefield 
+                            ? 'Middlefield order - should be a split load'
+                            : '424 footage order - should be a split load'}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              }
+              return null
+            })()}
           </div>
           {/* Show deduction amount for split loads */}
           {((row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined)) && (() => {
@@ -747,12 +787,40 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const transferCount = groupedOrders.filter(o => (o as any).isCombined).length
     
     // Calculate total quotes from grouped orders (each order counted once)
+    // Exclude orders where assignment_quote is the misc value (the smaller portion)
     const totalQuotes = groupedOrders.reduce((sum, order) => {
       if (order.freightQuote) {
         // Parse quote string (could be "$123.45" or "123.45")
         const cleaned = order.freightQuote.replace(/[^0-9.-]/g, '')
-        const value = parseFloat(cleaned)
-        return sum + (isNaN(value) ? 0 : value)
+        const fullQuote = parseFloat(cleaned)
+        if (isNaN(fullQuote)) return sum
+        
+        // If assignment_quote exists, check if it's the misc value
+        // The misc value is the smaller portion, so if assignment_quote is significantly
+        // less than the full quote, it's likely the misc value and should be excluded
+        if (order.assignmentQuote !== null && order.assignmentQuote !== undefined) {
+          const assignmentQuote = typeof order.assignmentQuote === 'number' 
+            ? order.assignmentQuote 
+            : parseFloat(String(order.assignmentQuote)) || 0
+          
+          // If assignment_quote is less than 50% of full quote, it's likely the misc value
+          // Also check if it's close to (fullQuote - assignmentQuote), which would indicate
+          // this is the "full quote - misc" assignment, so we should include the full quote
+          const otherPortion = fullQuote - assignmentQuote
+          
+          // If assignment_quote is the smaller value (misc), exclude it from load value
+          // If assignment_quote is the larger value (full - misc), include full quote
+          if (assignmentQuote < otherPortion) {
+            // This is the misc assignment - exclude from load value
+            return sum
+          } else {
+            // This is the "full quote - misc" assignment - include full quote in load value
+            return sum + fullQuote
+          }
+        }
+        
+        // No split load - include the quote normally
+        return sum + fullQuote
       }
       return sum
     }, 0)

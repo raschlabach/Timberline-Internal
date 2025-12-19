@@ -379,8 +379,8 @@ export async function POST(
         `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
       }
 
-      // Create deductions on both truckloads
-      // Full quote truckload gets deduction of misc amount
+      // Create deductions/additions on both truckloads
+      // Full quote truckload (gets full quote in load value, but misc deduction from driver pay)
       const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
       if (hasAppliesTo) {
         await client.query(`
@@ -409,8 +409,8 @@ export async function POST(
         `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment])
       }
 
-      // Misc quote truckload gets deduction of full quote amount
-      const miscQuoteDeductionComment = `${fullQuoteCustomerName} split load (full portion)`
+      // Misc quote truckload (quote excluded from load value, but misc addition to driver pay)
+      const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
       if (hasAppliesTo) {
         await client.query(`
           INSERT INTO cross_driver_freight_deductions (
@@ -422,8 +422,8 @@ export async function POST(
             applies_to,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, true, false, 'driver_pay', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [miscQuoteTruckloadId, fullQuoteAmount, miscQuoteDeductionComment])
+          ) VALUES ($1, $2, $3, true, true, 'driver_pay', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment])
       } else {
         await client.query(`
           INSERT INTO cross_driver_freight_deductions (
@@ -434,8 +434,8 @@ export async function POST(
             is_addition,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [miscQuoteTruckloadId, fullQuoteAmount, miscQuoteDeductionComment])
+          ) VALUES ($1, $2, $3, true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment])
       }
 
       await client.query('COMMIT')
