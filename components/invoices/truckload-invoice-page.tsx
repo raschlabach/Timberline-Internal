@@ -232,8 +232,7 @@ function SortableTableRow({
   onInfoClick,
   onAddDeduction,
   selectedTruckloadId,
-  onAddToSplitLoads,
-  onOpenSplitLoadsDialog,
+  onOpenSplitLoadDialog,
 }: {
   id: string
   row: AssignedOrderRow & { isCombined?: boolean; sequenceNumbers?: string }
@@ -248,8 +247,7 @@ function SortableTableRow({
   onInfoClick: () => void
   onAddDeduction: (orderId: string) => void
   selectedTruckloadId: string | null
-  onAddToSplitLoads: (orderId: string) => Promise<void>
-  onOpenSplitLoadsDialog: (truckloadId: number) => Promise<void>
+  onOpenSplitLoadDialog: (orderId: string) => Promise<void>
 }) {
   const {
     attributes,
@@ -347,25 +345,23 @@ function SortableTableRow({
         <div className="flex items-center gap-1">
           <Input
             type="text"
-            value={
-              // For split load orders, use split quote if available
-              row.splitQuote !== null && row.splitQuote !== undefined
-                ? String(row.splitQuote)
-                : (row.freightQuote || '')
-            }
+            value={row.freightQuote || ''}
             onChange={(e) => {
-              // For split load quotes, we don't allow editing here
+              // For split load orders, we don't allow editing here
               // They must be set via the split loads dialog
-              if (row.splitQuote !== null && row.splitQuote !== undefined) {
+              const hasSplitLoad = (row.splitQuote !== null && row.splitQuote !== undefined) ||
+                (row.middlefield && row.backhaul) ||
+                (row.middlefield && row.ohioToIndiana)
+              if (hasSplitLoad) {
                 return // Read-only for split load quotes
               }
               debouncedUpdateQuote(row.orderId, e.target.value)
             }}
             placeholder="—"
             className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-            disabled={updatingQuotes.has(row.orderId) || (row.splitQuote !== null && row.splitQuote !== undefined)}
+            disabled={updatingQuotes.has(row.orderId) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))}
           />
-          {row.splitQuote !== null && row.splitQuote !== undefined && (
+          {((row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))) && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -374,7 +370,7 @@ function SortableTableRow({
                   />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>This is a Middlefield delivery quote</p>
+                  <p>Split load - managed via split icon</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -413,25 +409,7 @@ function SortableTableRow({
                   variant="ghost"
                   onClick={async (e) => {
                     e.stopPropagation()
-                    if (selectedTruckloadId) {
-                      // Check if order is already in split loads
-                      const isInSplitLoads = (row.splitQuote !== null && row.splitQuote !== undefined) ||
-                        (row.middlefield && row.backhaul) ||
-                        (row.middlefield && row.ohioToIndiana)
-                      
-                      if (isInSplitLoads) {
-                        // Open the dialog to manage
-                        const truckloadId = parseInt(selectedTruckloadId, 10)
-                        if (!isNaN(truckloadId)) {
-                          await onOpenSplitLoadsDialog(truckloadId)
-                        }
-                      } else {
-                        // Add to split loads
-                        await onAddToSplitLoads(row.orderId)
-                      }
-                    } else {
-                      toast.error('No truckload selected')
-                    }
+                    await onOpenSplitLoadDialog(row.orderId)
                   }}
                   className={`h-7 w-7 p-0 ${
                     (row.splitQuote !== null && row.splitQuote !== undefined) ||
@@ -440,13 +418,7 @@ function SortableTableRow({
                       ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
                       : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                   }`}
-                  title={
-                    (row.splitQuote !== null && row.splitQuote !== undefined) ||
-                    (row.middlefield && row.backhaul) ||
-                    (row.middlefield && row.ohioToIndiana)
-                      ? 'In split loads - Click to manage'
-                      : 'Add to split loads'
-                  }
+                  title="Manage split load"
                 >
                   <Split className="h-4 w-4" />
                 </Button>
@@ -606,20 +578,21 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [deductionDialogAmount, setDeductionDialogAmount] = useState<string>('')
   const [deductionDialogAppliesTo, setDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
   const [deductionDialogType, setDeductionDialogType] = useState<'pickup' | 'delivery' | 'manual'>('manual')
-  const [middlefieldDialogOpen, setMiddlefieldDialogOpen] = useState(false)
-  const [middlefieldTruckloadId, setMiddlefieldTruckloadId] = useState<number | null>(null)
-  const [middlefieldOrders, setMiddlefieldOrders] = useState<Array<{
+  // Single-order split load dialog
+  const [splitLoadDialogOpen, setSplitLoadDialogOpen] = useState(false)
+  const [splitLoadOrderId, setSplitLoadOrderId] = useState<number | null>(null)
+  const [splitLoadData, setSplitLoadData] = useState<{
     orderId: number
-    assignmentType: 'pickup' | 'delivery'
     fullQuote: number | null
-    splitQuote: number | null
     deliveryCustomerName: string | null
     pickupCustomerName: string | null
-    otherTruckloadId: number | null
-    hasDeduction: number
-    isAutoIncluded?: boolean
-  }>>([])
-  const [isLoadingMiddlefield, setIsLoadingMiddlefield] = useState(false)
+    pickupAssignment: { assignmentId: number; truckloadId: number; assignmentQuote: number | null; driverName: string | null } | null
+    deliveryAssignment: { assignmentId: number; truckloadId: number; assignmentQuote: number | null; driverName: string | null } | null
+    hasSplitLoad: boolean
+  } | null>(null)
+  const [splitLoadMiscValue, setSplitLoadMiscValue] = useState<string>('')
+  const [splitLoadFullQuoteAssignment, setSplitLoadFullQuoteAssignment] = useState<'pickup' | 'delivery'>('delivery')
+  const [isLoadingSplitLoad, setIsLoadingSplitLoad] = useState(false)
   const selectedTruckload = useMemo(() => truckloads.find(t => t.id === selectedTruckloadId) || null, [truckloads, selectedTruckloadId])
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
@@ -1707,21 +1680,27 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     )
   }, [orders])
 
-  // Open middlefield management dialog
+  // Open middlefield management dialog (DEPRECATED - kept for compatibility)
   const openMiddlefieldDialog = async (truckloadId: number) => {
-    console.log('openMiddlefieldDialog called with truckloadId:', truckloadId)
-    if (!truckloadId || isNaN(truckloadId)) {
-      console.error('Invalid truckloadId:', truckloadId)
-      toast.error('Invalid truckload ID')
+    // This function is no longer used - split loads are now managed per-order
+    console.warn('openMiddlefieldDialog is deprecated - use openSplitLoadDialog instead')
+    return
+  }
+
+  // Open single-order split load dialog
+  const openSplitLoadDialog = async (orderId: string) => {
+    const orderIdNum = parseInt(orderId, 10)
+    if (isNaN(orderIdNum)) {
+      toast.error('Invalid order ID')
       return
     }
-    
-    setMiddlefieldTruckloadId(truckloadId)
-    setMiddlefieldDialogOpen(true)
-    setIsLoadingMiddlefield(true)
+
+    setSplitLoadOrderId(orderIdNum)
+    setSplitLoadDialogOpen(true)
+    setIsLoadingSplitLoad(true)
 
     try {
-      const response = await fetch(`/api/truckloads/${truckloadId}/middlefield-orders`, {
+      const response = await fetch(`/api/orders/${orderIdNum}/split-load`, {
         credentials: 'include'
       })
       
@@ -1732,175 +1711,78 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       const data = await response.json()
       
       if (data.success) {
-        // Parse the orders to ensure numeric values are properly typed
-        const parsedOrders = (data.orders || []).map((order: any) => ({
-          ...order,
-          orderId: typeof order.orderId === 'number' ? order.orderId : parseInt(String(order.orderId || 0)),
-          fullQuote: typeof order.fullQuote === 'number' 
-            ? order.fullQuote 
-            : (order.fullQuote ? parseFloat(String(order.fullQuote)) : null),
-          deliveryQuote: order.deliveryQuote !== null && order.deliveryQuote !== undefined
-            ? (typeof order.deliveryQuote === 'number' 
-                ? order.deliveryQuote 
-                : parseFloat(String(order.deliveryQuote)) || null)
-            : null,
-          pickupQuote: order.pickupQuote !== null && order.pickupQuote !== undefined
-            ? (typeof order.pickupQuote === 'number' 
-                ? order.pickupQuote 
-                : parseFloat(String(order.pickupQuote)) || null)
-            : null,
-          pickupTruckloadId: order.pickupTruckloadId 
-            ? (typeof order.pickupTruckloadId === 'number' 
-                ? order.pickupTruckloadId 
-                : parseInt(String(order.pickupTruckloadId)))
-            : null,
-          deliveryTruckloadId: order.deliveryTruckloadId 
-            ? (typeof order.deliveryTruckloadId === 'number' 
-                ? order.deliveryTruckloadId 
-                : parseInt(String(order.deliveryTruckloadId)))
-            : null,
-          scenarioType: order.scenarioType || null,
-          hasDeductionBackhaul: typeof order.hasDeductionBackhaul === 'number' 
-            ? order.hasDeductionBackhaul 
-            : parseInt(String(order.hasDeductionBackhaul || 0)),
-          hasDeductionOhioToIndiana: typeof order.hasDeductionOhioToIndiana === 'number' 
-            ? order.hasDeductionOhioToIndiana 
-            : parseInt(String(order.hasDeductionOhioToIndiana || 0)),
-          isAutoIncluded: order.isAutoIncluded !== undefined ? Boolean(order.isAutoIncluded) : false,
-          // Determine quote type for manually added orders
-          quoteType: order.scenarioType === 'backhaul' ? 'delivery' 
-            : order.scenarioType === 'ohio_to_indiana' ? 'pickup'
-            : (order.deliveryQuote !== null && order.deliveryQuote !== undefined) ? 'delivery'
-            : (order.pickupQuote !== null && order.pickupQuote !== undefined) ? 'pickup'
-            : null
-        }))
-        setMiddlefieldOrders(parsedOrders)
+        setSplitLoadData(data.order)
+        // If split load exists, populate the form
+        if (data.order.hasSplitLoad) {
+          const pickupQuote = data.order.pickupAssignment?.assignmentQuote
+          const deliveryQuote = data.order.deliveryAssignment?.assignmentQuote
+          const fullQuote = data.order.fullQuote || 0
+          
+          // Determine which assignment has the smaller quote (misc value)
+          if (pickupQuote !== null && deliveryQuote !== null) {
+            const miscValue = Math.min(pickupQuote, deliveryQuote)
+            const fullQuoteAssignment = pickupQuote > deliveryQuote ? 'pickup' : 'delivery'
+            setSplitLoadMiscValue(String(miscValue))
+            setSplitLoadFullQuoteAssignment(fullQuoteAssignment)
+          } else if (pickupQuote !== null) {
+            setSplitLoadMiscValue(String(pickupQuote))
+            setSplitLoadFullQuoteAssignment('pickup')
+          } else if (deliveryQuote !== null) {
+            setSplitLoadMiscValue(String(deliveryQuote))
+            setSplitLoadFullQuoteAssignment('delivery')
+          }
+        } else {
+          // Reset form for new split load
+          setSplitLoadMiscValue('')
+          setSplitLoadFullQuoteAssignment('delivery')
+        }
       } else {
-        toast.error('Failed to load middlefield orders')
-        setMiddlefieldOrders([])
+        toast.error('Failed to load split load info')
+        setSplitLoadData(null)
       }
     } catch (error) {
-      console.error('Error loading middlefield orders:', error)
-      toast.error('Failed to load middlefield orders')
-      setMiddlefieldOrders([])
+      console.error('Error loading split load info:', error)
+      toast.error('Failed to load split load info')
+      setSplitLoadData(null)
     } finally {
-      setIsLoadingMiddlefield(false)
+      setIsLoadingSplitLoad(false)
     }
   }
 
-  // Update split quote for an order
-  const updateSplitQuote = (orderId: number, splitQuote: string) => {
-    setMiddlefieldOrders(prev => prev.map(order => 
-      order.orderId === orderId
-        ? { ...order, splitQuote: splitQuote ? parseFloat(splitQuote) : null }
-        : order
-    ))
-  }
+  // Save split load
+  const saveSplitLoad = async () => {
+    if (!splitLoadOrderId || !splitLoadData) return
 
-  // Add order to split loads (called from icon button)
-  const addOrderToSplitLoads = async (orderId: string) => {
-    if (!selectedTruckloadId) {
-      toast.error('No truckload selected')
+    const miscValue = parseFloat(splitLoadMiscValue)
+    if (isNaN(miscValue) || miscValue <= 0) {
+      toast.error('Please enter a valid misc value')
       return
     }
 
-    const truckloadId = parseInt(selectedTruckloadId, 10)
-    if (isNaN(truckloadId)) {
-      toast.error('Invalid truckload ID')
-      return
-    }
-
-    // Open dialog with the order included
-    setMiddlefieldTruckloadId(truckloadId)
-    setMiddlefieldDialogOpen(true)
-    setIsLoadingMiddlefield(true)
-
-    try {
-      // Fetch orders including this specific order
-      const response = await fetch(`/api/truckloads/${truckloadId}/middlefield-orders?includeOrderId=${orderId}`, {
-        credentials: 'include'
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    const fullQuote = splitLoadData.fullQuote || 0
+    if (miscValue > fullQuote) {
+      // Show warning but allow it
+      if (!confirm(`Warning: Misc value ($${miscValue.toFixed(2)}) is greater than full quote ($${fullQuote.toFixed(2)}). Continue anyway?`)) {
+        return
       }
-      
-      const data = await response.json()
-      
-      if (data.success) {
-        // Parse the orders to ensure numeric values are properly typed
-        const parsedOrders = (data.orders || []).map((order: any) => ({
-          orderId: typeof order.orderId === 'number' ? order.orderId : parseInt(String(order.orderId || 0)),
-          assignmentType: order.assignmentType || 'delivery',
-          fullQuote: typeof order.fullQuote === 'number' 
-            ? order.fullQuote 
-            : (order.fullQuote ? parseFloat(String(order.fullQuote)) : null),
-          splitQuote: order.splitQuote !== null && order.splitQuote !== undefined
-            ? (typeof order.splitQuote === 'number' 
-                ? order.splitQuote 
-                : parseFloat(String(order.splitQuote)) || null)
-            : null,
-          deliveryCustomerName: order.deliveryCustomerName || null,
-          pickupCustomerName: order.pickupCustomerName || null,
-          otherTruckloadId: order.otherTruckloadId 
-            ? (typeof order.otherTruckloadId === 'number' 
-                ? order.otherTruckloadId 
-                : parseInt(String(order.otherTruckloadId)))
-            : null,
-          hasDeduction: typeof order.hasDeduction === 'number' 
-            ? order.hasDeduction 
-            : parseInt(String(order.hasDeduction || 0)),
-          isAutoIncluded: order.isAutoIncluded !== undefined ? Boolean(order.isAutoIncluded) : false
-        }))
-        setMiddlefieldOrders(parsedOrders)
-        toast.success('Order added to split loads. Please set the split quote amount.')
-      } else {
-        toast.error('Failed to load split load orders')
-        setMiddlefieldOrders([])
-      }
-    } catch (error) {
-      console.error('Error loading split load orders:', error)
-      toast.error('Failed to load split load orders')
-      setMiddlefieldOrders([])
-    } finally {
-      setIsLoadingMiddlefield(false)
-    }
-  }
-
-  // Save all split quotes
-  const saveDeliveryQuotes = async () => {
-    if (!middlefieldTruckloadId) return
-
-    const updates = middlefieldOrders
-      .filter(order => order.otherTruckloadId !== null)
-      .map(order => ({
-        orderId: order.orderId,
-        splitQuote: order.splitQuote,
-        otherTruckloadId: order.otherTruckloadId,
-        assignmentType: order.assignmentType,
-        customerName: order.assignmentType === 'delivery' 
-          ? order.deliveryCustomerName 
-          : order.pickupCustomerName
-      }))
-
-    if (updates.length === 0) {
-      toast.error('No orders to update')
-      return
     }
 
-    setIsLoadingMiddlefield(true)
+    setIsLoadingSplitLoad(true)
     try {
-      const response = await fetch('/api/orders/middlefield-delivery-quotes', {
+      const response = await fetch(`/api/orders/${splitLoadOrderId}/split-load`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ updates })
+        body: JSON.stringify({
+          miscValue,
+          fullQuoteAssignment: splitLoadFullQuoteAssignment
+        })
       })
 
       const data = await response.json()
       if (data.success) {
-        toast.success(data.message || 'Quotes updated successfully')
-        setMiddlefieldDialogOpen(false)
+        toast.success(data.message || 'Split load updated successfully')
+        setSplitLoadDialogOpen(false)
         // Refresh orders to show updated quotes
         if (selectedTruckloadId) {
           const id = selectedTruckloadId
@@ -1908,15 +1790,52 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           setTimeout(() => setSelectedTruckloadId(id), 0)
         }
       } else {
-        toast.error(data.error || 'Failed to update quotes')
+        toast.error(data.error || 'Failed to update split load')
       }
     } catch (error) {
-      console.error('Error saving quotes:', error)
-      toast.error('Failed to save quotes')
+      console.error('Error saving split load:', error)
+      toast.error('Failed to save split load')
     } finally {
-      setIsLoadingMiddlefield(false)
+      setIsLoadingSplitLoad(false)
     }
   }
+
+  // Clear split load
+  const clearSplitLoad = async () => {
+    if (!splitLoadOrderId) return
+
+    if (!confirm('Are you sure you want to clear the split load for this order?')) {
+      return
+    }
+
+    setIsLoadingSplitLoad(true)
+    try {
+      const response = await fetch(`/api/orders/${splitLoadOrderId}/split-load`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success(data.message || 'Split load cleared successfully')
+        setSplitLoadDialogOpen(false)
+        // Refresh orders
+        if (selectedTruckloadId) {
+          const id = selectedTruckloadId
+          setSelectedTruckloadId(null)
+          setTimeout(() => setSelectedTruckloadId(id), 0)
+        }
+      } else {
+        toast.error(data.error || 'Failed to clear split load')
+      }
+    } catch (error) {
+      console.error('Error clearing split load:', error)
+      toast.error('Failed to clear split load')
+    } finally {
+      setIsLoadingSplitLoad(false)
+    }
+  }
+
 
   function handlePrint(): void {
     window.print()
@@ -2143,40 +2062,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     <span className="text-base font-medium">BOL {selectedTruckload.billOfLadingNumber}</span>
                   )}
                 </div>
-                {selectedTruckloadId && (
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {hasMiddlefieldOrders && (
-                      <>
-                        <AlertTriangle className="h-5 w-5 text-red-600" />
-                        <span className="text-sm font-semibold text-red-600">Split Loads</span>
-                      </>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (selectedTruckloadId) {
-                          const truckloadId = parseInt(selectedTruckloadId, 10)
-                          if (!isNaN(truckloadId)) {
-                            openMiddlefieldDialog(truckloadId)
-                          } else {
-                            console.error('Invalid selectedTruckloadId:', selectedTruckloadId)
-                            toast.error('Invalid truckload ID')
-                          }
-                        } else {
-                          console.error('selectedTruckloadId is null or undefined')
-                          toast.error('No truckload selected')
-                        }
-                      }}
-                    >
-                      <Settings className="h-3 w-3 mr-1" />
-                      Manage Split Loads
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -2268,8 +2153,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             setDeductionDialogOpen(true)
                           }}
                           selectedTruckloadId={selectedTruckloadId}
-                          onAddToSplitLoads={addOrderToSplitLoads}
-                          onOpenSplitLoadsDialog={openMiddlefieldDialog}
+                          onOpenSplitLoadDialog={openSplitLoadDialog}
                         />
                       )
                     })}
@@ -2824,126 +2708,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     {isAddition ? 'Addition' : 'Deduction'}: ${amount.toFixed(2        )}
       </div>
 
-      {/* Middlefield Management Dialog */}
-      <Dialog open={middlefieldDialogOpen} onOpenChange={setMiddlefieldDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Manage Split Loads</DialogTitle>
-            <DialogDescription>
-              <p>
-                Split loads allow you to divide a single order's quote between pickup and delivery truckloads. 
-                Set a split quote for this truckload, and the other truckload will use the full quote. 
-                A deduction will be automatically created on the other truckload for the split quote amount.
-              </p>
-            </DialogDescription>
-          </DialogHeader>
-          
-          {isLoadingMiddlefield ? (
-            <div className="text-center py-8">Loading orders...</div>
-          ) : middlefieldOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">No split load orders found in this truckload</div>
-          ) : (
-            <div className="space-y-4">
-              {middlefieldOrders.map((order) => {
-                const fullQuote = typeof order.fullQuote === 'number' 
-                  ? order.fullQuote 
-                  : (order.fullQuote ? parseFloat(String(order.fullQuote)) : 0) || 0
-                const splitQuote = order.splitQuote !== null && order.splitQuote !== undefined
-                  ? (typeof order.splitQuote === 'number' 
-                      ? order.splitQuote 
-                      : parseFloat(String(order.splitQuote)) || null)
-                  : null
-                
-                // Deduction amount is the split quote value
-                const deductionAmount = splitQuote !== null && !isNaN(splitQuote) && splitQuote > 0 ? splitQuote : null
-                const hasDeduction = order.hasDeduction > 0
-                
-                // Determine which truckload gets the deduction (the other one)
-                const deductionTruckload = order.assignmentType === 'delivery' ? 'Pickup' : 'Delivery'
-                
-                return (
-                  <Card key={order.orderId} className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-semibold">Order #{order.orderId}</div>
-                          <div className="text-sm text-gray-600">
-                            Delivery: {order.deliveryCustomerName || 'Unknown'}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            Pickup: {order.pickupCustomerName || 'Unknown'}
-                          </div>
-                          <div className="text-xs mt-1">
-                            {order.isAutoIncluded ? (
-                              <span className="text-blue-600">Auto-included (Middlefield order)</span>
-                            ) : (
-                              <span className="text-purple-600">Manually Added</span>
-                            )}
-                          </div>
-                        </div>
-                        {hasDeduction && (
-                          <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                            Deduction exists
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <Label className="text-xs text-gray-600">Full Quote</Label>
-                          <div className="text-sm font-medium">${fullQuote.toFixed(2)}</div>
-                        </div>
-                        <div>
-                          <Label htmlFor={`split-quote-${order.orderId}`} className="text-xs text-gray-600">
-                            Split Quote ({order.assignmentType === 'delivery' ? 'Delivery' : 'Pickup'} Truckload)
-                          </Label>
-                          <Input
-                            id={`split-quote-${order.orderId}`}
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={splitQuote !== null ? splitQuote : ''}
-                            onChange={(e) => updateSplitQuote(order.orderId, e.target.value)}
-                            placeholder="Enter amount"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-600">Deduction ({deductionTruckload} Truckload)</Label>
-                          <div className={`text-sm font-medium ${deductionAmount !== null && deductionAmount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                            {deductionAmount !== null && deductionAmount > 0 
-                              ? `-$${deductionAmount.toFixed(2)}`
-                              : 'N/A'
-                            }
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {order.otherTruckloadId && (
-                        <div className="text-xs text-gray-500">
-                          {deductionTruckload} Truckload ID: {order.otherTruckloadId}
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMiddlefieldDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={saveDeliveryQuotes} 
-              disabled={isLoadingMiddlefield || middlefieldOrders.length === 0}
-            >
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 } else {
@@ -3180,6 +2944,133 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               </Button>
               <Button onClick={handleSaveDeduction} className="bg-red-600 hover:bg-red-700">
                 Add Deduction
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Single-Order Split Load Dialog */}
+        <Dialog open={splitLoadDialogOpen} onOpenChange={setSplitLoadDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Manage Split Load</DialogTitle>
+              <DialogDescription>
+                Set how the quote for this order is split between pickup and delivery assignments.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {isLoadingSplitLoad ? (
+              <div className="text-center py-8">Loading order information...</div>
+            ) : !splitLoadData ? (
+              <div className="text-center py-8 text-gray-500">Failed to load order information</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="border rounded-lg p-4 bg-gray-50">
+                  <div className="space-y-2">
+                    <div className="font-semibold">Order #{splitLoadData.orderId}</div>
+                    <div className="text-sm text-gray-600">
+                      <div>Pickup: {splitLoadData.pickupCustomerName || 'Unknown'}</div>
+                      <div>Delivery: {splitLoadData.deliveryCustomerName || 'Unknown'}</div>
+                      <div className="mt-2 font-medium">Full Quote: ${(splitLoadData.fullQuote || 0).toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="misc-value">Misc Value ($)</Label>
+                    <Input
+                      id="misc-value"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={splitLoadMiscValue}
+                      onChange={(e) => setSplitLoadMiscValue(e.target.value)}
+                      placeholder="Enter misc amount"
+                    />
+                    {splitLoadData.fullQuote && parseFloat(splitLoadMiscValue) > (splitLoadData.fullQuote || 0) && (
+                      <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
+                        ⚠️ Warning: Misc value is greater than full quote
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Which assignment gets full quote - misc?</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={splitLoadFullQuoteAssignment === 'pickup' ? 'default' : 'outline'}
+                        className="flex-1"
+                        onClick={() => setSplitLoadFullQuoteAssignment('pickup')}
+                      >
+                        Pickup
+                        {splitLoadData.pickupAssignment?.driverName && (
+                          <span className="ml-2 text-xs opacity-75">
+                            ({splitLoadData.pickupAssignment.driverName})
+                          </span>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={splitLoadFullQuoteAssignment === 'delivery' ? 'default' : 'outline'}
+                        className="flex-1"
+                        onClick={() => setSplitLoadFullQuoteAssignment('delivery')}
+                      >
+                        Delivery
+                        {splitLoadData.deliveryAssignment?.driverName && (
+                          <span className="ml-2 text-xs opacity-75">
+                            ({splitLoadData.deliveryAssignment.driverName})
+                          </span>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {splitLoadData.fullQuote && splitLoadMiscValue && (
+                    <div className="border rounded-lg p-4 bg-blue-50">
+                      <div className="text-sm font-semibold mb-2">Preview:</div>
+                      <div className="space-y-1 text-sm">
+                        <div>
+                          {splitLoadFullQuoteAssignment === 'pickup' ? 'Pickup' : 'Delivery'}: 
+                          <span className="font-medium ml-2">
+                            ${((splitLoadData.fullQuote || 0) - parseFloat(splitLoadMiscValue || '0')).toFixed(2)}
+                          </span>
+                        </div>
+                        <div>
+                          {splitLoadFullQuoteAssignment === 'pickup' ? 'Delivery' : 'Pickup'}: 
+                          <span className="font-medium ml-2">
+                            ${parseFloat(splitLoadMiscValue || '0').toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="pt-2 border-t text-xs text-gray-600">
+                          Both truckloads will show the full quote (${(splitLoadData.fullQuote || 0).toFixed(2)}) with manual deductions applied.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            <DialogFooter>
+              {splitLoadData?.hasSplitLoad && (
+                <Button
+                  variant="destructive"
+                  onClick={clearSplitLoad}
+                  disabled={isLoadingSplitLoad}
+                >
+                  Clear Split Load
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setSplitLoadDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={saveSplitLoad} 
+                disabled={isLoadingSplitLoad || !splitLoadMiscValue || parseFloat(splitLoadMiscValue || '0') <= 0}
+              >
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>

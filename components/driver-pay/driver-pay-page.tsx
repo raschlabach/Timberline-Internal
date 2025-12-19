@@ -169,11 +169,13 @@ export default function DriverPayPage({}: DriverPayPageProps) {
   const [middlefieldTruckloadId, setMiddlefieldTruckloadId] = useState<number | null>(null)
   const [middlefieldOrders, setMiddlefieldOrders] = useState<Array<{
     orderId: number
+    assignmentId: number
     assignmentType: 'pickup' | 'delivery'
     fullQuote: number | null
-    splitQuote: number | null
+    assignmentQuote: number | null
     deliveryCustomerName: string | null
     pickupCustomerName: string | null
+    otherAssignmentId: number | null
     otherTruckloadId: number | null
     hasDeduction: number
     isAutoIncluded?: boolean
@@ -778,7 +780,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     setIsLoadingMiddlefield(true)
 
     try {
-      const response = await fetch(`/api/truckloads/${truckloadId}/middlefield-orders`, {
+      const response = await fetch(`/api/truckloads/${truckloadId}/split-loads`, {
         credentials: 'include'
       })
       const data = await response.json()
@@ -787,17 +789,23 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         // Parse the orders to ensure numeric values are properly typed
         const parsedOrders = (data.orders || []).map((order: any) => ({
           orderId: typeof order.orderId === 'number' ? order.orderId : parseInt(String(order.orderId || 0)),
+          assignmentId: typeof order.assignmentId === 'number' ? order.assignmentId : parseInt(String(order.assignmentId || 0)),
           assignmentType: order.assignmentType || 'delivery',
           fullQuote: typeof order.fullQuote === 'number' 
             ? order.fullQuote 
             : (order.fullQuote ? parseFloat(String(order.fullQuote)) : null),
-          splitQuote: order.splitQuote !== null && order.splitQuote !== undefined
-            ? (typeof order.splitQuote === 'number' 
-                ? order.splitQuote 
-                : parseFloat(String(order.splitQuote)) || null)
+          assignmentQuote: order.assignmentQuote !== null && order.assignmentQuote !== undefined
+            ? (typeof order.assignmentQuote === 'number' 
+                ? order.assignmentQuote 
+                : parseFloat(String(order.assignmentQuote)) || null)
             : null,
           deliveryCustomerName: order.deliveryCustomerName || null,
           pickupCustomerName: order.pickupCustomerName || null,
+          otherAssignmentId: order.otherAssignmentId 
+            ? (typeof order.otherAssignmentId === 'number' 
+                ? order.otherAssignmentId 
+                : parseInt(String(order.otherAssignmentId)))
+            : null,
           otherTruckloadId: order.otherTruckloadId 
             ? (typeof order.otherTruckloadId === 'number' 
                 ? order.otherTruckloadId 
@@ -822,26 +830,25 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
   }
 
-  // Update split quote for an order
-  const updateSplitQuote = (orderId: number, splitQuote: string) => {
+  // Update assignment quote for an order
+  const updateSplitQuote = (orderId: number, assignmentQuote: string) => {
     setMiddlefieldOrders(prev => prev.map(order => 
       order.orderId === orderId
-        ? { ...order, splitQuote: splitQuote ? parseFloat(splitQuote) : null }
+        ? { ...order, assignmentQuote: assignmentQuote ? parseFloat(assignmentQuote) : null }
         : order
     ))
   }
 
-  // Save all split quotes
+  // Save all assignment quotes
   const saveDeliveryQuotes = async () => {
     if (!middlefieldTruckloadId) return
 
     const updates = middlefieldOrders
       .filter(order => order.otherTruckloadId !== null)
       .map(order => ({
-        orderId: order.orderId,
-        splitQuote: order.splitQuote,
+        assignmentId: order.assignmentId,
+        assignmentQuote: order.assignmentQuote,
         otherTruckloadId: order.otherTruckloadId,
-        assignmentType: order.assignmentType,
         customerName: order.assignmentType === 'delivery' 
           ? order.deliveryCustomerName 
           : order.pickupCustomerName
@@ -854,7 +861,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
     setIsLoadingMiddlefield(true)
     try {
-      const response = await fetch('/api/orders/middlefield-delivery-quotes', {
+      const response = await fetch(`/api/truckloads/${middlefieldTruckloadId}/split-loads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1622,14 +1629,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 const fullQuote = typeof order.fullQuote === 'number' 
                   ? order.fullQuote 
                   : (order.fullQuote ? parseFloat(String(order.fullQuote)) : 0) || 0
-                const splitQuote = order.splitQuote !== null && order.splitQuote !== undefined
-                  ? (typeof order.splitQuote === 'number' 
-                      ? order.splitQuote 
-                      : parseFloat(String(order.splitQuote)) || null)
+                const assignmentQuote = order.assignmentQuote !== null && order.assignmentQuote !== undefined
+                  ? (typeof order.assignmentQuote === 'number' 
+                      ? order.assignmentQuote 
+                      : parseFloat(String(order.assignmentQuote)) || null)
                   : null
                 
-                // Deduction amount is the split quote value
-                const deductionAmount = splitQuote !== null && !isNaN(splitQuote) && splitQuote > 0 ? splitQuote : null
+                // Deduction amount is the difference between full quote and assignment quote
+                const deductionAmount = assignmentQuote !== null && !isNaN(assignmentQuote) && assignmentQuote > 0 && fullQuote > assignmentQuote
+                  ? (fullQuote - assignmentQuote)
+                  : null
                 const hasDeduction = order.hasDeduction > 0
                 
                 // Determine which truckload gets the deduction (the other one)
@@ -1668,15 +1677,15 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                           <div className="text-sm font-medium">${fullQuote.toFixed(2)}</div>
                         </div>
                         <div>
-                          <Label htmlFor={`split-quote-${order.orderId}`} className="text-xs text-gray-600">
-                            Split Quote ({order.assignmentType === 'delivery' ? 'Delivery' : 'Pickup'} Truckload)
+                          <Label htmlFor={`assignment-quote-${order.orderId}`} className="text-xs text-gray-600">
+                            Assignment Quote ({order.assignmentType === 'delivery' ? 'Delivery' : 'Pickup'} Truckload)
                           </Label>
                           <Input
-                            id={`split-quote-${order.orderId}`}
+                            id={`assignment-quote-${order.orderId}`}
                             type="number"
                             step="0.01"
                             min="0"
-                            value={splitQuote !== null ? splitQuote : ''}
+                            value={assignmentQuote !== null ? assignmentQuote : ''}
                             onChange={(e) => updateSplitQuote(order.orderId, e.target.value)}
                             placeholder="Enter amount"
                             className="mt-1"

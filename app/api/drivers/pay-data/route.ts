@@ -198,55 +198,40 @@ export async function GET(request: NextRequest) {
       // Continue anyway - will try to query and handle gracefully
     }
 
-    // Check if split_quote column exists, if not, apply migration automatically
+    // Check if assignment_quote column exists, if not, apply migration automatically
     try {
-      const splitQuoteColumnCheck = await query(`
+      const assignmentQuoteCheck = await query(`
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_schema = 'public' 
-        AND table_name = 'orders'
-        AND column_name IN ('split_quote', 'middlefield_delivery_quote')
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'assignment_quote'
       `)
       
-      const hasSplitQuote = splitQuoteColumnCheck.rows.some(r => r.column_name === 'split_quote')
-      const hasOldColumn = splitQuoteColumnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
+      const hasAssignmentQuote = assignmentQuoteCheck.rows.length > 0
       
-      if (!hasSplitQuote && hasOldColumn) {
-        console.log('Applying split_quote migration...')
+      if (!hasAssignmentQuote) {
+        console.log('Applying assignment_quote migration...')
         const client = await getClient()
         try {
           await client.query('BEGIN')
           const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
           const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'simplify-split-loads.sql'),
+            path.join(migrationsDir, 'add-assignment-quote.sql'),
             'utf8'
           )
           await client.query(migrationSql)
           await client.query('COMMIT')
-          console.log('split_quote migration applied successfully')
+          console.log('assignment_quote migration applied successfully')
         } catch (migrationError) {
           await client.query('ROLLBACK')
-          console.error('Error applying split_quote migration:', migrationError)
-        } finally {
-          client.release()
-        }
-      } else if (!hasSplitQuote && !hasOldColumn) {
-        // Neither column exists, create split_quote
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          await client.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_quote DECIMAL(10, 2)')
-          await client.query('COMMIT')
-          console.log('split_quote column created')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error creating split_quote column:', migrationError)
+          console.error('Error applying assignment_quote migration:', migrationError)
         } finally {
           client.release()
         }
       }
     } catch (migrationCheckError) {
-      console.error('Error checking/applying split_quote migration:', migrationCheckError)
+      console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
     }
 
     // Get all truckloads for drivers in the date range
@@ -339,77 +324,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all orders for these truckloads
-    // For middlefield orders:
-    // - backhaul scenario: delivery uses middlefield_delivery_quote, pickup uses full quote
-    // - ohio_to_indiana scenario: pickup uses ohio_to_indiana_pickup_quote, delivery uses full quote
-    // Check if columns exist first
-    const middlefieldColumnExists = await query(`
+    // Use assignment_quote if set, otherwise use freight_quote
+    // Check if assignment_quote column exists
+    const assignmentQuoteCheck = await query(`
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_schema = 'public' 
-      AND table_name = 'orders'
-      AND column_name = 'middlefield_delivery_quote'
+      AND table_name = 'truckload_order_assignments'
+      AND column_name = 'assignment_quote'
     `)
-    const hasMiddlefieldColumn = middlefieldColumnExists.rows.length > 0
+    const hasAssignmentQuote = assignmentQuoteCheck.rows.length > 0
 
-    const ohioToIndianaColumnExists = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'orders'
-      AND column_name = 'ohio_to_indiana_pickup_quote'
-    `)
-    const hasOhioToIndianaColumn = ohioToIndianaColumnExists.rows.length > 0
-
-    // Build query based on whether columns exist
     let ordersResult
-    if (hasMiddlefieldColumn || hasOhioToIndianaColumn) {
-      let freightQuoteCase = 'o.freight_quote'
-      if (hasMiddlefieldColumn && hasOhioToIndianaColumn) {
-        freightQuoteCase = `
-          CASE 
-            -- Backhaul scenario: delivery uses delivery quote
-            WHEN toa.assignment_type = 'delivery' 
-              AND o.middlefield = true 
-              AND o.backhaul = true 
-              AND o.middlefield_delivery_quote IS NOT NULL
-            THEN o.middlefield_delivery_quote
-            -- Ohio to Indiana scenario: pickup uses pickup quote
-            WHEN toa.assignment_type = 'pickup' 
-              AND o.middlefield = true 
-              AND o.oh_to_in = true 
-              AND o.ohio_to_indiana_pickup_quote IS NOT NULL
-            THEN o.ohio_to_indiana_pickup_quote
-            ELSE o.freight_quote
-          END`
-      } else if (hasMiddlefieldColumn) {
-        freightQuoteCase = `
-          CASE 
-            WHEN toa.assignment_type = 'delivery' 
-              AND o.middlefield = true 
-              AND o.backhaul = true 
-              AND o.middlefield_delivery_quote IS NOT NULL
-            THEN o.middlefield_delivery_quote
-            ELSE o.freight_quote
-          END`
-      } else if (hasOhioToIndianaColumn) {
-        freightQuoteCase = `
-          CASE 
-            WHEN toa.assignment_type = 'pickup' 
-              AND o.middlefield = true 
-              AND o.oh_to_in = true 
-              AND o.ohio_to_indiana_pickup_quote IS NOT NULL
-            THEN o.ohio_to_indiana_pickup_quote
-            ELSE o.freight_quote
-          END`
-      }
-
+    if (hasAssignmentQuote) {
       ordersResult = await query(`
         SELECT 
           o.id as "orderId",
           toa.truckload_id as "truckloadId",
           toa.assignment_type as "assignmentType",
-          ${freightQuoteCase} as "freightQuote",
+          COALESCE(toa.assignment_quote, o.freight_quote) as "freightQuote",
           COALESCE(
             (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
             0
@@ -422,10 +355,10 @@ export async function GET(request: NextRequest) {
           COALESCE(o.middlefield, false) as "middlefield",
           COALESCE(o.backhaul, false) as "backhaul",
           COALESCE(o.oh_to_in, false) as "ohioToIndiana",
-          -- Check if quotes are set for middlefield orders based on assignment type
+          -- Check if quotes are set for middlefield orders
           CASE 
-            -- If split_quote is set, quote is "set"
-            WHEN o.split_quote IS NOT NULL AND o.split_quote > 0
+            -- If assignment_quote is set, quote is "set"
+            WHEN toa.assignment_quote IS NOT NULL AND toa.assignment_quote > 0
               THEN true
             -- For middlefield orders, check if they need a split quote
             WHEN o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true)
