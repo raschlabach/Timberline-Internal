@@ -117,6 +117,7 @@ interface AssignedOrderRow {
   payingCustomerName: string | null
   freightQuote: string | null
   splitQuote: number | null
+  assignmentQuote: number | null
   middlefield: boolean
   backhaul: boolean
   ohioToIndiana: boolean
@@ -342,39 +343,55 @@ function SortableTableRow({
         )}
       </TableCell>
       <TableCell className="text-sm" style={{ width: '90px' }}>
-        <div className="flex items-center gap-1">
-          <Input
-            type="text"
-            value={row.freightQuote || ''}
-            onChange={(e) => {
-              // For split load orders, we don't allow editing here
-              // They must be set via the split loads dialog
-              const hasSplitLoad = (row.splitQuote !== null && row.splitQuote !== undefined) ||
-                (row.middlefield && row.backhaul) ||
-                (row.middlefield && row.ohioToIndiana)
-              if (hasSplitLoad) {
-                return // Read-only for split load quotes
-              }
-              debouncedUpdateQuote(row.orderId, e.target.value)
-            }}
-            placeholder="—"
-            className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-            disabled={updatingQuotes.has(row.orderId) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))}
-          />
-          {((row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))) && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AlertTriangle 
-                    className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" 
-                  />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Split load - managed via split icon</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1">
+            <Input
+              type="text"
+              value={row.freightQuote || ''}
+              onChange={(e) => {
+                // For split load orders, we don't allow editing here
+                // They must be set via the split loads dialog
+                const hasSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
+                  (row.splitQuote !== null && row.splitQuote !== undefined) ||
+                  (row.middlefield && row.backhaul) ||
+                  (row.middlefield && row.ohioToIndiana)
+                if (hasSplitLoad) {
+                  return // Read-only for split load quotes
+                }
+                debouncedUpdateQuote(row.orderId, e.target.value)
+              }}
+              placeholder="—"
+              className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
+              disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))}
+            />
+            {((row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana))) && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertTriangle 
+                      className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" 
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Split load - managed via split icon</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+          {/* Show deduction amount for split loads */}
+          {((row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined)) && (() => {
+            const fullQuote = parseFloat(row.freightQuote || '0') || 0
+            const assignmentQuote = row.assignmentQuote !== null && row.assignmentQuote !== undefined 
+              ? row.assignmentQuote 
+              : (row.splitQuote !== null && row.splitQuote !== undefined ? row.splitQuote : null)
+            const deduction = assignmentQuote !== null ? fullQuote - assignmentQuote : 0
+            return deduction > 0 ? (
+              <span className="text-[10px] text-red-600 font-medium leading-tight">
+                -${deduction.toFixed(2)}
+              </span>
+            ) : null
+          })()}
         </div>
       </TableCell>
       <TableCell className="text-sm text-right">{row.footage}</TableCell>
@@ -412,6 +429,7 @@ function SortableTableRow({
                     await onOpenSplitLoadDialog(row.orderId)
                   }}
                   className={`h-7 w-7 p-0 ${
+                    (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
                     (row.splitQuote !== null && row.splitQuote !== undefined) ||
                     (row.middlefield && row.backhaul) ||
                     (row.middlefield && row.ohioToIndiana)
@@ -424,7 +442,7 @@ function SortableTableRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{(row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana)) ? 'In split loads' : 'Add to split loads'}</p>
+                <p>{(row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana)) ? 'In split loads' : 'Add to split loads'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -1554,6 +1572,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           freightQuote: o.freight_quote,
           splitQuote: (o as any).split_quote !== null && (o as any).split_quote !== undefined
             ? parseFloat((o as any).split_quote) 
+            : null,
+          assignmentQuote: (o as any).assignment_quote !== null && (o as any).assignment_quote !== undefined
+            ? parseFloat((o as any).assignment_quote) 
             : null,
           middlefield: (o as any).middlefield || false,
           backhaul: (o as any).backhaul || false,

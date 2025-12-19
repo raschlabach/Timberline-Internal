@@ -90,6 +90,57 @@ export async function GET(
       ? 'o.middlefield_delivery_quote as split_quote'
       : 'NULL::DECIMAL(10, 2) as split_quote'
 
+    // Check if assignment_quote column exists on truckload_order_assignments
+    try {
+      const assignmentQuoteCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'assignment_quote'
+      `)
+      
+      const hasAssignmentQuote = assignmentQuoteCheck.rows.length > 0
+      
+      if (!hasAssignmentQuote) {
+        console.log('Applying assignment_quote migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-assignment-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('assignment_quote migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying assignment_quote migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
+    }
+
+    // Check again after potential migration
+    const assignmentQuoteCheckAfter = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'truckload_order_assignments'
+      AND column_name = 'assignment_quote'
+    `)
+    const hasAssignmentQuote = assignmentQuoteCheckAfter.rows.length > 0
+
+    // Build assignment_quote field
+    const assignmentQuoteField = hasAssignmentQuote 
+      ? 'toa.assignment_quote'
+      : 'NULL::DECIMAL(10, 2) as assignment_quote'
+
     const result = await query(`
       WITH skids_summary AS (
         SELECT 
@@ -167,6 +218,7 @@ export async function GET(
         toa.assignment_type,
         toa.sequence_number,
         toa.is_completed as stop_completed,
+        ${assignmentQuoteField},
         o.status,
         -- Pickup customer details
         json_build_object(
