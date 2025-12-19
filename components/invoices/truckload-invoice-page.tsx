@@ -1716,7 +1716,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         if (data.order.hasSplitLoad) {
           const pickupQuote = data.order.pickupAssignment?.assignmentQuote
           const deliveryQuote = data.order.deliveryAssignment?.assignmentQuote
-          const fullQuote = data.order.fullQuote || 0
+          const fullQuote = typeof data.order.fullQuote === 'number' 
+            ? data.order.fullQuote 
+            : parseFloat(String(data.order.fullQuote || 0)) || 0
           
           // Determine which assignment has the smaller quote (misc value)
           if (pickupQuote !== null && deliveryQuote !== null) {
@@ -1759,7 +1761,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return
     }
 
-    const fullQuote = splitLoadData.fullQuote || 0
+    const fullQuote = typeof splitLoadData.fullQuote === 'number' 
+      ? splitLoadData.fullQuote 
+      : parseFloat(String(splitLoadData.fullQuote || 0)) || 0
     if (miscValue > fullQuote) {
       // Show warning but allow it
       if (!confirm(`Warning: Misc value ($${miscValue.toFixed(2)}) is greater than full quote ($${fullQuote.toFixed(2)}). Continue anyway?`)) {
@@ -2971,7 +2975,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     <div className="text-sm text-gray-600">
                       <div>Pickup: {splitLoadData.pickupCustomerName || 'Unknown'}</div>
                       <div>Delivery: {splitLoadData.deliveryCustomerName || 'Unknown'}</div>
-                      <div className="mt-2 font-medium">Full Quote: ${(splitLoadData.fullQuote || 0).toFixed(2)}</div>
+                      <div className="mt-2 font-medium">Full Quote: ${(typeof splitLoadData.fullQuote === 'number' ? splitLoadData.fullQuote : parseFloat(String(splitLoadData.fullQuote || 0)) || 0).toFixed(2)}</div>
                     </div>
                   </div>
                 </div>
@@ -3034,7 +3038,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         <div>
                           {splitLoadFullQuoteAssignment === 'pickup' ? 'Pickup' : 'Delivery'}: 
                           <span className="font-medium ml-2">
-                            ${((splitLoadData.fullQuote || 0) - parseFloat(splitLoadMiscValue || '0')).toFixed(2)}
+                            ${((typeof splitLoadData.fullQuote === 'number' ? splitLoadData.fullQuote : parseFloat(String(splitLoadData.fullQuote || 0)) || 0) - parseFloat(splitLoadMiscValue || '0')).toFixed(2)}
                           </span>
                         </div>
                         <div>
@@ -3044,7 +3048,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           </span>
                         </div>
                         <div className="pt-2 border-t text-xs text-gray-600">
-                          Both truckloads will show the full quote (${(splitLoadData.fullQuote || 0).toFixed(2)}) with manual deductions applied.
+                          Both truckloads will show the full quote (${(typeof splitLoadData.fullQuote === 'number' ? splitLoadData.fullQuote : parseFloat(String(splitLoadData.fullQuote || 0)) || 0).toFixed(2)}) with manual deductions applied.
                         </div>
                       </div>
                     </div>
