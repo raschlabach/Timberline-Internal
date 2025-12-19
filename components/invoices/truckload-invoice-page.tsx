@@ -351,8 +351,8 @@ function SortableTableRow({
               onChange={(e) => {
                 // For split load orders, we don't allow editing here
                 // They must be set via the split loads dialog
-                const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
-                  (row.splitQuote !== null && row.splitQuote !== undefined)
+                // Only check assignment_quote, ignore old split_quote
+                const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
                 if (hasConfirmedSplitLoad) {
                   return // Read-only for confirmed split load quotes
                 }
@@ -360,14 +360,11 @@ function SortableTableRow({
               }}
               placeholder="—"
               className="h-7 text-xs px-1.5 py-0.5 border-gray-300 bg-transparent hover:bg-gray-50 focus:bg-white focus:border-blue-400 transition-colors w-full"
-              disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined)}
+              disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined)}
             />
             {(() => {
-              // Check if this order has an active split load
-              const hasActiveSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
-                (row.splitQuote !== null && row.splitQuote !== undefined) ||
-                (row.middlefield && row.backhaul) ||
-                (row.middlefield && row.ohioToIndiana)
+              // Check if this order has an active split load (only use assignment_quote, ignore old split_quote)
+              const hasActiveSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
               
               // Check if this order should be a split load (warning conditions)
               const shouldBeSplitLoad = 
@@ -419,18 +416,15 @@ function SortableTableRow({
           </div>
           {/* Show deduction amount for confirmed split loads only */}
           {(() => {
-            // Only show deduction if there's a confirmed split load
-            const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
-              (row.splitQuote !== null && row.splitQuote !== undefined)
+            // Only show deduction if there's a confirmed split load (only use assignment_quote, ignore old split_quote)
+            const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
             
             if (!hasConfirmedSplitLoad) {
               return null
             }
             
             const fullQuote = parseFloat(row.freightQuote || '0') || 0
-            const assignmentQuote = row.assignmentQuote !== null && row.assignmentQuote !== undefined 
-              ? row.assignmentQuote 
-              : (row.splitQuote !== null && row.splitQuote !== undefined ? row.splitQuote : null)
+            const assignmentQuote = row.assignmentQuote
             
             if (assignmentQuote === null) {
               return null
@@ -480,10 +474,7 @@ function SortableTableRow({
                     await onOpenSplitLoadDialog(row.orderId)
                   }}
                   className={`h-7 w-7 p-0 ${
-                    (row.assignmentQuote !== null && row.assignmentQuote !== undefined) ||
-                    (row.splitQuote !== null && row.splitQuote !== undefined) ||
-                    (row.middlefield && row.backhaul) ||
-                    (row.middlefield && row.ohioToIndiana)
+                    (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
                       ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
                       : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                   }`}
@@ -493,7 +484,7 @@ function SortableTableRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{(row.assignmentQuote !== null && row.assignmentQuote !== undefined) || (row.splitQuote !== null && row.splitQuote !== undefined) || (row.middlefield && (row.backhaul || row.ohioToIndiana)) ? 'In split loads' : 'Add to split loads'}</p>
+                <p>{(row.assignmentQuote !== null && row.assignmentQuote !== undefined) ? 'In split loads' : 'Add to split loads'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -1768,15 +1759,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })
   }
 
-  // Check if truckload has split load orders (middlefield orders or orders with split quotes)
+  // Check if truckload has split load orders (only check assignment_quote, ignore old split_quote)
   const hasMiddlefieldOrders = useMemo(() => {
     if (!orders.length) return false
     return orders.some(order => 
-      // Auto-included: middlefield + backhaul or middlefield + ohio_to_indiana
-      (order.middlefield && order.backhaul) || 
-      (order.middlefield && order.ohioToIndiana) ||
-      // Manually added: has a split quote set
-      (order.splitQuote !== null && order.splitQuote !== undefined)
+      // Manually added: has an assignment_quote set
+      (order.assignmentQuote !== null && order.assignmentQuote !== undefined)
     )
   }, [orders])
 
