@@ -1279,18 +1279,6 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   <span className="text-sm font-semibold text-red-600">Split Loads</span>
                                 </>
                               )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openMiddlefieldDialog(truckload.id)
-                                }}
-                              >
-                                <Settings className="h-3 w-3 mr-1" />
-                                Manage Split Loads
-                              </Button>
                             </div>
                           </div>
 

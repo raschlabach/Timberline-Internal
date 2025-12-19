@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import fs from 'fs'
+import path from 'path'
 
 // GET /api/orders/[id]/split-load - Get split load info for a specific order
 export async function GET(
@@ -19,50 +21,144 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
     }
 
+    // Check if assignment_quote column exists, if not, apply migration
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'assignment_quote'
+      `)
+      
+      const hasAssignmentQuote = columnCheck.rows.length > 0
+      
+      if (!hasAssignmentQuote) {
+        console.log('Applying assignment_quote migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-assignment-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('assignment_quote migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying assignment_quote migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
+    }
+
+    // Check if assignment_quote column exists after migration
+    const columnCheckAfter = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'truckload_order_assignments'
+      AND column_name = 'assignment_quote'
+    `)
+    const hasAssignmentQuote = columnCheckAfter.rows.length > 0
+
     // Get order with both pickup and delivery assignments
-    const result = await query(`
-      SELECT 
-        o.id as "orderId",
-        o.freight_quote as "fullQuote",
-        dc.customer_name as "deliveryCustomerName",
-        pc.customer_name as "pickupCustomerName",
-        -- Pickup assignment
-        (
-          SELECT json_build_object(
-            'assignmentId', toa_pickup.id,
-            'truckloadId', t_pickup.id,
-            'assignmentQuote', toa_pickup.assignment_quote,
-            'driverName', u_pickup.full_name
-          )
-          FROM truckload_order_assignments toa_pickup
-          JOIN truckloads t_pickup ON toa_pickup.truckload_id = t_pickup.id
-          LEFT JOIN users u_pickup ON t_pickup.driver_id = u_pickup.id
-          WHERE toa_pickup.order_id = o.id
-            AND toa_pickup.assignment_type = 'pickup'
-          ORDER BY t_pickup.start_date DESC
-          LIMIT 1
-        ) as "pickupAssignment",
-        -- Delivery assignment
-        (
-          SELECT json_build_object(
-            'assignmentId', toa_delivery.id,
-            'truckloadId', t_delivery.id,
-            'assignmentQuote', toa_delivery.assignment_quote,
-            'driverName', u_delivery.full_name
-          )
-          FROM truckload_order_assignments toa_delivery
-          JOIN truckloads t_delivery ON toa_delivery.truckload_id = t_delivery.id
-          LEFT JOIN users u_delivery ON t_delivery.driver_id = u_delivery.id
-          WHERE toa_delivery.order_id = o.id
-            AND toa_delivery.assignment_type = 'delivery'
-          ORDER BY t_delivery.start_date DESC
-          LIMIT 1
-        ) as "deliveryAssignment"
-      FROM orders o
-      LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
-      LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
-      WHERE o.id = $1
-    `, [orderId])
+    let result
+    if (hasAssignmentQuote) {
+      result = await query(`
+        SELECT 
+          o.id as "orderId",
+          o.freight_quote as "fullQuote",
+          dc.customer_name as "deliveryCustomerName",
+          pc.customer_name as "pickupCustomerName",
+          -- Pickup assignment
+          (
+            SELECT json_build_object(
+              'assignmentId', toa_pickup.id,
+              'truckloadId', t_pickup.id,
+              'assignmentQuote', toa_pickup.assignment_quote,
+              'driverName', u_pickup.full_name
+            )
+            FROM truckload_order_assignments toa_pickup
+            JOIN truckloads t_pickup ON toa_pickup.truckload_id = t_pickup.id
+            LEFT JOIN users u_pickup ON t_pickup.driver_id = u_pickup.id
+            WHERE toa_pickup.order_id = o.id
+              AND toa_pickup.assignment_type = 'pickup'
+            ORDER BY t_pickup.start_date DESC
+            LIMIT 1
+          ) as "pickupAssignment",
+          -- Delivery assignment
+          (
+            SELECT json_build_object(
+              'assignmentId', toa_delivery.id,
+              'truckloadId', t_delivery.id,
+              'assignmentQuote', toa_delivery.assignment_quote,
+              'driverName', u_delivery.full_name
+            )
+            FROM truckload_order_assignments toa_delivery
+            JOIN truckloads t_delivery ON toa_delivery.truckload_id = t_delivery.id
+            LEFT JOIN users u_delivery ON t_delivery.driver_id = u_delivery.id
+            WHERE toa_delivery.order_id = o.id
+              AND toa_delivery.assignment_type = 'delivery'
+            ORDER BY t_delivery.start_date DESC
+            LIMIT 1
+          ) as "deliveryAssignment"
+        FROM orders o
+        LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+        LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+        WHERE o.id = $1
+      `, [orderId])
+    } else {
+      // Fallback query if column doesn't exist (shouldn't happen after migration, but just in case)
+      result = await query(`
+        SELECT 
+          o.id as "orderId",
+          o.freight_quote as "fullQuote",
+          dc.customer_name as "deliveryCustomerName",
+          pc.customer_name as "pickupCustomerName",
+          -- Pickup assignment
+          (
+            SELECT json_build_object(
+              'assignmentId', toa_pickup.id,
+              'truckloadId', t_pickup.id,
+              'assignmentQuote', NULL::DECIMAL(10, 2),
+              'driverName', u_pickup.full_name
+            )
+            FROM truckload_order_assignments toa_pickup
+            JOIN truckloads t_pickup ON toa_pickup.truckload_id = t_pickup.id
+            LEFT JOIN users u_pickup ON t_pickup.driver_id = u_pickup.id
+            WHERE toa_pickup.order_id = o.id
+              AND toa_pickup.assignment_type = 'pickup'
+            ORDER BY t_pickup.start_date DESC
+            LIMIT 1
+          ) as "pickupAssignment",
+          -- Delivery assignment
+          (
+            SELECT json_build_object(
+              'assignmentId', toa_delivery.id,
+              'truckloadId', t_delivery.id,
+              'assignmentQuote', NULL::DECIMAL(10, 2),
+              'driverName', u_delivery.full_name
+            )
+            FROM truckload_order_assignments toa_delivery
+            JOIN truckloads t_delivery ON toa_delivery.truckload_id = t_delivery.id
+            LEFT JOIN users u_delivery ON t_delivery.driver_id = u_delivery.id
+            WHERE toa_delivery.order_id = o.id
+              AND toa_delivery.assignment_type = 'delivery'
+            ORDER BY t_delivery.start_date DESC
+            LIMIT 1
+          ) as "deliveryAssignment"
+        FROM orders o
+        LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+        LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+        WHERE o.id = $1
+      `, [orderId])
+    }
 
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
@@ -125,6 +221,42 @@ export async function POST(
     }
 
     const miscAmount = parseFloat(miscValue)
+
+    // Check if assignment_quote column exists, if not, apply migration
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'assignment_quote'
+      `)
+      
+      const hasAssignmentQuote = columnCheck.rows.length > 0
+      
+      if (!hasAssignmentQuote) {
+        console.log('Applying assignment_quote migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-assignment-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('assignment_quote migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying assignment_quote migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
+    }
 
     // Check if applies_to column exists
     const appliesToCheck = await query(`
@@ -343,6 +475,42 @@ export async function DELETE(
     const orderId = parseInt(params.id)
     if (isNaN(orderId)) {
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
+    }
+
+    // Check if assignment_quote column exists, if not, apply migration
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'assignment_quote'
+      `)
+      
+      const hasAssignmentQuote = columnCheck.rows.length > 0
+      
+      if (!hasAssignmentQuote) {
+        console.log('Applying assignment_quote migration...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+          const migrationSql = fs.readFileSync(
+            path.join(migrationsDir, 'add-assignment-quote.sql'),
+            'utf8'
+          )
+          await client.query(migrationSql)
+          await client.query('COMMIT')
+          console.log('assignment_quote migration applied successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error applying assignment_quote migration:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
     }
 
     // Check if applies_to column exists
