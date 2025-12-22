@@ -1062,86 +1062,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     return deduped
   }
 
-  // Identify cross-driver freight (skids/vinyl handled by other drivers)
-  // Only includes freight from orders in the selected truckload where the other part (pickup/delivery) was handled by a different driver
-  const crossDriverFreight = useMemo(() => {
-    if (!selectedTruckload) return []
-    const currentDriverName = selectedTruckload.driver.driverName
-    const items: Omit<CrossDriverFreightItem, 'id' | 'deduction'>[] = []
-    const seenOrders = new Set<string>() // Track orders we've already processed to avoid duplicates
-
-    orders.forEach(order => {
-      // Skip if we've already processed this order
-      if (seenOrders.has(order.orderId)) return
-      seenOrders.add(order.orderId)
-
-      // Build dimensions string from skids and vinyl for this order
-      const dimensionGroups: { [key: string]: number } = {}
-      order.skidsData.forEach(skid => {
-        const dimension = `${skid.width}x${skid.length}`
-        dimensionGroups[dimension] = (dimensionGroups[dimension] || 0) + skid.quantity
-      })
-      order.vinylData.forEach(vinyl => {
-        const dimension = `${vinyl.width}x${vinyl.length}`
-        dimensionGroups[dimension] = (dimensionGroups[dimension] || 0) + vinyl.quantity
-      })
-      
-      const allDimensions = Object.entries(dimensionGroups)
-        .map(([dimension, quantity]) => `${quantity} ${dimension}`)
-        .join(', ')
-
-      // Only create entry if the OTHER part of the order (not the current assignment) was handled by a different driver
-      // If current assignment is pickup, check if delivery was handled by another driver
-      if (order.assignmentType === 'pickup' && 
-          order.deliveryDriverName && 
-          order.deliveryDriverName !== currentDriverName && 
-          order.deliveryAssignmentDate) {
-        items.push({
-          driverName: order.deliveryDriverName,
-          date: order.deliveryAssignmentDate,
-          action: 'Delivered',
-          footage: order.footage,
-          dimensions: allDimensions || '—',
-          isManual: false,
-          customerName: order.deliveryName, // Delivery customer name
-          orderId: order.orderId // Include order ID to differentiate separate orders
-        })
-      }
-      // If current assignment is delivery, check if pickup was handled by another driver
-      else if (order.assignmentType === 'delivery' && 
-               order.pickupDriverName && 
-               order.pickupDriverName !== currentDriverName && 
-               order.pickupAssignmentDate) {
-        items.push({
-          driverName: order.pickupDriverName,
-          date: order.pickupAssignmentDate,
-          action: 'Picked up',
-          footage: order.footage,
-          dimensions: allDimensions || '—',
-          isManual: false,
-          customerName: order.pickupName, // Pickup customer name
-          orderId: order.orderId // Include order ID to differentiate separate orders
-        })
-      }
-    })
-
-    console.log(`[Cross-Driver Freight] Current driver: ${currentDriverName}, Found ${items.length} items from ${orders.length} orders`)
-    
-    // Debug: log each item that was detected
-    items.forEach((item, idx) => {
-      console.log(`[Cross-Driver Freight] Item ${idx + 1}:`, {
-        driverName: item.driverName,
-        date: item.date,
-        action: item.action,
-        customerName: item.customerName,
-        orderId: item.orderId,
-        footage: item.footage,
-        dimensions: item.dimensions
-      })
-    })
-
-    return items
-  }, [orders, selectedTruckload])
+  // Auto-detection logic removed - deductions are now manually entered via table inputs
 
   // Clear cross-driver freight immediately when truckload changes
   useEffect(() => {
@@ -1181,185 +1102,34 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     loadDeductions()
   }, [selectedTruckloadId])
 
-  // Load cross-driver freight from database and merge with auto-detected freight
-  useEffect(() => {
-    if (!selectedTruckloadId || !selectedTruckload) {
-      return
-    }
-
-    // Skip reloading if we just generated auto deductions (prevents duplicates from coming back)
-    // Keep the flag for 2 seconds to ensure save completes and prevent any race conditions
-    if (justGeneratedAutoDeductions.current) {
-      console.log('[Cross-Driver Freight Load] Skipping reload - just generated auto deductions')
-      return
-    }
-
-    // Skip reloading if we're currently reloading after a save (prevents infinite loops)
-    if (isReloadingAfterSave.current) {
-      console.log('[Cross-Driver Freight Load] Skipping reload - currently reloading after save')
-      return
-    }
-
-    async function loadCrossDriverFreight() {
-      try {
-        const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
-          method: 'GET',
-          credentials: 'include'
-        })
-        
-        if (!res.ok) {
-          throw new Error('Failed to load cross-driver freight')
-        }
-        
-        const data = await res.json()
-        
-        const loadedItems = data.success && data.items ? data.items.map((item: any) => ({
-          id: `db-${item.id}`,
-          driverName: item.driverName || '',
-          date: formatDateForInput(item.date || ''),
-          action: item.action || 'Picked up',
-          footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
-          dimensions: item.dimensions || '',
-          deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
-          isManual: item.isManual || false,
-          comment: item.comment || '',
-          isAddition: item.isAddition || false,
-          appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
-          customerName: item.customerName || undefined,
-          orderId: item.orderId ? String(item.orderId) : undefined
-        })) : []
-
-        // First deduplicate loaded items to remove any duplicates that may exist in the database
-        const dedupedLoadedItems = dedupeFreightItems(loadedItems)
-
-        console.log(`[Cross-Driver Freight Load] Found ${loadedItems.length} raw saved items, ${dedupedLoadedItems.length} after deduplication, ${crossDriverFreight.length} auto-detected items`)
-
-        // Separate saved items into manual and auto-detected
-        const savedManualItems = dedupedLoadedItems.filter(item => item.isManual)
-        const savedAutoItems = dedupedLoadedItems.filter(item => !item.isManual)
-        
-        // Additional deduplication pass for saved auto items (in case duplicates slipped through)
-        const dedupedSavedAutoItems = dedupeFreightItems(savedAutoItems)
-        if (dedupedSavedAutoItems.length !== savedAutoItems.length) {
-          const duplicatesRemoved = savedAutoItems.length - dedupedSavedAutoItems.length
-          console.log(`[Cross-Driver Freight Load] Removed ${duplicatesRemoved} duplicate auto items from saved items`)
-          // NOTE: Removed automatic save here to prevent infinite loops when split load items are saved
-          // Duplicates will be cleaned up on the next manual save or when the user clicks "Save Deductions"
-        }
-
-        // If we have saved auto items, use those (don't merge with new auto-detected items)
-        // This prevents duplicates from being re-added after the user generates auto deductions
-        // Only merge on initial load if there are no saved items
-        if (dedupedSavedAutoItems.length > 0) {
-          // Use saved items (both manual and auto) - don't add new auto-detected items
-          console.log(`[Cross-Driver Freight Load] Using ${dedupedSavedAutoItems.length} saved auto items (not merging with new auto-detected items)`)
-          setEditableCrossDriverFreight([...savedManualItems, ...dedupedSavedAutoItems])
-        } else {
-          // No saved auto items - use auto-detected items from current orders
-          const newAutoItems = crossDriverFreight
-            .map((item, idx) => ({
-              ...item,
-              id: `auto-${Date.now()}-${idx}`,
-              deduction: 0,
-              date: formatDateForInput(item.date),
-              isManual: false,
-              customerName: item.customerName || undefined,
-              orderId: item.orderId ? String(item.orderId) : undefined
-            }))
-
-          console.log(`[Cross-Driver Freight Load] No saved auto items, using ${newAutoItems.length} auto-detected items`)
-          setEditableCrossDriverFreight([...savedManualItems, ...newAutoItems])
-        }
-      } catch (error) {
-        console.error('Error loading cross-driver freight:', error)
-        // Fallback to auto-detected freight from current truckload only
-        if (crossDriverFreight.length > 0) {
-          const initialized = crossDriverFreight.map((item, idx) => ({
-            ...item,
-            id: `auto-${Date.now()}-${idx}`,
-            deduction: 0,
-            date: formatDateForInput(item.date),
-            isManual: false,
-            customerName: item.customerName || undefined,
-            orderId: item.orderId || undefined
-          }))
-          setEditableCrossDriverFreight(initialized)
-        } else {
-          setEditableCrossDriverFreight([])
-        }
-      }
-    }
-
-    loadCrossDriverFreight()
-    // Removed crossDriverFreight from dependencies to prevent reloading after generate button
-    // This useEffect should only run when truckload changes, not when auto-detected items change
-  }, [selectedTruckloadId, selectedTruckload])
-
-  // Auto-calculate deductions based on footage when in footage mode
-  useEffect(() => {
-    if (deductByFootage && footageDeductionRate > 0) {
-      setEditableCrossDriverFreight(prev => 
-        prev.map(item => {
-          // Only auto-calculate for non-manual items
-          if (!item.isManual && item.footage > 0) {
-            return {
-              ...item,
-              deduction: item.footage * footageDeductionRate
-            }
-          }
-          return item
-        })
-      )
-    }
-  }, [deductByFootage, footageDeductionRate])
+  // Old cross-driver freight loading removed - using new table-based deduction system
 
   // Calculate detailed breakdown of deductions, additions, and driver pay
   const payrollCalculations = useMemo(() => {
     const totalQuotes = totals.totalQuotes || 0
     
-    // Separate deductions/additions by where they apply
-    // Manual items that apply to load value
-    const manualDeductionsFromLoadValue = editableCrossDriverFreight.reduce((sum, item) => {
-      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-      if (item.isManual && !item.isAddition && item.appliesTo === 'load_value') {
-        return sum + amount
+    // Separate deductions by where they apply (using new crossDriverDeductions)
+    const manualDeductionsFromLoadValue = crossDriverDeductions.reduce((sum, deduction) => {
+      if (deduction.appliesTo === 'load_value') {
+        return sum + deduction.amount
       }
       return sum
     }, 0)
     
-    const manualAdditionsToLoadValue = editableCrossDriverFreight.reduce((sum, item) => {
-      if (item.isManual && item.isAddition && item.appliesTo === 'load_value') {
-        const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-        return sum + amount
-      }
-      return sum
-    }, 0)
+    const manualAdditionsToLoadValue = 0 // No additions in new system
     
-    // Automatic deductions (always from driver pay)
-    const automaticDeductions = editableCrossDriverFreight.reduce((sum, item) => {
-      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-      if (!item.isManual) {
-        return sum + amount
-      }
-      return sum
-    }, 0)
+    // Automatic deductions removed - no longer used
+    const automaticDeductions = 0
     
     // Manual items that apply to driver pay
-    const manualDeductionsFromDriverPay = editableCrossDriverFreight.reduce((sum, item) => {
-      const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-      if (item.isManual && !item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)) {
-        return sum + amount
+    const manualDeductionsFromDriverPay = crossDriverDeductions.reduce((sum, deduction) => {
+      if (deduction.appliesTo === 'driver_pay') {
+        return sum + deduction.amount
       }
       return sum
     }, 0)
     
-    const manualAdditionsToDriverPay = editableCrossDriverFreight.reduce((sum, item) => {
-      if (item.isManual && item.isAddition && (item.appliesTo === 'driver_pay' || !item.appliesTo)) {
-        const amount = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-        return sum + amount
-      }
-      return sum
-    }, 0)
+    const manualAdditionsToDriverPay = 0 // No additions in new system
     
     // Calculate load value (quotes - manual deductions from load value + manual additions to load value)
     const loadValue = totalQuotes - manualDeductionsFromLoadValue + manualAdditionsToLoadValue
@@ -1382,7 +1152,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       finalDriverPay: Number(finalDriverPay),
       driverLoadPercentage: Number(driverLoadPercentage)
     }
-  }, [editableCrossDriverFreight, totals.totalQuotes, driverLoadPercentage])
+  }, [crossDriverDeductions, totals.totalQuotes, driverLoadPercentage])
 
   // Save calculated values to database when they change
   const saveCalculatedValues = useCallback(async (loadValue: number, driverPay: number) => {
@@ -1765,38 +1535,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           }
         }
 
-        // Get current auto-detected items (from crossDriverFreight)
-        const autoDetectedItems: CrossDriverFreightItem[] = crossDriverFreight.map((item, idx) => ({
-          ...item,
-          id: `auto-${Date.now()}-${idx}`,
-          deduction: 0, // Auto-detected items start with 0 deduction
-          date: formatDateForInput(item.date),
-          isManual: false,
-          customerName: item.customerName || undefined,
-          orderId: item.orderId || undefined
-        }))
-
+        // Auto-detection removed - just save current items
         // Merge strategy:
         // 1. Keep all items from currentItems (what user sees/edits - these take priority)
         // 2. Keep all existing saved items that aren't in currentItems (preserve old saved items)
-        // 3. Add new auto-detected items that don't match any existing items
         
         // Create a set of keys for current items (to check for matches)
         const currentKeys = new Set(
           currentItems.map(item => buildFreightKey(item))
         )
-
-        // Create a set of keys for existing saved items (to check for matches)
-        const existingKeys = new Set(
-          existingSavedItems.map(item => buildFreightKey(item))
-        )
-
-        // Find new auto-detected items that don't exist in current items or saved items
-        const newAutoItems = autoDetectedItems.filter(autoItem => {
-          const autoKey = buildFreightKey(autoItem)
-          // Include if it's not in current items AND not in existing saved items
-          return !currentKeys.has(autoKey) && !existingKeys.has(autoKey)
-        })
 
         // Keep existing saved items that aren't in current items (preserve old saved items)
         const preservedSavedItems = existingSavedItems.filter(savedItem => {
@@ -1804,17 +1551,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           return !currentKeys.has(savedKey)
         })
 
-        // Combine: current items (user's view) + preserved saved items + new auto-detected items
+        // Combine: current items (user's view) + preserved saved items
         const mergedItems = [
           ...currentItems,
-          ...preservedSavedItems,
-          ...newAutoItems
+          ...preservedSavedItems
         ]
 
         // Deduplicate the merged list
         itemsToSave = dedupeFreightItems(mergedItems)
         
-        console.log(`[Save] Merged items: ${currentItems.length} current + ${preservedSavedItems.length} preserved saved + ${newAutoItems.length} new auto = ${mergedItems.length} total, ${itemsToSave.length} after dedupe`)
+        console.log(`[Save] Merged items: ${currentItems.length} current + ${preservedSavedItems.length} preserved saved = ${mergedItems.length} total, ${itemsToSave.length} after dedupe`)
       }
 
       const deduplicated = itemsToSave
@@ -1901,20 +1647,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               setEditableCrossDriverFreight(dedupedReloadedItems)
               editableCrossDriverFreightRef.current = dedupedReloadedItems
               console.log('Merged items (from DB):', dedupedReloadedItems)
-            } else if (crossDriverFreight.length > 0) {
-              const autoItems = crossDriverFreight.map((item, idx) => ({
-                ...item,
-                id: `auto-${Date.now()}-${idx}`,
-                deduction: 0,
-                date: formatDateForInput(item.date),
-                isManual: false,
-                customerName: item.customerName || undefined,
-                orderId: item.orderId ? String(item.orderId) : undefined
-              }))
-              const dedupedAuto = dedupeFreightItems(autoItems)
-              setEditableCrossDriverFreight(dedupedAuto)
-              editableCrossDriverFreightRef.current = dedupedAuto
-              console.log('Merged items (auto-detected fallback):', dedupedAuto)
             } else {
               setEditableCrossDriverFreight([])
               editableCrossDriverFreightRef.current = []
@@ -1935,7 +1667,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save cross-driver freight'
       toast.error(errorMessage)
     }
-  }, [selectedTruckloadId, crossDriverFreight])
+  }, [selectedTruckloadId])
 
   function deleteCrossDriverFreightItem(id: string): void {
     setEditableCrossDriverFreight(items => items.filter(item => item.id !== id))
@@ -2760,10 +2492,31 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                       onClick={async () => {
                                         // Update appliesTo
                                         const newAppliesTo = deduction.appliesTo === 'driver_pay' ? 'load_value' : 'driver_pay'
-                                        // TODO: Update in database
-                                        setCrossDriverDeductions(prev =>
-                                          prev.map(d => d.id === deduction.id ? { ...d, appliesTo: newAppliesTo } : d)
-                                        )
+                                        
+                                        try {
+                                          const response = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            credentials: 'include',
+                                            body: JSON.stringify({
+                                              deductionId: deduction.id,
+                                              appliesTo: newAppliesTo
+                                            })
+                                          })
+                                          
+                                          const data = await response.json()
+                                          if (data.success) {
+                                            setCrossDriverDeductions(prev =>
+                                              prev.map(d => d.id === deduction.id ? { ...d, appliesTo: newAppliesTo } : d)
+                                            )
+                                            toast.success('Deduction updated')
+                                          } else {
+                                            toast.error(data.error || 'Failed to update deduction')
+                                          }
+                                        } catch (error) {
+                                          console.error('Error updating deduction:', error)
+                                          toast.error('Failed to update deduction')
+                                        }
                                       }}
                                       className="h-6 px-2 text-xs"
                                     >
@@ -2776,291 +2529,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           </div>
                         )}
                       </div>
-                    </div>
-                      
-                      {/* Automatic Deductions Section */}
-                      {editableCrossDriverFreight.filter(item => !item.isManual).length > 0 && (
-                        <div className="space-y-2 mb-4">
-                          <div className="flex items-center gap-2">
-                            <div className="h-px flex-1 bg-gray-300"></div>
-                            <h4 className="text-sm font-semibold text-gray-700 px-2">Automatic Deductions</h4>
-                            <div className="h-px flex-1 bg-gray-300"></div>
-                          </div>
-                          <div className="space-y-1.5">
-                            {editableCrossDriverFreight
-                              .filter(item => !item.isManual)
-                              .map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="grid grid-cols-[1fr_auto] gap-2 items-center border border-gray-300 rounded-lg p-1.5 text-sm"
-                                >
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium">{item.driverName}</span>
-                                    <span className="text-gray-500">-</span>
-                                    <span className="text-gray-600">{formatDateShort(item.date)}</span>
-                                    <span className="text-gray-500">-</span>
-                                    {item.customerName ? (
-                                      <span className="font-medium">
-                                        {item.action === 'Picked up' 
-                                          ? `Picked up from ${item.customerName}`
-                                          : `Delivered to ${item.customerName}`
-                                        }
-                                      </span>
-                                    ) : (
-                                      <span className="font-medium">{item.action}</span>
-                                    )}
-                                    <span className="text-gray-500">-</span>
-                                    <span className="text-gray-700">{item.footage} sqft</span>
-                                    <span className="text-gray-500">-</span>
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                      {item.dimensions && item.dimensions !== '—' ? (
-                                        item.dimensions.split(', ').map((dim, idx) => {
-                                          const match = dim.match(/^(\d+)\s+(.+)$/)
-                                          if (match) {
-                                            const [, quantity, dimension] = match
-                                            return (
-                                              <span key={idx} className="inline-block bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">
-                                                {quantity} {dimension}
-                                              </span>
-                                            )
-                                          }
-                                          return <span key={idx} className="text-gray-700">{dim}</span>
-                                        })
-                                      ) : (
-                                        <span className="text-gray-700">—</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {deductByFootage ? (
-                                    <div className="text-sm text-gray-700 w-24 text-right">
-                                      ${(typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0).toFixed(2)}
-                                    </div>
-                                  ) : (
-                                    <Input
-                                      type="number"
-                                      placeholder="$0.00"
-                                      value={item.deduction || ''}
-                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                      className="h-8 text-sm w-24"
-                                      min="0"
-                                      step="0.01"
-                                    />
-                                  )}
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Manual Additions and Deductions - Side by Side (Always Visible) */}
-                      <div className="grid grid-cols-2 gap-4">
-                          {/* Left: Manual Additions (Green) */}
-                          <div className="bg-green-50 border-2 border-green-300 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-semibold text-green-800">Manual Additions</h4>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => addCrossDriverFreightItem(true)}
-                                className="h-7 text-xs bg-white hover:bg-green-100 border-green-400 text-green-700"
-                              >
-                                <Plus className="h-3 w-3 mr-1" />
-                                Add
-                              </Button>
-                            </div>
-                            <div className="space-y-2">
-                              {editableCrossDriverFreight
-                                .filter(item => item.isManual && item.isAddition)
-                                .map((item) => (
-                                  <div
-                                    key={item.id}
-                                    className="bg-white border border-green-300 rounded-lg p-2 space-y-2"
-                                  >
-                                    <Textarea
-                                      placeholder="Enter description..."
-                                      value={item.comment || ''}
-                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
-                                      className="min-h-[50px] text-sm resize-none border-green-200"
-                                      rows={2}
-                                    />
-                                    <div className="flex items-center gap-2">
-                                      <Select
-                                        value={item.appliesTo || 'driver_pay'}
-                                        onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
-                                      >
-                                        <SelectTrigger className="h-8 w-32 text-xs border-green-300">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="load_value">Load Value</SelectItem>
-                                          <SelectItem value="driver_pay">Driver Pay</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Input
-                                        type="number"
-                                        placeholder="$0.00"
-                                        value={item.deduction || ''}
-                                        onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                        className="h-8 text-sm w-24 border-green-300"
-                                        min="0"
-                                        step="0.01"
-                                      />
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        onClick={() => deleteCrossDriverFreightItem(item.id)}
-                                        className="h-8 w-8 text-red-500 hover:text-red-700"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              {editableCrossDriverFreight.filter(item => item.isManual && item.isAddition).length === 0 && (
-                                <div className="text-xs text-green-600 italic text-center py-2">No additions yet</div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right: Manual Deductions (Red) */}
-                          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-semibold text-red-800">Manual Deductions</h4>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => addCrossDriverFreightItem(false)}
-                                className="h-7 text-xs bg-white hover:bg-red-100 border-red-400 text-red-700"
-                              >
-                                <Plus className="h-3 w-3 mr-1" />
-                                Add
-                              </Button>
-                            </div>
-                            <div className="space-y-2">
-                              {editableCrossDriverFreight
-                                .filter(item => item.isManual && !item.isAddition)
-                                .map((item) => (
-                                  <div
-                                    key={item.id}
-                                    className="bg-white border border-red-300 rounded-lg p-2 space-y-2"
-                                  >
-                                    <Textarea
-                                      placeholder="Enter description..."
-                                      value={item.comment || ''}
-                                      onChange={(e) => updateCrossDriverFreightItem(item.id, { comment: e.target.value })}
-                                      className="min-h-[50px] text-sm resize-none border-red-200"
-                                      rows={2}
-                                    />
-                                    <div className="flex items-center gap-2">
-                                      <Select
-                                        value={item.appliesTo || 'driver_pay'}
-                                        onValueChange={(value) => updateCrossDriverFreightItem(item.id, { appliesTo: value as 'load_value' | 'driver_pay' })}
-                                      >
-                                        <SelectTrigger className="h-8 w-32 text-xs border-red-300">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="load_value">Load Value</SelectItem>
-                                          <SelectItem value="driver_pay">Driver Pay</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Input
-                                        type="number"
-                                        placeholder="$0.00"
-                                        value={item.deduction || ''}
-                                        onChange={(e) => updateCrossDriverFreightItem(item.id, { deduction: parseFloat(e.target.value) || 0 })}
-                                        className="h-8 text-sm w-24 border-red-300"
-                                        min="0"
-                                        step="0.01"
-                                      />
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        onClick={() => deleteCrossDriverFreightItem(item.id)}
-                                        className="h-8 w-8 text-red-500 hover:text-red-700"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              {editableCrossDriverFreight.filter(item => item.isManual && !item.isAddition).length === 0 && (
-                                <div className="text-xs text-red-600 italic text-center py-2">No deductions yet</div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Totals Section with Save Button */}
-                        {editableCrossDriverFreight.length > 0 && (
-                          <div className="mt-4 pt-4 border-t-2 border-gray-400 bg-gray-100 rounded-lg p-4">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                              <div className="bg-white border border-gray-300 rounded-lg p-3">
-                                <div className="text-xs font-medium text-gray-600 mb-1">Total Deductions</div>
-                                <div className="text-xl font-bold text-gray-900">
-                                  {editableCrossDriverFreight.filter(item => !item.isManual || !item.isAddition).length}
-                                </div>
-                              </div>
-                              <div className="bg-white border border-gray-300 rounded-lg p-3">
-                                <div className="text-xs font-medium text-gray-600 mb-1">Total Sqft</div>
-                                <div className="text-xl font-bold text-gray-900">
-                                  {editableCrossDriverFreight
-                                    .filter(item => !item.isManual)
-                                    .reduce((sum, item) => sum + (typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0), 0)
-                                    .toFixed(0)}
-                                </div>
-                              </div>
-                              <div className="bg-white border border-gray-300 rounded-lg p-3">
-                                <div className="text-xs font-medium text-gray-600 mb-1">Skids/Sizes</div>
-                                <div className="text-lg font-bold text-gray-900">
-                                  {(() => {
-                                    const autoItems = editableCrossDriverFreight.filter(item => !item.isManual)
-                                    const uniqueDimensions = new Set<string>()
-                                    autoItems.forEach(item => {
-                                      if (item.dimensions && item.dimensions !== '—') {
-                                        item.dimensions.split(', ').forEach(dim => uniqueDimensions.add(dim))
-                                      }
-                                    })
-                                    return uniqueDimensions.size
-                                  })()}
-                                </div>
-                              </div>
-                              <div className="bg-white border border-gray-300 rounded-lg p-3">
-                                <div className="text-xs font-medium text-gray-600 mb-1">Total Deduction Amount</div>
-                                <div className="text-xl font-bold text-red-600">
-                                  ${editableCrossDriverFreight
-                                    .filter(item => !item.isManual || !item.isAddition)
-                                    .reduce((sum, item) => {
-                                      const deduction = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
-                                      return sum + deduction
-                                    }, 0)
-                                    .toFixed(2)}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex justify-end">
-                              <Button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await saveCrossDriverFreight()
-                                    toast.success('Deductions saved successfully')
-                                  } catch (error) {
-                                    toast.error('Failed to save deductions')
-                                    console.error('Error saving deductions:', error)
-                                  }
-                                }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                Save Deductions
-                              </Button>
-                            </div>
-                          </div>
-                        )}
                     </div>
 
                     {/* Payroll Summary */}
