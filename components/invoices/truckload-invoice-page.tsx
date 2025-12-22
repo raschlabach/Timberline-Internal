@@ -1032,8 +1032,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
 
     // Skip reloading if we just generated auto deductions (prevents duplicates from coming back)
+    // Keep the flag for 2 seconds to ensure save completes and prevent any race conditions
     if (justGeneratedAutoDeductions.current) {
-      justGeneratedAutoDeductions.current = false
+      console.log('[Cross-Driver Freight Load] Skipping reload - just generated auto deductions')
       return
     }
 
@@ -1500,90 +1501,101 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }
 
   // Function to save cross-driver freight to database
-  const saveCrossDriverFreight = useCallback(async (): Promise<void> => {
+  const saveCrossDriverFreight = useCallback(async (skipMerge: boolean = false): Promise<void> => {
     if (!selectedTruckloadId) return
 
     // Use ref to get latest state
     const currentItems = editableCrossDriverFreightRef.current
 
     try {
-      // First, fetch existing saved items from database
-      const existingRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
-        method: 'GET',
-        credentials: 'include'
-      })
-      
-      let existingSavedItems: CrossDriverFreightItem[] = []
-      if (existingRes.ok) {
-        const existingData = await existingRes.json()
-        if (existingData.success && existingData.items) {
-          existingSavedItems = existingData.items.map((item: any) => ({
-            id: `db-${item.id}`,
-            driverName: item.driverName || '',
-            date: formatDateForInput(item.date || ''),
-            action: item.action || 'Picked up',
-            footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
-            dimensions: item.dimensions || '',
-            deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
-            isManual: item.isManual || false,
-            comment: item.comment || '',
-            isAddition: item.isAddition || false,
-            appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
-            customerName: item.customerName || undefined
-          }))
+      let itemsToSave: CrossDriverFreightItem[] = []
+
+      if (skipMerge) {
+        // When generating, just save what we have (no merge with database)
+        console.log(`[Save] Skipping merge - saving ${currentItems.length} items directly`)
+        itemsToSave = dedupeFreightItems(currentItems)
+      } else {
+        // Normal save: fetch existing saved items and merge
+        const existingRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+        
+        let existingSavedItems: CrossDriverFreightItem[] = []
+        if (existingRes.ok) {
+          const existingData = await existingRes.json()
+          if (existingData.success && existingData.items) {
+            existingSavedItems = existingData.items.map((item: any) => ({
+              id: `db-${item.id}`,
+              driverName: item.driverName || '',
+              date: formatDateForInput(item.date || ''),
+              action: item.action || 'Picked up',
+              footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
+              dimensions: item.dimensions || '',
+              deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
+              isManual: item.isManual || false,
+              comment: item.comment || '',
+              isAddition: item.isAddition || false,
+              appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
+              customerName: item.customerName || undefined,
+              orderId: item.orderId ? String(item.orderId) : undefined
+            }))
+          }
         }
+
+        // Get current auto-detected items (from crossDriverFreight)
+        const autoDetectedItems: CrossDriverFreightItem[] = crossDriverFreight.map((item, idx) => ({
+          ...item,
+          id: `auto-${Date.now()}-${idx}`,
+          deduction: 0, // Auto-detected items start with 0 deduction
+          date: formatDateForInput(item.date),
+          isManual: false,
+          customerName: item.customerName || undefined,
+          orderId: item.orderId || undefined
+        }))
+
+        // Merge strategy:
+        // 1. Keep all items from currentItems (what user sees/edits - these take priority)
+        // 2. Keep all existing saved items that aren't in currentItems (preserve old saved items)
+        // 3. Add new auto-detected items that don't match any existing items
+        
+        // Create a set of keys for current items (to check for matches)
+        const currentKeys = new Set(
+          currentItems.map(item => buildFreightKey(item))
+        )
+
+        // Create a set of keys for existing saved items (to check for matches)
+        const existingKeys = new Set(
+          existingSavedItems.map(item => buildFreightKey(item))
+        )
+
+        // Find new auto-detected items that don't exist in current items or saved items
+        const newAutoItems = autoDetectedItems.filter(autoItem => {
+          const autoKey = buildFreightKey(autoItem)
+          // Include if it's not in current items AND not in existing saved items
+          return !currentKeys.has(autoKey) && !existingKeys.has(autoKey)
+        })
+
+        // Keep existing saved items that aren't in current items (preserve old saved items)
+        const preservedSavedItems = existingSavedItems.filter(savedItem => {
+          const savedKey = buildFreightKey(savedItem)
+          return !currentKeys.has(savedKey)
+        })
+
+        // Combine: current items (user's view) + preserved saved items + new auto-detected items
+        const mergedItems = [
+          ...currentItems,
+          ...preservedSavedItems,
+          ...newAutoItems
+        ]
+
+        // Deduplicate the merged list
+        itemsToSave = dedupeFreightItems(mergedItems)
+        
+        console.log(`[Save] Merged items: ${currentItems.length} current + ${preservedSavedItems.length} preserved saved + ${newAutoItems.length} new auto = ${mergedItems.length} total, ${itemsToSave.length} after dedupe`)
       }
 
-      // Get current auto-detected items (from crossDriverFreight)
-      const autoDetectedItems: CrossDriverFreightItem[] = crossDriverFreight.map((item, idx) => ({
-        ...item,
-        id: `auto-${Date.now()}-${idx}`,
-        deduction: 0, // Auto-detected items start with 0 deduction
-        date: formatDateForInput(item.date),
-        isManual: false,
-        customerName: item.customerName || undefined,
-        orderId: item.orderId || undefined
-      }))
-
-      // Merge strategy:
-      // 1. Keep all items from currentItems (what user sees/edits - these take priority)
-      // 2. Keep all existing saved items that aren't in currentItems (preserve old saved items)
-      // 3. Add new auto-detected items that don't match any existing items
-      
-      // Create a set of keys for current items (to check for matches)
-      const currentKeys = new Set(
-        currentItems.map(item => buildFreightKey(item))
-      )
-
-      // Create a set of keys for existing saved items (to check for matches)
-      const existingKeys = new Set(
-        existingSavedItems.map(item => buildFreightKey(item))
-      )
-
-      // Find new auto-detected items that don't exist in current items or saved items
-      const newAutoItems = autoDetectedItems.filter(autoItem => {
-        const autoKey = buildFreightKey(autoItem)
-        // Include if it's not in current items AND not in existing saved items
-        return !currentKeys.has(autoKey) && !existingKeys.has(autoKey)
-      })
-
-      // Keep existing saved items that aren't in current items (preserve old saved items)
-      const preservedSavedItems = existingSavedItems.filter(savedItem => {
-        const savedKey = buildFreightKey(savedItem)
-        return !currentKeys.has(savedKey)
-      })
-
-      // Combine: current items (user's view) + preserved saved items + new auto-detected items
-      const mergedItems = [
-        ...currentItems,
-        ...preservedSavedItems,
-        ...newAutoItems
-      ]
-
-      // Deduplicate the merged list
-      const deduplicated = dedupeFreightItems(mergedItems)
-      
-      console.log(`[Save] Merged items: ${currentItems.length} current + ${preservedSavedItems.length} preserved saved + ${newAutoItems.length} new auto = ${mergedItems.length} total, ${deduplicated.length} after dedupe`)
+      const deduplicated = itemsToSave
 
       const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
         method: 'POST',
@@ -2488,13 +2500,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               // Update ref immediately for save function
                               editableCrossDriverFreightRef.current = [...manualItems, ...newAutoItems]
                               
-                              // Save immediately after generating
+                              // Save immediately after generating (skip merge to prevent duplicates from coming back)
                               setTimeout(async () => {
-                                await saveCrossDriverFreight()
+                                await saveCrossDriverFreight(true) // true = skip merge, just save what we have
                                 // Clear flag after save completes (with delay to prevent immediate reload)
                                 setTimeout(() => {
                                   justGeneratedAutoDeductions.current = false
-                                }, 500)
+                                  console.log('[Generate Auto Deductions] Flag cleared - safe to reload now')
+                                }, 2000)
                               }, 100)
                               
                               toast.success(`Generated ${newAutoItems.length} auto deductions (removed ${editableCrossDriverFreight.filter(item => !item.isManual).length} old auto items)`)
