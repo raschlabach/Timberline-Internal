@@ -81,7 +81,7 @@ export function EditTruckloadDialog({
   // Fetch drivers when dialog opens
   useEffect(() => {
     if (isOpen) {
-      fetchDrivers()
+    fetchDrivers()
     }
   }, [isOpen])
 
@@ -273,15 +273,15 @@ export function EditTruckloadDialog({
                 placeholder="BOL number"
               />
             </div>
-            <div className="space-y-2">
+          <div className="space-y-2">
               <Label htmlFor="trailerNumber">Trailer Number</Label>
-              <Input
-                type="text"
-                id="trailerNumber"
-                value={formData.trailerNumber}
-                onChange={(e) => setFormData({ ...formData, trailerNumber: e.target.value })}
-                placeholder="Enter trailer number"
-              />
+            <Input
+              type="text"
+              id="trailerNumber"
+              value={formData.trailerNumber}
+              onChange={(e) => setFormData({ ...formData, trailerNumber: e.target.value })}
+              placeholder="Enter trailer number"
+            />
             </div>
           </div>
 

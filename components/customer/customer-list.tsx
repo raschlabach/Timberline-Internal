@@ -368,17 +368,17 @@ export default function CustomerList() {
   if (showInactiveCustomers) {
     return <InactiveCustomersList onBack={() => setShowInactiveCustomers(false)} />
   }
-
+  
   return (
     <div className="space-y-6">
       {/* Search and Stats Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
-              <Users className="h-5 w-5" />
-              <span>Customer Directory</span>
-            </CardTitle>
+          <CardTitle className="flex items-center space-x-2">
+            <Users className="h-5 w-5" />
+            <span>Customer Directory</span>
+          </CardTitle>
             <Button
               variant="outline"
               onClick={() => setShowInactiveCustomers(true)}

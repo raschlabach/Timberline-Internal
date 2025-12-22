@@ -177,7 +177,7 @@ export default function TruckloadManager() {
       if (!isRefreshing) {
         const savedSelected = localStorage.getItem('truckloadManager_selectedDrivers')
         if (savedSelected) {
-          try {
+      try {
             const parsed = JSON.parse(savedSelected)
             // Validate that all saved driver IDs still exist
             const driverIds = new Set(data.drivers.map(d => d.id))
@@ -185,7 +185,7 @@ export default function TruckloadManager() {
             if (validIds.length > 0) {
               setSelectedDrivers(new Set(validIds))
             }
-          } catch (e) {
+      } catch (e) {
             console.error('Failed to parse saved selected drivers:', e)
           }
         }
@@ -437,33 +437,33 @@ export default function TruckloadManager() {
     <div className="flex flex-col gap-6 p-6 bg-gradient-to-br from-slate-50 to-white min-h-screen">
       {/* Modern Header */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Truck className="h-6 w-6 text-blue-600" />
-              </div>
-              <h1 className="text-3xl font-bold text-gray-900">Truckload Manager</h1>
-            </div>
-            <p className="text-gray-600 text-sm">
-              Manage driver assignments and track truckload progress
-            </p>
-          </div>
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <ManageDriversDialog />
-            
-            {/* Reorder Mode Toggle */}
-              <Button
-              variant={isReorderMode ? "default" : "outline"}
-                size="sm"
-              onClick={() => setIsReorderMode(!isReorderMode)}
-              className="gap-2"
-              >
-              <GripVertical className="h-4 w-4" />
-              {isReorderMode ? 'Done Reordering' : 'Reorder Columns'}
-              </Button>
-            
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Truck className="h-6 w-6 text-blue-600" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">Truckload Manager</h1>
           </div>
+          <p className="text-gray-600 text-sm">
+            Manage driver assignments and track truckload progress
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <ManageDriversDialog />
+          
+          {/* Reorder Mode Toggle */}
+            <Button
+            variant={isReorderMode ? "default" : "outline"}
+              size="sm"
+            onClick={() => setIsReorderMode(!isReorderMode)}
+            className="gap-2"
+            >
+            <GripVertical className="h-4 w-4" />
+            {isReorderMode ? 'Done Reordering' : 'Reorder Columns'}
+            </Button>
+          
+        </div>
         </div>
 
         {/* Driver Selector - Horizontal */}

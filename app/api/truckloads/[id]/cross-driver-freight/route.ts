@@ -136,7 +136,7 @@ export async function GET(
         client.release()
       }
     }
-    
+
     const result = await query(`
       SELECT 
         id,

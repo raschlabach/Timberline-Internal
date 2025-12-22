@@ -61,46 +61,46 @@ function TruckloadSelectionGrid({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
         {driverColumns
           .filter((driver) => selectedDrivers.has(driver.driverName))
           .map((driver) => {
-            const completedCount = driver.truckloads.filter(t => t.isCompleted).length
-            
-            return (
-              <Card 
-                key={driver.driverName} 
-                className="w-full bg-white shadow-lg border-0 h-fit"
-                style={{
-                  borderLeft: `4px solid ${driver.driverColor}`,
-                }}
-              >
-                <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1">
-                      <div 
-                        className="w-3 h-3 rounded-full shadow-sm" 
-                        style={{ backgroundColor: driver.driverColor }}
-                      />
-                      <div className="flex-1">
-                        <CardTitle className="text-base font-semibold text-gray-900">
-                          {driver.driverName}
-                        </CardTitle>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          <div className="flex items-center gap-1 text-xs text-gray-600">
-                            <Package className="h-2.5 w-2.5" />
-                            <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-gray-600">
-                            <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
-                            <span>{completedCount} complete</span>
-                          </div>
-                        </div>
+        const completedCount = driver.truckloads.filter(t => t.isCompleted).length
+        
+        return (
+          <Card 
+            key={driver.driverName} 
+            className="w-full bg-white shadow-lg border-0 h-fit"
+            style={{
+              borderLeft: `4px solid ${driver.driverColor}`,
+            }}
+          >
+            <CardHeader className="pb-2 bg-gradient-to-r from-white to-gray-50/50 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1">
+                  <div 
+                    className="w-3 h-3 rounded-full shadow-sm" 
+                    style={{ backgroundColor: driver.driverColor }}
+                  />
+                  <div className="flex-1">
+                    <CardTitle className="text-base font-semibold text-gray-900">
+                      {driver.driverName}
+                    </CardTitle>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <Package className="h-2.5 w-2.5" />
+                        <span>{driver.truckloads.length} load{driver.truckloads.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
+                        <span>{completedCount} complete</span>
                       </div>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="p-3">
+                </div>
+              </div>
+            </CardHeader>
+              <CardContent className="p-3">
                   <div className="space-y-3">
                     {driver.truckloads.map((truckload) => {
                       const isPickupSelected = selectedPickupTruckloadId === truckload.id
@@ -108,7 +108,7 @@ function TruckloadSelectionGrid({
 
                       return (
                         <Card
-                          key={truckload.id}
+                      key={truckload.id}
                           className={`p-3 transition-all duration-200 ${
                             (isPickupSelected || isDeliverySelected)
                               ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
@@ -124,11 +124,11 @@ function TruckloadSelectionGrid({
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-3 w-3 text-gray-500" />
                                   <span className="text-xs font-semibold text-gray-900">
-                                    {(() => {
+                        {(() => {
                                       const dateParts = truckload.startDate.split('-')
                                       const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
                                       return format(date, 'MMM dd')
-                                    })()}
+                        })()}
                                   </span>
                                 </div>
                                 {truckload.isCompleted ? (
@@ -142,8 +142,8 @@ function TruckloadSelectionGrid({
                                     In Progress
                                   </Badge>
                                 )}
-                              </div>
-                            </div>
+                      </div>
+                        </div>
 
                             {/* Description */}
                             <div className="text-xs text-gray-700 leading-tight">
@@ -172,10 +172,10 @@ function TruckloadSelectionGrid({
                                 <div className="flex items-center gap-0.5 mb-0.5">
                                   <Package className="h-2.5 w-2.5 text-blue-600" />
                                   <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Transfer</div>
-                                </div>
+                        </div>
                                 <div className="text-xs font-bold text-blue-800">{truckload.transferFootage.toLocaleString()} ft²</div>
-                              </div>
-                            </div>
+                        </div>
+                        </div>
 
                             {/* Pickup and Delivery Selection Buttons */}
                             <div className="flex gap-2 pt-2">
@@ -209,26 +209,26 @@ function TruckloadSelectionGrid({
                               >
                                 Delivery
                               </Button>
-                            </div>
+                          </div>
                           </div>
                         </Card>
                       )
                     })}
-                    {driver.truckloads.length === 0 && (
-                      <div className="text-center py-6">
-                        <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
-                          <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
-                          <p className="text-xs text-gray-500 font-medium">
-                            No truckloads assigned
-                          </p>
-                        </div>
+                  {driver.truckloads.length === 0 && (
+                    <div className="text-center py-6">
+                      <div className="p-3 bg-gray-50 rounded border-2 border-dashed border-gray-200">
+                        <Package className="h-6 w-6 text-gray-400 mx-auto mb-1" />
+                        <p className="text-xs text-gray-500 font-medium">
+                      No truckloads assigned
+                    </p>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+        )
+      })}
       </div>
     </>
   )
@@ -533,24 +533,24 @@ export function BulkAssignmentDialog({
             <div className="space-y-2">
               <Label className="text-base font-semibold">
                 Select Truckloads
-                {pickupCount > 0 && (
+            {pickupCount > 0 && (
                   <span className="text-red-600 ml-2">Pickups: {pickupCount}</span>
                 )}
                 {deliveryCount > 0 && (
                   <span className="text-gray-900 ml-2">Deliveries: {deliveryCount}</span>
-                )}
+                  )}
               </Label>
-              <TruckloadSelectionGrid
-                driverColumns={driverColumns}
+                <TruckloadSelectionGrid
+                  driverColumns={driverColumns}
                 selectedDrivers={selectedDrivers}
                 toggleDriverSelection={toggleDriverSelection}
                 selectedPickupTruckloadId={selectedPickupTruckloadId}
                 selectedDeliveryTruckloadId={selectedDeliveryTruckloadId}
                 onPickupSelect={handlePickupTruckloadSelection}
                 onDeliverySelect={handleDeliveryTruckloadSelection}
-                selectionType="pickup"
-              />
-            </div>
+                  selectionType="pickup"
+                />
+                                </div>
           </div>
         </div>
 

@@ -653,6 +653,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     pickupAssignment: { assignmentId: number; truckloadId: number; assignmentQuote: number | null; driverName: string | null } | null
     deliveryAssignment: { assignmentId: number; truckloadId: number; assignmentQuote: number | null; driverName: string | null } | null
     hasSplitLoad: boolean
+    pendingSplit?: {
+      miscValue: number
+      fullQuoteAssignment: 'pickup' | 'delivery'
+      fullQuoteAppliesTo: 'load_value' | 'driver_pay'
+      miscAppliesTo: 'load_value' | 'driver_pay'
+      existingAssignmentType: 'pickup' | 'delivery'
+    } | null
   } | null>(null)
   const [splitLoadMiscValue, setSplitLoadMiscValue] = useState<string>('')
   const [splitLoadFullQuoteAssignment, setSplitLoadFullQuoteAssignment] = useState<'pickup' | 'delivery'>('delivery')
@@ -1424,12 +1431,84 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     // Use ref to get latest state
     const currentItems = editableCrossDriverFreightRef.current
 
-    // Deduplicate items before saving
-    const deduplicated = dedupeFreightItems(currentItems)
-    
-    console.log(`[Save] Deduplicated ${currentItems.length} items to ${deduplicated.length} items before saving`)
-
     try {
+      // First, fetch existing saved items from database
+      const existingRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
+        method: 'GET',
+        credentials: 'include'
+      })
+      
+      let existingSavedItems: CrossDriverFreightItem[] = []
+      if (existingRes.ok) {
+        const existingData = await existingRes.json()
+        if (existingData.success && existingData.items) {
+          existingSavedItems = existingData.items.map((item: any) => ({
+            id: `db-${item.id}`,
+            driverName: item.driverName || '',
+            date: formatDateForInput(item.date || ''),
+            action: item.action || 'Picked up',
+            footage: typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0,
+            dimensions: item.dimensions || '',
+            deduction: typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0,
+            isManual: item.isManual || false,
+            comment: item.comment || '',
+            isAddition: item.isAddition || false,
+            appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
+            customerName: item.customerName || undefined
+          }))
+        }
+      }
+
+      // Get current auto-detected items (from crossDriverFreight)
+      const autoDetectedItems: CrossDriverFreightItem[] = crossDriverFreight.map((item, idx) => ({
+        ...item,
+        id: `auto-${Date.now()}-${idx}`,
+        deduction: 0, // Auto-detected items start with 0 deduction
+        date: formatDateForInput(item.date),
+        isManual: false,
+        customerName: item.customerName || undefined
+      }))
+
+      // Merge strategy:
+      // 1. Keep all items from currentItems (what user sees/edits - these take priority)
+      // 2. Keep all existing saved items that aren't in currentItems (preserve old saved items)
+      // 3. Add new auto-detected items that don't match any existing items
+      
+      // Create a set of keys for current items (to check for matches)
+      const currentKeys = new Set(
+        currentItems.map(item => buildFreightKey(item))
+      )
+
+      // Create a set of keys for existing saved items (to check for matches)
+      const existingKeys = new Set(
+        existingSavedItems.map(item => buildFreightKey(item))
+      )
+
+      // Find new auto-detected items that don't exist in current items or saved items
+      const newAutoItems = autoDetectedItems.filter(autoItem => {
+        const autoKey = buildFreightKey(autoItem)
+        // Include if it's not in current items AND not in existing saved items
+        return !currentKeys.has(autoKey) && !existingKeys.has(autoKey)
+      })
+
+      // Keep existing saved items that aren't in current items (preserve old saved items)
+      const preservedSavedItems = existingSavedItems.filter(savedItem => {
+        const savedKey = buildFreightKey(savedItem)
+        return !currentKeys.has(savedKey)
+      })
+
+      // Combine: current items (user's view) + preserved saved items + new auto-detected items
+      const mergedItems = [
+        ...currentItems,
+        ...preservedSavedItems,
+        ...newAutoItems
+      ]
+
+      // Deduplicate the merged list
+      const deduplicated = dedupeFreightItems(mergedItems)
+      
+      console.log(`[Save] Merged items: ${currentItems.length} current + ${preservedSavedItems.length} preserved saved + ${newAutoItems.length} new auto = ${mergedItems.length} total, ${deduplicated.length} after dedupe`)
+
       const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1532,7 +1611,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save cross-driver freight'
       toast.error(errorMessage)
     }
-  }, [selectedTruckloadId])
+  }, [selectedTruckloadId, crossDriverFreight])
 
   function deleteCrossDriverFreightItem(id: string): void {
     setEditableCrossDriverFreight(items => items.filter(item => item.id !== id))
@@ -1806,33 +1885,43 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       
       if (data.success) {
         setSplitLoadData(data.order)
-        // If split load exists, populate the form
+        // If split load exists or is pending, populate the form
         if (data.order.hasSplitLoad) {
-          const pickupQuote = data.order.pickupAssignment?.assignmentQuote
-          const deliveryQuote = data.order.deliveryAssignment?.assignmentQuote
-          const fullQuote = typeof data.order.fullQuote === 'number' 
-            ? data.order.fullQuote 
-            : parseFloat(String(data.order.fullQuote || 0)) || 0
-          
-          // Determine which assignment has the smaller quote (misc value)
-          if (pickupQuote !== null && deliveryQuote !== null) {
-            const miscValue = Math.min(pickupQuote, deliveryQuote)
-            const fullQuoteAssignment = pickupQuote > deliveryQuote ? 'pickup' : 'delivery'
-            setSplitLoadMiscValue(String(miscValue))
-            setSplitLoadFullQuoteAssignment(fullQuoteAssignment)
-            // Default applies_to to driver_pay (will need to be fetched from deductions if we want to restore)
-            setSplitLoadFullQuoteAppliesTo('driver_pay')
-            setSplitLoadMiscAppliesTo('driver_pay')
-          } else if (pickupQuote !== null) {
-            setSplitLoadMiscValue(String(pickupQuote))
-            setSplitLoadFullQuoteAssignment('pickup')
-            setSplitLoadFullQuoteAppliesTo('driver_pay')
-            setSplitLoadMiscAppliesTo('driver_pay')
-          } else if (deliveryQuote !== null) {
-            setSplitLoadMiscValue(String(deliveryQuote))
-            setSplitLoadFullQuoteAssignment('delivery')
-            setSplitLoadFullQuoteAppliesTo('driver_pay')
-            setSplitLoadMiscAppliesTo('driver_pay')
+          // Check if there's a pending split load (only one assignment exists)
+          if (data.order.pendingSplit) {
+            const pending = data.order.pendingSplit
+            setSplitLoadMiscValue(String(pending.miscValue))
+            setSplitLoadFullQuoteAssignment(pending.fullQuoteAssignment)
+            setSplitLoadFullQuoteAppliesTo(pending.fullQuoteAppliesTo)
+            setSplitLoadMiscAppliesTo(pending.miscAppliesTo)
+          } else {
+            // Both assignments exist - use existing logic
+            const pickupQuote = data.order.pickupAssignment?.assignmentQuote
+            const deliveryQuote = data.order.deliveryAssignment?.assignmentQuote
+            const fullQuote = typeof data.order.fullQuote === 'number' 
+              ? data.order.fullQuote 
+              : parseFloat(String(data.order.fullQuote || 0)) || 0
+            
+            // Determine which assignment has the smaller quote (misc value)
+            if (pickupQuote !== null && deliveryQuote !== null) {
+              const miscValue = Math.min(pickupQuote, deliveryQuote)
+              const fullQuoteAssignment = pickupQuote > deliveryQuote ? 'pickup' : 'delivery'
+              setSplitLoadMiscValue(String(miscValue))
+              setSplitLoadFullQuoteAssignment(fullQuoteAssignment)
+              // Default applies_to to driver_pay (will need to be fetched from deductions if we want to restore)
+              setSplitLoadFullQuoteAppliesTo('driver_pay')
+              setSplitLoadMiscAppliesTo('driver_pay')
+            } else if (pickupQuote !== null) {
+              setSplitLoadMiscValue(String(pickupQuote))
+              setSplitLoadFullQuoteAssignment('pickup')
+              setSplitLoadFullQuoteAppliesTo('driver_pay')
+              setSplitLoadMiscAppliesTo('driver_pay')
+            } else if (deliveryQuote !== null) {
+              setSplitLoadMiscValue(String(deliveryQuote))
+              setSplitLoadFullQuoteAssignment('delivery')
+              setSplitLoadFullQuoteAppliesTo('driver_pay')
+              setSplitLoadMiscAppliesTo('driver_pay')
+            }
           }
         } else {
           // Reset form for new split load
@@ -2339,14 +2428,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     <span className="text-gray-500">-</span>
                                     <span className="text-gray-600">{formatDateShort(item.date)}</span>
                                     <span className="text-gray-500">-</span>
-                                    <span className="font-medium">{item.action}</span>
-                                    {item.customerName && (
-                                      <>
-                                        <span className="text-gray-500">
-                                          {item.action === 'Picked up' ? 'from' : 'to'}
-                                        </span>
-                                        <span className="text-gray-700 font-medium">{item.customerName}</span>
-                                      </>
+                                    {item.customerName ? (
+                                      <span className="font-medium">
+                                        {item.action === 'Picked up' 
+                                          ? `Picked up from ${item.customerName}`
+                                          : `Delivered to ${item.customerName}`
+                                        }
+                                      </span>
+                                    ) : (
+                                      <span className="font-medium">{item.action}</span>
                                     )}
                                     <span className="text-gray-500">-</span>
                                     <span className="text-gray-700">{item.footage} sqft</span>
@@ -3084,6 +3174,21 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                     </div>
                   </div>
                 </div>
+
+                {splitLoadData.pendingSplit && (
+                  <div className="border rounded-lg p-4 bg-amber-50 border-amber-200">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-semibold text-amber-900 mb-1">Pending Split Load</div>
+                        <div className="text-sm text-amber-800">
+                          This split load is configured but waiting for the {splitLoadData.pendingSplit.existingAssignmentType === 'pickup' ? 'delivery' : 'pickup'} assignment to be created. 
+                          It will be automatically applied when the missing assignment is added to a truckload.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <div className="space-y-2">

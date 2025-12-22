@@ -172,6 +172,18 @@ export async function GET(
     const hasSplitLoad = (pickupAssignment?.assignmentQuote !== null && pickupAssignment?.assignmentQuote !== undefined) ||
                         (deliveryAssignment?.assignmentQuote !== null && deliveryAssignment?.assignmentQuote !== undefined)
 
+    // Check for pending split load
+    const pendingSplitCheck = await query(`
+      SELECT 
+        psl.*,
+        toa.truckload_id as existing_truckload_id
+      FROM pending_split_loads psl
+      JOIN truckload_order_assignments toa ON psl.existing_assignment_id = toa.id
+      WHERE psl.order_id = $1
+    `, [orderId])
+
+    const pendingSplit = pendingSplitCheck.rows.length > 0 ? pendingSplitCheck.rows[0] : null
+
     return NextResponse.json({
       success: true,
       order: {
@@ -181,7 +193,14 @@ export async function GET(
         pickupCustomerName: order.pickupCustomerName,
         pickupAssignment,
         deliveryAssignment,
-        hasSplitLoad
+        hasSplitLoad: hasSplitLoad || !!pendingSplit,
+        pendingSplit: pendingSplit ? {
+          miscValue: pendingSplit.misc_value,
+          fullQuoteAssignment: pendingSplit.full_quote_assignment,
+          fullQuoteAppliesTo: pendingSplit.full_quote_applies_to,
+          miscAppliesTo: pendingSplit.misc_applies_to,
+          existingAssignmentType: pendingSplit.existing_assignment_type
+        } : null
       }
     })
   } catch (error) {
@@ -330,127 +349,295 @@ export async function POST(
       const pickupAssignment = order.pickup_assignment
       const deliveryAssignment = order.delivery_assignment
 
-      if (!pickupAssignment || !deliveryAssignment) {
-        throw new Error('Order must have both pickup and delivery assignments')
-      }
+      // Check if both assignments exist
+      const hasBothAssignments = pickupAssignment && deliveryAssignment
 
-      // Calculate quotes
-      const fullQuoteAmount = fullQuote - miscAmount
-      const miscQuoteAmount = miscAmount
+      if (hasBothAssignments) {
+        // Existing logic: both assignments exist
+        const fullQuoteAmount = fullQuote - miscAmount
+        const miscQuoteAmount = miscAmount
 
-      // Determine which assignment gets which quote
-      const assignmentThatGetsFull = fullQuoteAssignment === 'pickup' ? pickupAssignment : deliveryAssignment
-      const assignmentThatGetsMisc = fullQuoteAssignment === 'pickup' ? deliveryAssignment : pickupAssignment
+        const assignmentThatGetsFull = fullQuoteAssignment === 'pickup' ? pickupAssignment : deliveryAssignment
+        const assignmentThatGetsMisc = fullQuoteAssignment === 'pickup' ? deliveryAssignment : pickupAssignment
 
-      const fullQuoteAssignmentId = assignmentThatGetsFull.assignmentId
-      const miscQuoteAssignmentId = assignmentThatGetsMisc.assignmentId
-      const fullQuoteTruckloadId = assignmentThatGetsFull.truckloadId
-      const miscQuoteTruckloadId = assignmentThatGetsMisc.truckloadId
+        const fullQuoteAssignmentId = assignmentThatGetsFull.assignmentId
+        const miscQuoteAssignmentId = assignmentThatGetsMisc.assignmentId
+        const fullQuoteTruckloadId = assignmentThatGetsFull.truckloadId
+        const miscQuoteTruckloadId = assignmentThatGetsMisc.truckloadId
 
-      const fullQuoteCustomerName = fullQuoteAssignment === 'pickup' 
-        ? order.pickup_customer_name 
-        : order.delivery_customer_name
-      const miscQuoteCustomerName = fullQuoteAssignment === 'pickup' 
-        ? order.delivery_customer_name 
-        : order.pickup_customer_name
+        const fullQuoteCustomerName = fullQuoteAssignment === 'pickup' 
+          ? order.pickup_customer_name 
+          : order.delivery_customer_name
+        const miscQuoteCustomerName = fullQuoteAssignment === 'pickup' 
+          ? order.delivery_customer_name 
+          : order.pickup_customer_name
 
-      // Update assignment quotes
-      await client.query(`
-        UPDATE truckload_order_assignments
-        SET assignment_quote = $1,
+        // Update assignment quotes
+        await client.query(`
+          UPDATE truckload_order_assignments
+          SET assignment_quote = $1,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [fullQuoteAmount, fullQuoteAssignmentId])
+
+        await client.query(`
+          UPDATE truckload_order_assignments
+          SET assignment_quote = $1,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [miscQuoteAmount, miscQuoteAssignmentId])
+
+        // Delete existing deductions and pending split loads
+        if (hasAppliesTo) {
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
+            WHERE truckload_id IN ($1, $2)
+              AND comment LIKE '%split load%'
+              AND is_manual = true
+              AND applies_to = 'driver_pay'
+          `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
+        } else {
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
+            WHERE truckload_id IN ($1, $2)
+              AND comment LIKE '%split load%'
+              AND is_manual = true
+          `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
+        }
+
+        // Delete pending split load if it exists
+        await client.query(`
+          DELETE FROM pending_split_loads
+          WHERE order_id = $1
+        `, [orderId])
+
+        // Create deductions/additions on both truckloads
+        const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
+        if (hasAppliesTo) {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              applies_to,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, true, false, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
+        } else {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment])
+        }
+
+        const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
+        if (hasAppliesTo) {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              applies_to,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, true, true, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
+        } else {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment])
+        }
+      } else {
+        // New logic: only one assignment exists - store as pending
+        const existingAssignment = pickupAssignment || deliveryAssignment
+        if (!existingAssignment) {
+          throw new Error('Order must have at least one assignment (pickup or delivery)')
+        }
+
+        const existingAssignmentType = pickupAssignment ? 'pickup' : 'delivery'
+        const fullQuoteAmount = fullQuote - miscAmount
+        const miscQuoteAmount = miscAmount
+
+        // Determine which assignment gets which quote
+        let assignmentThatGetsFull, assignmentThatGetsMisc
+        if (fullQuoteAssignment === existingAssignmentType) {
+          // The existing assignment gets the full quote - misc
+          assignmentThatGetsFull = existingAssignment
+          assignmentThatGetsMisc = null // Will be created later
+        } else {
+          // The existing assignment gets the misc value
+          assignmentThatGetsFull = null // Will be created later
+          assignmentThatGetsMisc = existingAssignment
+        }
+
+        // Update the existing assignment's quote
+        if (assignmentThatGetsFull) {
+          await client.query(`
+            UPDATE truckload_order_assignments
+            SET assignment_quote = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `, [fullQuoteAmount, existingAssignment.assignmentId])
+        } else {
+          await client.query(`
+            UPDATE truckload_order_assignments
+            SET assignment_quote = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `, [miscQuoteAmount, existingAssignment.assignmentId])
+        }
+
+        // Delete existing pending split load and deductions
+        await client.query(`
+          DELETE FROM pending_split_loads
+          WHERE order_id = $1
+        `, [orderId])
+
+        if (hasAppliesTo) {
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND comment LIKE '%split load%'
+              AND is_manual = true
+              AND applies_to = 'driver_pay'
+          `, [existingAssignment.truckloadId])
+        } else {
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND comment LIKE '%split load%'
+              AND is_manual = true
+          `, [existingAssignment.truckloadId])
+        }
+
+        // Create deduction/addition on existing truckload
+        const customerName = existingAssignmentType === 'pickup' 
+          ? order.pickup_customer_name 
+          : order.delivery_customer_name
+        const otherCustomerName = existingAssignmentType === 'pickup' 
+          ? order.delivery_customer_name 
+          : order.pickup_customer_name
+
+        if (assignmentThatGetsFull) {
+          // Existing assignment gets full quote - misc, so create deduction
+          const deductionComment = `${otherCustomerName} split load (misc portion)`
+          if (hasAppliesTo) {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                applies_to,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, true, false, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, miscAmount, deductionComment, fullQuoteAppliesToValue])
+          } else {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, miscAmount, deductionComment])
+          }
+        } else {
+          // Existing assignment gets misc, so create addition
+          const additionComment = `${otherCustomerName} split load (misc portion)`
+          if (hasAppliesTo) {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                applies_to,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, true, true, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, miscAmount, additionComment, miscAppliesToValue])
+          } else {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, miscAmount, additionComment])
+          }
+        }
+
+        // Store pending split load configuration
+        await client.query(`
+          INSERT INTO pending_split_loads (
+            order_id,
+            existing_assignment_type,
+            existing_assignment_id,
+            misc_value,
+            full_quote_assignment,
+            full_quote_applies_to,
+            misc_applies_to,
+            created_at,
+            updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT (order_id) 
+          DO UPDATE SET
+            existing_assignment_type = EXCLUDED.existing_assignment_type,
+            existing_assignment_id = EXCLUDED.existing_assignment_id,
+            misc_value = EXCLUDED.misc_value,
+            full_quote_assignment = EXCLUDED.full_quote_assignment,
+            full_quote_applies_to = EXCLUDED.full_quote_applies_to,
+            misc_applies_to = EXCLUDED.misc_applies_to,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [fullQuoteAmount, fullQuoteAssignmentId])
-
-      await client.query(`
-        UPDATE truckload_order_assignments
-        SET assignment_quote = $1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [miscQuoteAmount, miscQuoteAssignmentId])
-
-      // Delete existing deductions for this order
-      if (hasAppliesTo) {
-        await client.query(`
-          DELETE FROM cross_driver_freight_deductions
-          WHERE truckload_id IN ($1, $2)
-            AND comment LIKE '%split load%'
-            AND is_manual = true
-            AND applies_to = 'driver_pay'
-        `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
-      } else {
-        await client.query(`
-          DELETE FROM cross_driver_freight_deductions
-          WHERE truckload_id IN ($1, $2)
-            AND comment LIKE '%split load%'
-            AND is_manual = true
-        `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
-      }
-
-      // Create deductions/additions on both truckloads
-      // Full quote truckload (gets full quote in load value, but misc deduction)
-      const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
-      if (hasAppliesTo) {
-        await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            deduction,
-            comment,
-            is_manual,
-            is_addition,
-            applies_to,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, true, false, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
-      } else {
-        await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            deduction,
-            comment,
-            is_manual,
-            is_addition,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment])
-      }
-
-      // Misc quote truckload (quote excluded from load value, but misc addition)
-      const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
-      if (hasAppliesTo) {
-        await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            deduction,
-            comment,
-            is_manual,
-            is_addition,
-            applies_to,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, true, true, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
-      } else {
-        await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            deduction,
-            comment,
-            is_manual,
-            is_addition,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment])
+        `, [
+          orderId,
+          existingAssignmentType,
+          existingAssignment.assignmentId,
+          miscAmount,
+          fullQuoteAssignment,
+          fullQuoteAppliesToValue,
+          miscAppliesToValue
+        ])
       }
 
       await client.query('COMMIT')
       
       return NextResponse.json({
         success: true,
-        message: 'Split load updated successfully'
+        message: hasBothAssignments 
+          ? 'Split load updated successfully'
+          : 'Split load configured. Will be applied when the missing assignment is created.'
       })
     } catch (error) {
       await client.query('ROLLBACK')
@@ -556,6 +743,12 @@ export async function DELETE(
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ANY($1::int[])
       `, [assignmentIds])
+
+      // Delete pending split loads
+      await client.query(`
+        DELETE FROM pending_split_loads
+        WHERE order_id = $1
+      `, [orderId])
 
       // Delete deductions
       if (hasAppliesTo) {
