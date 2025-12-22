@@ -750,23 +750,15 @@ export async function DELETE(
         WHERE order_id = $1
       `, [orderId])
 
-      // Delete deductions
-      if (hasAppliesTo) {
-        await client.query(`
-          DELETE FROM cross_driver_freight_deductions
-          WHERE truckload_id = ANY($1::int[])
-            AND comment LIKE '%split load%'
-            AND is_manual = true
-            AND applies_to = 'driver_pay'
-        `, [truckloadIds])
-      } else {
-        await client.query(`
-          DELETE FROM cross_driver_freight_deductions
-          WHERE truckload_id = ANY($1::int[])
-            AND comment LIKE '%split load%'
-            AND is_manual = true
-        `, [truckloadIds])
-      }
+      // Delete all split load deductions and additions
+      // This deletes both is_addition = true (additions) and is_addition = false (deductions)
+      // And handles both applies_to = 'driver_pay' and applies_to = 'load_value'
+      await client.query(`
+        DELETE FROM cross_driver_freight_deductions
+        WHERE truckload_id = ANY($1::int[])
+          AND comment LIKE '%split load%'
+          AND is_manual = true
+      `, [truckloadIds])
 
       await client.query('COMMIT')
       

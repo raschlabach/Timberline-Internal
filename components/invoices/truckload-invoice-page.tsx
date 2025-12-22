@@ -672,6 +672,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
   const calculatedValuesSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const justGeneratedAutoDeductions = useRef<boolean>(false)
+  const isReloadingAfterSave = useRef<boolean>(false)
   
   // Drag and drop sensors
   const sensors = useSensors(
@@ -1038,6 +1039,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return
     }
 
+    // Skip reloading if we're currently reloading after a save (prevents infinite loops)
+    if (isReloadingAfterSave.current) {
+      console.log('[Cross-Driver Freight Load] Skipping reload - currently reloading after save')
+      return
+    }
+
     async function loadCrossDriverFreight() {
       try {
         const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
@@ -1081,11 +1088,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         if (dedupedSavedAutoItems.length !== savedAutoItems.length) {
           const duplicatesRemoved = savedAutoItems.length - dedupedSavedAutoItems.length
           console.log(`[Cross-Driver Freight Load] Removed ${duplicatesRemoved} duplicate auto items from saved items`)
-          // If duplicates were found, trigger an immediate save to clean up the database
-          // This ensures duplicates are removed from the DB right away
-          setTimeout(() => {
-            saveCrossDriverFreight()
-          }, 100)
+          // NOTE: Removed automatic save here to prevent infinite loops when split load items are saved
+          // Duplicates will be cleaned up on the next manual save or when the user clicks "Save Deductions"
         }
 
         // If we have saved auto items, use those (don't merge with new auto-detected items)
@@ -1631,6 +1635,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       
       // Reload the data to ensure we have the latest from database
       if (responseData.success && responseData.verifiedCount > 0) {
+        // Set flag to prevent useEffect from running during reload (prevents infinite loops)
+        isReloadingAfterSave.current = true
+        
         // Trigger a reload of cross-driver freight
         const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
           method: 'GET',
@@ -1665,7 +1672,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               isAddition: item.isAddition || false,
               appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
               customerName: item.customerName || undefined,
-              orderId: item.orderId || undefined
+              orderId: item.orderId ? String(item.orderId) : undefined
             }))
             
             console.log('Reloaded items from DB:', reloadedItems)
@@ -1674,6 +1681,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             
             if (dedupedReloadedItems.length > 0) {
               setEditableCrossDriverFreight(dedupedReloadedItems)
+              editableCrossDriverFreightRef.current = dedupedReloadedItems
               console.log('Merged items (from DB):', dedupedReloadedItems)
             } else if (crossDriverFreight.length > 0) {
               const autoItems = crossDriverFreight.map((item, idx) => ({
@@ -1682,16 +1690,24 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 deduction: 0,
                 date: formatDateForInput(item.date),
                 isManual: false,
-                customerName: item.customerName || undefined
+                customerName: item.customerName || undefined,
+                orderId: item.orderId ? String(item.orderId) : undefined
               }))
               const dedupedAuto = dedupeFreightItems(autoItems)
               setEditableCrossDriverFreight(dedupedAuto)
+              editableCrossDriverFreightRef.current = dedupedAuto
               console.log('Merged items (auto-detected fallback):', dedupedAuto)
             } else {
               setEditableCrossDriverFreight([])
+              editableCrossDriverFreightRef.current = []
             }
           }
         }
+        
+        // Clear flag after a short delay to allow useEffect to run normally again
+        setTimeout(() => {
+          isReloadingAfterSave.current = false
+        }, 1000)
       }
       
       // Show success message
@@ -2107,11 +2123,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       if (data.success) {
         toast.success(data.message || 'Split load cleared successfully')
         setSplitLoadDialogOpen(false)
-        // Refresh orders
+        // Refresh orders and cross-driver freight
         if (selectedTruckloadId) {
           const id = selectedTruckloadId
           setSelectedTruckloadId(null)
-          setTimeout(() => setSelectedTruckloadId(id), 0)
+          setTimeout(() => {
+            setSelectedTruckloadId(id)
+            // Also clear and reload cross-driver freight to remove deleted split load items
+            setEditableCrossDriverFreight([])
+            editableCrossDriverFreightRef.current = []
+          }, 0)
         }
       } else {
         toast.error(data.error || 'Failed to clear split load')
