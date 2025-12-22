@@ -2459,10 +2459,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             size="sm"
                             variant="outline"
                             onClick={async () => {
-                              // Clear all existing auto-detected items
-                              setEditableCrossDriverFreight(prev => prev.filter(item => item.isManual))
+                              // Keep only manual items (remove all auto-detected items)
+                              const manualItems = editableCrossDriverFreight.filter(item => item.isManual)
                               
-                              // Add new auto-detected items
+                              // Create new auto-detected items from current orders
                               const newAutoItems = crossDriverFreight.map((item, idx) => ({
                                 ...item,
                                 id: `auto-${Date.now()}-${idx}`,
@@ -2473,14 +2473,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 orderId: item.orderId ? String(item.orderId) : undefined
                               }))
                               
-                              setEditableCrossDriverFreight(prev => [...prev, ...newAutoItems])
+                              // Combine: manual items + new auto items (single state update)
+                              setEditableCrossDriverFreight([...manualItems, ...newAutoItems])
+                              
+                              // Update ref immediately for save function
+                              editableCrossDriverFreightRef.current = [...manualItems, ...newAutoItems]
                               
                               // Save immediately after generating
                               setTimeout(() => {
                                 saveCrossDriverFreight()
                               }, 100)
                               
-                              toast.success(`Generated ${newAutoItems.length} auto deductions`)
+                              toast.success(`Generated ${newAutoItems.length} auto deductions (removed ${editableCrossDriverFreight.filter(item => !item.isManual).length} old auto items)`)
                             }}
                             className="h-7 text-xs"
                           >
