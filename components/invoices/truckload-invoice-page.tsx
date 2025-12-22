@@ -1030,13 +1030,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
 
         const dedupedLoadedItems = dedupeFreightItems(loadedItems)
 
-        if (dedupedLoadedItems.length > 0) {
-          setEditableCrossDriverFreight(dedupedLoadedItems)
-          return
-        }
 
-        if (crossDriverFreight.length > 0) {
-          const autoItems = crossDriverFreight.map((item, idx) => ({
+        console.log(`[Cross-Driver Freight Load] Found ${dedupedLoadedItems.length} saved items, ${crossDriverFreight.length} auto-detected items`)
+
+        // Always merge saved items with new auto-detected items (don't return early)
+        const savedKeys = new Set(dedupedLoadedItems.map(item => buildFreightKey(item)))
+        
+        const newAutoItems = crossDriverFreight
+          .map((item, idx) => ({
             ...item,
             id: `auto-${Date.now()}-${idx}`,
             deduction: 0,
@@ -1045,10 +1046,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             customerName: item.customerName || undefined,
             orderId: item.orderId || undefined
           }))
-          setEditableCrossDriverFreight(dedupeFreightItems(autoItems))
-        } else {
-          setEditableCrossDriverFreight([])
+          .filter(autoItem => {
+            const autoKey = buildFreightKey(autoItem)
+            return !savedKeys.has(autoKey)
+          })
+
+        if (newAutoItems.length > 0) {
+          console.log(`[Cross-Driver Freight Load] Adding ${newAutoItems.length} new auto-detected items`)
         }
+
+        // Combine saved items with new auto-detected items
+        const merged = [...dedupedLoadedItems, ...newAutoItems]
+        setEditableCrossDriverFreight(dedupeFreightItems(merged))
       } catch (error) {
         console.error('Error loading cross-driver freight:', error)
         // Fallback to auto-detected freight from current truckload only
