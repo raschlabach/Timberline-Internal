@@ -137,6 +137,40 @@ export async function GET(
       }
     }
 
+    // Check if order_id column exists
+    const orderIdCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'cross_driver_freight_deductions'
+      AND column_name = 'order_id'
+    `)
+    let hasOrderId = orderIdCheck.rows.length > 0
+    
+    // If order_id column doesn't exist, apply migration automatically
+    if (!hasOrderId) {
+      console.log('order_id column not found, applying migration...')
+      const client = await getClient()
+      try {
+        await client.query('BEGIN')
+        const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+        const migrationSql = fs.readFileSync(
+          path.join(migrationsDir, 'add-order-id-to-cross-driver-freight.sql'),
+          'utf8'
+        )
+        await client.query(migrationSql)
+        await client.query('COMMIT')
+        console.log('order_id column migration applied successfully')
+        hasOrderId = true
+      } catch (migrationError) {
+        await client.query('ROLLBACK')
+        console.error('Error applying order_id migration:', migrationError)
+        // Continue anyway - the column might already exist or migration might fail
+      } finally {
+        client.release()
+      }
+    }
+
     const result = await query(`
       SELECT 
         id,
@@ -148,7 +182,7 @@ export async function GET(
         deduction,
         is_manual as "isManual",
         comment,
-        is_addition as "isAddition"${hasAppliesTo ? ', applies_to as "appliesTo"' : ''}${hasCustomerName ? ', customer_name as "customerName"' : ''}
+        is_addition as "isAddition"${hasAppliesTo ? ', applies_to as "appliesTo"' : ''}${hasCustomerName ? ', customer_name as "customerName"' : ''}${hasOrderId ? ', order_id as "orderId"' : ''}
       FROM cross_driver_freight_deductions
       WHERE truckload_id = $1
       ORDER BY created_at ASC
@@ -282,26 +316,36 @@ export async function POST(
       `)
       const hasCustomerNameForInsert = customerNameCheckForInsert.rows.length > 0
 
+      // Check if order_id column exists for INSERT
+      const orderIdCheckForInsert = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'order_id'
+      `)
+      const hasOrderIdForInsert = orderIdCheckForInsert.rows.length > 0
+
       // Insert new items
       for (const item of items) {
         const footage = typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0
         const deduction = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+        const orderId = item.orderId ? parseInt(String(item.orderId), 10) : null
         
-        const insertResult = await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            driver_name,
-            date,
-            action,
-            footage,
-            dimensions,
-            deduction,
-            is_manual,
-            comment,
-            is_addition${hasAppliesTo ? ', applies_to' : ''}${hasCustomerNameForInsert ? ', customer_name' : ''}
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${hasAppliesTo ? ', $11' : ''}${hasCustomerNameForInsert ? (hasAppliesTo ? ', $12' : ', $11') : ''})
-          RETURNING id
-        `, [
+        // Build dynamic column list and values
+        const columns = [
+          'truckload_id',
+          'driver_name',
+          'date',
+          'action',
+          'footage',
+          'dimensions',
+          'deduction',
+          'is_manual',
+          'comment',
+          'is_addition'
+        ]
+        const values = [
           truckloadId,
           item.driverName || null,
           item.date || null,
@@ -311,10 +355,34 @@ export async function POST(
           deduction,
           item.isManual || false,
           item.comment || null,
-          item.isAddition || false,
-          ...(hasAppliesTo ? [item.appliesTo || 'driver_pay'] : []),
-          ...(hasCustomerNameForInsert ? [item.customerName || null] : [])
-        ])
+          item.isAddition || false
+        ]
+        let paramIndex = 11
+
+        if (hasAppliesTo) {
+          columns.push('applies_to')
+          values.push(item.appliesTo || 'driver_pay')
+          paramIndex++
+        }
+        if (hasCustomerNameForInsert) {
+          columns.push('customer_name')
+          values.push(item.customerName || null)
+          paramIndex++
+        }
+        if (hasOrderIdForInsert) {
+          columns.push('order_id')
+          values.push(orderId)
+          paramIndex++
+        }
+
+        const placeholders = values.map((_, idx) => `$${idx + 1}`).join(', ')
+        
+        const insertResult = await client.query(`
+          INSERT INTO cross_driver_freight_deductions (
+            ${columns.join(', ')}
+          ) VALUES (${placeholders})
+          RETURNING id
+        `, values)
         console.log(`[Cross-Driver Freight] Inserted item: id=${insertResult.rows[0]?.id}, driver=${item.driverName}, deduction=${deduction}`)
       }
 
