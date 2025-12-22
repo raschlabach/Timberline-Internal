@@ -871,7 +871,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     dimensions?: string | null
     footage?: number | null
     customerName?: string | null
-    orderId?: string | null
+    orderId?: string | number | null
   }): string {
     if (item.isManual && item.id) {
       return `manual:${item.id}`
@@ -880,6 +880,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const footageValue = typeof item.footage === 'number'
       ? item.footage
       : parseFloat(String(item.footage || 0)) || 0
+    // Normalize orderId to string for consistent key generation (handles both string and number from DB)
+    const normalizedOrderId = item.orderId ? String(item.orderId) : ''
     // Include orderId in the key to ensure each order gets its own deduction line
     // This prevents multiple orders with the same driver/date/dimensions/footage/customer from being collapsed
     return [
@@ -890,20 +892,49 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       item.dimensions || '',
       footageValue.toFixed(2),
       item.customerName || '',
-      item.orderId || '' // Include order ID to differentiate separate orders
+      normalizedOrderId // Include order ID to differentiate separate orders
     ].join('|')
   }
 
   function dedupeFreightItems(items: CrossDriverFreightItem[]): CrossDriverFreightItem[] {
-    const seen = new Set<string>()
-    const deduped: CrossDriverFreightItem[] = []
+    // Group items by their freight key
+    const itemsByKey = new Map<string, CrossDriverFreightItem[]>()
     items.forEach(item => {
       const key = buildFreightKey(item)
-      if (!seen.has(key)) {
-        seen.add(key)
-        deduped.push(item)
+      if (!itemsByKey.has(key)) {
+        itemsByKey.set(key, [])
+      }
+      itemsByKey.get(key)!.push(item)
+    })
+    
+    // For each key, keep only the item with the smallest database ID (the original)
+    // Items from database have IDs like "db-123", items from auto-detection have IDs like "auto-timestamp-idx"
+    const deduped: CrossDriverFreightItem[] = []
+    itemsByKey.forEach((duplicateItems, key) => {
+      if (duplicateItems.length === 1) {
+        // No duplicates, keep it
+        deduped.push(duplicateItems[0])
+      } else {
+        // Multiple items with same key - keep the one with the smallest database ID (original)
+        // Database items have IDs like "db-123", auto items have IDs like "auto-..."
+        // Extract numeric ID from database items for comparison
+        const getDbId = (id: string): number => {
+          if (id.startsWith('db-')) {
+            const numId = parseInt(id.replace('db-', ''), 10)
+            return isNaN(numId) ? Infinity : numId
+          }
+          // Auto-detected items get a high number so database items are preferred
+          return Infinity
+        }
+        
+        // Sort by database ID (smallest first) and keep the first one (original)
+        duplicateItems.sort((a, b) => getDbId(a.id) - getDbId(b.id))
+        deduped.push(duplicateItems[0])
+        
+        console.log(`[Dedupe] Found ${duplicateItems.length} duplicates for key "${key.substring(0, 50)}...", keeping original (ID: ${duplicateItems[0].id}), removing ${duplicateItems.length - 1} duplicate(s)`)
       }
     })
+    
     return deduped
   }
 
@@ -1025,17 +1056,34 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           isAddition: item.isAddition || false,
           appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
           customerName: item.customerName || undefined,
-          orderId: item.orderId || undefined
+          orderId: item.orderId ? String(item.orderId) : undefined
         })) : []
 
+        // First deduplicate loaded items to remove any duplicates that may exist in the database
         const dedupedLoadedItems = dedupeFreightItems(loadedItems)
 
+        console.log(`[Cross-Driver Freight Load] Found ${loadedItems.length} raw saved items, ${dedupedLoadedItems.length} after deduplication, ${crossDriverFreight.length} auto-detected items`)
 
-        console.log(`[Cross-Driver Freight Load] Found ${dedupedLoadedItems.length} saved items, ${crossDriverFreight.length} auto-detected items`)
-
-        // Always merge saved items with new auto-detected items (don't return early)
-        const savedKeys = new Set(dedupedLoadedItems.map(item => buildFreightKey(item)))
+        // Separate saved items into manual and auto-detected
+        const savedManualItems = dedupedLoadedItems.filter(item => item.isManual)
+        const savedAutoItems = dedupedLoadedItems.filter(item => !item.isManual)
         
+        // Additional deduplication pass for saved auto items (in case duplicates slipped through)
+        const dedupedSavedAutoItems = dedupeFreightItems(savedAutoItems)
+        if (dedupedSavedAutoItems.length !== savedAutoItems.length) {
+          const duplicatesRemoved = savedAutoItems.length - dedupedSavedAutoItems.length
+          console.log(`[Cross-Driver Freight Load] Removed ${duplicatesRemoved} duplicate auto items from saved items`)
+          // If duplicates were found, trigger an immediate save to clean up the database
+          // This ensures duplicates are removed from the DB right away
+          setTimeout(() => {
+            saveCrossDriverFreight()
+          }, 100)
+        }
+
+        // Build keys for saved auto items to avoid re-detecting them
+        const savedAutoKeys = new Set(dedupedSavedAutoItems.map(item => buildFreightKey(item)))
+        
+        // Only detect new auto items that don't already exist in saved items
         const newAutoItems = crossDriverFreight
           .map((item, idx) => ({
             ...item,
@@ -1044,19 +1092,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             date: formatDateForInput(item.date),
             isManual: false,
             customerName: item.customerName || undefined,
-            orderId: item.orderId || undefined
+            orderId: item.orderId ? String(item.orderId) : undefined
           }))
           .filter(autoItem => {
             const autoKey = buildFreightKey(autoItem)
-            return !savedKeys.has(autoKey)
+            return !savedAutoKeys.has(autoKey)
           })
 
         if (newAutoItems.length > 0) {
-          console.log(`[Cross-Driver Freight Load] Adding ${newAutoItems.length} new auto-detected items`)
+          console.log(`[Cross-Driver Freight Load] Adding ${newAutoItems.length} new auto-detected items (${dedupedSavedAutoItems.length} already saved)`)
         }
 
-        // Combine saved items with new auto-detected items
-        const merged = [...dedupedLoadedItems, ...newAutoItems]
+        // Combine: saved manual items + deduplicated saved auto items + new auto-detected items
+        const merged = [...savedManualItems, ...dedupedSavedAutoItems, ...newAutoItems]
         setEditableCrossDriverFreight(dedupeFreightItems(merged))
       } catch (error) {
         console.error('Error loading cross-driver freight:', error)
