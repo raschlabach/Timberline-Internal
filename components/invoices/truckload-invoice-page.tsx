@@ -671,6 +671,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
   const calculatedValuesSaveTimeout = useRef<NodeJS.Timeout | null>(null)
+  const justGeneratedAutoDeductions = useRef<boolean>(false)
   
   // Drag and drop sensors
   const sensors = useSensors(
@@ -1030,6 +1031,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return
     }
 
+    // Skip reloading if we just generated auto deductions (prevents duplicates from coming back)
+    if (justGeneratedAutoDeductions.current) {
+      justGeneratedAutoDeductions.current = false
+      return
+    }
+
     async function loadCrossDriverFreight() {
       try {
         const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-freight`, {
@@ -1080,32 +1087,29 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           }, 100)
         }
 
-        // Build keys for saved auto items to avoid re-detecting them
-        const savedAutoKeys = new Set(dedupedSavedAutoItems.map(item => buildFreightKey(item)))
-        
-        // Only detect new auto items that don't already exist in saved items
-        const newAutoItems = crossDriverFreight
-          .map((item, idx) => ({
-            ...item,
-            id: `auto-${Date.now()}-${idx}`,
-            deduction: 0,
-            date: formatDateForInput(item.date),
-            isManual: false,
-            customerName: item.customerName || undefined,
-            orderId: item.orderId ? String(item.orderId) : undefined
-          }))
-          .filter(autoItem => {
-            const autoKey = buildFreightKey(autoItem)
-            return !savedAutoKeys.has(autoKey)
-          })
+        // If we have saved auto items, use those (don't merge with new auto-detected items)
+        // This prevents duplicates from being re-added after the user generates auto deductions
+        // Only merge on initial load if there are no saved items
+        if (dedupedSavedAutoItems.length > 0) {
+          // Use saved items (both manual and auto) - don't add new auto-detected items
+          console.log(`[Cross-Driver Freight Load] Using ${dedupedSavedAutoItems.length} saved auto items (not merging with new auto-detected items)`)
+          setEditableCrossDriverFreight([...savedManualItems, ...dedupedSavedAutoItems])
+        } else {
+          // No saved auto items - use auto-detected items from current orders
+          const newAutoItems = crossDriverFreight
+            .map((item, idx) => ({
+              ...item,
+              id: `auto-${Date.now()}-${idx}`,
+              deduction: 0,
+              date: formatDateForInput(item.date),
+              isManual: false,
+              customerName: item.customerName || undefined,
+              orderId: item.orderId ? String(item.orderId) : undefined
+            }))
 
-        if (newAutoItems.length > 0) {
-          console.log(`[Cross-Driver Freight Load] Adding ${newAutoItems.length} new auto-detected items (${dedupedSavedAutoItems.length} already saved)`)
+          console.log(`[Cross-Driver Freight Load] No saved auto items, using ${newAutoItems.length} auto-detected items`)
+          setEditableCrossDriverFreight([...savedManualItems, ...newAutoItems])
         }
-
-        // Combine: saved manual items + deduplicated saved auto items + new auto-detected items
-        const merged = [...savedManualItems, ...dedupedSavedAutoItems, ...newAutoItems]
-        setEditableCrossDriverFreight(dedupeFreightItems(merged))
       } catch (error) {
         console.error('Error loading cross-driver freight:', error)
         // Fallback to auto-detected freight from current truckload only
@@ -1127,7 +1131,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
 
     loadCrossDriverFreight()
-  }, [selectedTruckloadId, crossDriverFreight, selectedTruckload])
+    // Removed crossDriverFreight from dependencies to prevent reloading after generate button
+    // This useEffect should only run when truckload changes, not when auto-detected items change
+  }, [selectedTruckloadId, selectedTruckload])
 
   // Auto-calculate deductions based on footage when in footage mode
   useEffect(() => {
@@ -2459,6 +2465,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             size="sm"
                             variant="outline"
                             onClick={async () => {
+                              // Set flag to prevent reload from database after save
+                              justGeneratedAutoDeductions.current = true
+                              
                               // Keep only manual items (remove all auto-detected items)
                               const manualItems = editableCrossDriverFreight.filter(item => item.isManual)
                               
@@ -2480,8 +2489,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               editableCrossDriverFreightRef.current = [...manualItems, ...newAutoItems]
                               
                               // Save immediately after generating
-                              setTimeout(() => {
-                                saveCrossDriverFreight()
+                              setTimeout(async () => {
+                                await saveCrossDriverFreight()
+                                // Clear flag after save completes (with delay to prevent immediate reload)
+                                setTimeout(() => {
+                                  justGeneratedAutoDeductions.current = false
+                                }, 500)
                               }, 100)
                               
                               toast.success(`Generated ${newAutoItems.length} auto deductions (removed ${editableCrossDriverFreight.filter(item => !item.isManual).length} old auto items)`)
