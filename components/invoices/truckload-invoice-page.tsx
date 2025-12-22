@@ -517,18 +517,7 @@ function SortableTableRow({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation()
-              onAddDeduction(row.orderId)
-            }}
-            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-            title="Add manual deduction"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
+          {/* Old deduction button removed - deductions are now entered via table input fields */}
         </div>
       </TableCell>
       <TableCell className="text-sm">
@@ -1487,67 +1476,38 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
   }, [selectedTruckloadId, crossDriverDeductionInputs, crossDriverDeductionToggles, setCrossDriverDeductionInput])
 
-  // Functions to manage editable cross-driver freight
+  // OLD FUNCTIONS DISABLED - These were creating auto deductions
+  // All deductions must now be entered via the table input fields and saved individually
+  
+  // DISABLED: addCrossDriverFreightItem - was creating auto deductions
   function addCrossDriverFreightItem(isAddition: boolean = false, comment?: string, deduction?: number, appliesTo?: 'load_value' | 'driver_pay'): void {
-    const newItem: CrossDriverFreightItem = {
-      id: `manual-${Date.now()}-${Math.random()}`,
-      driverName: '',
-      date: '',
-      action: 'Picked up',
-      footage: 0,
-      dimensions: '',
-      deduction: deduction || 0,
-      isManual: true,
-      comment: comment || '',
-      isAddition: isAddition,
-      appliesTo: appliesTo || 'driver_pay' // Default to driver pay
-    }
-    setEditableCrossDriverFreight([...editableCrossDriverFreight, newItem])
-    // Removed auto-save - user must manually save
+    console.warn('addCrossDriverFreightItem is disabled - use table input fields instead')
+    return
   }
 
-  // Handle saving deduction from dialog
+  // DISABLED: handleSaveDeduction - was creating auto deductions
   const handleSaveDeduction = useCallback(() => {
-    if (!deductionDialogOrderId) return
-    
-    const amount = parseFloat(deductionDialogAmount) || 0
-    if (amount <= 0) {
-      toast.error('Please enter a valid deduction amount')
-      return
-    }
+    console.warn('handleSaveDeduction is disabled - use table input fields instead')
+    return
+  }, [])
 
-    // Get the order to access customer names
-    const order = orders.find(o => o.orderId === deductionDialogOrderId)
-    let comment = ''
-    
-    if (deductionDialogType === 'pickup' && order) {
-      comment = `${order.pickupName} discount`
-    } else if (deductionDialogType === 'delivery' && order) {
-      comment = `${order.deliveryName} discount`
-    } else {
-      // Manual - use the editable comment
-      comment = deductionDialogComment
-    }
-
-    addCrossDriverFreightItem(false, comment, amount, deductionDialogAppliesTo)
-    setDeductionDialogOpen(false)
-    setDeductionDialogOrderId(null)
-    setDeductionDialogComment('')
-    setDeductionDialogAmount('')
-    setDeductionDialogAppliesTo('driver_pay')
-    setDeductionDialogType('manual')
-    toast.success('Manual deduction added')
-  }, [deductionDialogOrderId, deductionDialogComment, deductionDialogAmount, deductionDialogAppliesTo, deductionDialogType, orders, addCrossDriverFreightItem])
-
+  // DISABLED: updateCrossDriverFreightItem - was creating auto deductions
   function updateCrossDriverFreightItem(id: string, updates: Partial<CrossDriverFreightItem>): void {
-    setEditableCrossDriverFreight(items =>
-      items.map(item => item.id === id ? { ...item, ...updates } : item)
-    )
-    // Removed auto-save - user will save manually via save button
+    console.warn('updateCrossDriverFreightItem is disabled - use table input fields instead')
+    return
   }
 
-  // Function to save cross-driver freight to database
-  const saveCrossDriverFreight = useCallback(async (skipMerge: boolean = false): Promise<void> => {
+  // DISABLED: updateCrossDriverFreightItem - removed duplicate, use table input fields instead
+
+  // OLD FUNCTION DISABLED - This was creating duplicate deductions
+  // All deductions must now be entered via table input fields and saved individually
+  const saveCrossDriverFreight = useCallback(async (_skipMerge: boolean = false): Promise<void> => {
+    // DISABLED - Do nothing
+    console.warn('saveCrossDriverFreight is disabled - use individual save buttons instead')
+    return Promise.resolve()
+  }, [])
+  
+  /* DISABLED CODE - Old implementation that was creating duplicates:
     if (!selectedTruckloadId) return
 
     // Use ref to get latest state
@@ -1714,14 +1674,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         }, 1000)
       }
       
-      // Show success message
-      toast.success('Cross-driver freight saved')
-    } catch (error) {
-      console.error('Error saving cross-driver freight:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save cross-driver freight'
-      toast.error(errorMessage)
-    }
   }, [selectedTruckloadId])
+  */
 
   function deleteCrossDriverFreightItem(id: string): void {
     setEditableCrossDriverFreight(items => items.filter(item => item.id !== id))
