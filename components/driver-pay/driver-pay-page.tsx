@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import './print.css'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number)
   return new Date(year, month - 1, day)
 }
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -928,7 +929,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-shrink-0 p-6 border-b">
+      <div className="flex-shrink-0 p-6 border-b no-print">
         <h1 className="text-3xl font-bold tracking-tight mb-4">Driver Pay</h1>
         
         {/* Date Range Selector */}
@@ -1026,7 +1027,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           ) : !selectedDriver ? (
             <div className="text-center py-12 text-gray-500">Select a driver to view their pay information</div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 print-content">
+              {/* Print Header - Only visible when printing */}
+              <div className="print-header no-print-hidden mb-4 pb-2 border-b-2 border-black">
+                <h2 className="text-2xl font-bold mb-2">{selectedDriver.driverName} - Pay Statement</h2>
+                <div className="text-sm space-y-1">
+                  <div><strong>Date Range:</strong> {dateRange?.from ? format(dateRange.from, 'MM/dd/yyyy') : 'N/A'} - {dateRange?.to ? format(dateRange.to, 'MM/dd/yyyy') : 'N/A'}</div>
+                  <div><strong>Load Percentage:</strong> {selectedDriver.loadPercentage}% | <strong>Misc Driving Rate:</strong> ${selectedDriver.miscDrivingRate.toFixed(2)} | <strong>Maintenance Rate:</strong> ${selectedDriver.maintenanceRate.toFixed(2)}</div>
+                </div>
+              </div>
+
               {/* Driver Settings */}
               <Card className="p-4">
                 <div className="flex items-center justify-between">
@@ -1036,6 +1046,22 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                       style={{ backgroundColor: selectedDriver.driverColor || '#808080' }}
                     />
                     <h2 className="text-xl font-semibold">{selectedDriver.driverName}</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm text-gray-600 no-print">
+                      {dateRange?.from && dateRange?.to && (
+                        <span>{format(dateRange.from, 'MM/dd/yyyy')} - {format(dateRange.to, 'MM/dd/yyyy')}</span>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.print()}
+                      className="no-print"
+                    >
+                      <Printer className="h-4 w-4 mr-1" />
+                      Print
+                    </Button>
                   </div>
 
                   {editingSettings ? (

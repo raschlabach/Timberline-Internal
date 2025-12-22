@@ -1,0 +1,133 @@
+/* Hide print header on screen */
+.print-header.no-print-hidden {
+  display: none;
+}
+
+/* Print styles for driver pay page */
+@media print {
+  /* Hide non-printable elements */
+  .no-print,
+  button:not(.print-allow),
+  input,
+  select,
+  .pay-method-controls button,
+  .pay-method-controls select,
+  .pay-method-controls input,
+  [data-radix-scroll-area-root],
+  [data-radix-popover-content],
+  [data-radix-dialog-content] {
+    display: none !important;
+  }
+  
+  /* Hide driver selector and date picker */
+  .driver-selector,
+  .date-picker-container {
+    display: none !important;
+  }
+  
+  /* Show print header when printing */
+  .print-header.no-print-hidden {
+    display: block !important;
+  }
+
+  /* Show print content */
+  .print-content {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 0.5in;
+    size: letter;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Ensure cards don't break across pages */
+  .print-content > div,
+  .print-content > div > div {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Style for printable content */
+  .print-content h2,
+  .print-content h3,
+  .print-content h4 {
+    color: #000 !important;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Remove shadows and borders that don't print well */
+  .print-content .border,
+  .print-content .shadow {
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure text is black for printing */
+  .print-content {
+    color: #000 !important;
+  }
+
+  .print-content .text-gray-600,
+  .print-content .text-gray-500 {
+    color: #333 !important;
+  }
+
+  /* Hide scroll areas and show content */
+  [data-radix-scroll-area-viewport] {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Print header */
+  .print-header {
+    display: block !important;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #000 !important;
+  }
+
+  .print-header h2 {
+    font-size: 24pt;
+    margin: 0 0 0.5rem 0;
+    font-weight: bold;
+  }
+
+  .print-header .driver-info {
+    font-size: 12pt;
+    margin-top: 0.5rem;
+  }
+
+  /* Ensure all text is readable */
+  .print-content * {
+    color: #000 !important;
+  }
+
+  .print-content .text-blue-600,
+  .print-content .text-green-600,
+  .print-content .text-red-600 {
+    color: #000 !important;
+    font-weight: bold;
+  }
+
+  /* Make sure cards are visible */
+  .print-content [class*="Card"],
+  .print-content [class*="card"] {
+    border: 1px solid #000 !important;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    break-inside: avoid;
+  }
+
+  /* Prevent page breaks inside truckload cards */
+  .print-content [class*="Card"] {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
