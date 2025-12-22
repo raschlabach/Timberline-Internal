@@ -1029,11 +1029,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           ) : (
             <div className="space-y-6 print-content">
               {/* Print Header - Only visible when printing */}
-              <div className="print-header no-print-hidden mb-4 pb-2 border-b-2 border-black">
-                <h2 className="text-2xl font-bold mb-2">{selectedDriver.driverName} - Pay Statement</h2>
-                <div className="text-sm space-y-1">
+              <div className="print-header no-print-hidden mb-2 pb-1 border-b border-black">
+                <h2 className="text-xl font-bold mb-1">{selectedDriver.driverName} - Pay Statement</h2>
+                <div className="text-xs">
                   <div><strong>Date Range:</strong> {dateRange?.from ? format(dateRange.from, 'MM/dd/yyyy') : 'N/A'} - {dateRange?.to ? format(dateRange.to, 'MM/dd/yyyy') : 'N/A'}</div>
-                  <div><strong>Load Percentage:</strong> {selectedDriver.loadPercentage}% | <strong>Misc Driving Rate:</strong> ${selectedDriver.miscDrivingRate.toFixed(2)} | <strong>Maintenance Rate:</strong> ${selectedDriver.maintenanceRate.toFixed(2)}</div>
                 </div>
               </div>
 
