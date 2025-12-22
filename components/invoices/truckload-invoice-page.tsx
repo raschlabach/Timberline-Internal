@@ -147,6 +147,7 @@ interface CrossDriverFreightItem {
   isAddition?: boolean // Track if this is an addition (true) or deduction (false). Only applies to manual items.
   appliesTo?: 'load_value' | 'driver_pay' // For manual items: whether it applies to load value or driver pay. Defaults to 'driver_pay'
   customerName?: string // Customer name for pickup/delivery (for automatic items)
+  orderId?: string // Order ID to differentiate between separate orders with same attributes
 }
 
 // Customer info tooltip component
@@ -870,6 +871,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     dimensions?: string | null
     footage?: number | null
     customerName?: string | null
+    orderId?: string | null
   }): string {
     if (item.isManual && item.id) {
       return `manual:${item.id}`
@@ -878,8 +880,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const footageValue = typeof item.footage === 'number'
       ? item.footage
       : parseFloat(String(item.footage || 0)) || 0
-    // Include customerName in the key to ensure each order gets its own deduction line
-    // This prevents multiple orders with the same driver/date/dimensions from being collapsed
+    // Include orderId in the key to ensure each order gets its own deduction line
+    // This prevents multiple orders with the same driver/date/dimensions/footage/customer from being collapsed
     return [
       'auto',
       item.driverName || '',
@@ -887,7 +889,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       item.action || '',
       item.dimensions || '',
       footageValue.toFixed(2),
-      item.customerName || '' // Include customer name to differentiate orders
+      item.customerName || '',
+      item.orderId || '' // Include order ID to differentiate separate orders
     ].join('|')
   }
 
@@ -945,7 +948,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           footage: order.footage,
           dimensions: allDimensions || '—',
           isManual: false,
-          customerName: order.deliveryName // Delivery customer name
+          customerName: order.deliveryName, // Delivery customer name
+          orderId: order.orderId // Include order ID to differentiate separate orders
         })
       }
       // If current assignment is delivery, check if pickup was handled by another driver
@@ -960,7 +964,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           footage: order.footage,
           dimensions: allDimensions || '—',
           isManual: false,
-          customerName: order.pickupName // Pickup customer name
+          customerName: order.pickupName, // Pickup customer name
+          orderId: order.orderId // Include order ID to differentiate separate orders
         })
       }
     })
@@ -1006,7 +1011,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           comment: item.comment || '',
           isAddition: item.isAddition || false,
           appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
-          customerName: item.customerName || undefined
+          customerName: item.customerName || undefined,
+          orderId: item.orderId || undefined
         })) : []
 
         const dedupedLoadedItems = dedupeFreightItems(loadedItems)
@@ -1023,7 +1029,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             deduction: 0,
             date: formatDateForInput(item.date),
             isManual: false,
-            customerName: item.customerName || undefined
+            customerName: item.customerName || undefined,
+            orderId: item.orderId || undefined
           }))
           setEditableCrossDriverFreight(dedupeFreightItems(autoItems))
         } else {
@@ -1039,7 +1046,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             deduction: 0,
             date: formatDateForInput(item.date),
             isManual: false,
-            customerName: item.customerName || undefined
+            customerName: item.customerName || undefined,
+            orderId: item.orderId || undefined
           }))
           setEditableCrossDriverFreight(initialized)
         } else {
@@ -1466,7 +1474,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         deduction: 0, // Auto-detected items start with 0 deduction
         date: formatDateForInput(item.date),
         isManual: false,
-        customerName: item.customerName || undefined
+        customerName: item.customerName || undefined,
+        orderId: item.orderId || undefined
       }))
 
       // Merge strategy:
@@ -1525,7 +1534,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             comment: item.comment || null,
             isAddition: item.isAddition || false,
             appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
-            customerName: item.customerName || null
+            customerName: item.customerName || null,
+            orderId: item.orderId || null
           }))
         })
       })
@@ -1575,7 +1585,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               comment: item.comment || '',
               isAddition: item.isAddition || false,
               appliesTo: item.appliesTo || (item.isManual ? 'driver_pay' : undefined),
-              customerName: item.customerName || undefined
+              customerName: item.customerName || undefined,
+              orderId: item.orderId || undefined
             }))
             
             console.log('Reloaded items from DB:', reloadedItems)
