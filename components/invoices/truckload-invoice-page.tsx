@@ -134,6 +134,18 @@ interface AssignedOrderRow {
   isTransferOrder: boolean
 }
 
+interface CrossDriverDeduction {
+  id: string
+  orderId: string
+  driverName: string
+  date: string
+  action: 'Picked up' | 'Delivered'
+  customerName: string
+  amount: number
+  appliesTo: 'load_value' | 'driver_pay'
+}
+
+// Legacy interface - keeping for now during migration
 interface CrossDriverFreightItem {
   id: string
   driverName: string
@@ -235,6 +247,11 @@ function SortableTableRow({
   onAddDeduction,
   selectedTruckloadId,
   onOpenSplitLoadDialog,
+  onSaveCrossDriverDeduction,
+  crossDriverDeductionInputs,
+  setCrossDriverDeductionInput,
+  crossDriverDeductionToggles,
+  setCrossDriverDeductionToggle,
 }: {
   id: string
   row: AssignedOrderRow & { isCombined?: boolean; sequenceNumbers?: string }
@@ -250,6 +267,11 @@ function SortableTableRow({
   onAddDeduction: (orderId: string) => void
   selectedTruckloadId: string | null
   onOpenSplitLoadDialog: (orderId: string) => Promise<void>
+  onSaveCrossDriverDeduction: (orderId: string, action: 'Picked up' | 'Delivered', driverName: string, date: string, customerName: string) => Promise<void>
+  crossDriverDeductionInputs: Map<string, string>
+  setCrossDriverDeductionInput: (key: string, value: string) => void
+  crossDriverDeductionToggles: Map<string, 'load_value' | 'driver_pay'>
+  setCrossDriverDeductionToggle: (key: string, value: 'load_value' | 'driver_pay') => void
 }) {
   const {
     attributes,
@@ -536,6 +558,82 @@ function SortableTableRow({
           </div>
         ) : '—'}
       </TableCell>
+      {/* Cross-Driver Deduction Input Column - Only show for cross-driver situations */}
+      <TableCell className="text-sm">
+        {(() => {
+          // Check if this is a cross-driver situation
+          const isCrossDriverPickup = row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupDriverName !== selectedTruckload?.driver.driverName
+          const isCrossDriverDelivery = row.assignmentType === 'pickup' && row.deliveryDriverName && row.deliveryDriverName !== selectedTruckload?.driver.driverName
+          
+          if (!isCrossDriverPickup && !isCrossDriverDelivery) {
+            return '—'
+          }
+          
+          const action: 'Picked up' | 'Delivered' = isCrossDriverPickup ? 'Picked up' : 'Delivered'
+          const otherDriverName = isCrossDriverPickup ? row.pickupDriverName! : row.deliveryDriverName!
+          const otherDate = isCrossDriverPickup ? row.pickupAssignmentDate! : row.deliveryAssignmentDate!
+          const customerName = isCrossDriverPickup ? row.pickupName : row.deliveryName
+          const deductionKey = `${row.orderId}-${action}`
+          
+          const inputValue = crossDriverDeductionInputs.get(deductionKey) || ''
+          const toggleValue = crossDriverDeductionToggles.get(deductionKey) || 'driver_pay'
+          
+          return (
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="$0.00"
+                value={inputValue}
+                onChange={(e) => setCrossDriverDeductionInput(deductionKey, e.target.value)}
+                className="h-7 text-xs w-20 px-1.5"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant={toggleValue === 'driver_pay' ? 'default' : 'outline'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setCrossDriverDeductionToggle(deductionKey, 'driver_pay')
+                  }}
+                  className="h-7 px-2 text-xs"
+                >
+                  Driver Pay
+                </Button>
+                <Button
+                  size="sm"
+                  variant={toggleValue === 'load_value' ? 'default' : 'outline'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setCrossDriverDeductionToggle(deductionKey, 'load_value')
+                  }}
+                  className="h-7 px-2 text-xs"
+                >
+                  Load Value
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  const amount = parseFloat(inputValue)
+                  if (isNaN(amount) || amount <= 0) {
+                    toast.error('Please enter a valid deduction amount')
+                    return
+                  }
+                  await onSaveCrossDriverDeduction(row.orderId, action, otherDriverName, otherDate, customerName)
+                }}
+                className="h-7 px-2 text-xs"
+                disabled={!inputValue || parseFloat(inputValue) <= 0}
+              >
+                Save
+              </Button>
+            </div>
+          )
+        })()}
+      </TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
           <Button
@@ -631,7 +729,31 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [selectedDriverId, setSelectedDriverId] = useState<string>('default')
   const [collapsedDrivers, setCollapsedDrivers] = useState<Set<string>>(new Set())
   const [editableCrossDriverFreight, setEditableCrossDriverFreight] = useState<CrossDriverFreightItem[]>([])
+  const [crossDriverDeductions, setCrossDriverDeductions] = useState<CrossDriverDeduction[]>([])
+  const [crossDriverDeductionInputs, setCrossDriverDeductionInputsState] = useState<Map<string, string>>(new Map())
+  const [crossDriverDeductionToggles, setCrossDriverDeductionTogglesState] = useState<Map<string, 'load_value' | 'driver_pay'>>(new Map())
   const [showCompleted, setShowCompleted] = useState<boolean>(true)
+  
+  // Helper functions for managing deduction inputs and toggles
+  const setCrossDriverDeductionInput = useCallback((key: string, value: string) => {
+    setCrossDriverDeductionInputsState(prev => {
+      const newMap = new Map(prev)
+      if (value) {
+        newMap.set(key, value)
+      } else {
+        newMap.delete(key)
+      }
+      return newMap
+    })
+  }, [])
+  
+  const setCrossDriverDeductionToggle = useCallback((key: string, value: 'load_value' | 'driver_pay') => {
+    setCrossDriverDeductionTogglesState(prev => {
+      const newMap = new Map(prev)
+      newMap.set(key, value)
+      return newMap
+    })
+  }, [])
   const [deductByFootage, setDeductByFootage] = useState<boolean>(false)
   const [footageDeductionRate, setFootageDeductionRate] = useState<number>(0)
   const [updatingQuotes, setUpdatingQuotes] = useState<Set<string>>(new Set())
@@ -1024,6 +1146,39 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   // Clear cross-driver freight immediately when truckload changes
   useEffect(() => {
     setEditableCrossDriverFreight([])
+    setCrossDriverDeductions([])
+    setCrossDriverDeductionInputsState(new Map())
+    setCrossDriverDeductionTogglesState(new Map())
+  }, [selectedTruckloadId])
+
+  // Load cross-driver deductions when truckload changes
+  useEffect(() => {
+    if (!selectedTruckloadId) {
+      setCrossDriverDeductions([])
+      return
+    }
+
+    async function loadDeductions() {
+      try {
+        const res = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+        
+        if (!res.ok) {
+          throw new Error('Failed to load cross-driver deductions')
+        }
+        
+        const data = await res.json()
+        if (data.success && data.deductions) {
+          setCrossDriverDeductions(data.deductions)
+        }
+      } catch (error) {
+        console.error('Error loading cross-driver deductions:', error)
+      }
+    }
+
+    loadDeductions()
   }, [selectedTruckloadId])
 
   // Load cross-driver freight from database and merge with auto-detected freight
@@ -1439,6 +1594,69 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       setIsReordering(false)
     }
   }, [groupedOrders, orders, selectedTruckloadId])
+
+  // Save cross-driver deduction from table row
+  const handleSaveCrossDriverDeduction = useCallback(async (
+    orderId: string,
+    action: 'Picked up' | 'Delivered',
+    driverName: string,
+    date: string,
+    customerName: string
+  ) => {
+    if (!selectedTruckloadId) return
+    
+    const deductionKey = `${orderId}-${action}`
+    const amount = parseFloat(crossDriverDeductionInputs.get(deductionKey) || '0')
+    const appliesTo = crossDriverDeductionToggles.get(deductionKey) || 'driver_pay'
+    
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid deduction amount')
+      return
+    }
+    
+    try {
+      const response = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          orderId,
+          driverName,
+          date,
+          action,
+          customerName,
+          amount,
+          appliesTo
+        })
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        // Add to local state
+        const newDeduction: CrossDriverDeduction = {
+          id: data.deductionId || `deduction-${Date.now()}`,
+          orderId,
+          driverName,
+          date,
+          action,
+          customerName,
+          amount,
+          appliesTo
+        }
+        setCrossDriverDeductions(prev => [...prev, newDeduction])
+        
+        // Clear input
+        setCrossDriverDeductionInput(deductionKey, '')
+        
+        toast.success('Deduction saved successfully')
+      } else {
+        toast.error(data.error || 'Failed to save deduction')
+      }
+    } catch (error) {
+      console.error('Error saving cross-driver deduction:', error)
+      toast.error('Failed to save deduction')
+    }
+  }, [selectedTruckloadId, crossDriverDeductionInputs, crossDriverDeductionToggles, setCrossDriverDeductionInput])
 
   // Functions to manage editable cross-driver freight
   function addCrossDriverFreightItem(isAddition: boolean = false, comment?: string, deduction?: number, appliesTo?: 'load_value' | 'driver_pay'): void {
@@ -2403,6 +2621,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         <TableHead className="w-auto">Dimensions</TableHead>
                         <TableHead className="w-auto text-center" style={{ width: '40px' }}></TableHead>
                         <TableHead className="w-auto">Handled By</TableHead>
+                        <TableHead className="w-auto">Deduction</TableHead>
                         <TableHead className="w-auto">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -2463,6 +2682,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           }}
                           selectedTruckloadId={selectedTruckloadId}
                           onOpenSplitLoadDialog={openSplitLoadDialog}
+                          onSaveCrossDriverDeduction={handleSaveCrossDriverDeduction}
+                          crossDriverDeductionInputs={crossDriverDeductionInputs}
+                          setCrossDriverDeductionInput={setCrossDriverDeductionInput}
+                          crossDriverDeductionToggles={crossDriverDeductionToggles}
+                          setCrossDriverDeductionToggle={setCrossDriverDeductionToggle}
                         />
                       )
                     })}
@@ -2486,81 +2710,73 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                       </div>
                     </div>
 
-                    {/* Cross-Driver Freight Section */}
-                    <div className="px-2">
-                      <div className="flex items-center justify-between mb-2 gap-2">
-                        <div className="text-sm font-semibold text-gray-700">
-                          Freight Handled by Other Drivers
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              // Set flag to prevent reload from database after save
-                              justGeneratedAutoDeductions.current = true
-                              
-                              // Keep only manual items (remove all auto-detected items)
-                              const manualItems = editableCrossDriverFreight.filter(item => item.isManual)
-                              
-                              // Create new auto-detected items from current orders
-                              const newAutoItems = crossDriverFreight.map((item, idx) => ({
-                                ...item,
-                                id: `auto-${Date.now()}-${idx}`,
-                                deduction: 0,
-                                date: formatDateForInput(item.date),
-                                isManual: false,
-                                customerName: item.customerName || undefined,
-                                orderId: item.orderId ? String(item.orderId) : undefined
-                              }))
-                              
-                              // Combine: manual items + new auto items (single state update)
-                              setEditableCrossDriverFreight([...manualItems, ...newAutoItems])
-                              
-                              // Update ref immediately for save function
-                              editableCrossDriverFreightRef.current = [...manualItems, ...newAutoItems]
-                              
-                              // Save immediately after generating (skip merge to prevent duplicates from coming back)
-                              setTimeout(async () => {
-                                await saveCrossDriverFreight(true) // true = skip merge, just save what we have
-                                // Clear flag after save completes (with delay to prevent immediate reload)
-                                setTimeout(() => {
-                                  justGeneratedAutoDeductions.current = false
-                                  console.log('[Generate Auto Deductions] Flag cleared - safe to reload now')
-                                }, 2000)
-                              }, 100)
-                              
-                              toast.success(`Generated ${newAutoItems.length} auto deductions (removed ${editableCrossDriverFreight.filter(item => !item.isManual).length} old auto items)`)
-                            }}
-                            className="h-7 text-xs"
-                          >
-                            Generate Auto Deductions
-                          </Button>
-                          <div className="flex items-center gap-2 border border-gray-300 rounded px-2 py-1">
-                            <Switch
-                              checked={deductByFootage}
-                              onCheckedChange={setDeductByFootage}
-                              id="deduct-by-footage"
-                            />
-                            <Label htmlFor="deduct-by-footage" className="text-xs cursor-pointer">
-                              Deduct by ft²
-                            </Label>
-                            {deductByFootage && (
-                              <Input
-                                type="number"
-                                placeholder="Rate"
-                                value={footageDeductionRate || ''}
-                                onChange={(e) => setFootageDeductionRate(parseFloat(e.target.value) || 0)}
-                                className="h-6 w-24 text-xs"
-                                min="0"
-                                step="0.01"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            )}
+                    {/* Cross-Driver Sections - Side by Side */}
+                    <div className="px-2 grid grid-cols-2 gap-4">
+                      {/* Left: Freight Handled by Other Drivers (keeping for now, will remove later) */}
+                      <div className="px-2">
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <div className="text-sm font-semibold text-gray-700">
+                            Freight Handled by Other Drivers
                           </div>
                         </div>
+                        <div className="text-sm text-gray-600 border border-gray-300 rounded p-2">
+                          All freight handled by {selectedTruckload?.driver.driverName || 'selected driver'}
+                        </div>
                       </div>
+                      
+                      {/* Right: Cross-Driver Deductions List */}
+                      <div className="px-2">
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <div className="text-sm font-semibold text-gray-700">
+                            Pickup/Delivery Deductions
+                          </div>
+                        </div>
+                        {crossDriverDeductions.length === 0 ? (
+                          <div className="text-sm text-gray-600 border border-gray-300 rounded p-2">
+                            No deductions added
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-96 overflow-y-auto">
+                            {crossDriverDeductions.map((deduction) => (
+                              <div
+                                key={deduction.id}
+                                className={`border rounded-lg p-2 text-xs ${
+                                  deduction.action === 'Picked up' ? 'border-red-300 bg-red-50' : 'border-black bg-gray-50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className={`flex-1 ${deduction.action === 'Picked up' ? 'text-red-700' : 'text-black'}`}>
+                                    <div className="font-medium">
+                                      {deduction.driverName} {deduction.action.toLowerCase()} {deduction.action === 'Picked up' ? 'from' : 'to'} {deduction.customerName} on {formatDateShort(deduction.date)}
+                                    </div>
+                                    <div className="text-gray-600 mt-0.5">
+                                      ${deduction.amount.toFixed(2)}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant={deduction.appliesTo === 'driver_pay' ? 'default' : 'outline'}
+                                      onClick={async () => {
+                                        // Update appliesTo
+                                        const newAppliesTo = deduction.appliesTo === 'driver_pay' ? 'load_value' : 'driver_pay'
+                                        // TODO: Update in database
+                                        setCrossDriverDeductions(prev =>
+                                          prev.map(d => d.id === deduction.id ? { ...d, appliesTo: newAppliesTo } : d)
+                                        )
+                                      }}
+                                      className="h-6 px-2 text-xs"
+                                    >
+                                      {deduction.appliesTo === 'driver_pay' ? 'Driver Pay' : 'Load Value'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                       
                       {/* Automatic Deductions Section */}
                       {editableCrossDriverFreight.filter(item => !item.isManual).length > 0 && (
