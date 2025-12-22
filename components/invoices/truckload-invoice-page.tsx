@@ -971,6 +971,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })
 
     console.log(`[Cross-Driver Freight] Current driver: ${currentDriverName}, Found ${items.length} items from ${orders.length} orders`)
+    
+    // Debug: log each item that was detected
+    items.forEach((item, idx) => {
+      console.log(`[Cross-Driver Freight] Item ${idx + 1}:`, {
+        driverName: item.driverName,
+        date: item.date,
+        action: item.action,
+        customerName: item.customerName,
+        orderId: item.orderId,
+        footage: item.footage,
+        dimensions: item.dimensions
+      })
+    })
 
     return items
   }, [orders, selectedTruckload])
