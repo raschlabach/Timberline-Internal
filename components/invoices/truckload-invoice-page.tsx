@@ -1490,16 +1490,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     setEditableCrossDriverFreight(items =>
       items.map(item => item.id === id ? { ...item, ...updates } : item)
     )
-    
-    // Auto-save after a delay
-    if (selectedTruckloadId) {
-      if (crossDriverFreightSaveTimeout.current) {
-        clearTimeout(crossDriverFreightSaveTimeout.current)
-      }
-      crossDriverFreightSaveTimeout.current = setTimeout(() => {
-        saveCrossDriverFreight()
-      }, 1000)
-    }
+    // Removed auto-save - user will save manually via save button
   }
 
   // Function to save cross-driver freight to database
@@ -2463,6 +2454,38 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           Freight Handled by Other Drivers
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              // Clear all existing auto-detected items
+                              setEditableCrossDriverFreight(prev => prev.filter(item => item.isManual))
+                              
+                              // Add new auto-detected items
+                              const newAutoItems = crossDriverFreight.map((item, idx) => ({
+                                ...item,
+                                id: `auto-${Date.now()}-${idx}`,
+                                deduction: 0,
+                                date: formatDateForInput(item.date),
+                                isManual: false,
+                                customerName: item.customerName || undefined,
+                                orderId: item.orderId ? String(item.orderId) : undefined
+                              }))
+                              
+                              setEditableCrossDriverFreight(prev => [...prev, ...newAutoItems])
+                              
+                              // Save immediately after generating
+                              setTimeout(() => {
+                                saveCrossDriverFreight()
+                              }, 100)
+                              
+                              toast.success(`Generated ${newAutoItems.length} auto deductions`)
+                            }}
+                            className="h-7 text-xs"
+                          >
+                            Generate Auto Deductions
+                          </Button>
                           <div className="flex items-center gap-2 border border-gray-300 rounded px-2 py-1">
                             <Switch
                               checked={deductByFootage}
@@ -2704,6 +2727,73 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Totals Section with Save Button */}
+                        {editableCrossDriverFreight.length > 0 && (
+                          <div className="mt-4 pt-4 border-t-2 border-gray-400 bg-gray-100 rounded-lg p-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                              <div className="bg-white border border-gray-300 rounded-lg p-3">
+                                <div className="text-xs font-medium text-gray-600 mb-1">Total Deductions</div>
+                                <div className="text-xl font-bold text-gray-900">
+                                  {editableCrossDriverFreight.filter(item => !item.isManual || !item.isAddition).length}
+                                </div>
+                              </div>
+                              <div className="bg-white border border-gray-300 rounded-lg p-3">
+                                <div className="text-xs font-medium text-gray-600 mb-1">Total Sqft</div>
+                                <div className="text-xl font-bold text-gray-900">
+                                  {editableCrossDriverFreight
+                                    .filter(item => !item.isManual)
+                                    .reduce((sum, item) => sum + (typeof item.footage === 'number' ? item.footage : parseFloat(String(item.footage || 0)) || 0), 0)
+                                    .toFixed(0)}
+                                </div>
+                              </div>
+                              <div className="bg-white border border-gray-300 rounded-lg p-3">
+                                <div className="text-xs font-medium text-gray-600 mb-1">Skids/Sizes</div>
+                                <div className="text-lg font-bold text-gray-900">
+                                  {(() => {
+                                    const autoItems = editableCrossDriverFreight.filter(item => !item.isManual)
+                                    const uniqueDimensions = new Set<string>()
+                                    autoItems.forEach(item => {
+                                      if (item.dimensions && item.dimensions !== '—') {
+                                        item.dimensions.split(', ').forEach(dim => uniqueDimensions.add(dim))
+                                      }
+                                    })
+                                    return uniqueDimensions.size
+                                  })()}
+                                </div>
+                              </div>
+                              <div className="bg-white border border-gray-300 rounded-lg p-3">
+                                <div className="text-xs font-medium text-gray-600 mb-1">Total Deduction Amount</div>
+                                <div className="text-xl font-bold text-red-600">
+                                  ${editableCrossDriverFreight
+                                    .filter(item => !item.isManual || !item.isAddition)
+                                    .reduce((sum, item) => {
+                                      const deduction = typeof item.deduction === 'number' ? item.deduction : parseFloat(String(item.deduction || 0)) || 0
+                                      return sum + deduction
+                                    }, 0)
+                                    .toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex justify-end">
+                              <Button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await saveCrossDriverFreight()
+                                    toast.success('Deductions saved successfully')
+                                  } catch (error) {
+                                    toast.error('Failed to save deductions')
+                                    console.error('Error saving deductions:', error)
+                                  }
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                              >
+                                Save Deductions
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                     </div>
 
                     {/* Payroll Summary */}
