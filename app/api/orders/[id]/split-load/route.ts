@@ -21,7 +21,7 @@ export async function GET(
 
     // Get split load config from split_loads table
     // Handle case where table doesn't exist yet (migration not run)
-    let splitLoadResult = { rows: [] }
+    let splitLoadResult: { rows: any[] } = { rows: [] }
     try {
       splitLoadResult = await query(`
         SELECT 
