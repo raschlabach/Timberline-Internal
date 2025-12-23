@@ -164,7 +164,7 @@
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  
+
   /* Force page break before each driver's content */
   .print-content > div:first-child {
     page-break-before: auto;

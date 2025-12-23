@@ -512,7 +512,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         // Prefer delivery order (matching invoice page logic)
         const deliveryOrder = groupOrders.find(o => o.assignmentType === 'delivery')
         flatOrders.push(deliveryOrder || groupOrders[0])
-      } else {
+            } else {
         // For non-transfers, add all orders
         flatOrders.push(...groupOrders)
       }
@@ -527,7 +527,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       if (order.fullQuote !== null && order.fullQuote !== undefined) {
         fullQuote = typeof order.fullQuote === 'number' ? order.fullQuote : parseFloat(String(order.fullQuote)) || 0
       } else if (order.freightQuote) {
-        const quoteStr = String(order.freightQuote)
+            const quoteStr = String(order.freightQuote)
         const cleaned = quoteStr.replace(/[^0-9.-]/g, '')
         fullQuote = parseFloat(cleaned)
       } else {
@@ -543,20 +543,20 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           : parseFloat(String(order.assignmentQuote)) || 0
         
         const otherPortion = fullQuote - assignmentQuote
-        
+              
         // If assignment_quote is the smaller value (misc), exclude it from load value
         // Only the truckload with "full quote - misc" gets the quote counted
         if (assignmentQuote < otherPortion) {
           // This is the misc assignment - exclude from load value
           // The misc value will be added/subtracted via split load deductions/additions
           return sum
-        } else {
-          // This is the "full quote - misc" assignment - include full quote in load value
+              } else {
+                // This is the "full quote - misc" assignment - include full quote in load value
           // The misc value will be subtracted via split load deductions (if applies to load_value)
           return sum + fullQuote
-        }
-      }
-      
+              }
+            }
+            
       // No split load - include the quote normally
       return sum + fullQuote
     }, 0)
@@ -702,7 +702,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     }
     
     return { 
-      totalQuotes,
+      totalQuotes, 
       pickupDeliveryDeductionsFromLoadValue,
       manualDeductionsFromLoadValue,
       splitLoadDeductionsFromLoadValue,
@@ -1341,7 +1341,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 ) : (
                   <div className="text-sm text-gray-500 text-center py-4">No hours recorded</div>
                 )}
-                  </Card>
+              </Card>
                 )
               })()}
 
@@ -1387,8 +1387,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               </h4>
                               {truckload.description && (
                                 <p className="text-sm text-gray-700 mb-1 print:text-xs print:mb-0 print:leading-tight print:font-bold">{truckload.description}</p>
-                              )}
-                            </div>
+                                )}
+                              </div>
                             <div className="flex items-center gap-2 flex-shrink-0 print:gap-1">
                               {hasMiddlefield && (
                                 <>
@@ -1485,12 +1485,24 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                     <div className="text-xs font-semibold text-green-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Additions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
-                                      .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
-                                          <span className="text-green-700 truncate flex-1 print:text-xs">{ded.comment || 'Split load addition (misc portion)'}</span>
-                                          <span className="text-green-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">+${ded.deduction.toFixed(2)}</span>
-                                        </div>
-                                      ))}
+                                      .map((ded) => {
+                                        // Create description based on other driver's assignment
+                                        let description = 'Split load addition (misc portion)'
+                                        if (ded.otherAssignmentInfo) {
+                                          const { assignmentType, customerName, truckloadDate, driverName } = ded.otherAssignmentInfo
+                                          const action = assignmentType === 'pickup' ? 'picked up' : 'delivered'
+                                          const driver = driverName || 'Unknown Driver'
+                                          const customer = customerName || 'Unknown Customer'
+                                          const date = truckloadDate || ''
+                                          description = `${driver} ${action} "${customer}"${date ? ` (${date})` : ''}`
+                                        }
+                                        return (
+                                          <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                            <span className="text-green-700 truncate flex-1 print:text-xs">{description}</span>
+                                            <span className="text-green-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">+${ded.deduction.toFixed(2)}</span>
+                                          </div>
+                                        )
+                                      })}
                                     <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-green-300">
                                       <span className="text-green-700 font-medium print:font-normal">Subtotal</span>
                                       <span className="text-green-600 font-bold print:font-semibold">+${tlTotals.splitLoadAdditionsToLoadValue.toFixed(2)}</span>
@@ -1588,12 +1600,24 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                       <div className="text-xs font-semibold text-red-700 mb-0.5">Split Load Deductions (DP)</div>
                                       {truckload.deductions
                                         .filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'driver_pay' && d.deduction > 0)
-                                        .map((ded) => (
-                                          <div key={ded.id} className="flex items-center justify-between text-xs">
-                                            <span className="text-red-700 truncate flex-1">{ded.comment || 'Split load deduction (misc portion)'}</span>
-                                            <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
-                                          </div>
-                                        ))}
+                                        .map((ded) => {
+                                          // Create description based on other driver's assignment
+                                          let description = 'Split load deduction (misc portion)'
+                                          if (ded.otherAssignmentInfo) {
+                                            const { assignmentType, customerName, truckloadDate, driverName } = ded.otherAssignmentInfo
+                                            const action = assignmentType === 'pickup' ? 'picked up' : 'delivered'
+                                            const driver = driverName || 'Unknown Driver'
+                                            const customer = customerName || 'Unknown Customer'
+                                            const date = truckloadDate || ''
+                                            description = `${driver} ${action} "${customer}"${date ? ` (${date})` : ''}`
+                                          }
+                                          return (
+                                            <div key={ded.id} className="flex items-center justify-between text-xs">
+                                              <span className="text-red-700 truncate flex-1">{description}</span>
+                                              <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
+                                            </div>
+                                          )
+                                        })}
                                       <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
                                         <span className="text-red-700 font-medium">Subtotal</span>
                                         <span className="text-red-600 font-bold">-${tlTotals.splitLoadDeductionsFromDriverPay.toFixed(2)}</span>
@@ -1607,12 +1631,24 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                       <div className="text-xs font-semibold text-green-700 mb-0.5">Split Load Additions (DP)</div>
                                       {truckload.deductions
                                         .filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'driver_pay' && d.deduction > 0)
-                                        .map((ded) => (
-                                          <div key={ded.id} className="flex items-center justify-between text-xs">
-                                            <span className="text-green-700 truncate flex-1">{ded.comment || 'Split load addition (misc portion)'}</span>
-                                            <span className="text-green-600 font-semibold ml-1">+${ded.deduction.toFixed(2)}</span>
-                                          </div>
-                                        ))}
+                                        .map((ded) => {
+                                          // Create description based on other driver's assignment
+                                          let description = 'Split load addition (misc portion)'
+                                          if (ded.otherAssignmentInfo) {
+                                            const { assignmentType, customerName, truckloadDate, driverName } = ded.otherAssignmentInfo
+                                            const action = assignmentType === 'pickup' ? 'picked up' : 'delivered'
+                                            const driver = driverName || 'Unknown Driver'
+                                            const customer = customerName || 'Unknown Customer'
+                                            const date = truckloadDate || ''
+                                            description = `${driver} ${action} "${customer}"${date ? ` (${date})` : ''}`
+                                          }
+                                          return (
+                                            <div key={ded.id} className="flex items-center justify-between text-xs">
+                                              <span className="text-green-700 truncate flex-1">{description}</span>
+                                              <span className="text-green-600 font-semibold ml-1">+${ded.deduction.toFixed(2)}</span>
+                                            </div>
+                                          )
+                                        })}
                                       <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200">
                                         <span className="text-green-700 font-medium">Subtotal</span>
                                         <span className="text-green-600 font-bold">+${tlTotals.splitLoadAdditionsToDriverPay.toFixed(2)}</span>
@@ -1645,10 +1681,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-gray-600">
-                                    Driver Pay
-                                    {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
-                                    {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
-                                    {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
+                                  Driver Pay
+                                  {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
+                                  {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
+                                  {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
                                   </span>
                                   <span className="text-base font-bold text-blue-600">${tlTotals.driverPay.toFixed(2)}</span>
                                 </div>
