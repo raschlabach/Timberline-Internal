@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import fs from 'fs'
+import path from 'path'
 
-// GET /api/orders/[id]/split-load-simple - Get split load config for an order
+// GET /api/orders/[id]/split-load - Get split load info for a specific order
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -19,28 +21,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
     }
 
-    // Check if split_loads table exists
-    const tableCheck = await query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-      AND table_name = 'split_loads'
-    `)
-    
-    if (tableCheck.rows.length === 0) {
-      // Table doesn't exist yet, return empty
-      return NextResponse.json({
-        success: true,
-        order: {
-          orderId,
-          hasSplitLoad: false,
-          splitLoad: null
-        }
-      })
-    }
+    // Apply migration if needed
+    await applySplitLoadsMigration()
 
-    // Get split load config
-    const result = await query(`
+    // Get split load config from split_loads table
+    const splitLoadResult = await query(`
       SELECT 
         id,
         order_id,
@@ -52,19 +37,6 @@ export async function GET(
       WHERE order_id = $1
     `, [orderId])
 
-    if (result.rows.length === 0) {
-      return NextResponse.json({
-        success: true,
-        order: {
-          orderId,
-          hasSplitLoad: false,
-          splitLoad: null
-        }
-      })
-    }
-
-    const splitLoad = result.rows[0]
-    
     // Get order info
     const orderResult = await query(`
       SELECT 
@@ -75,10 +47,12 @@ export async function GET(
           SELECT json_build_object(
             'assignmentId', toa_pickup.id,
             'truckloadId', t_pickup.id,
-            'assignmentQuote', toa_pickup.assignment_quote
+            'assignmentQuote', toa_pickup.assignment_quote,
+            'driverName', u_pickup.full_name
           )
           FROM truckload_order_assignments toa_pickup
           JOIN truckloads t_pickup ON toa_pickup.truckload_id = t_pickup.id
+          LEFT JOIN users u_pickup ON t_pickup.driver_id = u_pickup.id
           WHERE toa_pickup.order_id = o.id
             AND toa_pickup.assignment_type = 'pickup'
           ORDER BY t_pickup.start_date DESC
@@ -88,10 +62,12 @@ export async function GET(
           SELECT json_build_object(
             'assignmentId', toa_delivery.id,
             'truckloadId', t_delivery.id,
-            'assignmentQuote', toa_delivery.assignment_quote
+            'assignmentQuote', toa_delivery.assignment_quote,
+            'driverName', u_delivery.full_name
           )
           FROM truckload_order_assignments toa_delivery
           JOIN truckloads t_delivery ON toa_delivery.truckload_id = t_delivery.id
+          LEFT JOIN users u_delivery ON t_delivery.driver_id = u_delivery.id
           WHERE toa_delivery.order_id = o.id
             AND toa_delivery.assignment_type = 'delivery'
           ORDER BY t_delivery.start_date DESC
@@ -108,22 +84,27 @@ export async function GET(
     }
 
     const order = orderResult.rows[0]
+    const hasSplitLoad = splitLoadResult.rows.length > 0
 
     return NextResponse.json({
       success: true,
       order: {
         orderId,
-        hasSplitLoad: true,
+        hasSplitLoad,
         fullQuote: parseFloat(order.freight_quote) || 0,
         pickupAssignment: order.pickup_assignment,
         deliveryAssignment: order.delivery_assignment,
-        splitLoad: {
-          id: splitLoad.id,
-          miscValue: parseFloat(splitLoad.misc_value) || 0,
-          fullQuoteAssignment: splitLoad.full_quote_assignment,
-          fullQuoteAppliesTo: splitLoad.full_quote_applies_to,
-          miscAppliesTo: splitLoad.misc_applies_to
-        }
+        existingSplitLoadAppliesTo: hasSplitLoad ? {
+          fullQuoteAppliesTo: splitLoadResult.rows[0].full_quote_applies_to,
+          miscAppliesTo: splitLoadResult.rows[0].misc_applies_to
+        } : null,
+        splitLoad: hasSplitLoad ? {
+          id: splitLoadResult.rows[0].id,
+          miscValue: parseFloat(splitLoadResult.rows[0].misc_value) || 0,
+          fullQuoteAssignment: splitLoadResult.rows[0].full_quote_assignment,
+          fullQuoteAppliesTo: splitLoadResult.rows[0].full_quote_applies_to,
+          miscAppliesTo: splitLoadResult.rows[0].misc_applies_to
+        } : null
       }
     })
   } catch (error) {
@@ -135,7 +116,7 @@ export async function GET(
   }
 }
 
-// POST /api/orders/[id]/split-load-simple - Save split load config
+// POST /api/orders/[id]/split-load - Save split load config (SIMPLIFIED)
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -171,40 +152,13 @@ export async function POST(
 
     const miscAmount = parseFloat(miscValue)
 
+    // Apply migration if needed
+    await applySplitLoadsMigration()
+
     const client = await getClient()
     
     try {
       await client.query('BEGIN')
-
-      // Check if split_loads table exists, create if not
-      const tableCheck = await query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'split_loads'
-      `)
-      
-      if (tableCheck.rows.length === 0) {
-        // Apply migration
-        const migrationSql = `
-          CREATE TABLE IF NOT EXISTS split_loads (
-            id SERIAL PRIMARY KEY,
-            order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-            misc_value DECIMAL(10, 2) NOT NULL,
-            full_quote_assignment VARCHAR(20) NOT NULL,
-            full_quote_applies_to VARCHAR(20) NOT NULL DEFAULT 'driver_pay',
-            misc_applies_to VARCHAR(20) NOT NULL DEFAULT 'driver_pay',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(order_id)
-          );
-          CREATE INDEX IF NOT EXISTS idx_split_loads_order ON split_loads(order_id);
-          ALTER TABLE cross_driver_freight_deductions
-          ADD COLUMN IF NOT EXISTS split_load_id INTEGER REFERENCES split_loads(id) ON DELETE CASCADE;
-          CREATE INDEX IF NOT EXISTS idx_deductions_split_load ON cross_driver_freight_deductions(split_load_id);
-        `
-        await client.query(migrationSql)
-      }
 
       // Get order info
       const orderResult = await client.query(`
@@ -307,7 +261,7 @@ export async function POST(
 
         const splitLoadId = splitLoadResult.rows[0].id
 
-        // Delete old deductions (cascade will handle this, but we do it explicitly for clarity)
+        // Delete old deductions for this split load (cascade will handle, but explicit for clarity)
         await client.query(`
           DELETE FROM cross_driver_freight_deductions
           WHERE split_load_id = $1
@@ -410,7 +364,7 @@ export async function POST(
   }
 }
 
-// DELETE /api/orders/[id]/split-load-simple - Clear split load
+// DELETE /api/orders/[id]/split-load - Clear split load (SIMPLIFIED)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -425,6 +379,9 @@ export async function DELETE(
     if (isNaN(orderId)) {
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
     }
+
+    // Apply migration if needed
+    await applySplitLoadsMigration()
 
     const client = await getClient()
     
@@ -447,9 +404,18 @@ export async function DELETE(
         `, [assignmentIds])
       }
 
-      // Delete split_loads record - cascade will delete all related deductions
+      // Delete split_loads record - cascade will automatically delete all related deductions
       await client.query(`
         DELETE FROM split_loads WHERE order_id = $1
+      `, [orderId])
+
+      // Also delete any old split load deductions that might not have split_load_id (cleanup)
+      await client.query(`
+        DELETE FROM cross_driver_freight_deductions
+        WHERE order_id = $1
+          AND comment LIKE '%split load%'
+          AND is_manual = true
+          AND split_load_id IS NULL
       `, [orderId])
 
       await client.query('COMMIT')
@@ -470,6 +436,45 @@ export async function DELETE(
       success: false,
       error: 'Failed to clear split load'
     }, { status: 500 })
+  }
+}
+
+// Helper function to apply migration
+async function applySplitLoadsMigration() {
+  try {
+    const tableCheck = await query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'split_loads'
+    `)
+    
+    if (tableCheck.rows.length > 0) {
+      // Migration already applied
+      return
+    }
+
+    console.log('Applying split_loads migration...')
+    const client = await getClient()
+    try {
+      await client.query('BEGIN')
+      const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
+      const migrationSql = fs.readFileSync(
+        path.join(migrationsDir, 'simplify-split-loads-system.sql'),
+        'utf8'
+      )
+      await client.query(migrationSql)
+      await client.query('COMMIT')
+      console.log('split_loads migration applied successfully')
+    } catch (migrationError) {
+      await client.query('ROLLBACK')
+      console.error('Error applying split_loads migration:', migrationError)
+      throw migrationError
+    } finally {
+      client.release()
+    }
+  } catch (migrationCheckError) {
+    console.error('Error checking/applying split_loads migration:', migrationCheckError)
   }
 }
 
