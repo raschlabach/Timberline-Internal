@@ -3,108 +3,7 @@
 -- the new split_loads table is the single source of truth
 
 -- ============================================================================
--- STEP 1: Data Preservation (Safe Migration)
--- ============================================================================
-
--- Migrate any valid data from pending_split_loads to split_loads (if not already migrated)
-INSERT INTO split_loads (order_id, misc_value, full_quote_assignment, full_quote_applies_to, misc_applies_to, created_at, updated_at)
-SELECT 
-  psl.order_id,
-  psl.misc_value,
-  psl.full_quote_assignment,
-  psl.full_quote_applies_to,
-  psl.misc_applies_to,
-  psl.created_at,
-  psl.updated_at
-FROM pending_split_loads psl
-WHERE NOT EXISTS (
-  SELECT 1 FROM split_loads sl WHERE sl.order_id = psl.order_id
-)
-ON CONFLICT (order_id) DO NOTHING;
-
--- Link existing split load deductions to split_loads records via split_load_id
-UPDATE cross_driver_freight_deductions cdfd
-SET split_load_id = sl.id
-FROM split_loads sl
-WHERE cdfd.comment LIKE '%split load%'
-  AND cdfd.is_manual = true
-  AND cdfd.order_id = sl.order_id
-  AND cdfd.split_load_id IS NULL;
-
--- Validate all existing split_loads records have valid order_id references
--- (This will fail if there are invalid references, which is good - we want to know)
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 
-    FROM split_loads sl
-    LEFT JOIN orders o ON sl.order_id = o.id
-    WHERE o.id IS NULL
-  ) THEN
-    RAISE EXCEPTION 'Found split_loads records with invalid order_id references';
-  END IF;
-END $$;
-
--- ============================================================================
--- STEP 2: Cleanup Orphaned Data
--- ============================================================================
-
--- Remove split load deductions without valid split_load_id or order_id
-DELETE FROM cross_driver_freight_deductions
-WHERE comment LIKE '%split load%'
-  AND is_manual = true
-  AND order_id IS NULL
-  AND split_load_id IS NULL;
-
--- Remove deductions that reference non-existent orders
-DELETE FROM cross_driver_freight_deductions
-WHERE comment LIKE '%split load%'
-  AND is_manual = true
-  AND order_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM orders o WHERE o.id = cross_driver_freight_deductions.order_id
-  );
-
--- Clear any assignment_quote values that don't have corresponding split_loads records
--- (Safety check - these shouldn't exist, but clean them up if they do)
-UPDATE truckload_order_assignments toa
-SET assignment_quote = NULL,
-    updated_at = CURRENT_TIMESTAMP
-WHERE toa.assignment_quote IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 
-    FROM split_loads sl
-    JOIN truckload_order_assignments toa2 ON sl.order_id = toa2.order_id
-    WHERE toa2.id = toa.id
-  )
-  AND EXISTS (
-    -- Only clear if there's another assignment for the same order (indicating it was a split)
-    SELECT 1
-    FROM truckload_order_assignments toa3
-    WHERE toa3.order_id = toa.order_id
-      AND toa3.id != toa.id
-  );
-
--- ============================================================================
--- STEP 3: Remove Legacy Tables/Columns
--- ============================================================================
-
--- Drop pending_split_loads table (CASCADE will handle any remaining references)
-DROP TABLE IF EXISTS pending_split_loads CASCADE;
-
--- Drop old columns from orders table
-ALTER TABLE orders DROP COLUMN IF EXISTS split_quote;
-ALTER TABLE orders DROP COLUMN IF EXISTS middlefield_delivery_quote;
-ALTER TABLE orders DROP COLUMN IF EXISTS ohio_to_indiana_pickup_quote;
-
--- Drop old indexes related to removed columns
-DROP INDEX IF EXISTS idx_orders_split_quote;
-DROP INDEX IF EXISTS idx_orders_middlefield_delivery_quote;
-DROP INDEX IF EXISTS idx_pending_split_loads_order;
-DROP INDEX IF EXISTS idx_pending_split_loads_assignment;
-
--- ============================================================================
--- STEP 4: Ensure New System Integrity
+-- STEP 1: Create New System Tables and Columns
 -- ============================================================================
 
 -- Ensure split_loads table structure is correct
@@ -172,3 +71,111 @@ BEGIN
     CHECK (misc_value > 0);
   END IF;
 END $$;
+
+-- ============================================================================
+-- STEP 2: Data Preservation (Safe Migration)
+-- ============================================================================
+
+-- Migrate any valid data from pending_split_loads to split_loads (if not already migrated)
+-- Only run if pending_split_loads table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'pending_split_loads') THEN
+    INSERT INTO split_loads (order_id, misc_value, full_quote_assignment, full_quote_applies_to, misc_applies_to, created_at, updated_at)
+    SELECT 
+      psl.order_id,
+      psl.misc_value,
+      psl.full_quote_assignment,
+      psl.full_quote_applies_to,
+      psl.misc_applies_to,
+      psl.created_at,
+      psl.updated_at
+    FROM pending_split_loads psl
+    WHERE NOT EXISTS (
+      SELECT 1 FROM split_loads sl WHERE sl.order_id = psl.order_id
+    )
+    ON CONFLICT (order_id) DO NOTHING;
+  END IF;
+END $$;
+
+-- Link existing split load deductions to split_loads records via split_load_id
+UPDATE cross_driver_freight_deductions cdfd
+SET split_load_id = sl.id
+FROM split_loads sl
+WHERE cdfd.comment LIKE '%split load%'
+  AND cdfd.is_manual = true
+  AND cdfd.order_id = sl.order_id
+  AND cdfd.split_load_id IS NULL;
+
+-- Validate all existing split_loads records have valid order_id references
+-- (This will fail if there are invalid references, which is good - we want to know)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 
+    FROM split_loads sl
+    LEFT JOIN orders o ON sl.order_id = o.id
+    WHERE o.id IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Found split_loads records with invalid order_id references';
+  END IF;
+END $$;
+
+-- ============================================================================
+-- STEP 3: Cleanup Orphaned Data
+-- ============================================================================
+
+-- Remove split load deductions without valid split_load_id or order_id
+DELETE FROM cross_driver_freight_deductions
+WHERE comment LIKE '%split load%'
+  AND is_manual = true
+  AND order_id IS NULL
+  AND split_load_id IS NULL;
+
+-- Remove deductions that reference non-existent orders
+DELETE FROM cross_driver_freight_deductions
+WHERE comment LIKE '%split load%'
+  AND is_manual = true
+  AND order_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM orders o WHERE o.id = cross_driver_freight_deductions.order_id
+  );
+
+-- Clear any assignment_quote values that don't have corresponding split_loads records
+-- (Safety check - these shouldn't exist, but clean them up if they do)
+UPDATE truckload_order_assignments toa
+SET assignment_quote = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE toa.assignment_quote IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 
+    FROM split_loads sl
+    JOIN truckload_order_assignments toa2 ON sl.order_id = toa2.order_id
+    WHERE toa2.id = toa.id
+  )
+  AND EXISTS (
+    -- Only clear if there's another assignment for the same order (indicating it was a split)
+    SELECT 1
+    FROM truckload_order_assignments toa3
+    WHERE toa3.order_id = toa.order_id
+      AND toa3.id != toa.id
+  );
+
+-- ============================================================================
+-- STEP 4: Remove Legacy Tables/Columns
+-- ============================================================================
+
+-- Drop pending_split_loads table (CASCADE will handle any remaining references)
+DROP TABLE IF EXISTS pending_split_loads CASCADE;
+
+-- Drop old columns from orders table
+ALTER TABLE orders DROP COLUMN IF EXISTS split_quote;
+ALTER TABLE orders DROP COLUMN IF EXISTS middlefield_delivery_quote;
+ALTER TABLE orders DROP COLUMN IF EXISTS ohio_to_indiana_pickup_quote;
+
+-- Drop old indexes related to removed columns
+DROP INDEX IF EXISTS idx_orders_split_quote;
+DROP INDEX IF EXISTS idx_orders_middlefield_delivery_quote;
+DROP INDEX IF EXISTS idx_pending_split_loads_order;
+DROP INDEX IF EXISTS idx_pending_split_loads_assignment;
+
