@@ -1287,10 +1287,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 )}
               </Card>
 
-              {/* Truckloads - Vertical List */}
+              {/* Truckloads - Grid Layout for Print */}
               <div>
                 <h3 className="font-semibold mb-3">Truckloads</h3>
-                <div className="space-y-2">
+                <div className="space-y-2 print:grid print:grid-cols-2 print:gap-2 print:space-y-0">
                   {selectedDriver.truckloads.map(truckload => {
                     const tlTotals = calculateTruckloadTotals(truckload)
                     const hasMiddlefield = truckload.orders.some(order => order.middlefield === true)
@@ -1309,7 +1309,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                     return (
                       <Card
                         key={truckload.id}
-                        className={`p-4 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid ${
+                        className={`p-4 cursor-pointer hover:shadow-md transition-shadow print:break-inside-avoid print:w-full print:max-w-none ${
                           showRedBorder ? 'border-2 border-red-500' : ''
                         }`}
                         onClick={(e) => handleTruckloadClick(truckload.id, e)}

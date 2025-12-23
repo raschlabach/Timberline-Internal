@@ -256,6 +256,7 @@ function SortableTableRow({
   setCrossDriverDeductionToggle,
   crossDriverDeductions,
   onDeleteCrossDriverDeduction,
+  onOpenStopDeductionDialog,
 }: {
   id: string
   row: AssignedOrderRow & { isCombined?: boolean; sequenceNumbers?: string }
@@ -278,6 +279,7 @@ function SortableTableRow({
   setCrossDriverDeductionToggle: (key: string, value: 'load_value' | 'driver_pay') => void
   crossDriverDeductions: CrossDriverDeduction[]
   onDeleteCrossDriverDeduction: (deductionId: string) => Promise<void>
+  onOpenStopDeductionDialog: (orderId: string) => void
 }) {
   const {
     attributes,
@@ -575,18 +577,35 @@ function SortableTableRow({
             d => d.orderId === row.orderId && d.action === action
           )
           
-          // If deduction exists, show it with visual indicator
+          // If deduction exists, show it in disabled input with delete button
           if (existingDeduction) {
             return (
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1 px-2 py-1 bg-green-50 border border-green-300 rounded">
-                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                  <span className="text-xs font-semibold text-green-700">
-                    ${existingDeduction.amount.toFixed(2)}
-                  </span>
-                  <span className="text-[10px] text-green-600">
-                    ({existingDeduction.appliesTo === 'driver_pay' ? 'DP' : 'LV'})
-                  </span>
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={existingDeduction.amount.toFixed(2)}
+                  disabled
+                  className="h-7 text-xs w-20 px-1.5 border-2 border-black bg-gray-50 cursor-not-allowed"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant={existingDeduction.appliesTo === 'driver_pay' ? 'default' : 'outline'}
+                    disabled
+                    className="h-7 px-2 text-xs opacity-60"
+                  >
+                    Driver Pay
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={existingDeduction.appliesTo === 'load_value' ? 'default' : 'outline'}
+                    disabled
+                    className="h-7 px-2 text-xs opacity-60"
+                  >
+                    Load Value
+                  </Button>
                 </div>
                 <Button
                   size="sm"
@@ -668,6 +687,18 @@ function SortableTableRow({
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenStopDeductionDialog(row.orderId)
+            }}
+            className="p-1 h-7 w-7"
+            title="Add deduction/addition for this stop"
+          >
+            <Minus className="h-3 w-3" />
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -798,7 +829,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [deductionDialogComment, setDeductionDialogComment] = useState<string>('')
   const [deductionDialogAmount, setDeductionDialogAmount] = useState<string>('')
   const [deductionDialogAppliesTo, setDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
-  const [deductionDialogType, setDeductionDialogType] = useState<'pickup' | 'delivery' | 'manual'>('manual')
+  // Per-row stop deduction/addition dialog
+  const [stopDeductionDialogOpen, setStopDeductionDialogOpen] = useState<boolean>(false)
+  const [stopDeductionDialogOrderId, setStopDeductionDialogOrderId] = useState<string | null>(null)
+  const [stopDeductionDialogCommentType, setStopDeductionDialogCommentType] = useState<'pickup' | 'delivery' | 'manual'>('manual')
+  const [stopDeductionDialogComment, setStopDeductionDialogComment] = useState<string>('')
+  const [stopDeductionDialogAmount, setStopDeductionDialogAmount] = useState<string>('')
+  const [stopDeductionDialogAppliesTo, setStopDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
+  const [stopDeductionDialogIsAddition, setStopDeductionDialogIsAddition] = useState<boolean>(false)
   // Single-order split load dialog
   const [splitLoadDialogOpen, setSplitLoadDialogOpen] = useState(false)
   const [splitLoadOrderId, setSplitLoadOrderId] = useState<number | null>(null)
@@ -1592,32 +1630,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
 
     try {
-      // Determine action and customer name based on type
-      let action: 'Picked up' | 'Delivered' | null = null
-      let customerName: string | null = null
-      let comment = deductionDialogComment
-
-      if (deductionDialogType === 'pickup' && deductionDialogOrderId) {
-        const order = orders.find(o => o.orderId === deductionDialogOrderId)
-        if (order) {
-          action = 'Picked up'
-          customerName = order.pickupName
-          comment = `${order.pickupName} discount`
-        }
-      } else if (deductionDialogType === 'delivery' && deductionDialogOrderId) {
-        const order = orders.find(o => o.orderId === deductionDialogOrderId)
-        if (order) {
-          action = 'Delivered'
-          customerName = order.deliveryName
-          comment = `${order.deliveryName} discount`
-        }
-      } else if (deductionDialogType === 'manual') {
-        // Manual type - use the comment as entered
-        if (!comment || comment.trim() === '') {
-          toast.error('Please enter a description for the manual deduction')
-          return
-        }
+      // Always use manual type - use the comment as entered
+      const comment = deductionDialogComment
+      if (!comment || comment.trim() === '') {
+        toast.error('Please enter a description for the manual deduction')
+        return
       }
+
+      // Manual deductions don't need action or customer name
+      const action: 'Picked up' | 'Delivered' | null = null
+      const customerName: string | null = null
 
       const response = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
         method: 'POST',
@@ -1656,7 +1678,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         setDeductionDialogComment('')
         setDeductionDialogAmount('')
         setDeductionDialogAppliesTo('driver_pay')
-        setDeductionDialogType('manual')
 
         toast.success('Manual deduction saved successfully')
       } else {
@@ -1666,7 +1687,98 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       console.error('Error saving manual deduction:', error)
       toast.error('Failed to save manual deduction')
     }
-  }, [selectedTruckloadId, deductionDialogAmount, deductionDialogComment, deductionDialogType, deductionDialogOrderId, deductionDialogAppliesTo, orders, selectedTruckload])
+  }, [selectedTruckloadId, deductionDialogAmount, deductionDialogComment, deductionDialogAppliesTo, selectedTruckload])
+
+  // Save stop-specific deduction/addition
+  const handleSaveStopDeduction = useCallback(async () => {
+    if (!selectedTruckloadId || !stopDeductionDialogOrderId) {
+      toast.error('No truckload or order selected')
+      return
+    }
+
+    const amount = parseFloat(stopDeductionDialogAmount)
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+
+    try {
+      const order = orders.find(o => o.orderId === stopDeductionDialogOrderId)
+      if (!order) {
+        toast.error('Order not found')
+        return
+      }
+
+      // Determine comment based on type
+      let comment = stopDeductionDialogComment
+      let action: 'Picked up' | 'Delivered' | null = null
+      let customerName: string | null = null
+
+      if (stopDeductionDialogCommentType === 'pickup') {
+        comment = `${order.pickupName} discount`
+        action = 'Picked up'
+        customerName = order.pickupName
+      } else if (stopDeductionDialogCommentType === 'delivery') {
+        comment = `${order.deliveryName} discount`
+        action = 'Delivered'
+        customerName = order.deliveryName
+      } else {
+        // Manual type - use the comment as entered
+        if (!comment || comment.trim() === '') {
+          toast.error('Please enter a description for the manual deduction')
+          return
+        }
+      }
+
+      const response = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          orderId: stopDeductionDialogOrderId,
+          driverName: selectedTruckload?.driver.driverName || null,
+          date: selectedTruckload?.startDate || null,
+          action: action,
+          customerName: customerName,
+          amount: amount,
+          appliesTo: stopDeductionDialogAppliesTo,
+          comment: comment,
+          isAddition: stopDeductionDialogIsAddition
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        // Reload manual deductions
+        const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/manual-deductions`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+        if (reloadRes.ok) {
+          const reloadData = await reloadRes.json()
+          if (reloadData.success && reloadData.deductions) {
+            setManualDeductions(reloadData.deductions)
+          }
+        }
+
+        // Close dialog and reset
+        setStopDeductionDialogOpen(false)
+        setStopDeductionDialogOrderId(null)
+        setStopDeductionDialogCommentType('manual')
+        setStopDeductionDialogComment('')
+        setStopDeductionDialogAmount('')
+        setStopDeductionDialogAppliesTo('driver_pay')
+        setStopDeductionDialogIsAddition(false)
+
+        toast.success(stopDeductionDialogIsAddition ? 'Addition saved successfully' : 'Deduction saved successfully')
+      } else {
+        toast.error(data.error || 'Failed to save deduction')
+      }
+    } catch (error) {
+      console.error('Error saving stop deduction:', error)
+      toast.error('Failed to save deduction')
+    }
+  }, [selectedTruckloadId, stopDeductionDialogOrderId, stopDeductionDialogAmount, stopDeductionDialogComment, stopDeductionDialogCommentType, stopDeductionDialogAppliesTo, stopDeductionDialogIsAddition, orders, selectedTruckload])
 
   // DISABLED: updateCrossDriverFreightItem - was creating auto deductions
   function updateCrossDriverFreightItem(id: string, updates: Partial<CrossDriverFreightItem>): void {
@@ -2628,11 +2740,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             setIsOrderInfoDialogOpen(true)
                           }}
                           onAddDeduction={(orderId) => {
-                            setDeductionDialogOrderId(orderId)
+                            setDeductionDialogOrderId(null)
                             setDeductionDialogComment('')
                             setDeductionDialogAmount('')
                             setDeductionDialogAppliesTo('driver_pay')
-                            setDeductionDialogType('manual')
                             setDeductionDialogOpen(true)
                           }}
                           selectedTruckloadId={selectedTruckloadId}
@@ -2643,6 +2754,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           crossDriverDeductionToggles={crossDriverDeductionToggles}
                           setCrossDriverDeductionToggle={setCrossDriverDeductionToggle}
                           crossDriverDeductions={crossDriverDeductions}
+                          onOpenStopDeductionDialog={(orderId: string) => {
+                            setStopDeductionDialogOrderId(orderId)
+                            setStopDeductionDialogCommentType('manual')
+                            setStopDeductionDialogComment('')
+                            setStopDeductionDialogAmount('')
+                            setStopDeductionDialogAppliesTo('driver_pay')
+                            setStopDeductionDialogIsAddition(false)
+                            setStopDeductionDialogOpen(true)
+                          }}
                           onDeleteCrossDriverDeduction={async (deductionId: string) => {
                             try {
                               const response = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
@@ -2714,7 +2834,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               setDeductionDialogComment('')
                               setDeductionDialogAmount('')
                               setDeductionDialogAppliesTo('driver_pay')
-                              setDeductionDialogType('manual')
                             }}
                             className="h-7 text-xs"
                           >
@@ -3479,72 +3598,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Type</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={deductionDialogType === 'pickup' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setDeductionDialogType('pickup')
-                      setDeductionDialogComment('')
-                    }}
-                    className="flex-1"
-                  >
-                    Pickup
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={deductionDialogType === 'delivery' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setDeductionDialogType('delivery')
-                      setDeductionDialogComment('')
-                    }}
-                    className="flex-1"
-                  >
-                    Delivery
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={deductionDialogType === 'manual' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setDeductionDialogType('manual')
-                      setDeductionDialogComment('')
-                    }}
-                    className="flex-1"
-                  >
-                    Manual
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="deduction-comment">Description</Label>
-                {deductionDialogType === 'manual' ? (
-                  <Textarea
-                    id="deduction-comment"
-                    placeholder="Enter description..."
-                    value={deductionDialogComment}
-                    onChange={(e) => setDeductionDialogComment(e.target.value)}
-                    className="min-h-[80px]"
-                    rows={3}
-                  />
-                ) : (
-                  <div className="min-h-[80px] px-3 py-2 border rounded-md bg-gray-50 flex items-center">
-                    <span className="text-sm text-gray-700">
-                      {(() => {
-                        const order = orders.find(o => o.orderId === deductionDialogOrderId)
-                        if (deductionDialogType === 'pickup' && order) {
-                          return `${order.pickupName} discount`
-                        } else if (deductionDialogType === 'delivery' && order) {
-                          return `${order.deliveryName} discount`
-                        }
-                        return '—'
-                      })()}
-                    </span>
-                  </div>
-                )}
+                <Textarea
+                  id="deduction-comment"
+                  placeholder="Enter description..."
+                  value={deductionDialogComment}
+                  onChange={(e) => setDeductionDialogComment(e.target.value)}
+                  className="min-h-[80px]"
+                  rows={3}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deduction-applies-to">Applies To</Label>
@@ -3577,8 +3639,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             <DialogFooter>
               <Button variant="outline" onClick={() => {
                 setDeductionDialogOpen(false)
-                setDeductionDialogType('manual')
                 setDeductionDialogComment('')
+                setDeductionDialogAmount('')
               }}>
                 Cancel
               </Button>
