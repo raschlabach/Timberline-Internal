@@ -459,22 +459,61 @@ export async function POST(
           WHERE id = $2
         `, [miscQuoteAmount, miscQuoteAssignmentId])
 
-        // Delete existing deductions and pending split loads
-        if (hasAppliesTo) {
-          await client.query(`
-            DELETE FROM cross_driver_freight_deductions
-            WHERE truckload_id IN ($1, $2)
-              AND comment LIKE '%split load%'
-              AND is_manual = true
-              AND applies_to = 'driver_pay'
-          `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
-        } else {
-          await client.query(`
-            DELETE FROM cross_driver_freight_deductions
-            WHERE truckload_id IN ($1, $2)
-              AND comment LIKE '%split load%'
-              AND is_manual = true
-          `, [fullQuoteTruckloadId, miscQuoteTruckloadId])
+        // Delete ALL existing split load deductions for this order across ALL truckloads
+        // First, find all truckloads that have this order (pickup or delivery assignment)
+        const allTruckloadsResult = await client.query(`
+          SELECT DISTINCT truckload_id
+          FROM truckload_order_assignments
+          WHERE order_id = $1
+        `, [orderId])
+        
+        const allTruckloadIds = allTruckloadsResult.rows.map(row => row.truckload_id)
+        
+        // Check if order_id column exists
+        const orderIdCheck = await query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'cross_driver_freight_deductions'
+          AND column_name = 'order_id'
+        `)
+        const hasOrderId = orderIdCheck.rows.length > 0
+        
+        // Delete ALL split load deductions for this order
+        if (hasOrderId) {
+          // If order_id column exists, use it for precise deletion
+          if (hasAppliesTo) {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE order_id = $1
+                AND comment LIKE '%split load%'
+                AND is_manual = true
+            `, [orderId])
+          } else {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE order_id = $1
+                AND comment LIKE '%split load%'
+                AND is_manual = true
+            `, [orderId])
+          }
+        } else if (allTruckloadIds.length > 0) {
+          // If order_id doesn't exist, delete from all truckloads that have this order
+          if (hasAppliesTo) {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE truckload_id = ANY($1::int[])
+                AND comment LIKE '%split load%'
+                AND is_manual = true
+            `, [allTruckloadIds])
+          } else {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE truckload_id = ANY($1::int[])
+                AND comment LIKE '%split load%'
+                AND is_manual = true
+            `, [allTruckloadIds])
+          }
         }
 
         // Delete pending split load if it exists
@@ -483,9 +522,33 @@ export async function POST(
           WHERE order_id = $1
         `, [orderId])
 
+        // Check if order_id column exists for INSERT
+        const orderIdCheckInsert = await query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'cross_driver_freight_deductions'
+          AND column_name = 'order_id'
+        `)
+        const hasOrderIdForInsert = orderIdCheckInsert.rows.length > 0
+
         // Create deductions/additions on both truckloads
         const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
-        if (hasAppliesTo) {
+        if (hasAppliesTo && hasOrderIdForInsert) {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              order_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              applies_to,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, true, false, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [fullQuoteTruckloadId, orderId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
+        } else if (hasAppliesTo) {
           await client.query(`
             INSERT INTO cross_driver_freight_deductions (
               truckload_id,
@@ -498,6 +561,19 @@ export async function POST(
               updated_at
             ) VALUES ($1, $2, $3, true, false, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `, [fullQuoteTruckloadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
+        } else if (hasOrderIdForInsert) {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              order_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [fullQuoteTruckloadId, orderId, miscAmount, fullQuoteDeductionComment])
         } else {
           await client.query(`
             INSERT INTO cross_driver_freight_deductions (
@@ -513,7 +589,21 @@ export async function POST(
         }
 
         const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
-        if (hasAppliesTo) {
+        if (hasAppliesTo && hasOrderIdForInsert) {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              order_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              applies_to,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, true, true, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [miscQuoteTruckloadId, orderId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
+        } else if (hasAppliesTo) {
           await client.query(`
             INSERT INTO cross_driver_freight_deductions (
               truckload_id,
@@ -526,6 +616,19 @@ export async function POST(
               updated_at
             ) VALUES ($1, $2, $3, true, true, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `, [miscQuoteTruckloadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
+        } else if (hasOrderIdForInsert) {
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              order_id,
+              deduction,
+              comment,
+              is_manual,
+              is_addition,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [miscQuoteTruckloadId, orderId, miscAmount, miscQuoteAdditionComment])
         } else {
           await client.query(`
             INSERT INTO cross_driver_freight_deductions (
@@ -579,27 +682,58 @@ export async function POST(
           `, [miscQuoteAmount, existingAssignment.assignmentId])
         }
 
-        // Delete existing pending split load and deductions
+        // Delete existing pending split load and ALL deductions for this order
         await client.query(`
           DELETE FROM pending_split_loads
           WHERE order_id = $1
         `, [orderId])
 
-        if (hasAppliesTo) {
+        // Check if order_id column exists for deletion
+        const orderIdCheckPending = await query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'cross_driver_freight_deductions'
+          AND column_name = 'order_id'
+        `)
+        const hasOrderIdForPending = orderIdCheckPending.rows.length > 0
+
+        // Delete ALL split load deductions for this order across ALL truckloads
+        if (hasOrderIdForPending) {
+          // If order_id column exists, use it for precise deletion
           await client.query(`
             DELETE FROM cross_driver_freight_deductions
-            WHERE truckload_id = $1
+            WHERE order_id = $1
               AND comment LIKE '%split load%'
               AND is_manual = true
-              AND applies_to = 'driver_pay'
-          `, [existingAssignment.truckloadId])
+          `, [orderId])
         } else {
-          await client.query(`
-            DELETE FROM cross_driver_freight_deductions
-            WHERE truckload_id = $1
-              AND comment LIKE '%split load%'
-              AND is_manual = true
-          `, [existingAssignment.truckloadId])
+          // If order_id doesn't exist, find all truckloads with this order and delete
+          const allTruckloadsResult = await client.query(`
+            SELECT DISTINCT truckload_id
+            FROM truckload_order_assignments
+            WHERE order_id = $1
+          `, [orderId])
+          
+          const allTruckloadIds = allTruckloadsResult.rows.map(row => row.truckload_id)
+          
+          if (allTruckloadIds.length > 0) {
+            if (hasAppliesTo) {
+              await client.query(`
+                DELETE FROM cross_driver_freight_deductions
+                WHERE truckload_id = ANY($1::int[])
+                  AND comment LIKE '%split load%'
+                  AND is_manual = true
+              `, [allTruckloadIds])
+            } else {
+              await client.query(`
+                DELETE FROM cross_driver_freight_deductions
+                WHERE truckload_id = ANY($1::int[])
+                  AND comment LIKE '%split load%'
+                  AND is_manual = true
+              `, [allTruckloadIds])
+            }
+          }
         }
 
         // Create deduction/addition on existing truckload
@@ -610,10 +744,34 @@ export async function POST(
           ? order.delivery_customer_name 
           : order.pickup_customer_name
 
+        // Check if order_id column exists for INSERT in pending section
+        const orderIdCheckPendingInsert = await query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'cross_driver_freight_deductions'
+          AND column_name = 'order_id'
+        `)
+        const hasOrderIdForPendingInsert = orderIdCheckPendingInsert.rows.length > 0
+
         if (assignmentThatGetsFull) {
           // Existing assignment gets full quote - misc, so create deduction
           const deductionComment = `${otherCustomerName} split load (misc portion)`
-          if (hasAppliesTo) {
+          if (hasAppliesTo && hasOrderIdForPendingInsert) {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                order_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                applies_to,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, $4, true, false, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, orderId, miscAmount, deductionComment, fullQuoteAppliesToValue])
+          } else if (hasAppliesTo) {
             await client.query(`
               INSERT INTO cross_driver_freight_deductions (
                 truckload_id,
@@ -626,6 +784,19 @@ export async function POST(
                 updated_at
               ) VALUES ($1, $2, $3, true, false, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             `, [existingAssignment.truckloadId, miscAmount, deductionComment, fullQuoteAppliesToValue])
+          } else if (hasOrderIdForPendingInsert) {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                order_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, $4, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, orderId, miscAmount, deductionComment])
           } else {
             await client.query(`
               INSERT INTO cross_driver_freight_deductions (
@@ -640,9 +811,23 @@ export async function POST(
             `, [existingAssignment.truckloadId, miscAmount, deductionComment])
           }
         } else {
-          // Existing assignment gets misc, so create addition
-          const additionComment = `${otherCustomerName} split load (misc portion)`
-          if (hasAppliesTo) {
+          // Existing assignment gets misc value, so create addition
+          const additionComment = `${customerName} split load (misc portion)`
+          if (hasAppliesTo && hasOrderIdForPendingInsert) {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                order_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                applies_to,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, $4, true, true, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, orderId, miscAmount, additionComment, miscAppliesToValue])
+          } else if (hasAppliesTo) {
             await client.query(`
               INSERT INTO cross_driver_freight_deductions (
                 truckload_id,
@@ -655,6 +840,19 @@ export async function POST(
                 updated_at
               ) VALUES ($1, $2, $3, true, true, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             `, [existingAssignment.truckloadId, miscAmount, additionComment, miscAppliesToValue])
+          } else if (hasOrderIdForPendingInsert) {
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                order_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, $4, true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [existingAssignment.truckloadId, orderId, miscAmount, additionComment])
           } else {
             await client.query(`
               INSERT INTO cross_driver_freight_deductions (
@@ -808,6 +1006,16 @@ export async function DELETE(
       const assignmentIds = assignmentsResult.rows.map(r => r.assignment_id)
       const truckloadIds = assignmentsResult.rows.map(r => r.truckload_id)
 
+      // Check if order_id column exists
+      const orderIdCheckDelete = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'order_id'
+      `)
+      const hasOrderIdForDelete = orderIdCheckDelete.rows.length > 0
+
       // Clear assignment quotes
       await client.query(`
         UPDATE truckload_order_assignments
@@ -822,15 +1030,25 @@ export async function DELETE(
         WHERE order_id = $1
       `, [orderId])
 
-      // Delete all split load deductions and additions
-      // This deletes both is_addition = true (additions) and is_addition = false (deductions)
-      // And handles both applies_to = 'driver_pay' and applies_to = 'load_value'
-      await client.query(`
-        DELETE FROM cross_driver_freight_deductions
-        WHERE truckload_id = ANY($1::int[])
-          AND comment LIKE '%split load%'
-          AND is_manual = true
-      `, [truckloadIds])
+      // Delete ALL split load deductions and additions for this order across ALL truckloads
+      // This ensures no duplicates remain when split load is cleared
+      if (hasOrderIdForDelete) {
+        // If order_id column exists, use it for precise deletion
+        await client.query(`
+          DELETE FROM cross_driver_freight_deductions
+          WHERE order_id = $1
+            AND comment LIKE '%split load%'
+            AND is_manual = true
+        `, [orderId])
+      } else if (truckloadIds.length > 0) {
+        // If order_id doesn't exist, delete from all truckloads that have this order
+        await client.query(`
+          DELETE FROM cross_driver_freight_deductions
+          WHERE truckload_id = ANY($1::int[])
+            AND comment LIKE '%split load%'
+            AND is_manual = true
+        `, [truckloadIds])
+      }
 
       await client.query('COMMIT')
       

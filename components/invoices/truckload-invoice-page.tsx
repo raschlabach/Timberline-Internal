@@ -2970,19 +2970,20 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         )}
                       </div>
                       
-                      {/* Right: Cross-Driver Deductions List */}
+                      {/* Right: Pickup/Delivery & Split Load Deductions List */}
                       <div className="px-2">
                         <div className="flex items-center justify-between mb-2 gap-2">
                           <div className="text-sm font-semibold text-gray-700">
                             Pickup/Delivery Deductions
                           </div>
                         </div>
-                        {crossDriverDeductions.length === 0 ? (
+                        {crossDriverDeductions.length === 0 && splitLoadDeductions.length === 0 ? (
                           <div className="text-sm text-gray-600 border border-gray-300 rounded p-2">
                             No deductions added
                           </div>
                         ) : (
                           <div className="space-y-1.5 max-h-96 overflow-y-auto">
+                            {/* Pickup/Delivery Deductions */}
                             {crossDriverDeductions.map((deduction) => (
                               <div
                                 key={deduction.id}
@@ -3092,28 +3093,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 </div>
                               </div>
                             ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Split Load Deductions - Read Only */}
-                    {splitLoadDeductions.length > 0 && (
-                      <div className="px-2 mt-4">
-                        <div className="border-2 border-blue-300 rounded-lg p-3 bg-blue-50">
-                          <div className="flex items-center justify-between mb-2 gap-2">
-                            <div className="text-sm font-semibold text-blue-800">
-                              Split Load Deductions (Read Only)
-                            </div>
-                            <div className="text-xs text-blue-600 italic">
-                              Edit via split load popup in order
-                            </div>
-                          </div>
-                          <div className="space-y-1.5 max-h-96 overflow-y-auto">
+                            
+                            {/* Split Load Deductions - Read Only (combined in same list) */}
                             {splitLoadDeductions.map((deduction) => (
                               <div
                                 key={deduction.id}
-                                className={`border rounded-lg p-2 text-xs ${
+                                className={`border-2 border-blue-300 rounded-lg p-2 text-xs bg-blue-50 ${
                                   deduction.isAddition 
                                     ? 'border-green-300 bg-green-50' 
                                     : deduction.action === 'Picked up' 
@@ -3129,8 +3114,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                         ? 'text-red-700' 
                                         : 'text-gray-700'
                                   }`}>
-                                    <div className="font-medium">
-                                      {deduction.isAddition ? '+' : '-'} ${deduction.amount.toFixed(2)} - {deduction.comment || 'Split load'}
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-medium">
+                                        {deduction.isAddition ? '+' : '-'} ${deduction.amount.toFixed(2)} - {deduction.comment || 'Split load'}
+                                      </span>
+                                      <span className="text-[10px] text-blue-600 italic bg-blue-100 px-1 rounded">
+                                        Split Load
+                                      </span>
                                     </div>
                                     {deduction.driverName && (
                                       <div className="text-gray-600 mt-0.5 text-xs">
@@ -3138,16 +3128,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                       </div>
                                     )}
                                     <div className="text-gray-500 mt-0.5 text-xs">
-                                      Applies to: {deduction.appliesTo === 'driver_pay' ? 'Driver Pay' : 'Load Value'}
+                                      Applies to: {deduction.appliesTo === 'driver_pay' ? 'Driver Pay' : 'Load Value'} • Edit via split load popup in order
                                     </div>
                                   </div>
                                 </div>
                               </div>
                             ))}
                           </div>
-                        </div>
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     {/* Payroll Summary */}
                     <div className="px-2 mt-3">
