@@ -492,70 +492,56 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       orderGroups.set(order.orderId, existing)
     })
     
-    // Calculate total quotes from grouped orders (each order counted once, same as Invoice page)
-    // Exclude orders where assignment_quote is the misc value (the smaller portion)
-    const totalQuotes = Array.from(orderGroups.values()).reduce((sum, groupOrders) => {
-      // For transfer orders (both pickup and delivery), only count once
-      // For non-transfer orders, count each one
+    // Calculate total quotes from grouped orders (each order counted once, matching Invoice page exactly)
+    // The invoice page uses groupedOrders which combines transfers, so we need to do the same
+    // Create a flat list of orders (transfers are already combined in the grouping)
+    const flatOrders: Order[] = []
+    Array.from(orderGroups.values()).forEach(groupOrders => {
       const hasPickup = groupOrders.some(o => o.assignmentType === 'pickup')
       const hasDelivery = groupOrders.some(o => o.assignmentType === 'delivery')
       const isTransfer = hasPickup && hasDelivery
       
       if (isTransfer) {
-        // For transfers, use the first order's quote (they should be the same)
-        const order = groupOrders[0]
-        if (order.freightQuote) {
-          // Parse quote string (could be "$123.45" or "123.45" or a number)
-          const quoteStr = String(order.freightQuote)
-          const fullQuote = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
-          if (isNaN(fullQuote)) return sum
-          
-          // Check if this is a split load with assignment_quote
-          const assignmentQuote = order.assignmentQuote
-          const orderFullQuote = order.fullQuote || fullQuote
-          if (assignmentQuote !== null && assignmentQuote !== undefined && orderFullQuote) {
-            const aq = typeof assignmentQuote === 'number' ? assignmentQuote : parseFloat(String(assignmentQuote)) || 0
-            const otherPortion = orderFullQuote - aq
-            
-            // If assignment_quote is the smaller value (misc), exclude from load value
-            if (aq < otherPortion) {
-              return sum
-            } else {
-              // This is the "full quote - misc" assignment - include full quote in load value
-              return sum + orderFullQuote
-            }
-          }
-          
-          return sum + fullQuote
-        }
+        // For transfers, only add one order (they should have the same quote)
+        // Prefer delivery order (matching invoice page logic)
+        const deliveryOrder = groupOrders.find(o => o.assignmentType === 'delivery')
+        flatOrders.push(deliveryOrder || groupOrders[0])
       } else {
-        // For non-transfers, sum all orders in the group
-        return sum + groupOrders.reduce((groupSum, order) => {
-          if (order.freightQuote) {
-            const quoteStr = String(order.freightQuote)
-            const fullQuote = parseFloat(quoteStr.replace(/[^0-9.-]/g, ''))
-            if (isNaN(fullQuote)) return groupSum
-            
-            // Check if this is a split load with assignment_quote
-            const assignmentQuote = order.assignmentQuote
-            const orderFullQuote = order.fullQuote || fullQuote
-            if (assignmentQuote !== null && assignmentQuote !== undefined && orderFullQuote) {
-              const aq = typeof assignmentQuote === 'number' ? assignmentQuote : parseFloat(String(assignmentQuote)) || 0
-              const otherPortion = orderFullQuote - aq
-              
-              // If assignment_quote is the smaller value (misc), exclude from load value
-              if (aq < otherPortion) {
-                return groupSum
-              } else {
-                // This is the "full quote - misc" assignment - include full quote in load value
-                return groupSum + orderFullQuote
-              }
-            }
-            
-            return groupSum + fullQuote
+        // For non-transfers, add all orders
+        flatOrders.push(...groupOrders)
+      }
+    })
+    
+    // Now calculate totalQuotes exactly like invoice page does
+    const totalQuotes = flatOrders.reduce((sum, order) => {
+      if (order.freightQuote) {
+        // Parse quote string (could be "$123.45" or "123.45") - matching invoice page exactly
+        const quoteStr = String(order.freightQuote)
+        const cleaned = quoteStr.replace(/[^0-9.-]/g, '')
+        const fullQuote = parseFloat(cleaned)
+        if (isNaN(fullQuote)) return sum
+        
+        // If assignment_quote exists, check if it's the misc value (matching invoice page logic exactly)
+        if (order.assignmentQuote !== null && order.assignmentQuote !== undefined) {
+          const assignmentQuote = typeof order.assignmentQuote === 'number' 
+            ? order.assignmentQuote 
+            : parseFloat(String(order.assignmentQuote)) || 0
+          
+          const otherPortion = fullQuote - assignmentQuote
+          
+          // If assignment_quote is the smaller value (misc), exclude it from load value
+          // If assignment_quote is the larger value (full - misc), include full quote
+          if (assignmentQuote < otherPortion) {
+            // This is the misc assignment - exclude from load value
+            return sum
+          } else {
+            // This is the "full quote - misc" assignment - include full quote in load value
+            return sum + fullQuote
           }
-          return groupSum
-        }, 0)
+        }
+        
+        // No split load - include the quote normally
+        return sum + fullQuote
       }
       return sum
     }, 0)
@@ -727,15 +713,25 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum + tlTotals.totalQuotes
     }, 0)
 
+    // Use saved calculated load values (source of truth)
     const totalLoadValue = selectedDriver.truckloads.reduce((sum, tl) => {
-      const tlTotals = calculateTruckloadTotals(tl)
-      return sum + tlTotals.loadValue
+      return sum + (tl.calculatedLoadValue || 0)
     }, 0)
 
-    // Sum all driver pay from truckloads (already includes all deductions/additions)
+    // Sum all driver pay from truckloads using saved calculated values
     const totalDriverPayFromLoads = selectedDriver.truckloads.reduce((sum, tl) => {
-      const tlTotals = calculateTruckloadTotals(tl)
-      return sum + tlTotals.driverPay
+      const payMethod = tl.payCalculationMethod || 'automatic'
+      let driverPay = 0
+      
+      if (payMethod === 'hourly' && tl.payHours !== null && tl.payHours !== undefined && selectedDriver) {
+        driverPay = tl.payHours * selectedDriver.miscDrivingRate
+      } else if (payMethod === 'manual' && tl.payManualAmount !== null && tl.payManualAmount !== undefined) {
+        driverPay = tl.payManualAmount
+      } else if (tl.calculatedDriverPay !== null && tl.calculatedDriverPay !== undefined) {
+        driverPay = tl.calculatedDriverPay
+      }
+      
+      return sum + driverPay
     }, 0)
 
     const miscDrivingHours = selectedDriver.hours
@@ -1506,7 +1502,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   {truckload.calculatedLoadValue === null || truckload.calculatedLoadValue === undefined ? (
                                     <span className="font-bold text-yellow-700">$0.00 (not calculated)</span>
                                   ) : (
-                                    <span className="font-bold text-blue-900">${tlTotals.loadValue.toFixed(2)}</span>
+                                    <span className="font-bold text-blue-900">${truckload.calculatedLoadValue.toFixed(2)}</span>
                                   )}
                                 </div>
                               </div>
@@ -1518,38 +1514,21 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                               {truckload.calculatedLoadValue === null || truckload.calculatedLoadValue === undefined ? (
                                 <div className="text-xs text-yellow-700 font-medium">$0.00 (not calculated)</div>
                               ) : (
-                                <div className="text-sm font-bold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
+                                <div className="text-sm font-bold text-blue-600">${(truckload.calculatedLoadValue * (selectedDriver.loadPercentage || 30) / 100).toFixed(2)}</div>
                               )}
                             </div>
 
                             {/* Step 3: Deductions & Additions - Detailed */}
-                            {(truckload.deductions.filter(d => !d.isManual && d.deduction > 0).length > 0 || 
+                            {/* Only show if we have calculated values OR if there are deductions to display */}
+                            {((truckload.calculatedLoadValue !== null && truckload.calculatedLoadValue !== undefined) || 
                               truckload.deductions.filter(d => d.isManual && !d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0).length > 0 ||
                               truckload.deductions.filter(d => d.isManual && d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && d.deduction > 0).length > 0 ||
-                              truckload.deductions.filter(d => d.splitLoadId && d.orderId && d.deduction > 0).length > 0) && (
+                              truckload.deductions.filter(d => d.splitLoadId && d.orderId && d.deduction > 0).length > 0 ||
+                              truckload.deductions.filter(d => d.isManual && !d.isAddition && d.appliesTo === 'driver_pay' && d.orderId && !d.splitLoadId && d.deduction > 0).length > 0) && (
                               <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
                                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Adjustments</div>
                                 <div className="space-y-1">
-                                  {/* Automatic Deductions - Detailed */}
-                                  {truckload.deductions.filter(d => !d.isManual && d.deduction > 0).length > 0 && (
-                                    <div className="bg-red-50 rounded px-2 py-1">
-                                      <div className="text-xs font-semibold text-red-700 mb-0.5">Auto Deductions</div>
-                                      {truckload.deductions
-                                        .filter(d => !d.isManual && d.deduction > 0)
-                                        .map((ded) => (
-                                          <div key={ded.id} className="flex items-center justify-between text-xs">
-                                            <span className="text-red-700 truncate flex-1">
-                                              {ded.driverName || 'Unknown'} - {ded.date ? new Date(ded.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }) : ''} - {ded.action || ''} from {ded.customerName || 'Unknown'}
-                                            </span>
-                                            <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
-                                          </div>
-                                        ))}
-                                      <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                        <span className="text-red-700 font-medium">Subtotal</span>
-                                        <span className="text-red-600 font-bold">-${tlTotals.automaticDeductions.toFixed(2)}</span>
-                                      </div>
-                                    </div>
-                                  )}
+                                  {/* Note: Automatic deductions are no longer used - removed from display */}
                                   
                                   {/* Pickup/Delivery Deductions from Driver Pay - Detailed */}
                                   {truckload.deductions.filter(d => d.isManual && !d.isAddition && d.appliesTo === 'driver_pay' && d.orderId && !d.splitLoadId && d.deduction > 0).length > 0 && (
@@ -1659,7 +1638,15 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 {truckload.payCalculationMethod === 'automatic' && (truckload.calculatedDriverPay === null || truckload.calculatedDriverPay === undefined) ? (
                                   <div className="text-xs text-yellow-700 font-medium mb-1">$0.00 (not calculated)</div>
                                 ) : (
-                                  <div className="text-base font-bold text-blue-600 mb-1">${tlTotals.driverPay.toFixed(2)}</div>
+                                  <div className="text-base font-bold text-blue-600 mb-1">
+                                    {truckload.payCalculationMethod === 'hourly' && truckload.payHours !== null && truckload.payHours !== undefined && selectedDriver
+                                      ? `$${(truckload.payHours * selectedDriver.miscDrivingRate).toFixed(2)}`
+                                      : truckload.payCalculationMethod === 'manual' && truckload.payManualAmount !== null && truckload.payManualAmount !== undefined
+                                      ? `$${truckload.payManualAmount.toFixed(2)}`
+                                      : truckload.calculatedDriverPay !== null && truckload.calculatedDriverPay !== undefined
+                                      ? `$${truckload.calculatedDriverPay.toFixed(2)}`
+                                      : '$0.00 (not calculated)'}
+                                  </div>
                                 )}
                                 <div className="flex gap-1">
                                   <Button
