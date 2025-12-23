@@ -42,34 +42,101 @@ export async function GET(
     const client = await getClient()
     
     try {
+      // Check if split_load_id column exists (new simplified system)
+      const splitLoadIdCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'split_load_id'
+      `)
+      const hasSplitLoadId = splitLoadIdCheck.rows.length > 0
+
       let result
-      if (hasAppliesTo && hasOrderId) {
-        result = await client.query(`
-          SELECT 
-            id,
-            order_id,
-            driver_name,
-            date,
-            action,
-            customer_name,
-            deduction as amount,
-            applies_to,
-            comment,
-            is_addition
-          FROM cross_driver_freight_deductions
-          WHERE truckload_id = $1
-            AND is_manual = true
-            AND comment LIKE '%split load%'
-            AND order_id IS NOT NULL
-          ORDER BY created_at DESC
-        `, [truckloadId])
-      } else if (hasAppliesTo) {
-        // If order_id column doesn't exist, we can't filter by it, so return empty
-        // (This shouldn't happen in production, but handle gracefully)
-        result = { rows: [] }
+      if (hasSplitLoadId) {
+        // Use new simplified system - get deductions via split_load_id
+        if (hasAppliesTo && hasOrderId) {
+          result = await client.query(`
+            SELECT 
+              id,
+              order_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction as amount,
+              applies_to,
+              comment,
+              is_addition
+            FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND is_manual = true
+              AND split_load_id IS NOT NULL
+              AND order_id IS NOT NULL
+            ORDER BY created_at DESC
+          `, [truckloadId])
+        } else if (hasAppliesTo) {
+          result = await client.query(`
+            SELECT 
+              id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction as amount,
+              applies_to,
+              comment,
+              is_addition
+            FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND is_manual = true
+              AND split_load_id IS NOT NULL
+            ORDER BY created_at DESC
+          `, [truckloadId])
+        } else {
+          result = await client.query(`
+            SELECT 
+              id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction as amount,
+              'driver_pay' as applies_to,
+              comment,
+              is_addition
+            FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND is_manual = true
+              AND split_load_id IS NOT NULL
+            ORDER BY created_at DESC
+          `, [truckloadId])
+        }
       } else {
-        // If order_id column doesn't exist, we can't filter by it, so return empty
-        result = { rows: [] }
+        // Fallback to old system (comment-based)
+        if (hasAppliesTo && hasOrderId) {
+          result = await client.query(`
+            SELECT 
+              id,
+              order_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction as amount,
+              applies_to,
+              comment,
+              is_addition
+            FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND is_manual = true
+              AND comment LIKE '%split load%'
+              AND order_id IS NOT NULL
+            ORDER BY created_at DESC
+          `, [truckloadId])
+        } else {
+          result = { rows: [] }
+        }
       }
 
       const deductions = result.rows
