@@ -654,19 +654,20 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum
     }, 0)
     
-    // Use ONLY saved calculated values from Invoice page (source of truth)
-    // If values aren't available, they need to be calculated on the invoice page first
-    const loadValue = truckload.calculatedLoadValue !== null && truckload.calculatedLoadValue !== undefined
-      ? truckload.calculatedLoadValue
-      : null
+    // CALCULATE LOAD VALUE DIRECTLY FROM QUOTES AND DEDUCTIONS
+    // Load Value = Total Quotes - deductions from load value + additions to load value
+    const loadValue = totalQuotes 
+      - pickupDeliveryDeductionsFromLoadValue 
+      - manualDeductionsFromLoadValue 
+      - splitLoadDeductionsFromLoadValue 
+      + manualAdditionsToLoadValue 
+      + splitLoadAdditionsToLoadValue
     
-    // Calculate base driver pay (load value × percentage) - only if we have load value
-    const baseDriverPay = loadValue !== null
-      ? loadValue * (selectedDriver?.loadPercentage || 30) / 100
-      : null
+    // Calculate base driver pay (load value × percentage)
+    const baseDriverPay = loadValue * (selectedDriver?.loadPercentage || 30) / 100
     
     // Calculate driver pay based on selected method
-    let driverPay: number | null = null
+    let driverPay: number
     const payMethod = truckload.payCalculationMethod || 'automatic'
     
     if (payMethod === 'hourly' && truckload.payHours !== null && truckload.payHours !== undefined && selectedDriver) {
@@ -676,10 +677,13 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       // Manual: use entered amount
       driverPay = truckload.payManualAmount
     } else {
-      // Automatic: use ONLY saved calculated driver pay from invoice page (source of truth)
-      driverPay = truckload.calculatedDriverPay !== null && truckload.calculatedDriverPay !== undefined
-        ? truckload.calculatedDriverPay
-        : null
+      // Automatic: Base Driver Pay - deductions from driver pay + additions to driver pay
+      driverPay = baseDriverPay 
+        - pickupDeliveryDeductionsFromDriverPay 
+        - manualDeductionsFromDriverPay 
+        - splitLoadDeductionsFromDriverPay 
+        + manualAdditionsToDriverPay 
+        + splitLoadAdditionsToDriverPay
     }
     
     return { 
@@ -689,16 +693,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       splitLoadDeductionsFromLoadValue,
       splitLoadAdditionsToLoadValue,
       manualAdditionsToLoadValue,
-      loadValue: loadValue ?? 0, // Use 0 as fallback for display, but show warning if null
-      baseDriverPay: baseDriverPay ?? 0, // Use 0 as fallback for display, but show warning if null
+      loadValue: Number(loadValue),
+      baseDriverPay: Number(baseDriverPay),
       automaticDeductions,
       pickupDeliveryDeductionsFromDriverPay,
       manualDeductionsFromDriverPay,
       splitLoadDeductionsFromDriverPay,
       splitLoadAdditionsToDriverPay,
       manualAdditionsToDriverPay,
-      driverPay: driverPay ?? 0, // Use 0 as fallback for display, but show warning if null
-      hasCalculatedValues: loadValue !== null && (payMethod !== 'automatic' || driverPay !== null), // Track if we have calculated values
+      driverPay: Number(driverPay),
+      hasCalculatedValues: true, // Always calculated now
       pickupCount,
       deliveryCount
     }
@@ -713,25 +717,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum + tlTotals.totalQuotes
     }, 0)
 
-    // Use saved calculated load values (source of truth)
+    // Calculate total load value from all truckloads
     const totalLoadValue = selectedDriver.truckloads.reduce((sum, tl) => {
-      return sum + (tl.calculatedLoadValue || 0)
+      const tlTotals = calculateTruckloadTotals(tl)
+      return sum + tlTotals.loadValue
     }, 0)
 
-    // Sum all driver pay from truckloads using saved calculated values
+    // Sum all driver pay from truckloads - calculate directly
     const totalDriverPayFromLoads = selectedDriver.truckloads.reduce((sum, tl) => {
-      const payMethod = tl.payCalculationMethod || 'automatic'
-      let driverPay = 0
-      
-      if (payMethod === 'hourly' && tl.payHours !== null && tl.payHours !== undefined && selectedDriver) {
-        driverPay = tl.payHours * selectedDriver.miscDrivingRate
-      } else if (payMethod === 'manual' && tl.payManualAmount !== null && tl.payManualAmount !== undefined) {
-        driverPay = tl.payManualAmount
-      } else if (tl.calculatedDriverPay !== null && tl.calculatedDriverPay !== undefined) {
-        driverPay = tl.calculatedDriverPay
-      }
-      
-      return sum + driverPay
+      const tlTotals = calculateTruckloadTotals(tl)
+      return sum + tlTotals.driverPay
     }, 0)
 
     const miscDrivingHours = selectedDriver.hours
@@ -1389,13 +1384,6 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             {/* Step 1: Load Value Calculation */}
                             <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
                               <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Load Value</div>
-                              {truckload.calculatedLoadValue === null || truckload.calculatedLoadValue === undefined ? (
-                                <div className="bg-yellow-50 border border-yellow-200 rounded px-2 py-1.5 mb-2">
-                                  <div className="text-xs text-yellow-800 font-medium">
-                                    ⚠️ Values not calculated yet. Please open this truckload on the Invoice page to calculate values.
-                                  </div>
-                                </div>
-                              ) : null}
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="font-medium">Total Quotes</span>
@@ -1499,11 +1487,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 
                                 <div className="flex items-center justify-between text-xs bg-blue-100 rounded px-2 py-1 border border-blue-300">
                                   <span className="font-semibold text-blue-900">Load Value</span>
-                                  {truckload.calculatedLoadValue === null || truckload.calculatedLoadValue === undefined ? (
-                                    <span className="font-bold text-yellow-700">$0.00 (not calculated)</span>
-                                  ) : (
-                                    <span className="font-bold text-blue-900">${truckload.calculatedLoadValue.toFixed(2)}</span>
-                                  )}
+                                  <span className="font-bold text-blue-900">${tlTotals.loadValue.toFixed(2)}</span>
                                 </div>
                               </div>
                             </div>
@@ -1511,11 +1495,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             {/* Step 2: Base Driver Pay */}
                             <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
                               <div className="text-xs font-semibold text-blue-700 mb-0.5">Base Driver Pay ({selectedDriver.loadPercentage}%)</div>
-                              {truckload.calculatedLoadValue === null || truckload.calculatedLoadValue === undefined ? (
-                                <div className="text-xs text-yellow-700 font-medium">$0.00 (not calculated)</div>
-                              ) : (
-                                <div className="text-sm font-bold text-blue-600">${(truckload.calculatedLoadValue * (selectedDriver.loadPercentage || 30) / 100).toFixed(2)}</div>
-                              )}
+                              <div className="text-sm font-bold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
                             </div>
 
                             {/* Step 3: Deductions & Additions - Detailed */}
@@ -1635,19 +1615,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
                                   {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
                                 </div>
-                                {truckload.payCalculationMethod === 'automatic' && (truckload.calculatedDriverPay === null || truckload.calculatedDriverPay === undefined) ? (
-                                  <div className="text-xs text-yellow-700 font-medium mb-1">$0.00 (not calculated)</div>
-                                ) : (
-                                  <div className="text-base font-bold text-blue-600 mb-1">
-                                    {truckload.payCalculationMethod === 'hourly' && truckload.payHours !== null && truckload.payHours !== undefined && selectedDriver
-                                      ? `$${(truckload.payHours * selectedDriver.miscDrivingRate).toFixed(2)}`
-                                      : truckload.payCalculationMethod === 'manual' && truckload.payManualAmount !== null && truckload.payManualAmount !== undefined
-                                      ? `$${truckload.payManualAmount.toFixed(2)}`
-                                      : truckload.calculatedDriverPay !== null && truckload.calculatedDriverPay !== undefined
-                                      ? `$${truckload.calculatedDriverPay.toFixed(2)}`
-                                      : '$0.00 (not calculated)'}
-                                  </div>
-                                )}
+                                <div className="text-base font-bold text-blue-600 mb-1">${tlTotals.driverPay.toFixed(2)}</div>
                                 <div className="flex gap-1">
                                   <Button
                                     size="sm"
