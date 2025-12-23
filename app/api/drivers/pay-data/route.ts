@@ -406,26 +406,87 @@ export async function GET(request: NextRequest) {
     }
 
     // Get cross-driver freight deductions for these truckloads
+    // Include order_id and customer_name, and ensure comments are always included
     let deductionsResult
     try {
-      deductionsResult = await query(`
-        SELECT 
-          id,
-          truckload_id as "truckloadId",
-          driver_name as "driverName",
-          TO_CHAR(date, 'YYYY-MM-DD') as date,
-          action,
-          footage,
-          dimensions,
-          deduction,
-          is_manual as "isManual",
-          comment,
-          is_addition as "isAddition",
-          COALESCE(applies_to, 'driver_pay') as "appliesTo"
-        FROM cross_driver_freight_deductions
-        WHERE truckload_id = ANY($1::int[])
-        ORDER BY truckload_id, date
-      `, [truckloadIds])
+      // Check if order_id and customer_name columns exist
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name IN ('order_id', 'customer_name')
+      `)
+      const hasOrderId = columnCheck.rows.some((r: any) => r.column_name === 'order_id')
+      const hasCustomerName = columnCheck.rows.some((r: any) => r.column_name === 'customer_name')
+      
+      if (hasOrderId && hasCustomerName) {
+        deductionsResult = await query(`
+          SELECT 
+            id,
+            truckload_id as "truckloadId",
+            order_id as "orderId",
+            driver_name as "driverName",
+            TO_CHAR(date, 'YYYY-MM-DD') as date,
+            action,
+            footage,
+            dimensions,
+            deduction,
+            is_manual as "isManual",
+            comment,
+            is_addition as "isAddition",
+            COALESCE(applies_to, 'driver_pay') as "appliesTo",
+            customer_name as "customerName",
+            split_load_id as "splitLoadId"
+          FROM cross_driver_freight_deductions
+          WHERE truckload_id = ANY($1::int[])
+          ORDER BY truckload_id, date
+        `, [truckloadIds])
+      } else if (hasOrderId) {
+        deductionsResult = await query(`
+          SELECT 
+            id,
+            truckload_id as "truckloadId",
+            order_id as "orderId",
+            driver_name as "driverName",
+            TO_CHAR(date, 'YYYY-MM-DD') as date,
+            action,
+            footage,
+            dimensions,
+            deduction,
+            is_manual as "isManual",
+            comment,
+            is_addition as "isAddition",
+            COALESCE(applies_to, 'driver_pay') as "appliesTo",
+            NULL as "customerName",
+            NULL as "splitLoadId"
+          FROM cross_driver_freight_deductions
+          WHERE truckload_id = ANY($1::int[])
+          ORDER BY truckload_id, date
+        `, [truckloadIds])
+      } else {
+        deductionsResult = await query(`
+          SELECT 
+            id,
+            truckload_id as "truckloadId",
+            NULL as "orderId",
+            driver_name as "driverName",
+            TO_CHAR(date, 'YYYY-MM-DD') as date,
+            action,
+            footage,
+            dimensions,
+            deduction,
+            is_manual as "isManual",
+            comment,
+            is_addition as "isAddition",
+            COALESCE(applies_to, 'driver_pay') as "appliesTo",
+            NULL as "customerName",
+            NULL as "splitLoadId"
+          FROM cross_driver_freight_deductions
+          WHERE truckload_id = ANY($1::int[])
+          ORDER BY truckload_id, date
+        `, [truckloadIds])
+      }
     } catch (err: any) {
       // If table doesn't exist, return empty result
       if (err?.message?.includes('does not exist') || err?.code === '42P01') {
@@ -574,6 +635,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Add deductions to truckloads
+    // Ensure all deductions have proper comments/descriptions
     deductionsResult.rows.forEach((deduction: any) => {
       const driver = driversMap.get(
         truckloads.find((t: any) => t.id === deduction.truckloadId)?.driverId
@@ -581,8 +643,29 @@ export async function GET(request: NextRequest) {
       if (driver) {
         const truckload = driver.truckloads.find((t: any) => t.id === deduction.truckloadId)
         if (truckload) {
+          // Generate comment if missing
+          let comment = deduction.comment
+          if (!comment || comment.trim() === '') {
+            if (deduction.splitLoadId) {
+              // Split load deduction - generate description
+              comment = deduction.isAddition 
+                ? `Split load addition (misc portion)`
+                : `Split load deduction (misc portion)`
+            } else if (deduction.orderId && deduction.action && deduction.customerName) {
+              // Pickup/delivery deduction - generate description
+              comment = `${deduction.customerName} ${deduction.action}`
+            } else if (deduction.isManual) {
+              // Manual deduction without comment - use generic
+              comment = 'Manual adjustment'
+            } else {
+              // Automatic deduction - use action or generic
+              comment = deduction.action || 'Automatic deduction'
+            }
+          }
+          
           truckload.deductions.push({
             id: deduction.id,
+            orderId: deduction.orderId || null,
             driverName: deduction.driverName,
             date: deduction.date,
             action: deduction.action,
@@ -590,10 +673,11 @@ export async function GET(request: NextRequest) {
             dimensions: deduction.dimensions,
             deduction: parseFloat(deduction.deduction) || 0,
             isManual: deduction.isManual,
-            comment: deduction.comment,
+            comment: comment,
             isAddition: deduction.isAddition || false,
             appliesTo: deduction.appliesTo || 'driver_pay',
-            customerName: deduction.customerName || null
+            customerName: deduction.customerName || null,
+            splitLoadId: deduction.splitLoadId || null
           })
         }
       }
