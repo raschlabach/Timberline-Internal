@@ -37,7 +37,7 @@
 
   /* Page setup - minimal margins */
   @page {
-    margin: 0.25in;
+    margin: 0.15in;
     size: letter;
   }
 
@@ -143,8 +143,8 @@
   .print-content [class*="Card"],
   .print-content [class*="card"] {
     border: 1px solid #000 !important;
-    margin-bottom: 0.5rem;
-    padding: 0.5rem;
+    margin-bottom: 0.25rem !important;
+    padding: 0.375rem !important;
     break-inside: avoid;
     font-size: 9pt;
   }
@@ -193,24 +193,32 @@
 
   /* Reduce spacing in all elements - especially for print */
   .print-content .space-y-6 > * + * {
-    margin-top: 0.25rem !important;
+    margin-top: 0.15rem !important;
   }
 
   /* Remove large spacing after driver hours section */
   .print-content > div > div {
-    margin-top: 0.25rem !important;
+    margin-top: 0.15rem !important;
   }
 
   .print-content .space-y-4 > * + * {
-    margin-top: 0.375rem !important;
+    margin-top: 0.2rem !important;
   }
 
   .print-content .space-y-3 > * + * {
-    margin-top: 0.25rem !important;
+    margin-top: 0.15rem !important;
   }
 
   .print-content .space-y-2 > * + * {
-    margin-top: 0.25rem !important;
+    margin-top: 0.15rem !important;
+  }
+  
+  /* Reduce margins on headings */
+  .print-content h2,
+  .print-content h3,
+  .print-content h4 {
+    margin-top: 0.15rem !important;
+    margin-bottom: 0.15rem !important;
   }
 
   /* Compact text sizes */

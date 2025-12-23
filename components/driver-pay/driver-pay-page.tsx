@@ -1070,7 +1070,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
               </div>
 
               {/* Driver Settings */}
-              <Card className="p-4">
+              <Card className="p-4 no-print">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
@@ -1173,8 +1173,22 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 </div>
               </Card>
 
-              {/* Driver Hours */}
-              <Card className="p-4">
+              {/* Driver Hours - Only show if there are hours */}
+              {(() => {
+                const miscDrivingHours = selectedDriver.hours
+                  .filter(h => h.type === 'misc_driving')
+                  .reduce((sum, hour) => sum + (typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0), 0)
+                const maintenanceHours = selectedDriver.hours
+                  .filter(h => h.type === 'maintenance')
+                  .reduce((sum, hour) => sum + (typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0), 0)
+                const hasHours = miscDrivingHours > 0 || maintenanceHours > 0 || selectedDriver.hours.length > 0
+                
+                if (!hasHours) {
+                  return null // Don't render the card if no hours
+                }
+                
+                return (
+                  <Card key="driver-hours" className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold">Driver Hours</h3>
                   {!newHour ? (
@@ -1318,7 +1332,9 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 ) : (
                   <div className="text-sm text-gray-500 text-center py-4">No hours recorded</div>
                 )}
-              </Card>
+                  </Card>
+                )
+              })()}
 
               {/* Truckloads - Grid Layout for Print */}
               <div>
