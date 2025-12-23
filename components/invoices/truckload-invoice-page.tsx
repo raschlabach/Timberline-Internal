@@ -1237,12 +1237,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         throw new Error('Failed to load split load deductions')
       }
       
-      const data = await res.json()
-      if (data.success && data.deductions) {
-        setSplitLoadDeductions(data.deductions)
-      } else {
-        setSplitLoadDeductions([])
-      }
+        const data = await res.json()
+        if (data.success && data.deductions) {
+          // Filter out any deductions without orderId (safety measure)
+          setSplitLoadDeductions(data.deductions.filter((d: CrossDriverDeduction) => d.orderId !== null))
+        } else {
+          setSplitLoadDeductions([])
+        }
     } catch (error) {
       console.error('Error loading split load deductions:', error)
       setSplitLoadDeductions([])
@@ -1278,20 +1279,24 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return sum
     }, 0)
     
-    // Split load deductions/additions from load value
-    const splitLoadDeductionsFromLoadValue = splitLoadDeductions.reduce((sum, deduction) => {
-      if (!deduction.isAddition && deduction.appliesTo === 'load_value') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    // Split load deductions/additions from load value (only count those with orderId)
+    const splitLoadDeductionsFromLoadValue = splitLoadDeductions
+      .filter(deduction => deduction.orderId !== null)
+      .reduce((sum, deduction) => {
+        if (!deduction.isAddition && deduction.appliesTo === 'load_value') {
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
-    const splitLoadAdditionsToLoadValue = splitLoadDeductions.reduce((sum, deduction) => {
-      if (deduction.isAddition && deduction.appliesTo === 'load_value') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    const splitLoadAdditionsToLoadValue = splitLoadDeductions
+      .filter(deduction => deduction.orderId !== null)
+      .reduce((sum, deduction) => {
+        if (deduction.isAddition && deduction.appliesTo === 'load_value') {
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
     // Automatic deductions removed - no longer used
     const automaticDeductions = 0
@@ -1319,20 +1324,24 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return sum
     }, 0)
     
-    // Split load deductions/additions from driver pay
-    const splitLoadDeductionsFromDriverPay = splitLoadDeductions.reduce((sum, deduction) => {
-      if (!deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    // Split load deductions/additions from driver pay (only count those with orderId)
+    const splitLoadDeductionsFromDriverPay = splitLoadDeductions
+      .filter(deduction => deduction.orderId !== null)
+      .reduce((sum, deduction) => {
+        if (!deduction.isAddition && deduction.appliesTo === 'driver_pay') {
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
-    const splitLoadAdditionsToDriverPay = splitLoadDeductions.reduce((sum, deduction) => {
-      if (deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    const splitLoadAdditionsToDriverPay = splitLoadDeductions
+      .filter(deduction => deduction.orderId !== null)
+      .reduce((sum, deduction) => {
+        if (deduction.isAddition && deduction.appliesTo === 'driver_pay') {
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
     // Calculate load value (quotes - pickup/delivery deductions from load value - manual deductions from load value - split load deductions from load value + manual additions to load value + split load additions to load value)
     const loadValue = totalQuotes - pickupDeliveryDeductionsFromLoadValue - manualDeductionsFromLoadValue - splitLoadDeductionsFromLoadValue + manualAdditionsToLoadValue + splitLoadAdditionsToLoadValue
@@ -3107,7 +3116,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             ))}
                             
                             {/* Split Load Deductions - Read Only (combined in same list) */}
-                            {splitLoadDeductions.map((deduction) => (
+                            {splitLoadDeductions
+                              .filter(deduction => deduction.orderId !== null) // Only show deductions with orderId
+                              .map((deduction) => (
                               <div
                                 key={deduction.id}
                                 className={`border-2 border-blue-300 rounded-lg p-2 text-xs bg-blue-50 ${

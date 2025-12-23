@@ -60,58 +60,32 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND comment LIKE '%split load%'
+            AND order_id IS NOT NULL
           ORDER BY created_at DESC
         `, [truckloadId])
       } else if (hasAppliesTo) {
-        result = await client.query(`
-          SELECT 
-            id,
-            driver_name,
-            date,
-            action,
-            customer_name,
-            deduction as amount,
-            applies_to,
-            comment,
-            is_addition
-          FROM cross_driver_freight_deductions
-          WHERE truckload_id = $1
-            AND is_manual = true
-            AND comment LIKE '%split load%'
-          ORDER BY created_at DESC
-        `, [truckloadId])
+        // If order_id column doesn't exist, we can't filter by it, so return empty
+        // (This shouldn't happen in production, but handle gracefully)
+        result = { rows: [] }
       } else {
-        result = await client.query(`
-          SELECT 
-            id,
-            driver_name,
-            date,
-            action,
-            customer_name,
-            deduction as amount,
-            'driver_pay' as applies_to,
-            comment,
-            is_addition
-          FROM cross_driver_freight_deductions
-          WHERE truckload_id = $1
-            AND is_manual = true
-            AND comment LIKE '%split load%'
-          ORDER BY created_at DESC
-        `, [truckloadId])
+        // If order_id column doesn't exist, we can't filter by it, so return empty
+        result = { rows: [] }
       }
 
-      const deductions = result.rows.map(row => ({
-        id: `db-${row.id}`,
-        orderId: hasOrderId ? (row.order_id ? String(row.order_id) : null) : null,
-        driverName: row.driver_name || '',
-        date: row.date || '',
-        action: row.action || 'Picked up',
-        customerName: row.customer_name || '',
-        amount: typeof row.amount === 'number' ? row.amount : parseFloat(String(row.amount || 0)) || 0,
-        appliesTo: row.applies_to || 'driver_pay',
-        comment: row.comment || '',
-        isAddition: row.is_addition || false
-      }))
+      const deductions = result.rows
+        .map(row => ({
+          id: `db-${row.id}`,
+          orderId: hasOrderId ? (row.order_id ? String(row.order_id) : null) : null,
+          driverName: row.driver_name || '',
+          date: row.date || '',
+          action: row.action || 'Picked up',
+          customerName: row.customer_name || '',
+          amount: typeof row.amount === 'number' ? row.amount : parseFloat(String(row.amount || 0)) || 0,
+          appliesTo: row.applies_to || 'driver_pay',
+          comment: row.comment || '',
+          isAddition: row.is_addition || false
+        }))
+        .filter(deduction => deduction.orderId !== null) // Additional safety filter
 
       return NextResponse.json({
         success: true,
