@@ -423,24 +423,50 @@ export async function GET(request: NextRequest) {
       if (hasOrderId && hasCustomerName) {
         deductionsResult = await query(`
           SELECT 
-            id,
-            truckload_id as "truckloadId",
-            order_id as "orderId",
-            driver_name as "driverName",
-            TO_CHAR(date, 'YYYY-MM-DD') as date,
-            action,
-            footage,
-            dimensions,
-            deduction,
-            is_manual as "isManual",
-            comment,
-            is_addition as "isAddition",
-            COALESCE(applies_to, 'driver_pay') as "appliesTo",
-            customer_name as "customerName",
-            split_load_id as "splitLoadId"
-          FROM cross_driver_freight_deductions
-          WHERE truckload_id = ANY($1::int[])
-          ORDER BY truckload_id, date
+            cdfd.id,
+            cdfd.truckload_id as "truckloadId",
+            cdfd.order_id as "orderId",
+            cdfd.driver_name as "driverName",
+            TO_CHAR(cdfd.date, 'YYYY-MM-DD') as date,
+            cdfd.action,
+            cdfd.footage,
+            cdfd.dimensions,
+            cdfd.deduction,
+            cdfd.is_manual as "isManual",
+            cdfd.comment,
+            cdfd.is_addition as "isAddition",
+            COALESCE(cdfd.applies_to, 'driver_pay') as "appliesTo",
+            cdfd.customer_name as "customerName",
+            cdfd.split_load_id as "splitLoadId",
+            -- For split load deductions, get the other driver's assignment info
+            CASE 
+              WHEN cdfd.split_load_id IS NOT NULL AND cdfd.order_id IS NOT NULL THEN (
+                SELECT json_build_object(
+                  'assignmentType', toa_other.assignment_type,
+                  'customerName', CASE 
+                    WHEN toa_other.assignment_type = 'pickup' THEN pc.customer_name
+                    WHEN toa_other.assignment_type = 'delivery' THEN dc.customer_name
+                    ELSE NULL
+                  END,
+                  'truckloadDate', TO_CHAR(t_other.start_date, 'MM/dd/yyyy'),
+                  'driverName', u_other.full_name
+                )
+                FROM truckload_order_assignments toa_other
+                JOIN truckloads t_other ON toa_other.truckload_id = t_other.id
+                JOIN orders o_other ON toa_other.order_id = o_other.id
+                LEFT JOIN customers pc ON o_other.pickup_customer_id = pc.id
+                LEFT JOIN customers dc ON o_other.delivery_customer_id = dc.id
+                LEFT JOIN users u_other ON t_other.driver_id = u_other.id
+                WHERE toa_other.order_id = cdfd.order_id
+                  AND toa_other.truckload_id != cdfd.truckload_id
+                ORDER BY t_other.start_date DESC
+                LIMIT 1
+              )
+              ELSE NULL
+            END as "otherAssignmentInfo"
+          FROM cross_driver_freight_deductions cdfd
+          WHERE cdfd.truckload_id = ANY($1::int[])
+          ORDER BY cdfd.truckload_id, cdfd.date
         `, [truckloadIds])
       } else if (hasOrderId) {
         deductionsResult = await query(`

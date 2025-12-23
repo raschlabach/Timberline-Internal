@@ -453,8 +453,16 @@
   
   /* Manual deductions and split load deductions list items - match adjustments text size (6pt) */
   /* Target list items (divs with flex) inside manual/split load sections, but not headers or subtotals */
+  /* Also target the Load Value section specifically */
   .print-content .bg-red-50 > div:not(:first-child):not(:last-child) .text-xs,
   .print-content .bg-green-50 > div:not(:first-child):not(:last-child) .text-xs {
+    font-size: 6pt !important;
+    line-height: 1.1 !important;
+  }
+  
+  /* Specifically target manual and split load deductions in Load Value section */
+  .print-content [class*="Load Value"] ~ * .bg-red-50 > div:not(:first-child):not(:last-child) .text-xs,
+  .print-content [class*="Load Value"] ~ * .bg-green-50 > div:not(:first-child):not(:last-child) .text-xs {
     font-size: 6pt !important;
     line-height: 1.1 !important;
   }

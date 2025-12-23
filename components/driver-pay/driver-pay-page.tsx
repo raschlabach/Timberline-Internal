@@ -54,6 +54,12 @@ interface Deduction {
   appliesTo?: 'load_value' | 'driver_pay' // For manual items: whether it applies to load value or driver pay. Defaults to 'driver_pay'
   customerName?: string | null // Customer name for pickup/delivery (for automatic items)
   splitLoadId?: number | null // ID of split load if this is a split load deduction
+  otherAssignmentInfo?: {
+    assignmentType: 'pickup' | 'delivery'
+    customerName: string | null
+    truckloadDate: string | null
+    driverName: string | null
+  } | null // Info about the other driver's assignment for split loads
 }
 
 interface Order {
@@ -1180,7 +1186,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                 </div>
               </Card>
 
-              {/* Driver Hours - Only show if there are hours */}
+              {/* Driver Hours - Always visible on screen, only in print if there are hours */}
               {(() => {
                 const miscDrivingHours = selectedDriver.hours
                   .filter(h => h.type === 'misc_driving')
@@ -1190,12 +1196,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                   .reduce((sum, hour) => sum + (typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0), 0)
                 const hasHours = miscDrivingHours > 0 || maintenanceHours > 0 || selectedDriver.hours.length > 0
                 
-                if (!hasHours) {
-                  return null // Don't render the card if no hours
-                }
-                
                 return (
-                  <Card key="driver-hours" className="p-4">
+                  <Card key="driver-hours" className={`p-4 ${!hasHours ? 'print:hidden' : ''}`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold">Driver Hours</h3>
                   {!newHour ? (
@@ -1452,12 +1454,24 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                     <div className="text-xs font-semibold text-red-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Deductions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
-                                      .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
-                                          <span className="text-red-700 truncate flex-1 print:text-xs">{ded.comment || 'Split load deduction (misc portion)'}</span>
-                                          <span className="text-red-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">-${ded.deduction.toFixed(2)}</span>
-                                        </div>
-                                      ))}
+                                      .map((ded) => {
+                                        // Create description based on other driver's assignment
+                                        let description = 'Split load deduction (misc portion)'
+                                        if (ded.otherAssignmentInfo) {
+                                          const { assignmentType, customerName, truckloadDate, driverName } = ded.otherAssignmentInfo
+                                          const action = assignmentType === 'pickup' ? 'picked up' : 'delivered'
+                                          const driver = driverName || 'Unknown Driver'
+                                          const customer = customerName || 'Unknown Customer'
+                                          const date = truckloadDate || ''
+                                          description = `${driver} ${action} "${customer}"${date ? ` (${date})` : ''}`
+                                        }
+                                        return (
+                                          <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                            <span className="text-red-700 truncate flex-1 print:text-xs">{description}</span>
+                                            <span className="text-red-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">-${ded.deduction.toFixed(2)}</span>
+                                          </div>
+                                        )
+                                      })}
                                     <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-red-300">
                                       <span className="text-red-700 font-medium print:font-normal">Subtotal</span>
                                       <span className="text-red-600 font-bold print:font-semibold">-${tlTotals.splitLoadDeductionsFromLoadValue.toFixed(2)}</span>
@@ -1512,8 +1526,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
                             {/* Step 2: Base Driver Pay */}
                             <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
-                              <div className="text-xs font-semibold text-blue-700 mb-0.5">Base Driver Pay ({selectedDriver.loadPercentage}%)</div>
-                              <div className="text-sm font-bold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-blue-700">Base Driver Pay ({selectedDriver.loadPercentage}%)</span>
+                                <span className="font-bold text-blue-600">${tlTotals.baseDriverPay.toFixed(2)}</span>
+                              </div>
                             </div>
 
                             {/* Step 3: Deductions & Additions - Detailed */}
@@ -1627,13 +1643,15 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             )}
                             <div className="flex-shrink-0 pay-method-controls">
                               <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-                                <div className="text-xs text-gray-600 mb-0.5">
-                                  Driver Pay
-                                  {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
-                                  {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
-                                  {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-600">
+                                    Driver Pay
+                                    {truckload.payCalculationMethod === 'automatic' && ` (${selectedDriver.loadPercentage}%)`}
+                                    {truckload.payCalculationMethod === 'hourly' && ` (${truckload.payHours || 0}h × $${selectedDriver.miscDrivingRate.toFixed(2)})`}
+                                    {truckload.payCalculationMethod === 'manual' && ' (Manual)'}
+                                  </span>
+                                  <span className="text-base font-bold text-blue-600">${tlTotals.driverPay.toFixed(2)}</span>
                                 </div>
-                                <div className="text-base font-bold text-blue-600 mb-1">${tlTotals.driverPay.toFixed(2)}</div>
                                 <div className="flex gap-1">
                                   <Button
                                     size="sm"
