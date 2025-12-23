@@ -3143,6 +3143,55 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                       Applies to: {deduction.appliesTo === 'driver_pay' ? 'Driver Pay' : 'Load Value'} • Edit via split load popup in order
                                     </div>
                                   </div>
+                                  <div className="flex items-center gap-1">
+                                    {deduction.orderId && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={async () => {
+                                          if (!confirm('Are you sure you want to clear the split load for this order? This will delete all split load deductions for this order across both truckloads.')) {
+                                            return
+                                          }
+                                          
+                                          try {
+                                            const response = await fetch(`/api/orders/${deduction.orderId}/split-load`, {
+                                              method: 'DELETE',
+                                              credentials: 'include'
+                                            })
+                                            
+                                            const data = await response.json()
+                                            if (data.success) {
+                                              toast.success(data.message || 'Split load cleared successfully')
+                                              // Reload split load deductions
+                                              await reloadSplitLoadDeductions()
+                                              // Also reload cross-driver deductions to refresh the list
+                                              if (selectedTruckloadId) {
+                                                const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
+                                                  method: 'GET',
+                                                  credentials: 'include'
+                                                })
+                                                if (reloadRes.ok) {
+                                                  const reloadData = await reloadRes.json()
+                                                  if (reloadData.success && reloadData.deductions) {
+                                                    setCrossDriverDeductions(reloadData.deductions)
+                                                  }
+                                                }
+                                              }
+                                            } else {
+                                              toast.error(data.error || 'Failed to clear split load')
+                                            }
+                                          } catch (error) {
+                                            console.error('Error clearing split load:', error)
+                                            toast.error('Failed to clear split load')
+                                          }
+                                        }}
+                                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        title="Clear split load for this order"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ))}
