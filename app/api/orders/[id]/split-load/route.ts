@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import fs from 'fs'
-import path from 'path'
 
 // GET /api/orders/[id]/split-load - Get split load info for a specific order
 export async function GET(
@@ -20,9 +18,6 @@ export async function GET(
     if (isNaN(orderId)) {
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
     }
-
-    // Apply migration if needed
-    await applySplitLoadsMigration()
 
     // Get split load config from split_loads table
     const splitLoadResult = await query(`
@@ -152,9 +147,6 @@ export async function POST(
 
     const miscAmount = parseFloat(miscValue)
 
-    // Apply migration if needed
-    await applySplitLoadsMigration()
-
     const client = await getClient()
     
     try {
@@ -207,7 +199,23 @@ export async function POST(
       const pickupAssignment = order.pickup_assignment
       const deliveryAssignment = order.delivery_assignment
 
+      // Validation checks
+      if (fullQuote <= 0) {
+        throw new Error('Order must have a valid freight quote greater than 0')
+      }
+
+      if (miscAmount >= fullQuote) {
+        throw new Error(`Misc value ($${miscAmount.toFixed(2)}) must be less than full quote ($${fullQuote.toFixed(2)})`)
+      }
+
       const hasBothAssignments = pickupAssignment && deliveryAssignment
+
+      if (hasBothAssignments) {
+        // Verify both assignments are on different truckloads (not a transfer)
+        if (pickupAssignment.truckloadId === deliveryAssignment.truckloadId) {
+          throw new Error('Cannot create split load: both assignments must be on different truckloads. Transfer orders cannot be split loads.')
+        }
+      }
 
       if (hasBothAssignments) {
         // Both assignments exist - apply split load immediately
@@ -267,60 +275,25 @@ export async function POST(
           WHERE split_load_id = $1
         `, [splitLoadId])
 
-        // Check if columns exist
-        const orderIdCheck = await query(`
-          SELECT column_name 
-          FROM information_schema.columns 
-          WHERE table_schema = 'public' 
-          AND table_name = 'cross_driver_freight_deductions'
-          AND column_name = 'order_id'
-        `)
-        const hasOrderId = orderIdCheck.rows.length > 0
-
-        const appliesToCheck = await query(`
-          SELECT column_name 
-          FROM information_schema.columns 
-          WHERE table_schema = 'public' 
-          AND table_name = 'cross_driver_freight_deductions'
-          AND column_name = 'applies_to'
-        `)
-        const hasAppliesTo = appliesToCheck.rows.length > 0
-
         // Create deductions/additions
         const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
         const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
 
-        if (hasAppliesTo && hasOrderId) {
-          // Deduction on full quote truckload
-          await client.query(`
-            INSERT INTO cross_driver_freight_deductions (
-              truckload_id, order_id, split_load_id, deduction, comment,
-              is_manual, is_addition, applies_to, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, true, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `, [fullQuoteTruckloadId, orderId, splitLoadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
+        // Deduction on full quote truckload
+        await client.query(`
+          INSERT INTO cross_driver_freight_deductions (
+            truckload_id, order_id, split_load_id, deduction, comment,
+            is_manual, is_addition, applies_to, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, true, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [fullQuoteTruckloadId, orderId, splitLoadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
 
-          // Addition on misc truckload
-          await client.query(`
-            INSERT INTO cross_driver_freight_deductions (
-              truckload_id, order_id, split_load_id, deduction, comment,
-              is_manual, is_addition, applies_to, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, true, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `, [miscQuoteTruckloadId, orderId, splitLoadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
-        } else if (hasAppliesTo) {
-          await client.query(`
-            INSERT INTO cross_driver_freight_deductions (
-              truckload_id, split_load_id, deduction, comment,
-              is_manual, is_addition, applies_to, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, true, false, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `, [fullQuoteTruckloadId, splitLoadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
-
-          await client.query(`
-            INSERT INTO cross_driver_freight_deductions (
-              truckload_id, split_load_id, deduction, comment,
-              is_manual, is_addition, applies_to, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, true, true, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `, [miscQuoteTruckloadId, splitLoadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
-        }
+        // Addition on misc truckload
+        await client.query(`
+          INSERT INTO cross_driver_freight_deductions (
+            truckload_id, order_id, split_load_id, deduction, comment,
+            is_manual, is_addition, applies_to, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, true, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [miscQuoteTruckloadId, orderId, splitLoadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
       } else {
         // Only one assignment exists - just save config for later
         await client.query(`
@@ -380,9 +353,6 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
     }
 
-    // Apply migration if needed
-    await applySplitLoadsMigration()
-
     const client = await getClient()
     
     try {
@@ -436,45 +406,6 @@ export async function DELETE(
       success: false,
       error: 'Failed to clear split load'
     }, { status: 500 })
-  }
-}
-
-// Helper function to apply migration
-async function applySplitLoadsMigration() {
-  try {
-    const tableCheck = await query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-      AND table_name = 'split_loads'
-    `)
-    
-    if (tableCheck.rows.length > 0) {
-      // Migration already applied
-      return
-    }
-
-    console.log('Applying split_loads migration...')
-    const client = await getClient()
-    try {
-      await client.query('BEGIN')
-      const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-      const migrationSql = fs.readFileSync(
-        path.join(migrationsDir, 'simplify-split-loads-system.sql'),
-        'utf8'
-      )
-      await client.query(migrationSql)
-      await client.query('COMMIT')
-      console.log('split_loads migration applied successfully')
-    } catch (migrationError) {
-      await client.query('ROLLBACK')
-      console.error('Error applying split_loads migration:', migrationError)
-      throw migrationError
-    } finally {
-      client.release()
-    }
-  } catch (migrationCheckError) {
-    console.error('Error checking/applying split_loads migration:', migrationCheckError)
   }
 }
 

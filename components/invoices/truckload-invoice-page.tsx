@@ -116,7 +116,6 @@ interface AssignedOrderRow {
   deliveryNotes: string | null
   payingCustomerName: string | null
   freightQuote: string | null
-  splitQuote: number | null
   assignmentQuote: number | null
   middlefield: boolean
   backhaul: boolean
@@ -382,7 +381,6 @@ function SortableTableRow({
               onChange={(e) => {
                 // For split load orders, we don't allow editing here
                 // They must be set via the split loads dialog
-                // Only check assignment_quote, ignore old split_quote
                 const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
                 if (hasConfirmedSplitLoad) {
                   return // Read-only for confirmed split load quotes
@@ -394,7 +392,7 @@ function SortableTableRow({
               disabled={updatingQuotes.has(row.orderId) || (row.assignmentQuote !== null && row.assignmentQuote !== undefined)}
             />
             {(() => {
-              // Check if this order has an active split load (only use assignment_quote, ignore old split_quote)
+              // Check if this order has an active split load
               const hasActiveSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
               
               // Check if this order should be a split load (warning conditions)
@@ -450,8 +448,8 @@ function SortableTableRow({
             })()}
           </div>
           {/* Show deduction amount for confirmed split loads only */}
-          {(() => {
-            // Only show deduction if there's a confirmed split load (only use assignment_quote, ignore old split_quote)
+            {(() => {
+            // Only show deduction if there's a confirmed split load
             const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
             
             if (!hasConfirmedSplitLoad) {
@@ -2118,9 +2116,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deliveryNotes: o.delivery_customer?.notes || null,
           payingCustomerName: null as string | null,
           freightQuote: o.freight_quote,
-          splitQuote: (o as any).split_quote !== null && (o as any).split_quote !== undefined
-            ? parseFloat((o as any).split_quote) 
-            : null,
           assignmentQuote: (o as any).assignment_quote !== null && (o as any).assignment_quote !== undefined
             ? parseFloat((o as any).assignment_quote) 
             : null,
@@ -2237,7 +2232,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })
   }
 
-  // Check if truckload has split load orders (only check assignment_quote, ignore old split_quote)
+  // Check if truckload has split load orders
   const hasMiddlefieldOrders = useMemo(() => {
     if (!orders.length) return false
     return orders.some(order => 

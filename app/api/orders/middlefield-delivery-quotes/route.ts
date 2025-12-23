@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import fs from 'fs'
-import path from 'path'
 
 // POST /api/orders/middlefield-delivery-quotes - Update split quotes and create deductions
 export async function POST(request: NextRequest) {
@@ -19,67 +17,6 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(updates) || updates.length === 0) {
       return NextResponse.json({ success: false, error: 'Updates array is required' }, { status: 400 })
     }
-
-    // Check if split_quote column exists, if not, apply migration
-    try {
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'orders'
-        AND column_name IN ('split_quote', 'middlefield_delivery_quote')
-      `)
-      
-      const hasSplitQuote = columnCheck.rows.some(r => r.column_name === 'split_quote')
-      const hasOldColumn = columnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
-      
-      if (!hasSplitQuote && hasOldColumn) {
-        console.log('Applying split_quote migration...')
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'simplify-split-loads.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
-          await client.query('COMMIT')
-          console.log('split_quote migration applied successfully')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error applying split_quote migration:', migrationError)
-        } finally {
-          client.release()
-        }
-      } else if (!hasSplitQuote && !hasOldColumn) {
-        // Neither column exists, create split_quote
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          await client.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_quote DECIMAL(10, 2)')
-          await client.query('COMMIT')
-          console.log('split_quote column created')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error creating split_quote column:', migrationError)
-        } finally {
-          client.release()
-        }
-      }
-    } catch (migrationCheckError) {
-      console.error('Error checking/applying migration:', migrationCheckError)
-    }
-
-    // Check if applies_to column exists
-    const appliesToCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'applies_to'
-    `)
-    const hasAppliesTo = appliesToCheck.rows.length > 0
 
     const client = await getClient()
     
@@ -97,60 +34,72 @@ export async function POST(request: NextRequest) {
           throw new Error('otherTruckloadId is required')
         }
 
-        const newSplitQuote = splitQuote ? parseFloat(splitQuote) : null
-        const customerNameForDeduction = customerName || 'Unknown Customer'
-        const deductionAmount = newSplitQuote !== null && newSplitQuote > 0 ? newSplitQuote : null
+        if (!assignmentType) {
+          throw new Error('assignmentType is required')
+        }
 
-        // Update the order's split quote
+        const newAssignmentQuote = splitQuote ? parseFloat(splitQuote) : null
+        const customerNameForDeduction = customerName || 'Unknown Customer'
+
+        // Get the assignment ID for this order and assignment type
+        const assignmentResult = await client.query(`
+          SELECT id, truckload_id
+          FROM truckload_order_assignments
+          WHERE order_id = $1 AND assignment_type = $2
+          ORDER BY created_at DESC
+          LIMIT 1
+        `, [orderId, assignmentType])
+
+        if (assignmentResult.rows.length === 0) {
+          throw new Error(`Assignment not found for order ${orderId} with type ${assignmentType}`)
+        }
+
+        const assignmentId = assignmentResult.rows[0].id
+        const currentTruckloadId = assignmentResult.rows[0].truckload_id
+
+        // Get the order's full quote to calculate deduction amount
+        const orderResult = await client.query(`
+          SELECT freight_quote FROM orders WHERE id = $1
+        `, [orderId])
+
+        if (orderResult.rows.length === 0) {
+          throw new Error(`Order ${orderId} not found`)
+        }
+
+        const fullQuote = parseFloat(orderResult.rows[0].freight_quote) || 0
+        const deductionAmount = newAssignmentQuote !== null && newAssignmentQuote > 0 
+          ? (fullQuote - newAssignmentQuote)
+          : null
+
+        // Update the assignment's quote
         await client.query(`
-          UPDATE orders
-          SET split_quote = $1,
+          UPDATE truckload_order_assignments
+          SET assignment_quote = $1,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = $2
-        `, [newSplitQuote, orderId])
+        `, [newAssignmentQuote, assignmentId])
 
-        // Handle deduction: delete existing if split quote is cleared, or update/create if set
-        if (newSplitQuote === null || newSplitQuote <= 0) {
-          // Delete existing deduction if split quote is cleared
-          if (hasAppliesTo) {
-            await client.query(`
-              DELETE FROM cross_driver_freight_deductions
-              WHERE truckload_id = $1
-                AND comment LIKE '%' || $2 || '%split load%'
-                AND is_manual = true
-                AND applies_to = 'driver_pay'
-            `, [otherTruckloadId, customerNameForDeduction])
-          } else {
-            await client.query(`
-              DELETE FROM cross_driver_freight_deductions
-              WHERE truckload_id = $1
-                AND comment LIKE '%' || $2 || '%split load%'
-                AND is_manual = true
-            `, [otherTruckloadId, customerNameForDeduction])
-          }
+        // Handle deduction: delete existing if assignment quote is cleared, or update/create if set
+        if (newAssignmentQuote === null || newAssignmentQuote <= 0) {
+          // Delete existing deduction if assignment quote is cleared
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND comment LIKE '%' || $2 || '%split load%'
+              AND is_manual = true
+              AND applies_to = 'driver_pay'
+          `, [otherTruckloadId, customerNameForDeduction])
         } else if (deductionAmount !== null && deductionAmount > 0) {
           // Check if deduction already exists
-          let existingDeduction
-          if (hasAppliesTo) {
-            existingDeduction = await client.query(`
-              SELECT id
-              FROM cross_driver_freight_deductions
-              WHERE truckload_id = $1
-                AND comment LIKE '%' || $2 || '%split load%'
-                AND is_manual = true
-                AND applies_to = 'driver_pay'
-              LIMIT 1
-            `, [otherTruckloadId, customerNameForDeduction])
-          } else {
-            existingDeduction = await client.query(`
-              SELECT id
-              FROM cross_driver_freight_deductions
-              WHERE truckload_id = $1
-                AND comment LIKE '%' || $2 || '%split load%'
-                AND is_manual = true
-              LIMIT 1
-            `, [otherTruckloadId, customerNameForDeduction])
-          }
+          const existingDeduction = await client.query(`
+            SELECT id
+            FROM cross_driver_freight_deductions
+            WHERE truckload_id = $1
+              AND comment LIKE '%' || $2 || '%split load%'
+              AND is_manual = true
+              AND applies_to = 'driver_pay'
+            LIMIT 1
+          `, [otherTruckloadId, customerNameForDeduction])
 
           const comment = `${customerNameForDeduction} split load`
 
@@ -164,28 +113,19 @@ export async function POST(request: NextRequest) {
             `, [deductionAmount, existingDeduction.rows[0].id])
           } else {
             // Create new deduction
-            if (hasAppliesTo) {
-              await client.query(`
-                INSERT INTO cross_driver_freight_deductions (
-                  truckload_id,
-                  deduction,
-                  is_manual,
-                  comment,
-                  is_addition,
-                  applies_to
-                ) VALUES ($1, $2, true, $3, false, 'driver_pay')
-              `, [otherTruckloadId, deductionAmount, comment])
-            } else {
-              await client.query(`
-                INSERT INTO cross_driver_freight_deductions (
-                  truckload_id,
-                  deduction,
-                  is_manual,
-                  comment,
-                  is_addition
-                ) VALUES ($1, $2, true, $3, false)
-              `, [otherTruckloadId, deductionAmount, comment])
-            }
+            await client.query(`
+              INSERT INTO cross_driver_freight_deductions (
+                truckload_id,
+                order_id,
+                deduction,
+                comment,
+                is_manual,
+                is_addition,
+                applies_to,
+                created_at,
+                updated_at
+              ) VALUES ($1, $2, $3, $4, true, false, 'driver_pay', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `, [otherTruckloadId, orderId, deductionAmount, comment])
           }
         }
       }
@@ -194,7 +134,7 @@ export async function POST(request: NextRequest) {
       
       return NextResponse.json({
         success: true,
-        message: `Updated ${updates.length} split quote(s)`
+        message: `Updated ${updates.length} assignment quote(s)`
       })
     } catch (error) {
       await client.query('ROLLBACK')
@@ -203,11 +143,11 @@ export async function POST(request: NextRequest) {
       client.release()
     }
   } catch (error) {
-    console.error('Error updating split quotes:', error)
+    console.error('Error updating assignment quotes:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({
       success: false,
-      error: 'Failed to update split quotes',
+      error: 'Failed to update assignment quotes',
       details: errorMessage
     }, { status: 500 })
   }

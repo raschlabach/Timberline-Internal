@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query, getClient } from '@/lib/db'
+import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import fs from 'fs'
-import path from 'path'
 
 // GET /api/truckloads/[id]/middlefield-orders - Get all split load orders for a truckload
 // Query params: ?includeOrderId=123 to include a specific order even if it doesn't have quotes set
@@ -27,75 +25,14 @@ export async function GET(
     const includeOrderId = searchParams.get('includeOrderId')
     const includeOrderIdNum = includeOrderId ? parseInt(includeOrderId, 10) : null
 
-    // Check if split_quote column exists, if not, check for old columns and apply migration
-    try {
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'orders'
-        AND column_name IN ('split_quote', 'middlefield_delivery_quote')
-      `)
-      
-      const hasSplitQuote = columnCheck.rows.some(r => r.column_name === 'split_quote')
-      const hasOldColumn = columnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
-      
-      if (!hasSplitQuote && hasOldColumn) {
-        console.log('Applying split_quote migration...')
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'simplify-split-loads.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
-          await client.query('COMMIT')
-          console.log('split_quote migration applied successfully')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error applying split_quote migration:', migrationError)
-        } finally {
-          client.release()
-        }
-      } else if (!hasSplitQuote && !hasOldColumn) {
-        // Neither column exists, create split_quote
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          await client.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_quote DECIMAL(10, 2)')
-          await client.query('COMMIT')
-          console.log('split_quote column created')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error creating split_quote column:', migrationError)
-        } finally {
-          client.release()
-        }
-      }
-    } catch (migrationCheckError) {
-      console.error('Error checking/applying migration:', migrationCheckError)
-    }
-
-    // Check if applies_to column exists
-    const appliesToCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'applies_to'
-    `)
-    const hasAppliesTo = appliesToCheck.rows.length > 0
-
     // Get all orders in this truckload that need split load management
-    // Automatically includes middlefield orders, plus any with split_quote set
+    // Automatically includes middlefield orders, plus any with assignment_quote set
     const sqlQuery = `
       SELECT 
         o.id as "orderId",
         toa.assignment_type as "assignmentType",
         o.freight_quote as "fullQuote",
-        o.split_quote as "splitQuote",
+        toa.assignment_quote as "assignmentQuote",
         dc.customer_name as "deliveryCustomerName",
         pc.customer_name as "pickupCustomerName",
         -- Find the other truckload (pickup if viewing delivery, delivery if viewing pickup)
@@ -150,7 +87,7 @@ export async function GET(
             ''
           ) || '%split load%'
           AND cdfd.is_manual = true
-          ${hasAppliesTo ? "AND cdfd.applies_to = 'driver_pay'" : ''}
+          AND cdfd.applies_to = 'driver_pay'
         ) as "hasDeduction",
         -- Track if this is automatically included (middlefield) or manually added
         (o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true)) as "isAutoIncluded"
@@ -162,8 +99,8 @@ export async function GET(
         AND (
           -- Automatically include middlefield orders
           (o.middlefield = true AND (o.backhaul = true OR o.oh_to_in = true))
-          -- OR manually added orders (have a split quote set)
-          OR (o.split_quote IS NOT NULL AND o.split_quote > 0)
+          -- OR manually added orders (have an assignment_quote set)
+          OR (toa.assignment_quote IS NOT NULL AND toa.assignment_quote > 0)
           ${includeOrderIdNum ? 'OR o.id = $2' : ''}
         )
       ORDER BY o.id

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query, getClient } from '@/lib/db'
+import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import fs from 'fs'
-import path from 'path'
 
 // GET /api/truckloads/[id]/orders - Get all orders assigned to a specific truckload
 export async function GET(
@@ -20,126 +18,6 @@ export async function GET(
     if (isNaN(truckloadId)) {
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
-
-    // Check if split_quote column exists, if not, check for old columns and apply migration
-    try {
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'orders'
-        AND column_name IN ('split_quote', 'middlefield_delivery_quote')
-      `)
-      
-      const hasSplitQuote = columnCheck.rows.some(r => r.column_name === 'split_quote')
-      const hasOldColumn = columnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
-      
-      if (!hasSplitQuote && hasOldColumn) {
-        console.log('Applying split_quote migration...')
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'simplify-split-loads.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
-          await client.query('COMMIT')
-          console.log('split_quote migration applied successfully')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error applying split_quote migration:', migrationError)
-        } finally {
-          client.release()
-        }
-      } else if (!hasSplitQuote && !hasOldColumn) {
-        // Neither column exists, create split_quote
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          await client.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS split_quote DECIMAL(10, 2)')
-          await client.query('COMMIT')
-          console.log('split_quote column created')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error creating split_quote column:', migrationError)
-        } finally {
-          client.release()
-        }
-      }
-    } catch (migrationCheckError) {
-      console.error('Error checking/applying migration:', migrationCheckError)
-    }
-
-    // Check which column exists to use in query
-    const columnCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'orders'
-      AND column_name IN ('split_quote', 'middlefield_delivery_quote')
-    `)
-    const hasSplitQuote = columnCheck.rows.some(r => r.column_name === 'split_quote')
-    const hasOldColumn = columnCheck.rows.some(r => r.column_name === 'middlefield_delivery_quote')
-
-    // Build the split quote field based on which column exists
-    const splitQuoteField = hasSplitQuote 
-      ? 'o.split_quote as split_quote'
-      : hasOldColumn
-      ? 'o.middlefield_delivery_quote as split_quote'
-      : 'NULL::DECIMAL(10, 2) as split_quote'
-
-    // Check if assignment_quote column exists on truckload_order_assignments
-    try {
-      const assignmentQuoteCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'truckload_order_assignments'
-        AND column_name = 'assignment_quote'
-      `)
-      
-      const hasAssignmentQuote = assignmentQuoteCheck.rows.length > 0
-      
-      if (!hasAssignmentQuote) {
-        console.log('Applying assignment_quote migration...')
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-assignment-quote.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
-          await client.query('COMMIT')
-          console.log('assignment_quote migration applied successfully')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error applying assignment_quote migration:', migrationError)
-        } finally {
-          client.release()
-        }
-      }
-    } catch (migrationCheckError) {
-      console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
-    }
-
-    // Check again after potential migration
-    const assignmentQuoteCheckAfter = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'truckload_order_assignments'
-      AND column_name = 'assignment_quote'
-    `)
-    const hasAssignmentQuote = assignmentQuoteCheckAfter.rows.length > 0
-
-    // Build assignment_quote field
-    const assignmentQuoteField = hasAssignmentQuote 
-      ? 'toa.assignment_quote'
-      : 'NULL::DECIMAL(10, 2) as assignment_quote'
 
     const result = await query(`
       WITH skids_summary AS (
@@ -218,7 +96,7 @@ export async function GET(
         toa.assignment_type,
         toa.sequence_number,
         toa.is_completed as stop_completed,
-        ${assignmentQuoteField},
+        toa.assignment_quote,
         o.status,
         -- Pickup customer details
         json_build_object(
@@ -268,7 +146,7 @@ export async function GET(
         COALESCE(o.needs_attention, false) as needs_attention,
         o.comments,
         o.freight_quote,
-        ${splitQuoteField},
+        toa.assignment_quote,
         COALESCE(o.middlefield, false) as middlefield,
         COALESCE(o.backhaul, false) as backhaul,
         COALESCE(o.is_transfer_order, false) as is_transfer_order,
