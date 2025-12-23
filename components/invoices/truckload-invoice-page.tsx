@@ -863,6 +863,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const crossDriverFreightSaveTimeout = useRef<NodeJS.Timeout | null>(null)
   const editableCrossDriverFreightRef = useRef<CrossDriverFreightItem[]>([])
   const calculatedValuesSaveTimeout = useRef<NodeJS.Timeout | null>(null)
+  const hasSavedForCurrentTruckload = useRef<string | null>(null)
   const justGeneratedAutoDeductions = useRef<boolean>(false)
   const isReloadingAfterSave = useRef<boolean>(false)
   
@@ -1402,7 +1403,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }, [selectedTruckloadId])
 
   // Auto-save calculated values when payrollCalculations change (debounced)
-  // Also save immediately on initial load to ensure values are always saved
+  // Save immediately on first calculation for each truckload to ensure values are always saved
   useEffect(() => {
     if (!selectedTruckloadId || !payrollCalculations) return
 
@@ -1411,12 +1412,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       clearTimeout(calculatedValuesSaveTimeout.current)
     }
 
-    // Save immediately on first calculation, then debounce subsequent changes
-    const isFirstSave = calculatedValuesSaveTimeout.current === undefined
-    const delay = isFirstSave ? 0 : 2000
+    // Check if we've already saved for this truckload
+    const isFirstSaveForThisTruckload = hasSavedForCurrentTruckload.current !== selectedTruckloadId
+    const delay = isFirstSaveForThisTruckload ? 0 : 2000
 
     calculatedValuesSaveTimeout.current = setTimeout(() => {
       saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
+      hasSavedForCurrentTruckload.current = selectedTruckloadId
     }, delay)
 
     return () => {
@@ -1425,6 +1427,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       }
     }
   }, [payrollCalculations.loadValue, payrollCalculations.finalDriverPay, selectedTruckloadId, saveCalculatedValues])
+
+  // Reset the saved flag when truckload changes
+  useEffect(() => {
+    hasSavedForCurrentTruckload.current = null
+  }, [selectedTruckloadId])
 
   // Ref to store debounce timeouts
   const quoteUpdateTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
