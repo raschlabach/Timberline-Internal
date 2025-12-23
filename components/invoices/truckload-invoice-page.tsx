@@ -1268,121 +1268,62 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
 
   // Old cross-driver freight loading removed - using new table-based deduction system
 
-  // Calculate detailed breakdown of deductions, additions, and driver pay
+  // SIMPLIFIED CALCULATION: Load Value and Driver Pay
   const payrollCalculations = useMemo(() => {
     const totalQuotes = totals.totalQuotes || 0
     
-    // Pickup/delivery deductions from load value (from table input)
-    const pickupDeliveryDeductionsFromLoadValue = crossDriverDeductions.reduce((sum, deduction) => {
-      if (deduction.appliesTo === 'load_value') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    // Combine ALL deductions and additions (simplified - no need to separate by type)
+    // All deductions/additions that apply to load_value
+    const allDeductionsFromLoadValue = [
+      ...crossDriverDeductions.filter(d => d.appliesTo === 'load_value' && !d.isAddition),
+      ...manualDeductions.filter(d => d.appliesTo === 'load_value' && !d.isAddition),
+      ...splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'load_value' && !d.isAddition)
+    ].reduce((sum, d) => sum + d.amount, 0)
     
-    // Manual deductions/additions from load value (with comments)
-    const manualDeductionsFromLoadValue = manualDeductions.reduce((sum, deduction) => {
-      if (!deduction.isAddition && deduction.appliesTo === 'load_value') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    const allAdditionsToLoadValue = [
+      ...crossDriverDeductions.filter(d => d.appliesTo === 'load_value' && d.isAddition),
+      ...manualDeductions.filter(d => d.appliesTo === 'load_value' && d.isAddition),
+      ...splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'load_value' && d.isAddition)
+    ].reduce((sum, d) => sum + d.amount, 0)
     
-    const manualAdditionsToLoadValue = manualDeductions.reduce((sum, deduction) => {
-      if (deduction.isAddition && deduction.appliesTo === 'load_value') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+    // All deductions/additions that apply to driver_pay
+    const allDeductionsFromDriverPay = [
+      ...crossDriverDeductions.filter(d => d.appliesTo === 'driver_pay' && !d.isAddition),
+      ...manualDeductions.filter(d => d.appliesTo === 'driver_pay' && !d.isAddition),
+      ...splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'driver_pay' && !d.isAddition)
+    ].reduce((sum, d) => sum + d.amount, 0)
     
-    // Split load deductions/additions from load value (only count those with orderId)
-    const splitLoadDeductionsFromLoadValue = splitLoadDeductions
-      .filter(deduction => deduction.orderId !== null)
-      .reduce((sum, deduction) => {
-        if (!deduction.isAddition && deduction.appliesTo === 'load_value') {
-          return sum + deduction.amount
-        }
-        return sum
-      }, 0)
+    const allAdditionsToDriverPay = [
+      ...crossDriverDeductions.filter(d => d.appliesTo === 'driver_pay' && d.isAddition),
+      ...manualDeductions.filter(d => d.appliesTo === 'driver_pay' && d.isAddition),
+      ...splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'driver_pay' && d.isAddition)
+    ].reduce((sum, d) => sum + d.amount, 0)
     
-    const splitLoadAdditionsToLoadValue = splitLoadDeductions
-      .filter(deduction => deduction.orderId !== null)
-      .reduce((sum, deduction) => {
-        if (deduction.isAddition && deduction.appliesTo === 'load_value') {
-          return sum + deduction.amount
-        }
-        return sum
-      }, 0)
+    // SIMPLE CALCULATION:
+    // 1. Load Value = Total Quotes - deductions from load value + additions to load value
+    const loadValue = totalQuotes - allDeductionsFromLoadValue + allAdditionsToLoadValue
     
-    // Automatic deductions removed - no longer used
-    const automaticDeductions = 0
-    
-    // Pickup/delivery deductions from driver pay (from table input)
-    const pickupDeliveryDeductionsFromDriverPay = crossDriverDeductions.reduce((sum, deduction) => {
-      if (deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
-    
-    // Manual deductions/additions from driver pay (with comments)
-    const manualDeductionsFromDriverPay = manualDeductions.reduce((sum, deduction) => {
-      if (!deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
-    
-    const manualAdditionsToDriverPay = manualDeductions.reduce((sum, deduction) => {
-      if (deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
-    
-    // Split load deductions/additions from driver pay (only count those with orderId)
-    const splitLoadDeductionsFromDriverPay = splitLoadDeductions
-      .filter(deduction => deduction.orderId !== null)
-      .reduce((sum, deduction) => {
-        if (!deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-          return sum + deduction.amount
-        }
-        return sum
-      }, 0)
-    
-    const splitLoadAdditionsToDriverPay = splitLoadDeductions
-      .filter(deduction => deduction.orderId !== null)
-      .reduce((sum, deduction) => {
-        if (deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-          return sum + deduction.amount
-        }
-        return sum
-      }, 0)
-    
-    // Calculate load value (quotes - pickup/delivery deductions from load value - manual deductions from load value - split load deductions from load value + manual additions to load value + split load additions to load value)
-    const loadValue = totalQuotes - pickupDeliveryDeductionsFromLoadValue - manualDeductionsFromLoadValue - splitLoadDeductionsFromLoadValue + manualAdditionsToLoadValue + splitLoadAdditionsToLoadValue
-    
-    // Calculate base driver pay (load value × percentage)
+    // 2. Base Driver Pay = Load Value × 30% (or driver's percentage)
     const baseDriverPay = loadValue * (driverLoadPercentage / 100)
     
-    // Calculate final driver pay (base driver pay - automatic deductions - pickup/delivery deductions from driver pay - manual deductions from driver pay - split load deductions from driver pay + manual additions to driver pay + split load additions to driver pay)
-    const finalDriverPay = baseDriverPay - automaticDeductions - pickupDeliveryDeductionsFromDriverPay - manualDeductionsFromDriverPay - splitLoadDeductionsFromDriverPay + manualAdditionsToDriverPay + splitLoadAdditionsToDriverPay
+    // 3. Final Driver Pay = Base Driver Pay - deductions from driver pay + additions to driver pay
+    const finalDriverPay = baseDriverPay - allDeductionsFromDriverPay + allAdditionsToDriverPay
     
     return { 
       totalQuotes: Number(totalQuotes),
-      pickupDeliveryDeductionsFromLoadValue: Number(pickupDeliveryDeductionsFromLoadValue),
-      manualDeductionsFromLoadValue: Number(manualDeductionsFromLoadValue),
-      splitLoadDeductionsFromLoadValue: Number(splitLoadDeductionsFromLoadValue),
-      splitLoadAdditionsToLoadValue: Number(splitLoadAdditionsToLoadValue),
-      manualAdditionsToLoadValue: Number(manualAdditionsToLoadValue),
+      pickupDeliveryDeductionsFromLoadValue: crossDriverDeductions.filter(d => d.appliesTo === 'load_value' && !d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      manualDeductionsFromLoadValue: manualDeductions.filter(d => d.appliesTo === 'load_value' && !d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      splitLoadDeductionsFromLoadValue: splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'load_value' && !d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      splitLoadAdditionsToLoadValue: splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'load_value' && d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      manualAdditionsToLoadValue: manualDeductions.filter(d => d.appliesTo === 'load_value' && d.isAddition).reduce((sum, d) => sum + d.amount, 0),
       loadValue: Number(loadValue),
       baseDriverPay: Number(baseDriverPay),
-      automaticDeductions: Number(automaticDeductions),
-      pickupDeliveryDeductionsFromDriverPay: Number(pickupDeliveryDeductionsFromDriverPay),
-      manualDeductionsFromDriverPay: Number(manualDeductionsFromDriverPay),
-      splitLoadDeductionsFromDriverPay: Number(splitLoadDeductionsFromDriverPay),
-      splitLoadAdditionsToDriverPay: Number(splitLoadAdditionsToDriverPay),
-      manualAdditionsToDriverPay: Number(manualAdditionsToDriverPay),
+      automaticDeductions: 0,
+      pickupDeliveryDeductionsFromDriverPay: crossDriverDeductions.filter(d => d.appliesTo === 'driver_pay' && !d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      manualDeductionsFromDriverPay: manualDeductions.filter(d => d.appliesTo === 'driver_pay' && !d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      splitLoadDeductionsFromDriverPay: splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'driver_pay' && !d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      splitLoadAdditionsToDriverPay: splitLoadDeductions.filter(d => d.orderId !== null && d.appliesTo === 'driver_pay' && d.isAddition).reduce((sum, d) => sum + d.amount, 0),
+      manualAdditionsToDriverPay: manualDeductions.filter(d => d.appliesTo === 'driver_pay' && d.isAddition).reduce((sum, d) => sum + d.amount, 0),
       finalDriverPay: Number(finalDriverPay),
       driverLoadPercentage: Number(driverLoadPercentage)
     }
@@ -1405,7 +1346,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save calculated values')
+        const errorText = await response.text().catch(() => 'Unknown error')
+        throw new Error(`Failed to save calculated values: ${errorText}`)
       }
       const result = await response.json()
       console.log(`[Invoice] Successfully saved calculated values:`, result)
@@ -1415,24 +1357,17 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
   }, [selectedTruckloadId])
 
-  // Auto-save calculated values when payrollCalculations change (debounced)
-  // Save immediately on first calculation for each truckload to ensure values are always saved
+  // Auto-save calculated values - ALWAYS save immediately when calculations change
   useEffect(() => {
     if (!selectedTruckloadId || !payrollCalculations) return
 
-    // Clear existing timeout
+    // Clear any existing timeout
     if (calculatedValuesSaveTimeout.current) {
       clearTimeout(calculatedValuesSaveTimeout.current)
     }
 
-    // Check if we've already saved for this truckload
-    const isFirstSaveForThisTruckload = hasSavedForCurrentTruckload.current !== selectedTruckloadId
-    const delay = isFirstSaveForThisTruckload ? 0 : 2000
-
-    calculatedValuesSaveTimeout.current = setTimeout(() => {
-      saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
-      hasSavedForCurrentTruckload.current = selectedTruckloadId
-    }, delay)
+    // Save immediately - no debounce needed, we want values saved right away
+    saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
 
     return () => {
       if (calculatedValuesSaveTimeout.current) {
@@ -1440,11 +1375,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       }
     }
   }, [payrollCalculations.loadValue, payrollCalculations.finalDriverPay, selectedTruckloadId, saveCalculatedValues])
-
-  // Reset the saved flag when truckload changes
-  useEffect(() => {
-    hasSavedForCurrentTruckload.current = null
-  }, [selectedTruckloadId])
 
   // Ref to store debounce timeouts
   const quoteUpdateTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
