@@ -1220,6 +1220,35 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     loadManualDeductions()
   }, [selectedTruckloadId])
 
+  // Helper function to reload split load deductions (can be called after save/clear operations)
+  const reloadSplitLoadDeductions = useCallback(async () => {
+    if (!selectedTruckloadId) {
+      setSplitLoadDeductions([])
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/truckloads/${selectedTruckloadId}/split-load-deductions`, {
+        method: 'GET',
+        credentials: 'include'
+      })
+      
+      if (!res.ok) {
+        throw new Error('Failed to load split load deductions')
+      }
+      
+      const data = await res.json()
+      if (data.success && data.deductions) {
+        setSplitLoadDeductions(data.deductions)
+      } else {
+        setSplitLoadDeductions([])
+      }
+    } catch (error) {
+      console.error('Error loading split load deductions:', error)
+      setSplitLoadDeductions([])
+    }
+  }, [selectedTruckloadId])
+
   // Old cross-driver freight loading removed - using new table-based deduction system
 
   // Calculate detailed breakdown of deductions, additions, and driver pay
@@ -1594,6 +1623,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           }
         }
         
+        // Also reload split load deductions in case they were affected
+        await reloadSplitLoadDeductions()
+        
         // Clear input
         setCrossDriverDeductionInput(deductionKey, '')
         
@@ -1605,7 +1637,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       console.error('Error saving cross-driver deduction:', error)
       toast.error('Failed to save deduction')
     }
-  }, [selectedTruckloadId, crossDriverDeductionInputs, crossDriverDeductionToggles, setCrossDriverDeductionInput])
+  }, [selectedTruckloadId, crossDriverDeductionInputs, crossDriverDeductionToggles, setCrossDriverDeductionInput, reloadSplitLoadDeductions])
 
   // OLD FUNCTIONS DISABLED - These were creating auto deductions
   // All deductions must now be entered via the table input fields and saved individually
@@ -2350,20 +2382,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           setSelectedTruckloadId(null)
           setTimeout(async () => {
             setSelectedTruckloadId(id)
-            // Reload split load deductions
-            const reloadRes = await fetch(`/api/truckloads/${id}/split-load-deductions`, {
-              method: 'GET',
-              credentials: 'include'
-            })
-            if (reloadRes.ok) {
-              const reloadData = await reloadRes.json()
-              if (reloadData.success && reloadData.deductions) {
-                setSplitLoadDeductions(reloadData.deductions)
-              } else {
-                setSplitLoadDeductions([])
-              }
-            }
-          }, 0)
+            // Reload split load deductions using the helper function
+            await reloadSplitLoadDeductions()
+          }, 100)
         }
       } else {
         toast.error(data.error || 'Failed to update split load')
@@ -2404,20 +2425,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
             // Also clear and reload cross-driver freight to remove deleted split load items
             setEditableCrossDriverFreight([])
             editableCrossDriverFreightRef.current = []
-            // Reload split load deductions
-            const reloadRes = await fetch(`/api/truckloads/${id}/split-load-deductions`, {
-              method: 'GET',
-              credentials: 'include'
-            })
-            if (reloadRes.ok) {
-              const reloadData = await reloadRes.json()
-              if (reloadData.success && reloadData.deductions) {
-                setSplitLoadDeductions(reloadData.deductions)
-              } else {
-                setSplitLoadDeductions([])
-              }
-            }
-          }, 0)
+            // Reload split load deductions using the helper function
+            await reloadSplitLoadDeductions()
+          }, 100)
         }
       } else {
         toast.error(data.error || 'Failed to clear split load')
@@ -2785,6 +2795,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                     setCrossDriverDeductions(reloadData.deductions)
                                   }
                                 }
+                                // Also reload split load deductions in case they were affected
+                                await reloadSplitLoadDeductions()
                                 toast.success('Deduction deleted')
                               } else {
                                 toast.error(data.error || 'Failed to delete deduction')

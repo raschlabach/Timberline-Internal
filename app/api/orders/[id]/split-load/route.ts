@@ -1032,22 +1032,93 @@ export async function DELETE(
 
       // Delete ALL split load deductions and additions for this order across ALL truckloads
       // This ensures no duplicates remain when split load is cleared
+      // We need to find ALL split load deductions for this order, even if they're in truckloads
+      // that no longer have assignments for this order
       if (hasOrderIdForDelete) {
-        // If order_id column exists, use it for precise deletion
+        // If order_id column exists, use it for precise deletion - this will catch ALL deductions
+        // for this order regardless of which truckload they're in
         await client.query(`
           DELETE FROM cross_driver_freight_deductions
           WHERE order_id = $1
             AND comment LIKE '%split load%'
             AND is_manual = true
         `, [orderId])
-      } else if (truckloadIds.length > 0) {
-        // If order_id doesn't exist, delete from all truckloads that have this order
-        await client.query(`
-          DELETE FROM cross_driver_freight_deductions
-          WHERE truckload_id = ANY($1::int[])
-            AND comment LIKE '%split load%'
-            AND is_manual = true
-        `, [truckloadIds])
+      } else {
+        // If order_id doesn't exist, we need to find ALL truckloads that have split load deductions
+        // for this order by searching through all deductions with the order's customer names
+        // First, get the order's customer names
+        const orderInfoResult = await client.query(`
+          SELECT 
+            dc.customer_name as delivery_customer_name,
+            pc.customer_name as pickup_customer_name
+          FROM orders o
+          LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+          LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+          WHERE o.id = $1
+        `, [orderId])
+        
+        if (orderInfoResult.rows.length > 0) {
+          const orderInfo = orderInfoResult.rows[0]
+          const deliveryCustomerName = orderInfo.delivery_customer_name
+          const pickupCustomerName = orderInfo.pickup_customer_name
+          
+          // Delete all split load deductions that mention either customer name from this order
+          // This is a fallback when order_id doesn't exist
+          if (deliveryCustomerName && pickupCustomerName) {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE comment LIKE '%split load%'
+                AND is_manual = true
+                AND (
+                  comment LIKE $1 OR
+                  comment LIKE $2 OR
+                  customer_name = $3 OR
+                  customer_name = $4
+                )
+            `, [
+              `%${deliveryCustomerName}%split load%`,
+              `%${pickupCustomerName}%split load%`,
+              deliveryCustomerName,
+              pickupCustomerName
+            ])
+          } else if (deliveryCustomerName) {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE comment LIKE '%split load%'
+                AND is_manual = true
+                AND (
+                  comment LIKE $1 OR
+                  customer_name = $2
+                )
+            `, [
+              `%${deliveryCustomerName}%split load%`,
+              deliveryCustomerName
+            ])
+          } else if (pickupCustomerName) {
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE comment LIKE '%split load%'
+                AND is_manual = true
+                AND (
+                  comment LIKE $1 OR
+                  customer_name = $2
+                )
+            `, [
+              `%${pickupCustomerName}%split load%`,
+              pickupCustomerName
+            ])
+          }
+        }
+        
+        // Also delete from current truckloads as a safety measure
+        if (truckloadIds.length > 0) {
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
+            WHERE truckload_id = ANY($1::int[])
+              AND comment LIKE '%split load%'
+              AND is_manual = true
+          `, [truckloadIds])
+        }
       }
 
       await client.query('COMMIT')
