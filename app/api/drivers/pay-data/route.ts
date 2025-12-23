@@ -465,27 +465,27 @@ export async function GET(request: NextRequest) {
           ORDER BY truckload_id, date
         `, [truckloadIds])
       } else {
-        deductionsResult = await query(`
-          SELECT 
-            id,
-            truckload_id as "truckloadId",
+      deductionsResult = await query(`
+        SELECT 
+          id,
+          truckload_id as "truckloadId",
             NULL as "orderId",
-            driver_name as "driverName",
-            TO_CHAR(date, 'YYYY-MM-DD') as date,
-            action,
-            footage,
-            dimensions,
-            deduction,
-            is_manual as "isManual",
-            comment,
-            is_addition as "isAddition",
+          driver_name as "driverName",
+          TO_CHAR(date, 'YYYY-MM-DD') as date,
+          action,
+          footage,
+          dimensions,
+          deduction,
+          is_manual as "isManual",
+          comment,
+          is_addition as "isAddition",
             COALESCE(applies_to, 'driver_pay') as "appliesTo",
             NULL as "customerName",
             NULL as "splitLoadId"
-          FROM cross_driver_freight_deductions
-          WHERE truckload_id = ANY($1::int[])
-          ORDER BY truckload_id, date
-        `, [truckloadIds])
+        FROM cross_driver_freight_deductions
+        WHERE truckload_id = ANY($1::int[])
+        ORDER BY truckload_id, date
+      `, [truckloadIds])
       }
     } catch (err: any) {
       // If table doesn't exist, return empty result

@@ -480,7 +480,7 @@ function SortableTableRow({
             })()}
           </div>
           {/* Show deduction amount for confirmed split loads only */}
-            {(() => {
+          {(() => {
             // Only show deduction if there's a confirmed split load
             const hasConfirmedSplitLoad = (row.assignmentQuote !== null && row.assignmentQuote !== undefined)
             
@@ -1437,7 +1437,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
 
     // Save immediately - no debounce needed, we want values saved right away
-    saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
+      saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
 
     return () => {
       if (calculatedValuesSaveTimeout.current) {

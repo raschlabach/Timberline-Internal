@@ -35,9 +35,9 @@
     display: block !important;
   }
 
-  /* Page setup - minimal margins */
+  /* Page setup - minimal margins for maximum space */
   @page {
-    margin: 0.15in;
+    margin: 0.1in;
     size: letter;
   }
 
@@ -58,30 +58,30 @@
     page-break-inside: avoid;
   }
 
-  /* Style for printable content - compact */
+  /* Style for printable content - very compact */
   .print-content {
-    font-size: 9pt;
-    line-height: 1.2;
+    font-size: 7pt;
+    line-height: 1.1;
   }
 
   .print-content h2 {
-    font-size: 12pt;
-    margin-top: 0.25rem;
-    margin-bottom: 0.25rem;
+    font-size: 10pt;
+    margin-top: 0.1rem;
+    margin-bottom: 0.1rem;
     color: #000 !important;
   }
 
   .print-content h3 {
-    font-size: 10pt;
-    margin-top: 0.25rem;
-    margin-bottom: 0.25rem;
+    font-size: 8pt;
+    margin-top: 0.1rem;
+    margin-bottom: 0.1rem;
     color: #000 !important;
   }
 
   .print-content h4 {
-    font-size: 9pt;
-    margin-top: 0.25rem;
-    margin-bottom: 0.25rem;
+    font-size: 7pt;
+    margin-top: 0.1rem;
+    margin-bottom: 0.1rem;
     color: #000 !important;
   }
 
@@ -139,23 +139,28 @@
     font-weight: bold;
   }
 
-  /* Make sure cards are visible - compact */
+  /* Make sure cards are visible - very compact */
   .print-content [class*="Card"],
   .print-content [class*="card"] {
     border: 1px solid #000 !important;
-    margin-bottom: 0.25rem !important;
-    padding: 0.375rem !important;
+    margin-bottom: 0.15rem !important;
+    padding: 0.25rem !important;
     break-inside: avoid;
-    font-size: 9pt;
+    font-size: 7pt;
   }
 
-  /* Prevent page breaks inside truckload cards */
+  /* Allow page breaks between truckload cards but not inside them */
   .print-content [class*="Card"] {
     page-break-inside: avoid;
     break-inside: avoid;
   }
+  
+  /* Force page break before each driver's content */
+  .print-content > div:first-child {
+    page-break-before: auto;
+  }
 
-  /* Truckloads grid layout - 2 columns for print */
+  /* Truckloads grid layout - 2 columns for print, very tight */
   .print-content .print\:grid {
     display: grid !important;
   }
@@ -165,7 +170,7 @@
   }
 
   .print-content .print\:gap-2 {
-    gap: 0.25rem !important;
+    gap: 0.15rem !important;
   }
 
   .print-content .print\:space-y-0 > * + * {
@@ -181,9 +186,22 @@
     max-width: none !important;
   }
 
-  /* Reduce truckload card padding in print */
+  /* Reduce truckload card padding in print - very tight */
   .print-content [class*="Card"] {
-    padding: 0.375rem !important;
+    padding: 0.2rem !important;
+  }
+  
+  /* Compact spacing inside truckload cards */
+  .print-content [class*="Card"] .space-y-3,
+  .print-content [class*="Card"] .space-y-2,
+  .print-content [class*="Card"] .space-y-1 {
+    gap: 0.1rem !important;
+  }
+  
+  .print-content [class*="Card"] .space-y-3 > * + *,
+  .print-content [class*="Card"] .space-y-2 > * + *,
+  .print-content [class*="Card"] .space-y-1 > * + * {
+    margin-top: 0.1rem !important;
   }
 
   /* Reduce spacing after driver hours section */
@@ -191,81 +209,225 @@
     margin-top: 0.25rem !important;
   }
 
-  /* Reduce spacing in all elements - especially for print */
+  /* Reduce spacing in all elements - very tight for print */
   .print-content .space-y-6 > * + * {
-    margin-top: 0.15rem !important;
+    margin-top: 0.1rem !important;
   }
 
   /* Remove large spacing after driver hours section */
   .print-content > div > div {
-    margin-top: 0.15rem !important;
+    margin-top: 0.1rem !important;
   }
 
   .print-content .space-y-4 > * + * {
-    margin-top: 0.2rem !important;
+    margin-top: 0.1rem !important;
   }
 
   .print-content .space-y-3 > * + * {
-    margin-top: 0.15rem !important;
+    margin-top: 0.1rem !important;
   }
 
   .print-content .space-y-2 > * + * {
-    margin-top: 0.15rem !important;
+    margin-top: 0.1rem !important;
   }
   
   /* Reduce margins on headings */
   .print-content h2,
   .print-content h3,
   .print-content h4 {
-    margin-top: 0.15rem !important;
+    margin-top: 0.1rem !important;
+    margin-bottom: 0.1rem !important;
+  }
+  
+  /* Compact spacing in breakdown sections */
+  .print-content .pt-3 {
+    padding-top: 0.15rem !important;
+  }
+  
+  .print-content .border-t {
+    border-top-width: 1px !important;
+  }
+  
+  .print-content .rounded-lg {
+    border-radius: 0.125rem !important;
+  }
+  
+  .print-content .p-2 {
+    padding: 0.15rem !important;
+  }
+  
+  .print-content .px-2 {
+    padding-left: 0.15rem !important;
+    padding-right: 0.15rem !important;
+  }
+  
+  .print-content .py-1 {
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
+  }
+  
+  .print-content .mb-1\.5,
+  .print-content .mb-1 {
+    margin-bottom: 0.1rem !important;
+  }
+  
+  .print-content .mb-3 {
     margin-bottom: 0.15rem !important;
   }
 
-  /* Compact text sizes */
+  /* Compact text sizes - very small for print */
   .print-content .text-sm {
-    font-size: 8pt !important;
+    font-size: 6.5pt !important;
   }
 
   .print-content .text-xs {
-    font-size: 7pt !important;
+    font-size: 6pt !important;
   }
 
   .print-content .text-lg {
-    font-size: 10pt !important;
+    font-size: 8pt !important;
   }
 
   .print-content .text-xl {
-    font-size: 11pt !important;
+    font-size: 9pt !important;
   }
 
   .print-content .text-2xl {
-    font-size: 12pt !important;
+    font-size: 10pt !important;
+  }
+  
+  /* Even smaller for detail text */
+  .print-content .text-xs.text-gray-500,
+  .print-content .text-xs.text-gray-600,
+  .print-content .text-xs.text-gray-700 {
+    font-size: 5.5pt !important;
   }
 
-  /* Reduce padding in cards */
+  /* Reduce padding in cards - very tight */
   .print-content .p-4 {
-    padding: 0.5rem !important;
+    padding: 0.25rem !important;
   }
 
   .print-content .p-6 {
-    padding: 0.5rem !important;
+    padding: 0.25rem !important;
   }
 
-  /* Reduce gaps */
+  /* Reduce gaps - very tight */
   .print-content .gap-4 {
-    gap: 0.375rem !important;
+    gap: 0.2rem !important;
   }
 
   .print-content .gap-3 {
-    gap: 0.25rem !important;
+    gap: 0.15rem !important;
   }
 
   .print-content .gap-2 {
-    gap: 0.25rem !important;
+    gap: 0.1rem !important;
+  }
+  
+  .print-content .gap-1 {
+    gap: 0.05rem !important;
   }
 
   /* Compact grid spacing */
   .print-content .grid {
-    gap: 0.25rem !important;
+    gap: 0.15rem !important;
+  }
+  
+  /* Compact flex gaps */
+  .print-content .flex.gap-4 {
+    gap: 0.15rem !important;
+  }
+  
+  .print-content .flex.gap-3 {
+    gap: 0.1rem !important;
+  }
+  
+  .print-content .flex.gap-2 {
+    gap: 0.1rem !important;
+  }
+  
+  /* Reduce font weights for better fit */
+  .print-content .font-bold {
+    font-weight: 600 !important;
+  }
+  
+  .print-content .font-semibold {
+    font-weight: 500 !important;
+  }
+  
+  /* Compact rounded corners */
+  .print-content .rounded-lg {
+    border-radius: 0.125rem !important;
+  }
+  
+  .print-content .rounded {
+    border-radius: 0.1rem !important;
+  }
+  
+  /* Ensure one page per driver - force page break before each driver section */
+  .print-content {
+    page-break-inside: auto;
+  }
+  
+  /* Prevent orphaned truckload cards */
+  .print-content [class*="Card"]:first-child {
+    page-break-before: auto;
+  }
+  
+  /* Compact all deduction/addition sections */
+  .print-content .bg-red-50,
+  .print-content .bg-green-50,
+  .print-content .bg-blue-50,
+  .print-content .bg-gray-50 {
+    padding: 0.1rem !important;
+    margin-bottom: 0.1rem !important;
+  }
+  
+  .print-content .bg-red-50 > div:first-child,
+  .print-content .bg-green-50 > div:first-child,
+  .print-content .bg-blue-50 > div:first-child,
+  .print-content .bg-gray-50 > div:first-child {
+    margin-bottom: 0.05rem !important;
+    font-size: 5.5pt !important;
+  }
+  
+  .print-content .bg-red-50 .text-xs,
+  .print-content .bg-green-50 .text-xs,
+  .print-content .bg-blue-50 .text-xs,
+  .print-content .bg-gray-50 .text-xs {
+    font-size: 5.5pt !important;
+    line-height: 1.1 !important;
+  }
+  
+  .print-content .bg-red-50 .border-t,
+  .print-content .bg-green-50 .border-t {
+    margin-top: 0.05rem !important;
+    padding-top: 0.05rem !important;
+    border-top-width: 0.5px !important;
+  }
+  
+  /* Compact all flex gaps in deduction sections */
+  .print-content .bg-red-50 .flex,
+  .print-content .bg-green-50 .flex,
+  .print-content .bg-blue-50 .flex,
+  .print-content .bg-gray-50 .flex {
+    gap: 0.05rem !important;
+  }
+  
+  /* Reduce font weights for better fit */
+  .print-content .font-bold {
+    font-weight: 600 !important;
+  }
+  
+  .print-content .font-semibold {
+    font-weight: 500 !important;
+  }
+  
+  /* Make sure all deduction items are compact */
+  .print-content [class*="bg-red-50"] .flex.items-center,
+  .print-content [class*="bg-green-50"] .flex.items-center {
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

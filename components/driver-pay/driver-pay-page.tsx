@@ -513,37 +513,46 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     })
     
     // Now calculate totalQuotes exactly like invoice page does
+    // For split loads: only the truckload with "full quote - misc" gets the quote counted
+    // The truckload with "misc" does NOT get the quote counted (only the misc addition/deduction applies)
     const totalQuotes = flatOrders.reduce((sum, order) => {
-      if (order.freightQuote) {
-        // Parse quote string (could be "$123.45" or "123.45") - matching invoice page exactly
+      // Use fullQuote if available, otherwise parse freightQuote
+      let fullQuote: number
+      if (order.fullQuote !== null && order.fullQuote !== undefined) {
+        fullQuote = typeof order.fullQuote === 'number' ? order.fullQuote : parseFloat(String(order.fullQuote)) || 0
+      } else if (order.freightQuote) {
         const quoteStr = String(order.freightQuote)
         const cleaned = quoteStr.replace(/[^0-9.-]/g, '')
-        const fullQuote = parseFloat(cleaned)
-        if (isNaN(fullQuote)) return sum
-        
-        // If assignment_quote exists, check if it's the misc value (matching invoice page logic exactly)
-        if (order.assignmentQuote !== null && order.assignmentQuote !== undefined) {
-          const assignmentQuote = typeof order.assignmentQuote === 'number' 
-            ? order.assignmentQuote 
-            : parseFloat(String(order.assignmentQuote)) || 0
-          
-          const otherPortion = fullQuote - assignmentQuote
-          
-          // If assignment_quote is the smaller value (misc), exclude it from load value
-          // If assignment_quote is the larger value (full - misc), include full quote
-          if (assignmentQuote < otherPortion) {
-            // This is the misc assignment - exclude from load value
-            return sum
-          } else {
-            // This is the "full quote - misc" assignment - include full quote in load value
-            return sum + fullQuote
-          }
-        }
-        
-        // No split load - include the quote normally
-        return sum + fullQuote
+        fullQuote = parseFloat(cleaned)
+      } else {
+        return sum
       }
-      return sum
+      
+      if (isNaN(fullQuote) || fullQuote <= 0) return sum
+      
+      // If assignment_quote exists, this is a split load
+      if (order.assignmentQuote !== null && order.assignmentQuote !== undefined) {
+        const assignmentQuote = typeof order.assignmentQuote === 'number' 
+          ? order.assignmentQuote 
+          : parseFloat(String(order.assignmentQuote)) || 0
+        
+        const otherPortion = fullQuote - assignmentQuote
+        
+        // If assignment_quote is the smaller value (misc), exclude it from load value
+        // Only the truckload with "full quote - misc" gets the quote counted
+        if (assignmentQuote < otherPortion) {
+          // This is the misc assignment - exclude from load value
+          // The misc value will be added/subtracted via split load deductions/additions
+          return sum
+        } else {
+          // This is the "full quote - misc" assignment - include full quote in load value
+          // The misc value will be subtracted via split load deductions (if applies to load_value)
+          return sum + fullQuote
+        }
+      }
+      
+      // No split load - include the quote normally
+      return sum + fullQuote
     }, 0)
     
     // Count pickups and deliveries (using grouped orders to avoid double-counting transfers)
@@ -673,9 +682,9 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     if (payMethod === 'hourly' && truckload.payHours !== null && truckload.payHours !== undefined && selectedDriver) {
       // Hourly: hours × driver hourly rate (use misc driving rate)
       driverPay = truckload.payHours * selectedDriver.miscDrivingRate
-    } else if (payMethod === 'manual' && truckload.payManualAmount !== null && truckload.payManualAmount !== undefined) {
-      // Manual: use entered amount
-      driverPay = truckload.payManualAmount
+    } else if (payMethod === 'manual') {
+      // Manual: use entered amount (can be 0 to exclude load from pay)
+      driverPay = truckload.payManualAmount !== null && truckload.payManualAmount !== undefined ? truckload.payManualAmount : 0
     } else {
       // Automatic: Base Driver Pay - deductions from driver pay + additions to driver pay
       driverPay = baseDriverPay 
@@ -799,7 +808,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
         updateData.payHours = tempPayMethod.hours || 0
         updateData.payManualAmount = null
       } else if (tempPayMethod.method === 'manual') {
-        updateData.payManualAmount = tempPayMethod.amount || 0
+        // Allow 0 or undefined/null - 0 means $0 pay, undefined/null means exclude from calculations
+        updateData.payManualAmount = tempPayMethod.amount !== null && tempPayMethod.amount !== undefined ? tempPayMethod.amount : null
         updateData.payHours = null
       } else {
         // automatic
@@ -827,7 +837,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         ...tl,
                         payCalculationMethod: tempPayMethod.method,
                         payHours: tempPayMethod.method === 'hourly' ? (tempPayMethod.hours || null) : null,
-                        payManualAmount: tempPayMethod.method === 'manual' ? (tempPayMethod.amount || null) : null
+                        payManualAmount: tempPayMethod.method === 'manual' ? (tempPayMethod.amount !== null && tempPayMethod.amount !== undefined ? tempPayMethod.amount : null) : null
                       }
                     : tl
                 )
@@ -1337,9 +1347,9 @@ export default function DriverPayPage({}: DriverPayPageProps) {
               })()}
 
               {/* Truckloads - Grid Layout for Print */}
-              <div>
-                <h3 className="font-semibold mb-3">Truckloads</h3>
-                <div className="space-y-2 print:grid print:grid-cols-2 print:gap-2 print:space-y-0">
+              <div className="print:page-break-inside-avoid">
+                <h3 className="font-semibold mb-3 print:mb-1 print:text-sm">Truckloads</h3>
+                <div className="space-y-2 print:grid print:grid-cols-2 print:gap-1 print:space-y-0">
                   {selectedDriver.truckloads.map(truckload => {
                     const tlTotals = calculateTruckloadTotals(truckload)
                     const hasMiddlefield = truckload.orders.some(order => order.middlefield === true)
@@ -1363,17 +1373,17 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                         }`}
                         onClick={(e) => handleTruckloadClick(truckload.id, e)}
                       >
-                        <div className="space-y-3">
+                        <div className="space-y-3 print:space-y-1">
                           {/* Header: Dates, Description, Pickups/Deliveries */}
-                          <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start justify-between gap-4 print:gap-1 print:items-center">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-xl mb-1">
+                              <h4 className="font-bold text-xl mb-1 print:text-xs print:mb-0 print:font-semibold">
                                 {format(parseLocalDate(truckload.startDate), 'MM/dd')} - {format(parseLocalDate(truckload.endDate), 'MM/dd')}
                               </h4>
                               {truckload.description && (
-                                <p className="text-sm text-gray-700 mb-1">{truckload.description}</p>
+                                <p className="text-sm text-gray-700 mb-1 print:text-xs print:mb-0 print:leading-tight">{truckload.description}</p>
                               )}
-                              <div className="flex items-center gap-3 text-xs text-gray-600">
+                              <div className="flex items-center gap-3 text-xs text-gray-600 print:gap-1 print:text-xs">
                                 <span>{tlTotals.pickupCount} Pickups</span>
                                 <span>•</span>
                                 <span>{tlTotals.deliveryCount} Deliveries</span>
@@ -1385,22 +1395,22 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-2 flex-shrink-0 print:gap-1">
                               {hasMiddlefield && (
                                 <>
-                                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                                  <span className="text-sm font-semibold text-red-600">Middlefield</span>
+                                  <AlertTriangle className="h-5 w-5 text-red-600 print:h-3 print:w-3" />
+                                  <span className="text-sm font-semibold text-red-600 print:text-xs">Middlefield</span>
                                 </>
                               )}
                             </div>
                           </div>
 
                           {/* Calculations - Detailed Breakdown */}
-                          <div className="pt-3 border-t border-gray-200 space-y-2">
+                          <div className="pt-3 border-t border-gray-200 space-y-2 print:pt-1 print:space-y-0.5 print:border-t print:border-gray-300">
                             {/* Step 1: Load Value Calculation */}
-                            <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
-                              <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Load Value</div>
-                              <div className="space-y-1">
+                            <div className="bg-gray-50 rounded-lg p-2 border border-gray-200 print:p-1 print:rounded print:border print:border-gray-300">
+                              <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5 print:text-xs print:mb-0.5 print:font-medium">Load Value</div>
+                              <div className="space-y-1 print:space-y-0.5">
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="font-medium">Total Quotes</span>
                                   <span className="font-semibold">${tlTotals.totalQuotes.toFixed(2)}</span>
@@ -1408,95 +1418,95 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 
                                 {/* Pickup/Delivery Deductions from Load Value - Detailed */}
                                 {truckload.deductions.filter(d => d.isManual && !d.isAddition && d.appliesTo === 'load_value' && d.orderId && !d.splitLoadId && d.deduction > 0).length > 0 && (
-                                  <div className="bg-red-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-red-700 mb-0.5">Pickup/Delivery Deductions (LV)</div>
+                                  <div className="bg-red-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                    <div className="text-xs font-semibold text-red-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Pickup/Delivery Deductions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.isManual && !d.isAddition && d.appliesTo === 'load_value' && d.orderId && !d.splitLoadId && d.deduction > 0)
                                       .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-red-700 truncate flex-1">{ded.comment || `${ded.customerName || 'Unknown'} ${ded.action || ''}`}</span>
-                                          <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
+                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                          <span className="text-red-700 truncate flex-1 print:text-xs">{ded.comment || `${ded.customerName || 'Unknown'} ${ded.action || ''}`}</span>
+                                          <span className="text-red-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">-${ded.deduction.toFixed(2)}</span>
                                         </div>
                                       ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                      <span className="text-red-700 font-medium">Subtotal</span>
-                                      <span className="text-red-600 font-bold">-${tlTotals.pickupDeliveryDeductionsFromLoadValue.toFixed(2)}</span>
+                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-red-300">
+                                      <span className="text-red-700 font-medium print:font-normal">Subtotal</span>
+                                      <span className="text-red-600 font-bold print:font-semibold">-${tlTotals.pickupDeliveryDeductionsFromLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
                                 )}
                                 
                                 {/* Manual Deductions from Load Value - Detailed */}
                                 {truckload.deductions.filter(d => d.isManual && !d.isAddition && d.appliesTo === 'load_value' && !d.orderId && !d.splitLoadId && d.deduction > 0).length > 0 && (
-                                  <div className="bg-red-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-red-700 mb-0.5">Manual Deductions (LV)</div>
+                                  <div className="bg-red-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                    <div className="text-xs font-semibold text-red-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Manual Deductions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.isManual && !d.isAddition && d.appliesTo === 'load_value' && !d.orderId && !d.splitLoadId && d.deduction > 0)
                                       .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-red-700 truncate flex-1">{ded.comment || 'No description'}</span>
-                                          <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
+                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                          <span className="text-red-700 truncate flex-1 print:text-xs">{ded.comment || 'No description'}</span>
+                                          <span className="text-red-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">-${ded.deduction.toFixed(2)}</span>
                                         </div>
                                       ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                      <span className="text-red-700 font-medium">Subtotal</span>
-                                      <span className="text-red-600 font-bold">-${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</span>
+                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-red-300">
+                                      <span className="text-red-700 font-medium print:font-normal">Subtotal</span>
+                                      <span className="text-red-600 font-bold print:font-semibold">-${tlTotals.manualDeductionsFromLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
                                 )}
                                 
                                 {/* Split Load Deductions from Load Value - Detailed */}
                                 {truckload.deductions.filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0).length > 0 && (
-                                  <div className="bg-red-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-red-700 mb-0.5">Split Load Deductions (LV)</div>
+                                  <div className="bg-red-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                    <div className="text-xs font-semibold text-red-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Deductions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
                                       .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-red-700 truncate flex-1">{ded.comment || 'Split load deduction (misc portion)'}</span>
-                                          <span className="text-red-600 font-semibold ml-1">-${ded.deduction.toFixed(2)}</span>
+                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                          <span className="text-red-700 truncate flex-1 print:text-xs">{ded.comment || 'Split load deduction (misc portion)'}</span>
+                                          <span className="text-red-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">-${ded.deduction.toFixed(2)}</span>
                                         </div>
                                       ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200">
-                                      <span className="text-red-700 font-medium">Subtotal</span>
-                                      <span className="text-red-600 font-bold">-${tlTotals.splitLoadDeductionsFromLoadValue.toFixed(2)}</span>
+                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-red-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-red-300">
+                                      <span className="text-red-700 font-medium print:font-normal">Subtotal</span>
+                                      <span className="text-red-600 font-bold print:font-semibold">-${tlTotals.splitLoadDeductionsFromLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
                                 )}
                                 
                                 {/* Split Load Additions to Load Value - Detailed */}
                                 {truckload.deductions.filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0).length > 0 && (
-                                  <div className="bg-green-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-green-700 mb-0.5">Split Load Additions (LV)</div>
+                                  <div className="bg-green-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                    <div className="text-xs font-semibold text-green-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Additions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
                                       .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-green-700 truncate flex-1">{ded.comment || 'Split load addition (misc portion)'}</span>
-                                          <span className="text-green-600 font-semibold ml-1">+${ded.deduction.toFixed(2)}</span>
+                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                          <span className="text-green-700 truncate flex-1 print:text-xs">{ded.comment || 'Split load addition (misc portion)'}</span>
+                                          <span className="text-green-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">+${ded.deduction.toFixed(2)}</span>
                                         </div>
                                       ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200">
-                                      <span className="text-green-700 font-medium">Subtotal</span>
-                                      <span className="text-green-600 font-bold">+${tlTotals.splitLoadAdditionsToLoadValue.toFixed(2)}</span>
+                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-green-300">
+                                      <span className="text-green-700 font-medium print:font-normal">Subtotal</span>
+                                      <span className="text-green-600 font-bold print:font-semibold">+${tlTotals.splitLoadAdditionsToLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
                                 )}
                                 
                                 {/* Manual Additions to Load Value - Detailed */}
                                 {truckload.deductions.filter(d => d.isManual && d.isAddition && d.appliesTo === 'load_value' && !d.orderId && !d.splitLoadId && d.deduction > 0).length > 0 && (
-                                  <div className="bg-green-50 rounded px-2 py-1">
-                                    <div className="text-xs font-semibold text-green-700 mb-0.5">Manual Additions (LV)</div>
+                                  <div className="bg-green-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                    <div className="text-xs font-semibold text-green-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Manual Additions (LV)</div>
                                     {truckload.deductions
                                       .filter(d => d.isManual && d.isAddition && d.appliesTo === 'load_value' && !d.orderId && !d.splitLoadId && d.deduction > 0)
                                       .map((ded) => (
-                                        <div key={ded.id} className="flex items-center justify-between text-xs">
-                                          <span className="text-green-700 truncate flex-1">{ded.comment || 'No description'}</span>
-                                          <span className="text-green-600 font-semibold ml-1">+${ded.deduction.toFixed(2)}</span>
+                                        <div key={ded.id} className="flex items-center justify-between text-xs print:text-xs print:leading-tight">
+                                          <span className="text-green-700 truncate flex-1 print:text-xs">{ded.comment || 'No description'}</span>
+                                          <span className="text-green-600 font-semibold ml-1 print:text-xs print:ml-0.5 print:font-medium">+${ded.deduction.toFixed(2)}</span>
                                         </div>
                                       ))}
-                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200">
-                                      <span className="text-green-700 font-medium">Subtotal</span>
-                                      <span className="text-green-600 font-bold">+${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</span>
+                                    <div className="flex items-center justify-between text-xs mt-0.5 pt-0.5 border-t border-green-200 print:text-xs print:mt-0 print:pt-0 print:border-t print:border-green-300">
+                                      <span className="text-green-700 font-medium print:font-normal">Subtotal</span>
+                                      <span className="text-green-600 font-bold print:font-semibold">+${tlTotals.manualAdditionsToLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
                                 )}
@@ -1667,7 +1677,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                       if (editingPayMethod !== truckload.id) {
                                         startEditPayMethod(truckload)
                                       }
-                                      setTempPayMethod(prev => prev ? { ...prev, method: 'manual', amount: truckload.payManualAmount || 0 } : { method: 'manual', amount: truckload.payManualAmount || 0 })
+                                      setTempPayMethod(prev => prev ? { ...prev, method: 'manual', amount: truckload.payManualAmount !== null && truckload.payManualAmount !== undefined ? truckload.payManualAmount : undefined } : { method: 'manual', amount: truckload.payManualAmount !== null && truckload.payManualAmount !== undefined ? truckload.payManualAmount : undefined })
                                     }}
                                   >
                                     Manual
@@ -1716,12 +1726,17 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                     <Input
                                       type="number"
                                       placeholder="Amount"
-                                      value={editingPayMethod === truckload.id ? (tempPayMethod?.amount || '') : (truckload.payManualAmount || '')}
+                                      value={editingPayMethod === truckload.id 
+                                        ? (tempPayMethod?.amount !== null && tempPayMethod?.amount !== undefined ? tempPayMethod.amount : '') 
+                                        : (truckload.payManualAmount !== null && truckload.payManualAmount !== undefined ? truckload.payManualAmount : '')}
                                       onChange={(e) => {
                                         if (editingPayMethod !== truckload.id) {
                                           startEditPayMethod(truckload)
                                         }
-                                        setTempPayMethod(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : { method: 'manual', amount: parseFloat(e.target.value) || 0 })
+                                        const value = e.target.value
+                                        // Allow empty string, 0, or any number - use undefined instead of null for type compatibility
+                                        const numValue = value === '' ? undefined : (isNaN(parseFloat(value)) ? undefined : parseFloat(value))
+                                        setTempPayMethod(prev => prev ? { ...prev, amount: numValue } : { method: 'manual', amount: numValue })
                                       }}
                                       className="h-6 w-24 text-xs"
                                       step="0.01"

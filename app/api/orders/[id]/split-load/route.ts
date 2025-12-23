@@ -24,16 +24,16 @@ export async function GET(
     let splitLoadResult: { rows: any[] } = { rows: [] }
     try {
       splitLoadResult = await query(`
-        SELECT 
-          id,
-          order_id,
-          misc_value,
-          full_quote_assignment,
-          full_quote_applies_to,
-          misc_applies_to
-        FROM split_loads
-        WHERE order_id = $1
-      `, [orderId])
+      SELECT 
+        id,
+        order_id,
+        misc_value,
+        full_quote_assignment,
+        full_quote_applies_to,
+        misc_applies_to
+      FROM split_loads
+      WHERE order_id = $1
+    `, [orderId])
     } catch (tableError: any) {
       // If table doesn't exist (PostgreSQL error code 42P01), return empty result
       if (tableError?.code === '42P01' || 
@@ -306,21 +306,21 @@ export async function POST(
         const fullQuoteDeductionComment = `${miscQuoteCustomerName} split load (misc portion)`
         const miscQuoteAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
 
-        // Deduction on full quote truckload
-        await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id, order_id, split_load_id, deduction, comment,
-            is_manual, is_addition, applies_to, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, true, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [fullQuoteTruckloadId, orderId, splitLoadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
+          // Deduction on full quote truckload
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id, order_id, split_load_id, deduction, comment,
+              is_manual, is_addition, applies_to, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, true, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [fullQuoteTruckloadId, orderId, splitLoadId, miscAmount, fullQuoteDeductionComment, fullQuoteAppliesToValue])
 
-        // Addition on misc truckload
-        await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id, order_id, split_load_id, deduction, comment,
-            is_manual, is_addition, applies_to, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, true, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [miscQuoteTruckloadId, orderId, splitLoadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
+          // Addition on misc truckload
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id, order_id, split_load_id, deduction, comment,
+              is_manual, is_addition, applies_to, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, true, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `, [miscQuoteTruckloadId, orderId, splitLoadId, miscAmount, miscQuoteAdditionComment, miscAppliesToValue])
       } else {
         // Only one assignment exists - just save config for later
         await client.query(`
