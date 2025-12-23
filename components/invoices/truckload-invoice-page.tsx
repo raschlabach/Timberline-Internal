@@ -1140,7 +1140,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   useEffect(() => {
     setEditableCrossDriverFreight([])
     setCrossDriverDeductions([])
-    setSplitLoadDeductions([])
+    // Don't clear splitLoadDeductions here - let the loading useEffect handle it
     setCrossDriverDeductionInputsState(new Map())
     setCrossDriverDeductionTogglesState(new Map())
   }, [selectedTruckloadId])
@@ -1186,10 +1186,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         
         const data = await res.json()
         if (data.success && data.deductions) {
-          setSplitLoadDeductions(data.deductions)
+          // Filter out any deductions without orderId (safety measure)
+          setSplitLoadDeductions(data.deductions.filter((d: CrossDriverDeduction) => d.orderId !== null))
+        } else {
+          setSplitLoadDeductions([])
         }
       } catch (error) {
         console.error('Error loading split load deductions:', error)
+        setSplitLoadDeductions([])
       }
     }
 
