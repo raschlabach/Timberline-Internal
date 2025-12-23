@@ -1402,6 +1402,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }, [selectedTruckloadId])
 
   // Auto-save calculated values when payrollCalculations change (debounced)
+  // Also save immediately on initial load to ensure values are always saved
   useEffect(() => {
     if (!selectedTruckloadId || !payrollCalculations) return
 
@@ -1410,10 +1411,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       clearTimeout(calculatedValuesSaveTimeout.current)
     }
 
-    // Debounce the save by 2 seconds
+    // Save immediately on first calculation, then debounce subsequent changes
+    const isFirstSave = calculatedValuesSaveTimeout.current === undefined
+    const delay = isFirstSave ? 0 : 2000
+
     calculatedValuesSaveTimeout.current = setTimeout(() => {
       saveCalculatedValues(payrollCalculations.loadValue, payrollCalculations.finalDriverPay)
-    }, 2000)
+    }, delay)
 
     return () => {
       if (calculatedValuesSaveTimeout.current) {
