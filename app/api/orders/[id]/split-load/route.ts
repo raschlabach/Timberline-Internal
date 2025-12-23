@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query, getClient, runMigrations } from '@/lib/db'
+import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -19,43 +19,18 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 })
     }
 
-    // Ensure migrations have run (creates split_loads table if needed)
-    try {
-      await runMigrations()
-    } catch (migrationError) {
-      console.error('Migration error (non-fatal):', migrationError)
-      // Continue - table might already exist or migration might have partially run
-    }
-
     // Get split load config from split_loads table
-    // Use a try-catch to handle case where table doesn't exist yet
-    let splitLoadResult = { rows: [] }
-    try {
-      const result = await query(`
-        SELECT 
-          id,
-          order_id,
-          misc_value,
-          full_quote_assignment,
-          full_quote_applies_to,
-          misc_applies_to
-        FROM split_loads
-        WHERE order_id = $1
-      `, [orderId])
-      splitLoadResult = result
-    } catch (tableError: any) {
-      // If table doesn't exist (PostgreSQL error code 42P01), return empty result
-      if (tableError?.code === '42P01' || 
-          tableError?.message?.includes('does not exist') ||
-          tableError?.message?.includes('relation') && tableError?.message?.includes('split_loads')) {
-        console.log('split_loads table does not exist yet, returning empty result')
-        splitLoadResult = { rows: [] }
-      } else {
-        // Re-throw other errors
-        console.error('Error querying split_loads table:', tableError)
-        throw tableError
-      }
-    }
+    const splitLoadResult = await query(`
+      SELECT 
+        id,
+        order_id,
+        misc_value,
+        full_quote_assignment,
+        full_quote_applies_to,
+        misc_applies_to
+      FROM split_loads
+      WHERE order_id = $1
+    `, [orderId])
 
     // Get order info
     const orderResult = await query(`
@@ -129,11 +104,9 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching split load:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch split load',
-      details: errorMessage
+      error: 'Failed to fetch split load'
     }, { status: 500 })
   }
 }

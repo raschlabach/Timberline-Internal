@@ -108,27 +108,9 @@ function createPool() {
     return pool
 }
 
-// Run migrations automatically on first database access (lazy initialization)
-let migrationsInitiated = false
-async function ensureMigrationsRun() {
-  if (migrationsInitiated || isBuildPhase) return
-  migrationsInitiated = true
-  try {
-    await runMigrations()
-  } catch (error) {
-    console.error('Failed to run migrations on startup:', error)
-    // Don't throw - allow app to continue, migrations can be run manually
-  }
-}
-
 export async function query(text: string, params: any[] = [], retry = 0): Promise<QueryResult<any>> {
   const start = Date.now()
   try {
-    // Run migrations on first query (lazy initialization)
-    if (!migrationsInitiated && !isBuildPhase) {
-      await ensureMigrationsRun()
-    }
-
     const p = createPool()
     if (!p) {
       if (isBuildPhase) {
@@ -162,11 +144,6 @@ export async function query(text: string, params: any[] = [], retry = 0): Promis
 }
 
 export async function getClient() {
-  // Run migrations on first client access (lazy initialization)
-  if (!migrationsInitiated && !isBuildPhase) {
-    await ensureMigrationsRun()
-  }
-
   const p = createPool()
   if (!p) {
     if (isBuildPhase) {
