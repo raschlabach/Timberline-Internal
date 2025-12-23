@@ -325,6 +325,38 @@ function SortableTableRow({
               </Tooltip>
             </TooltipProvider>
           )}
+          {(() => {
+            // Check if this is a cross-driver situation and has a deduction
+            const isCrossDriverPickup = row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupDriverName !== selectedTruckload?.driver.driverName
+            const isCrossDriverDelivery = row.assignmentType === 'pickup' && row.deliveryDriverName && row.deliveryDriverName !== selectedTruckload?.driver.driverName
+            
+            if (!isCrossDriverPickup && !isCrossDriverDelivery) {
+              return null
+            }
+            
+            const action: 'Picked up' | 'Delivered' = isCrossDriverPickup ? 'Picked up' : 'Delivered'
+            const existingDeduction = crossDriverDeductions.find(
+              d => d.orderId === row.orderId && d.action === action
+            )
+            
+            if (existingDeduction) {
+              return (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Minus 
+                        className="h-4 w-4 text-red-600 flex-shrink-0 cursor-help" 
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Cross-driver deduction: ${existingDeduction.amount.toFixed(2)} ({existingDeduction.appliesTo === 'driver_pay' ? 'DP' : 'LV'})</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            }
+            return null
+          })()}
         </div>
       </TableCell>
       <TableCell className="text-sm">
