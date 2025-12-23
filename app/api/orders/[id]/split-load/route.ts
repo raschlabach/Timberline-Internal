@@ -20,17 +20,33 @@ export async function GET(
     }
 
     // Get split load config from split_loads table
-    const splitLoadResult = await query(`
-      SELECT 
-        id,
-        order_id,
-        misc_value,
-        full_quote_assignment,
-        full_quote_applies_to,
-        misc_applies_to
-      FROM split_loads
-      WHERE order_id = $1
-    `, [orderId])
+    // Handle case where table doesn't exist yet (migration not run)
+    let splitLoadResult = { rows: [] }
+    try {
+      splitLoadResult = await query(`
+        SELECT 
+          id,
+          order_id,
+          misc_value,
+          full_quote_assignment,
+          full_quote_applies_to,
+          misc_applies_to
+        FROM split_loads
+        WHERE order_id = $1
+      `, [orderId])
+    } catch (tableError: any) {
+      // If table doesn't exist (PostgreSQL error code 42P01), return empty result
+      if (tableError?.code === '42P01' || 
+          tableError?.message?.includes('does not exist') ||
+          (tableError?.message?.includes('relation') && tableError?.message?.includes('split_loads'))) {
+        console.log('split_loads table does not exist yet, returning empty result')
+        splitLoadResult = { rows: [] }
+      } else {
+        // Re-throw other errors
+        console.error('Error querying split_loads table:', tableError)
+        throw tableError
+      }
+    }
 
     // Get order info
     const orderResult = await query(`
@@ -104,9 +120,20 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching split load:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    // Check if it's a table doesn't exist error
+    if (errorMessage.includes('split_loads') && errorMessage.includes('does not exist')) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database migration required: split_loads table does not exist. Please run the migration before using split load features.'
+      }, { status: 500 })
+    }
+    
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch split load'
+      error: 'Failed to fetch split load',
+      details: errorMessage
     }, { status: 500 })
   }
 }
@@ -329,6 +356,15 @@ export async function POST(
   } catch (error) {
     console.error('Error updating split load:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    // Check if it's a table doesn't exist error
+    if (errorMessage.includes('split_loads') && errorMessage.includes('does not exist')) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database migration required: split_loads table does not exist. Please run the migration before using split load features.'
+      }, { status: 500 })
+    }
+    
     return NextResponse.json({
       success: false,
       error: 'Failed to update split load',
@@ -402,9 +438,20 @@ export async function DELETE(
     }
   } catch (error) {
     console.error('Error clearing split load:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    // Check if it's a table doesn't exist error
+    if (errorMessage.includes('split_loads') && errorMessage.includes('does not exist')) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database migration required: split_loads table does not exist. Please run the migration before using split load features.'
+      }, { status: 500 })
+    }
+    
     return NextResponse.json({
       success: false,
-      error: 'Failed to clear split load'
+      error: 'Failed to clear split load',
+      details: errorMessage
     }, { status: 500 })
   }
 }
