@@ -1070,13 +1070,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
           ) : !selectedDriver ? (
             <div className="text-center py-12 text-gray-500">Select a driver to view their pay information</div>
           ) : (
-            <div className="space-y-6 print-content">
+            <div className="space-y-6 print:space-y-1 print-content">
               {/* Print Header - Only visible when printing */}
-              <div className="print-header no-print-hidden mb-2 pb-1 border-b border-black">
-                <h2 className="text-xl font-bold mb-1">{selectedDriver.driverName} - Pay Statement</h2>
-                <div className="text-xs">
-                  <div><strong>Date Range:</strong> {dateRange?.from ? format(dateRange.from, 'MM/dd/yyyy') : 'N/A'} - {dateRange?.to ? format(dateRange.to, 'MM/dd/yyyy') : 'N/A'}</div>
-                </div>
+              <div className="print-header no-print-hidden mb-0 pb-0 border-b border-black print:mb-0 print:pb-0">
+                <h2 className="text-sm font-bold mb-0 print:text-xs print:mb-0 print:py-0">{selectedDriver.driverName} - Pay Statement</h2>
               </div>
 
               {/* Driver Settings */}
@@ -1347,8 +1344,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
               })()}
 
               {/* Truckloads - Grid Layout for Print */}
-              <div className="print:page-break-inside-avoid">
-                <h3 className="font-semibold mb-3 print:mb-1 print:text-sm">Truckloads</h3>
+              <div className="print:page-break-inside-avoid print:mt-0">
+                <h3 className="font-semibold mb-3 print:mb-0.5 print:text-sm print:mt-0">Truckloads</h3>
                 <div className="space-y-2 print:grid print:grid-cols-2 print:gap-1 print:space-y-0">
                   {selectedDriver.truckloads.map(truckload => {
                     const tlTotals = calculateTruckloadTotals(truckload)
@@ -1379,21 +1376,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             <div className="flex-1 min-w-0">
                               <h4 className="font-bold text-xl mb-1 print:text-xs print:mb-0 print:font-semibold">
                                 {format(parseLocalDate(truckload.startDate), 'MM/dd')} - {format(parseLocalDate(truckload.endDate), 'MM/dd')}
+                                <span className="text-base font-normal text-gray-600 ml-2 print:text-xs print:ml-1 print:font-normal">
+                                  • {tlTotals.pickupCount} Pickups • {tlTotals.deliveryCount} Deliveries
+                                  {truckload.billOfLadingNumber && (
+                                    <> • BOL {truckload.billOfLadingNumber}</>
+                                  )}
+                                </span>
                               </h4>
                               {truckload.description && (
-                                <p className="text-sm text-gray-700 mb-1 print:text-xs print:mb-0 print:leading-tight">{truckload.description}</p>
+                                <p className="text-sm text-gray-700 mb-1 print:text-xs print:mb-0 print:leading-tight print:font-bold">{truckload.description}</p>
                               )}
-                              <div className="flex items-center gap-3 text-xs text-gray-600 print:gap-1 print:text-xs">
-                                <span>{tlTotals.pickupCount} Pickups</span>
-                                <span>•</span>
-                                <span>{tlTotals.deliveryCount} Deliveries</span>
-                                {truckload.billOfLadingNumber && (
-                                  <>
-                                    <span>•</span>
-                                    <span>BOL {truckload.billOfLadingNumber}</span>
-                                  </>
-                                )}
-                              </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0 print:gap-1">
                               {hasMiddlefield && (
@@ -1779,32 +1771,32 @@ export default function DriverPayPage({}: DriverPayPageProps) {
 
               {/* Driver Totals */}
               {totals && (
-                <Card className="p-4 bg-gray-50">
-                  <h3 className="font-semibold mb-4">Weekly Summary</h3>
-                  <div className="grid grid-cols-6 gap-4">
+                <Card className="p-4 bg-gray-50 print:p-2">
+                  <h3 className="font-semibold mb-4 print:text-xs print:mb-1 print:font-medium">Weekly Summary</h3>
+                  <div className="grid grid-cols-6 gap-4 print:gap-2">
                     <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Total Quotes</div>
-                      <div className="text-lg font-bold">${totals.totalQuotes.toFixed(2)}</div>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5 print:text-xs print:mb-0">Total Quotes</div>
+                      <div className="text-lg font-bold print:text-sm print:font-semibold">${totals.totalQuotes.toFixed(2)}</div>
                     </div>
                     <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Load Value</div>
-                      <div className="text-lg font-bold">${totals.loadValue.toFixed(2)}</div>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5 print:text-xs print:mb-0">Load Value</div>
+                      <div className="text-lg font-bold print:text-sm print:font-semibold">${totals.loadValue.toFixed(2)}</div>
                     </div>
                     <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Misc Driving Hours</div>
-                      <div className="text-lg font-bold">
-                        {totals.miscDrivingHours.toFixed(2)} <span className="text-sm font-normal text-gray-500">(${totals.miscDrivingTotal.toFixed(2)})</span>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5 print:text-xs print:mb-0">Misc Driving Hours</div>
+                      <div className="text-lg font-bold print:text-sm print:font-semibold">
+                        {totals.miscDrivingHours.toFixed(2)} <span className="text-sm font-normal text-gray-500 print:text-xs">(${totals.miscDrivingTotal.toFixed(2)})</span>
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Maintenance Hours</div>
-                      <div className="text-lg font-bold">
-                        {totals.maintenanceHours.toFixed(2)} <span className="text-sm font-normal text-gray-500">(${totals.maintenanceTotal.toFixed(2)})</span>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5 print:text-xs print:mb-0">Maintenance Hours</div>
+                      <div className="text-lg font-bold print:text-sm print:font-semibold">
+                        {totals.maintenanceHours.toFixed(2)} <span className="text-sm font-normal text-gray-500 print:text-xs">(${totals.maintenanceTotal.toFixed(2)})</span>
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-medium text-gray-600 mb-0.5">Weekly Driver Pay</div>
-                      <div className="text-xl font-bold text-green-600">${totals.weeklyDriverPay.toFixed(2)}</div>
+                      <div className="text-xs font-medium text-gray-600 mb-0.5 print:text-xs print:mb-0">Weekly Driver Pay</div>
+                      <div className="text-xl font-bold text-green-600 print:text-sm print:font-semibold">${totals.weeklyDriverPay.toFixed(2)}</div>
                     </div>
                   </div>
                 </Card>

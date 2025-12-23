@@ -35,9 +35,9 @@
     display: block !important;
   }
 
-  /* Page setup - minimal margins for maximum space */
+  /* Page setup - no top/bottom margins for maximum space */
   @page {
-    margin: 0.1in;
+    margin: 0.1in 0.1in 0 0.1in;
     size: letter;
   }
 
@@ -47,6 +47,13 @@
   }
 
   /* Ensure cards don't break across pages - but allow truckloads to flow */
+  .print-content {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
   .print-content > div {
     break-inside: auto;
     page-break-inside: auto;
@@ -108,23 +115,26 @@
     height: auto !important;
   }
 
-  /* Print header - compact */
+  /* Print header - minimal padding */
   .print-header {
     display: block !important;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.25rem;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
     border-bottom: 1px solid #000 !important;
   }
 
   .print-header h2 {
-    font-size: 16pt;
-    margin: 0 0 0.25rem 0;
+    font-size: 8pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
     font-weight: bold;
   }
 
   .print-header .driver-info {
-    font-size: 9pt;
-    margin-top: 0.25rem;
+    font-size: 7pt !important;
+    margin-top: 0.1rem !important;
   }
 
   /* Ensure all text is readable */
@@ -279,9 +289,23 @@
   .print-content .text-sm {
     font-size: 6.5pt !important;
   }
+  
+  /* Truckload description - bigger and bold (override text-sm) */
+  .print-content p.text-sm.text-gray-700 {
+    font-size: 7.5pt !important;
+    font-weight: bold !important;
+  }
 
   .print-content .text-xs {
     font-size: 6pt !important;
+  }
+  
+  /* Manual deductions and split load deductions list items - match adjustments text size (6pt) */
+  /* Override the 7pt rule for list items in manual/split load sections */
+  .print-content .bg-red-50 > div:not(:first-child):not(:last-child) .text-xs,
+  .print-content .bg-green-50 > div:not(:first-child):not(:last-child) .text-xs {
+    font-size: 6pt !important;
+    line-height: 1.1 !important;
   }
 
   .print-content .text-lg {
@@ -370,12 +394,38 @@
     page-break-inside: auto;
   }
   
+  /* Reduce spacing between driver hours and truckloads sections */
+  .print-content > div:has([class*="Driver Hours"]) + div {
+    margin-top: 0.1rem !important;
+  }
+  
+  /* Weekly Summary section - compact */
+  .print-content .bg-gray-50 h3 {
+    font-size: 7pt !important;
+    margin-bottom: 0.2rem !important;
+    font-weight: 600 !important;
+  }
+  
+  .print-content .bg-gray-50 .grid {
+    gap: 0.5rem !important;
+  }
+  
+  .print-content .bg-gray-50 .text-lg,
+  .print-content .bg-gray-50 .text-xl {
+    font-size: 7pt !important;
+    font-weight: 600 !important;
+  }
+  
+  .print-content .bg-gray-50 .text-xs {
+    font-size: 6pt !important;
+  }
+
   /* Prevent orphaned truckload cards */
   .print-content [class*="Card"]:first-child {
     page-break-before: auto;
   }
   
-  /* Compact all deduction/addition sections */
+  /* Compact all deduction/addition sections - match truckload description size */
   .print-content .bg-red-50,
   .print-content .bg-green-50,
   .print-content .bg-blue-50,
@@ -389,14 +439,23 @@
   .print-content .bg-blue-50 > div:first-child,
   .print-content .bg-gray-50 > div:first-child {
     margin-bottom: 0.05rem !important;
-    font-size: 5.5pt !important;
+    font-size: 7pt !important;
   }
   
+  /* Deduction/addition items match truckload description font size (7pt) */
   .print-content .bg-red-50 .text-xs,
   .print-content .bg-green-50 .text-xs,
   .print-content .bg-blue-50 .text-xs,
   .print-content .bg-gray-50 .text-xs {
-    font-size: 5.5pt !important;
+    font-size: 7pt !important;
+    line-height: 1.1 !important;
+  }
+  
+  /* Manual deductions and split load deductions list items - match adjustments text size (6pt) */
+  /* Target list items (divs with flex) inside manual/split load sections, but not headers or subtotals */
+  .print-content .bg-red-50 > div:not(:first-child):not(:last-child) .text-xs,
+  .print-content .bg-green-50 > div:not(:first-child):not(:last-child) .text-xs {
+    font-size: 6pt !important;
     line-height: 1.1 !important;
   }
   
