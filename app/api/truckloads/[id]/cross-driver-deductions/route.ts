@@ -20,10 +20,22 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { orderId, driverName, date, action, customerName, amount, appliesTo } = body
+    const { orderId, driverName, date, action, customerName, amount, appliesTo, comment, isAddition } = body
 
-    if (!orderId || !driverName || !date || !action || !customerName || amount === undefined || amount === null || !appliesTo) {
-      return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
+    // For manual deductions (with comment), orderId, driverName, date, action, customerName are optional
+    // For pickup/delivery deductions (from table), all fields are required
+    const isManualDeduction = comment !== undefined && comment !== null && comment !== ''
+    
+    if (!isManualDeduction) {
+      // Pickup/delivery deduction - require all fields
+      if (!orderId || !driverName || !date || !action || !customerName || amount === undefined || amount === null || !appliesTo) {
+        return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
+      }
+    } else {
+      // Manual deduction - require amount, appliesTo, and comment
+      if (amount === undefined || amount === null || !appliesTo || !comment) {
+        return NextResponse.json({ success: false, error: 'Missing required fields for manual deduction' }, { status: 400 })
+      }
     }
 
     // Validate amount
@@ -37,10 +49,13 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'appliesTo must be "load_value" or "driver_pay"' }, { status: 400 })
     }
 
-    // Validate action
-    if (!['Picked up', 'Delivered'].includes(action)) {
+    // Validate action (only required for pickup/delivery deductions)
+    if (!isManualDeduction && !['Picked up', 'Delivered'].includes(action)) {
       return NextResponse.json({ success: false, error: 'action must be "Picked up" or "Delivered"' }, { status: 400 })
     }
+    
+    // Validate isAddition (defaults to false if not provided)
+    const isAdditionValue = isAddition === true
 
     const client = await getClient()
     
@@ -68,55 +83,137 @@ export async function POST(
       const hasOrderId = orderIdCheck.rows.length > 0
 
       // Insert the deduction
-      if (hasAppliesTo && hasOrderId) {
-        const result = await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            order_id,
-            driver_name,
-            date,
-            action,
-            customer_name,
-            deduction,
-            is_manual,
-            is_addition,
-            applies_to,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, false, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          RETURNING id
-        `, [truckloadId, parseInt(orderId), driverName, date, action, customerName, amountNum, appliesTo])
-        
-        await client.query('COMMIT')
-        
-        return NextResponse.json({
-          success: true,
-          deductionId: `db-${result.rows[0].id}`
-        })
-      } else if (hasAppliesTo) {
-        const result = await client.query(`
-          INSERT INTO cross_driver_freight_deductions (
-            truckload_id,
-            driver_name,
-            date,
-            action,
-            customer_name,
-            deduction,
-            is_manual,
-            is_addition,
-            applies_to,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, true, false, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          RETURNING id
-        `, [truckloadId, driverName, date, action, customerName, amountNum, appliesTo])
-        
-        await client.query('COMMIT')
-        
-        return NextResponse.json({
-          success: true,
-          deductionId: `db-${result.rows[0].id}`
-        })
+      if (isManualDeduction) {
+        // Manual deduction - use comment, optional orderId
+        if (hasAppliesTo && hasOrderId && orderId) {
+          const result = await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              order_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction,
+              is_manual,
+              is_addition,
+              applies_to,
+              comment,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+          `, [truckloadId, parseInt(orderId), driverName || null, date || null, action || null, customerName || null, amountNum, isAdditionValue, appliesTo, comment])
+          
+          await client.query('COMMIT')
+          
+          return NextResponse.json({
+            success: true,
+            deductionId: `db-${result.rows[0].id}`
+          })
+        } else if (hasAppliesTo) {
+          const result = await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction,
+              is_manual,
+              is_addition,
+              applies_to,
+              comment,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+          `, [truckloadId, driverName || null, date || null, action || null, customerName || null, amountNum, isAdditionValue, appliesTo, comment])
+          
+          await client.query('COMMIT')
+          
+          return NextResponse.json({
+            success: true,
+            deductionId: `db-${result.rows[0].id}`
+          })
+        } else {
+          // Fallback if applies_to column doesn't exist
+          const result = await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction,
+              is_manual,
+              is_addition,
+              comment,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+          `, [truckloadId, driverName || null, date || null, action || null, customerName || null, amountNum, isAdditionValue, comment])
+          
+          await client.query('COMMIT')
+          
+          return NextResponse.json({
+            success: true,
+            deductionId: `db-${result.rows[0].id}`
+          })
+        }
+      } else {
+        // Pickup/delivery deduction (from table input)
+        if (hasAppliesTo && hasOrderId) {
+          const result = await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              order_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction,
+              is_manual,
+              is_addition,
+              applies_to,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, false, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+          `, [truckloadId, parseInt(orderId), driverName, date, action, customerName, amountNum, appliesTo])
+          
+          await client.query('COMMIT')
+          
+          return NextResponse.json({
+            success: true,
+            deductionId: `db-${result.rows[0].id}`
+          })
+        } else if (hasAppliesTo) {
+          const result = await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
+              truckload_id,
+              driver_name,
+              date,
+              action,
+              customer_name,
+              deduction,
+              is_manual,
+              is_addition,
+              applies_to,
+              created_at,
+              updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, true, false, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+          `, [truckloadId, driverName, date, action, customerName, amountNum, appliesTo])
+          
+          await client.query('COMMIT')
+          
+          return NextResponse.json({
+            success: true,
+            deductionId: `db-${result.rows[0].id}`
+          })
+        }
       }
     } catch (error) {
       await client.query('ROLLBACK')
@@ -183,7 +280,9 @@ export async function GET(
             action,
             customer_name,
             deduction as amount,
-            applies_to
+            applies_to,
+            comment,
+            is_addition
           FROM cross_driver_freight_deductions
           WHERE truckload_id = $1
             AND is_manual = true
@@ -200,7 +299,9 @@ export async function GET(
             action,
             customer_name,
             deduction as amount,
-            applies_to
+            applies_to,
+            comment,
+            is_addition
           FROM cross_driver_freight_deductions
           WHERE truckload_id = $1
             AND is_manual = true
