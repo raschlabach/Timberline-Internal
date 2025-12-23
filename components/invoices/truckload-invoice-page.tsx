@@ -1967,19 +1967,34 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               const fullQuoteAssignment = pickupQuote > deliveryQuote ? 'pickup' : 'delivery'
               setSplitLoadMiscValue(String(miscValue))
               setSplitLoadFullQuoteAssignment(fullQuoteAssignment)
-              // Default applies_to to driver_pay (will need to be fetched from deductions if we want to restore)
-              setSplitLoadFullQuoteAppliesTo('driver_pay')
-              setSplitLoadMiscAppliesTo('driver_pay')
+              // Use saved applies_to values if they exist, otherwise default to driver_pay
+              if (data.order.existingSplitLoadAppliesTo) {
+                setSplitLoadFullQuoteAppliesTo(data.order.existingSplitLoadAppliesTo.fullQuoteAppliesTo)
+                setSplitLoadMiscAppliesTo(data.order.existingSplitLoadAppliesTo.miscAppliesTo)
+              } else {
+                setSplitLoadFullQuoteAppliesTo('driver_pay')
+                setSplitLoadMiscAppliesTo('driver_pay')
+              }
             } else if (pickupQuote !== null) {
               setSplitLoadMiscValue(String(pickupQuote))
               setSplitLoadFullQuoteAssignment('pickup')
-              setSplitLoadFullQuoteAppliesTo('driver_pay')
-              setSplitLoadMiscAppliesTo('driver_pay')
+              if (data.order.existingSplitLoadAppliesTo) {
+                setSplitLoadFullQuoteAppliesTo(data.order.existingSplitLoadAppliesTo.fullQuoteAppliesTo)
+                setSplitLoadMiscAppliesTo(data.order.existingSplitLoadAppliesTo.miscAppliesTo)
+              } else {
+                setSplitLoadFullQuoteAppliesTo('driver_pay')
+                setSplitLoadMiscAppliesTo('driver_pay')
+              }
             } else if (deliveryQuote !== null) {
               setSplitLoadMiscValue(String(deliveryQuote))
               setSplitLoadFullQuoteAssignment('delivery')
-              setSplitLoadFullQuoteAppliesTo('driver_pay')
-              setSplitLoadMiscAppliesTo('driver_pay')
+              if (data.order.existingSplitLoadAppliesTo) {
+                setSplitLoadFullQuoteAppliesTo(data.order.existingSplitLoadAppliesTo.fullQuoteAppliesTo)
+                setSplitLoadMiscAppliesTo(data.order.existingSplitLoadAppliesTo.miscAppliesTo)
+              } else {
+                setSplitLoadFullQuoteAppliesTo('driver_pay')
+                setSplitLoadMiscAppliesTo('driver_pay')
+              }
             }
           }
         } else {

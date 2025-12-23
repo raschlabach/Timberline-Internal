@@ -184,6 +184,74 @@ export async function GET(
 
     const pendingSplit = pendingSplitCheck.rows.length > 0 ? pendingSplitCheck.rows[0] : null
 
+    // If split load exists, fetch the applies_to values from the deductions
+    let existingFullQuoteAppliesTo: 'load_value' | 'driver_pay' | null = null
+    let existingMiscAppliesTo: 'load_value' | 'driver_pay' | null = null
+    
+    if (hasSplitLoad && pickupAssignment?.truckloadId && deliveryAssignment?.truckloadId) {
+      // Check if applies_to column exists
+      const appliesToCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'cross_driver_freight_deductions'
+        AND column_name = 'applies_to'
+      `)
+      const hasAppliesTo = appliesToCheck.rows.length > 0
+
+      if (hasAppliesTo) {
+        // Determine which truckload has the full quote (larger amount) and which has misc (smaller amount)
+        const pickupQuoteNum = typeof pickupAssignment.assignmentQuote === 'number' 
+          ? pickupAssignment.assignmentQuote 
+          : parseFloat(String(pickupAssignment.assignmentQuote || 0)) || 0
+        const deliveryQuoteNum = typeof deliveryAssignment.assignmentQuote === 'number'
+          ? deliveryAssignment.assignmentQuote
+          : parseFloat(String(deliveryAssignment.assignmentQuote || 0)) || 0
+
+        // The truckload with the larger quote gets the full quote (and receives a deduction)
+        // The truckload with the smaller quote gets the misc portion (and receives an addition)
+        const fullQuoteTruckloadId = pickupQuoteNum > deliveryQuoteNum 
+          ? pickupAssignment.truckloadId 
+          : deliveryAssignment.truckloadId
+        const miscTruckloadId = pickupQuoteNum > deliveryQuoteNum 
+          ? deliveryAssignment.truckloadId 
+          : pickupAssignment.truckloadId
+
+        // Find the deduction (not addition) for the full quote truckload
+        // This deduction represents the misc portion being deducted from the full quote truckload
+        const fullQuoteDeduction = await query(`
+          SELECT applies_to
+          FROM cross_driver_freight_deductions
+          WHERE truckload_id = $1
+            AND is_manual = true
+            AND comment LIKE '%split load%'
+            AND is_addition = false
+          ORDER BY created_at DESC
+          LIMIT 1
+        `, [fullQuoteTruckloadId])
+
+        // Find the addition for the misc truckload
+        // This addition represents the misc portion being added to the misc truckload
+        const miscAddition = await query(`
+          SELECT applies_to
+          FROM cross_driver_freight_deductions
+          WHERE truckload_id = $1
+            AND is_manual = true
+            AND comment LIKE '%split load%'
+            AND is_addition = true
+          ORDER BY created_at DESC
+          LIMIT 1
+        `, [miscTruckloadId])
+
+        if (fullQuoteDeduction.rows.length > 0) {
+          existingFullQuoteAppliesTo = (fullQuoteDeduction.rows[0].applies_to as 'load_value' | 'driver_pay') || 'driver_pay'
+        }
+        if (miscAddition.rows.length > 0) {
+          existingMiscAppliesTo = (miscAddition.rows[0].applies_to as 'load_value' | 'driver_pay') || 'driver_pay'
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       order: {
@@ -200,6 +268,10 @@ export async function GET(
           fullQuoteAppliesTo: pendingSplit.full_quote_applies_to,
           miscAppliesTo: pendingSplit.misc_applies_to,
           existingAssignmentType: pendingSplit.existing_assignment_type
+        } : null,
+        existingSplitLoadAppliesTo: hasSplitLoad && !pendingSplit ? {
+          fullQuoteAppliesTo: existingFullQuoteAppliesTo || 'driver_pay',
+          miscAppliesTo: existingMiscAppliesTo || 'driver_pay'
         } : null
       }
     })

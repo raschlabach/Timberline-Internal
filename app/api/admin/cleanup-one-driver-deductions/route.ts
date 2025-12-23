@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getClient, query } from '@/lib/db'
 
-// DELETE /api/admin/cleanup-one-driver-deductions - Delete all deductions from one-driver loads
+// DELETE /api/admin/cleanup-one-driver-deductions - Delete all manual deductions (except split loads)
+// This is the ultra-simple version that deletes ALL manual deductions to start fresh
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,57 +17,38 @@ export async function DELETE(request: NextRequest) {
     try {
       await client.query('BEGIN')
 
-      // Find all truckloads where all orders have the same driver
-      const oneDriverTruckloads = await client.query(`
-        SELECT DISTINCT t.id as truckload_id
-        FROM truckloads t
-        WHERE NOT EXISTS (
-          -- Check if there are orders with different drivers
-          SELECT 1
-          FROM truckload_order_assignments toa1
-          JOIN truckload_order_assignments toa2 
-            ON toa1.order_id = toa2.order_id 
-            AND toa1.assignment_type != toa2.assignment_type
-          JOIN truckloads t1 ON toa1.truckload_id = t1.id
-          JOIN truckloads t2 ON toa2.truckload_id = t2.id
-          WHERE (t1.id = t.id OR t2.id = t.id)
-            AND t1.driver_id != t2.driver_id
-        )
-        AND EXISTS (
-          -- Make sure truckload has at least one order
-          SELECT 1
-          FROM truckload_order_assignments toa
-          WHERE toa.truckload_id = t.id
-        )
+      // First, count what will be deleted
+      const countResult = await client.query(`
+        SELECT COUNT(*) as total
+        FROM cross_driver_freight_deductions
+        WHERE is_manual = true
+          AND (comment IS NULL OR comment NOT LIKE '%split load%')
       `)
-
-      const truckloadIds = oneDriverTruckloads.rows.map(row => row.truckload_id)
       
-      if (truckloadIds.length === 0) {
+      const countToDelete = parseInt(countResult.rows[0]?.total || '0')
+
+      if (countToDelete === 0) {
         await client.query('COMMIT')
         return NextResponse.json({
           success: true,
-          message: 'No one-driver truckloads found',
+          message: 'No manual deductions found to delete',
           deletedCount: 0
         })
       }
 
-      // Delete all deductions from these truckloads
-      // Only delete manual deductions (not split load deductions)
+      // Delete all manual deductions except split loads
       const deleteResult = await client.query(`
         DELETE FROM cross_driver_freight_deductions
-        WHERE truckload_id = ANY($1)
-          AND is_manual = true
+        WHERE is_manual = true
           AND (comment IS NULL OR comment NOT LIKE '%split load%')
-      `, [truckloadIds])
+      `)
 
       await client.query('COMMIT')
 
       return NextResponse.json({
         success: true,
-        message: `Cleaned up deductions from ${truckloadIds.length} one-driver truckloads`,
-        deletedCount: deleteResult.rowCount,
-        truckloadIds: truckloadIds
+        message: `Successfully deleted ${deleteResult.rowCount} manual deductions. Split load deductions were preserved.`,
+        deletedCount: deleteResult.rowCount
       })
     } catch (error) {
       await client.query('ROLLBACK')
@@ -75,10 +57,10 @@ export async function DELETE(request: NextRequest) {
       client.release()
     }
   } catch (error) {
-    console.error('Error cleaning up one-driver deductions:', error)
+    console.error('Error cleaning up deductions:', error)
     return NextResponse.json({
       success: false,
-      error: 'Failed to cleanup deductions'
+      error: error instanceof Error ? error.message : 'Failed to cleanup deductions'
     }, { status: 500 })
   }
 }

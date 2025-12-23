@@ -188,7 +188,7 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND is_addition = false
-            AND comment NOT LIKE '%split load%'
+            AND (comment IS NULL OR comment NOT LIKE '%split load%')
           ORDER BY created_at DESC
         `, [truckloadId])
       } else if (hasAppliesTo) {
@@ -205,7 +205,7 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND is_addition = false
-            AND comment NOT LIKE '%split load%'
+            AND (comment IS NULL OR comment NOT LIKE '%split load%')
           ORDER BY created_at DESC
         `, [truckloadId])
       } else {
@@ -222,7 +222,7 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND is_addition = false
-            AND comment NOT LIKE '%split load%'
+            AND (comment IS NULL OR comment NOT LIKE '%split load%')
           ORDER BY created_at DESC
         `, [truckloadId])
       }
@@ -379,7 +379,7 @@ export async function DELETE(
         WHERE id = $1
           AND truckload_id = $2
           AND is_manual = true
-          AND comment NOT LIKE '%split load%'
+          AND (comment IS NULL OR comment NOT LIKE '%split load%')
       `, [dbId, truckloadId])
       
       await client.query('COMMIT')
