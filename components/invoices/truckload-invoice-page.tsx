@@ -603,8 +603,9 @@ function SortableTableRow({
           const deductionKey = `${row.orderId}-${action}`
           
           // Check if a deduction already exists for this order/action
+          // Compare as strings to handle type differences (orderId can be string or number)
           const existingDeduction = crossDriverDeductions.find(
-            d => d.orderId === row.orderId && d.action === action
+            d => String(d.orderId) === String(row.orderId) && d.action === action
           )
           
           // If deduction exists, show just the amount and delete button
