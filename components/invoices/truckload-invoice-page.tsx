@@ -575,36 +575,16 @@ function SortableTableRow({
             d => d.orderId === row.orderId && d.action === action
           )
           
-          // If deduction exists, show it in disabled input with delete button
+          // If deduction exists, show just the amount and delete button
           if (existingDeduction) {
             return (
               <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={existingDeduction.amount.toFixed(2)}
-                  disabled
-                  className="h-7 text-xs w-20 px-1.5 border-2 border-black bg-gray-50 cursor-not-allowed"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant={existingDeduction.appliesTo === 'driver_pay' ? 'default' : 'outline'}
-                    disabled
-                    className="h-7 px-2 text-xs opacity-60"
-                  >
-                    Driver Pay
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={existingDeduction.appliesTo === 'load_value' ? 'default' : 'outline'}
-                    disabled
-                    className="h-7 px-2 text-xs opacity-60"
-                  >
-                    Load Value
-                  </Button>
-                </div>
+                <span className="text-sm font-medium text-red-600">
+                  -${existingDeduction.amount.toFixed(2)}
+                </span>
+                <span className="text-xs text-gray-500">
+                  ({existingDeduction.appliesTo === 'driver_pay' ? 'DP' : 'LV'})
+                </span>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -646,9 +626,9 @@ function SortableTableRow({
                     e.stopPropagation()
                     setCrossDriverDeductionToggle(deductionKey, 'driver_pay')
                   }}
-                  className="h-7 px-2 text-xs"
+                  className="h-7 px-1.5 text-xs"
                 >
-                  Driver Pay
+                  DP
                 </Button>
                 <Button
                   size="sm"
@@ -657,9 +637,9 @@ function SortableTableRow({
                     e.stopPropagation()
                     setCrossDriverDeductionToggle(deductionKey, 'load_value')
                   }}
-                  className="h-7 px-2 text-xs"
+                  className="h-7 px-1.5 text-xs"
                 >
-                  Load Value
+                  LV
                 </Button>
               </div>
               <Button
@@ -674,10 +654,11 @@ function SortableTableRow({
                   }
                   await onSaveCrossDriverDeduction(row.orderId, action, otherDriverName, otherDate, customerName)
                 }}
-                className="h-7 px-2 text-xs"
+                className="h-7 w-7 p-0"
                 disabled={!inputValue || parseFloat(inputValue) <= 0}
+                title="Save deduction"
               >
-                Save
+                <Check className="h-3.5 w-3.5" />
               </Button>
             </div>
           )
