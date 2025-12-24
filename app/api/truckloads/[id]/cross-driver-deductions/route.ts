@@ -179,7 +179,7 @@ export async function POST(
               applies_to,
               created_at,
               updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, false, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id
           `, [truckloadId, parseInt(orderId), driverName, date, action, customerName, amountNum, appliesTo])
           
@@ -203,7 +203,7 @@ export async function POST(
               applies_to,
               created_at,
               updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, true, false, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES ($1, $2, $3, $4, $5, $6, false, false, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id
           `, [truckloadId, driverName, date, action, customerName, amountNum, appliesTo])
           
@@ -281,11 +281,7 @@ export async function GET(
     try {
       let result
       if (hasAppliesTo && hasOrderId) {
-        // Exclude split load deductions: check split_load_id IS NULL (new system) OR comment NOT LIKE '%split load%' (old system)
-        const splitLoadFilter = hasSplitLoadId 
-          ? 'AND split_load_id IS NULL'
-          : "AND (comment IS NULL OR comment NOT LIKE '%split load%')"
-        
+        // Return ALL deductions: pickup/delivery, manual, split loads, and additions
         result = await client.query(`
           SELECT 
             id,
@@ -297,20 +293,15 @@ export async function GET(
             deduction as amount,
             applies_to,
             comment,
-            is_addition
+            is_addition,
+            is_manual${hasSplitLoadId ? ', split_load_id' : ''},
+            created_at
           FROM cross_driver_freight_deductions
           WHERE truckload_id = $1
-            AND is_manual = true
-            AND is_addition = false
-            ${splitLoadFilter}
           ORDER BY created_at DESC
         `, [truckloadId])
       } else if (hasAppliesTo) {
-        // Exclude split load deductions: check split_load_id IS NULL (new system) OR comment NOT LIKE '%split load%' (old system)
-        const splitLoadFilter = hasSplitLoadId 
-          ? 'AND split_load_id IS NULL'
-          : "AND (comment IS NULL OR comment NOT LIKE '%split load%')"
-        
+        // Return ALL deductions without order_id column
         result = await client.query(`
           SELECT 
             id,
@@ -321,20 +312,15 @@ export async function GET(
             deduction as amount,
             applies_to,
             comment,
-            is_addition
+            is_addition,
+            is_manual${hasSplitLoadId ? ', split_load_id' : ''},
+            created_at
           FROM cross_driver_freight_deductions
           WHERE truckload_id = $1
-            AND is_manual = true
-            AND is_addition = false
-            ${splitLoadFilter}
           ORDER BY created_at DESC
         `, [truckloadId])
       } else {
-        // Exclude split load deductions: check split_load_id IS NULL (new system) OR comment NOT LIKE '%split load%' (old system)
-        const splitLoadFilter = hasSplitLoadId 
-          ? 'AND split_load_id IS NULL'
-          : "AND (comment IS NULL OR comment NOT LIKE '%split load%')"
-        
+        // Fallback without applies_to column
         result = await client.query(`
           SELECT 
             id,
@@ -343,12 +329,13 @@ export async function GET(
             action,
             customer_name,
             deduction as amount,
-            'driver_pay' as applies_to
+            'driver_pay' as applies_to,
+            comment,
+            is_addition,
+            is_manual${hasSplitLoadId ? ', split_load_id' : ''},
+            created_at
           FROM cross_driver_freight_deductions
           WHERE truckload_id = $1
-            AND is_manual = true
-            AND is_addition = false
-            ${splitLoadFilter}
           ORDER BY created_at DESC
         `, [truckloadId])
       }
@@ -358,10 +345,14 @@ export async function GET(
         orderId: hasOrderId ? (row.order_id ? String(row.order_id) : null) : null,
         driverName: row.driver_name || '',
         date: row.date || '',
-        action: row.action || 'Picked up',
+        action: row.action || null,
         customerName: row.customer_name || '',
         amount: typeof row.amount === 'number' ? row.amount : parseFloat(String(row.amount || 0)) || 0,
-        appliesTo: row.applies_to || 'driver_pay'
+        appliesTo: row.applies_to || 'driver_pay',
+        comment: row.comment || null,
+        isAddition: row.is_addition || false,
+        isManual: row.is_manual || false,
+        splitLoadId: hasSplitLoadId ? (row.split_load_id ? row.split_load_id : null) : null
       }))
 
       return NextResponse.json({
