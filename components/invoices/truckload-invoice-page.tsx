@@ -841,6 +841,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   const [deductionDialogComment, setDeductionDialogComment] = useState<string>('')
   const [deductionDialogAmount, setDeductionDialogAmount] = useState<string>('')
   const [deductionDialogAppliesTo, setDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
+  const [deductionDialogIsAddition, setDeductionDialogIsAddition] = useState<boolean>(false)
   // Per-row stop deduction/addition dialog
   const [stopDeductionDialogOpen, setStopDeductionDialogOpen] = useState<boolean>(false)
   const [stopDeductionDialogOrderId, setStopDeductionDialogOrderId] = useState<string | null>(null)
@@ -1721,7 +1722,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           amount: amount,
           appliesTo: deductionDialogAppliesTo,
           comment: comment,
-          isAddition: false
+          isAddition: deductionDialogIsAddition
         })
       })
 
@@ -1745,8 +1746,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         setDeductionDialogComment('')
         setDeductionDialogAmount('')
         setDeductionDialogAppliesTo('driver_pay')
+        setDeductionDialogIsAddition(false)
 
-        toast.success('Manual deduction saved successfully')
+        toast.success(deductionDialogIsAddition ? 'Manual addition saved successfully' : 'Manual deduction saved successfully')
       } else {
         toast.error(data.error || 'Failed to save manual deduction')
       }
@@ -2869,7 +2871,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           <div className="text-sm font-semibold text-gray-700">
                             Manual Deductions/Additions
                           </div>
-                          <Button
+                            <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
@@ -2878,6 +2880,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               setDeductionDialogComment('')
                               setDeductionDialogAmount('')
                               setDeductionDialogAppliesTo('driver_pay')
+                              setDeductionDialogIsAddition(false)
                             }}
                             className="h-7 text-xs"
                           >
@@ -3028,7 +3031,17 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                         ) : (
                           <div className="space-y-1.5 max-h-96 overflow-y-auto">
                             {/* Pickup/Delivery Deductions */}
-                            {crossDriverDeductions.map((deduction) => (
+                            {(() => {
+                              // Get list of order IDs in the current truckload
+                              const currentOrderIds = new Set(orders.map(o => o.orderId))
+                              
+                              // Filter deductions to only show those associated with orders in this truckload
+                              // OR manual deductions without an orderId
+                              const filteredDeductions = crossDriverDeductions.filter(deduction => 
+                                !deduction.orderId || currentOrderIds.has(deduction.orderId)
+                              )
+                              
+                              return filteredDeductions.map((deduction) => (
                               <div
                                 key={deduction.id}
                                 className={`border rounded-lg p-2 text-xs ${
@@ -3136,7 +3149,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                   </div>
                                 </div>
                               </div>
-                            ))}
+                              ))
+                            })()}
                             
                             {/* Split Load Deductions - Read Only (combined in same list) */}
                             {splitLoadDeductions
@@ -3679,7 +3693,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         <Dialog open={deductionDialogOpen} onOpenChange={setDeductionDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Add Manual Deduction</DialogTitle>
+              <DialogTitle>{deductionDialogIsAddition ? 'Add Manual Addition' : 'Add Manual Deduction'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -3692,6 +3706,21 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                   className="min-h-[80px]"
                   rows={3}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deduction-type">Type</Label>
+                <Select
+                  value={deductionDialogIsAddition ? 'addition' : 'deduction'}
+                  onValueChange={(value) => setDeductionDialogIsAddition(value === 'addition')}
+                >
+                  <SelectTrigger id="deduction-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deduction">Deduction</SelectItem>
+                    <SelectItem value="addition">Addition</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deduction-applies-to">Applies To</Label>
@@ -3726,11 +3755,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 setDeductionDialogOpen(false)
                 setDeductionDialogComment('')
                 setDeductionDialogAmount('')
+                setDeductionDialogIsAddition(false)
               }}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveDeduction} className="bg-red-600 hover:bg-red-700">
-                Add Deduction
+              <Button 
+                onClick={handleSaveDeduction} 
+                className={deductionDialogIsAddition ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+              >
+                {deductionDialogIsAddition ? 'Add Addition' : 'Add Deduction'}
               </Button>
             </DialogFooter>
           </DialogContent>
