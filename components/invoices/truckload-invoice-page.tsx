@@ -131,6 +131,7 @@ interface AssignedOrderRow {
   deliveryDriverName: string | null
   deliveryAssignmentDate: string | null
   isTransferOrder: boolean
+  excludeFromLoadValue: boolean
 }
 
 interface CrossDriverDeduction {
@@ -550,6 +551,88 @@ function SortableTableRow({
               </TooltipTrigger>
               <TooltipContent>
                 <p>{(row.assignmentQuote !== null && row.assignmentQuote !== undefined) ? 'In split loads' : 'Add to split loads'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Switch
+                    checked={row.excludeFromLoadValue}
+                    onCheckedChange={async (checked) => {
+                      try {
+                        const response = await fetch(`/api/truckloads/${selectedTruckloadId}/assignments/${row.orderId}/exclude-from-load-value`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({
+                            assignmentType: row.assignmentType,
+                            excludeFromLoadValue: checked
+                          })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                          // Reload orders to get updated data
+                          const res = await fetch(`/api/truckloads/${selectedTruckloadId}/orders`, { method: 'GET', credentials: 'include' })
+                          if (res.ok) {
+                            const orderData = (await res.json()) as TruckloadOrdersApiResponse
+                            if (orderData.success) {
+                              const rowsBase = orderData.orders.map(o => ({
+                                orderId: o.id,
+                                assignmentType: o.assignment_type,
+                                sequenceNumber: o.sequence_number,
+                                pickupName: o.pickup_customer?.name || 'Unknown',
+                                deliveryName: o.delivery_customer?.name || 'Unknown',
+                                pickupAddress: o.pickup_customer?.address || null,
+                                deliveryAddress: o.delivery_customer?.address || null,
+                                pickupPhone1: o.pickup_customer?.phone_number_1 || null,
+                                pickupPhone2: o.pickup_customer?.phone_number_2 || null,
+                                pickupNotes: o.pickup_customer?.notes || null,
+                                deliveryPhone1: o.delivery_customer?.phone_number_1 || null,
+                                deliveryPhone2: o.delivery_customer?.phone_number_2 || null,
+                                deliveryNotes: o.delivery_customer?.notes || null,
+                                payingCustomerName: null as string | null,
+                                freightQuote: o.freight_quote,
+                                assignmentQuote: (o as any).assignment_quote !== null && (o as any).assignment_quote !== undefined
+                                  ? parseFloat((o as any).assignment_quote) 
+                                  : null,
+                                middlefield: (o as any).middlefield || false,
+                                backhaul: (o as any).backhaul || false,
+                                ohioToIndiana: (o as any).oh_to_in || false,
+                                footage: typeof o.footage === 'number' ? o.footage : (typeof o.footage === 'string' ? parseFloat(o.footage) || 0 : 0),
+                                skidsData: o.skids_data || [],
+                                vinylData: o.vinyl_data || [],
+                                comments: o.comments || null,
+                                isRush: o.is_rush,
+                                needsAttention: o.needs_attention,
+                                pickupDriverName: o.pickup_driver_name || null,
+                                pickupAssignmentDate: o.pickup_assignment_date || null,
+                                deliveryDriverName: o.delivery_driver_name || null,
+                                deliveryAssignmentDate: o.delivery_assignment_date || null,
+                                isTransferOrder: o.is_transfer_order || false,
+                                excludeFromLoadValue: (o as any).exclude_from_load_value || false,
+                              }))
+                              // Trigger a page reload by updating a timestamp or just let the useEffect handle it
+                              // For now, just update the current row's state locally
+                              window.location.reload()
+                            }
+                          }
+                          toast.success(checked ? 'Quote excluded from load value' : 'Quote included in load value')
+                        } else {
+                          toast.error(data.error || 'Failed to update exclude setting')
+                        }
+                      } catch (error) {
+                        console.error('Error updating exclude from load value:', error)
+                        toast.error('Failed to update exclude setting')
+                      }
+                    }}
+                    className="scale-75"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{row.excludeFromLoadValue ? 'Included in load value' : 'Excluded from load value'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -1014,7 +1097,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     
     // Calculate total quotes from grouped orders (each order counted once)
     // Exclude orders where assignment_quote is the misc value (the smaller portion)
+    // Also exclude orders where excludeFromLoadValue is true
     const totalQuotes = groupedOrders.reduce((sum, order) => {
+      // Skip if explicitly excluded from load value
+      if (order.excludeFromLoadValue) {
+        return sum
+      }
+      
       if (order.freightQuote) {
         // Parse quote string (could be "$123.45" or "123.45")
         const cleaned = order.freightQuote.replace(/[^0-9.-]/g, '')
@@ -2159,6 +2248,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deliveryDriverName: o.delivery_driver_name || null,
           deliveryAssignmentDate: o.delivery_assignment_date || null,
           isTransferOrder: o.is_transfer_order || false,
+          excludeFromLoadValue: (o as any).exclude_from_load_value || false,
         }))
         // Fetch paying customer names in parallel
         const payingNames = await Promise.all(rowsBase.map(r => fetchPayingCustomerName(r.orderId)))

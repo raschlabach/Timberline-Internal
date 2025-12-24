@@ -68,6 +68,7 @@ interface Order {
   freightQuote: number | null
   fullQuote?: number | null
   assignmentQuote?: number | null
+  excludeFromLoadValue?: boolean
   footage: number
   pickupCustomerName: string | null
   deliveryCustomerName: string | null
@@ -522,6 +523,11 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     // For split loads: only the truckload with "full quote - misc" gets the quote counted
     // The truckload with "misc" does NOT get the quote counted (only the misc addition/deduction applies)
     const totalQuotes = flatOrders.reduce((sum, order) => {
+      // Skip if explicitly excluded from load value
+      if (order.excludeFromLoadValue) {
+        return sum
+      }
+      
       // Use fullQuote if available, otherwise parse freightQuote
       let fullQuote: number
       if (order.fullQuote !== null && order.fullQuote !== undefined) {

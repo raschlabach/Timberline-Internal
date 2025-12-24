@@ -97,6 +97,7 @@ export async function GET(
         toa.sequence_number,
         toa.is_completed as stop_completed,
         toa.assignment_quote,
+        COALESCE(toa.exclude_from_load_value, false) as exclude_from_load_value,
         o.status,
         -- Pickup customer details
         json_build_object(

@@ -345,6 +345,7 @@ export async function GET(request: NextRequest) {
           o.freight_quote as "fullQuote",
           toa.assignment_quote as "assignmentQuote",
           COALESCE(toa.assignment_quote, o.freight_quote) as "freightQuote",
+          COALESCE(toa.exclude_from_load_value, false) as "excludeFromLoadValue",
           COALESCE(
             (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
             0
@@ -639,6 +640,8 @@ export async function GET(request: NextRequest) {
 
     // Add orders to truckloads
     ordersResult.rows.forEach((order: any) => {
+      // Map excludeFromLoadValue if it exists
+      const excludeFromLoadValue = order.excludeFromLoadValue || false
       const driver = driversMap.get(
         truckloads.find((t: any) => t.id === order.truckloadId)?.driverId
       )
@@ -651,6 +654,7 @@ export async function GET(request: NextRequest) {
             freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
             fullQuote: order.fullQuote ? parseFloat(order.fullQuote) : null,
             assignmentQuote: order.assignmentQuote ? parseFloat(order.assignmentQuote) : null,
+            excludeFromLoadValue: excludeFromLoadValue,
             footage: parseFloat(order.footage) || 0,
             pickupCustomerName: order.pickupCustomerName,
             deliveryCustomerName: order.deliveryCustomerName,
