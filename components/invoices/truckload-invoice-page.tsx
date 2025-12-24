@@ -3110,7 +3110,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 <div className="flex items-center justify-between gap-2">
                                   <div className={`flex-1 ${deduction.action === 'Picked up' ? 'text-red-700' : 'text-black'}`}>
                                     <div className="font-medium">
-                                      {deduction.driverName} {deduction.action.toLowerCase()} {deduction.action === 'Picked up' ? 'from' : 'to'} {deduction.customerName} on {formatDateShort(deduction.date)}
+                                      {deduction.action 
+                                        ? `${deduction.driverName} ${deduction.action.toLowerCase()} ${deduction.action === 'Picked up' ? 'from' : 'to'} ${deduction.customerName} on ${formatDateShort(deduction.date)}`
+                                        : deduction.comment || 'Manual deduction'
+                                      }
                                     </div>
                                     <div className="text-gray-600 mt-0.5">
                                       ${deduction.amount.toFixed(2)}
@@ -3249,7 +3252,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                         Split Load
                                       </span>
                                     </div>
-                                    {deduction.driverName && (
+                                    {deduction.driverName && deduction.action && (
                                       <div className="text-gray-600 mt-0.5 text-xs">
                                         {deduction.driverName} {deduction.action.toLowerCase()} {deduction.action === 'Picked up' ? 'from' : 'to'} {deduction.customerName} on {formatDateShort(deduction.date)}
                                       </div>
