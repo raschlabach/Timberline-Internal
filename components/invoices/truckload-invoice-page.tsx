@@ -3032,14 +3032,19 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           <div className="space-y-1.5 max-h-96 overflow-y-auto">
                             {/* Pickup/Delivery Deductions */}
                             {(() => {
-                              // Get list of order IDs in the current truckload
-                              const currentOrderIds = new Set(orders.map(o => o.orderId))
+                              // Get list of order IDs in the current truckload (as strings for comparison)
+                              const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
                               
                               // Filter deductions to only show those associated with orders in this truckload
-                              // OR manual deductions without an orderId
-                              const filteredDeductions = crossDriverDeductions.filter(deduction => 
-                                !deduction.orderId || currentOrderIds.has(deduction.orderId)
-                              )
+                              // Pickup/delivery deductions from table input should have orderId that matches
+                              const filteredDeductions = crossDriverDeductions.filter(deduction => {
+                                // If deduction has no orderId, don't show it (pickup/delivery deductions should have orderId)
+                                if (!deduction.orderId) {
+                                  return false
+                                }
+                                // Only show if orderId matches an order in current truckload
+                                return currentOrderIds.has(String(deduction.orderId))
+                              })
                               
                               return filteredDeductions.map((deduction) => (
                               <div
@@ -3153,9 +3158,17 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             })()}
                             
                             {/* Split Load Deductions - Read Only (combined in same list) */}
-                            {splitLoadDeductions
-                              .filter(deduction => deduction.orderId !== null) // Only show deductions with orderId
-                              .map((deduction) => (
+                            {(() => {
+                              // Get list of order IDs in the current truckload (as strings for comparison)
+                              const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
+                              
+                              // Filter split load deductions to only show those for orders in this truckload
+                              return splitLoadDeductions
+                                .filter(deduction => {
+                                  // Only show if orderId matches an order in current truckload
+                                  return deduction.orderId !== null && currentOrderIds.has(String(deduction.orderId))
+                                })
+                                .map((deduction) => (
                               <div
                                 key={deduction.id}
                                 className={`border-2 border-blue-300 rounded-lg p-2 text-xs bg-blue-50 ${
@@ -3242,7 +3255,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                   </div>
                                 </div>
                               </div>
-                            ))}
+                              ))
+                            })()}
                           </div>
                         )}
                       </div>
