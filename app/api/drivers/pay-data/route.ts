@@ -678,6 +678,7 @@ export async function GET(request: NextRequest) {
             freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
             fullQuote: order.fullQuote ? parseFloat(order.fullQuote) : null,
             assignmentQuote: order.assignmentQuote ? parseFloat(order.assignmentQuote) : null,
+            excludeFromLoadValue: order.excludeFromLoadValue === true || order.excludeFromLoadValue === 'true' || order.excludeFromLoadValue === 1,
             footage: parseFloat(order.footage) || 0,
             pickupCustomerName: order.pickupCustomerName,
             deliveryCustomerName: order.deliveryCustomerName,
