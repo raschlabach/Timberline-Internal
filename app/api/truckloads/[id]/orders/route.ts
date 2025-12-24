@@ -39,7 +39,7 @@ export async function GET(
     const excludeColumnSelect = hasExcludeFromLoadValue 
       ? 'COALESCE(toa.exclude_from_load_value, false) as exclude_from_load_value,'
       : 'false as exclude_from_load_value,'
-    
+
     const result = await query(`
       WITH skids_summary AS (
         SELECT 

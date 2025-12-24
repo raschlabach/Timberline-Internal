@@ -376,7 +376,8 @@ export async function GET(request: NextRequest) {
       console.log('[Driver Pay API] excludeColumnSelect:', excludeColumnSelect)
       console.log('[Driver Pay API] hasExcludeFromLoadValue:', hasExcludeFromLoadValue)
       
-      ordersResult = await query(`
+      // Build the full query string to verify it's correct
+      const queryString = `
         SELECT 
           o.id as "orderId",
           toa.truckload_id as "truckloadId",
@@ -414,7 +415,11 @@ export async function GET(request: NextRequest) {
         LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
         WHERE toa.truckload_id = ANY($1::int[])
         ORDER BY toa.truckload_id, toa.sequence_number
-      `, [truckloadIds])
+      `
+      
+      console.log('[Driver Pay API] Query includes excludeFromLoadValue:', queryString.includes('excludeFromLoadValue'))
+      
+      ordersResult = await query(queryString, [truckloadIds])
     } else {
       // Build the query with conditional exclude_from_load_value column for fallback
       const excludeColumnSelectFallback = hasExcludeFromLoadValue 
@@ -706,7 +711,13 @@ export async function GET(request: NextRequest) {
             }
           } else {
             // Debug: Log if field is missing from query result
-            console.log('[Driver Pay API] excludeFromLoadValue missing from order:', order.orderId, 'Order keys:', Object.keys(order))
+            // This should not happen if the query includes the field
+            console.log('[Driver Pay API] WARNING: excludeFromLoadValue missing from order:', order.orderId, 'Order keys:', Object.keys(order))
+          }
+          
+          // Debug: Log the value being set
+          if (excludeFromLoadValue) {
+            console.log('[Driver Pay API] Order', order.orderId, 'has excludeFromLoadValue = true')
           }
           // If field doesn't exist in query result, it defaults to false
           
