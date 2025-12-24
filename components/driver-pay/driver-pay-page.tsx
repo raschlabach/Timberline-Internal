@@ -526,9 +526,12 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     const totalQuotes = flatOrders.reduce((sum, order) => {
       // Skip if excluded from load value
       // Check explicitly for true (PostgreSQL booleans come as booleans, but be defensive)
-      if (order.excludeFromLoadValue === true || 
-          (typeof order.excludeFromLoadValue === 'string' && order.excludeFromLoadValue.toLowerCase() === 'true') ||
-          order.excludeFromLoadValue === 1) {
+      const isExcluded = order.excludeFromLoadValue === true || 
+                         (typeof order.excludeFromLoadValue === 'string' && order.excludeFromLoadValue.toLowerCase() === 'true') ||
+                         order.excludeFromLoadValue === 1
+      
+      if (isExcluded) {
+        console.log('[Driver Pay Calc] Excluding order', order.orderId, 'from load value calculation. excludeFromLoadValue:', order.excludeFromLoadValue)
         return sum
       }
       
