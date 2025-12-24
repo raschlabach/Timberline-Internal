@@ -93,6 +93,7 @@ export async function GET(
       )
       SELECT 
         o.id, 
+        toa.id as assignment_id,
         toa.assignment_type,
         toa.sequence_number,
         toa.is_completed as stop_completed,

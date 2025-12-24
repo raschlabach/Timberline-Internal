@@ -1,5 +1,5 @@
 -- Migration to add exclude_from_load_value column to truckload_order_assignments
--- This allows users to exclude specific order quotes from load value calculations
+-- This allows excluding specific order quotes from load value calculations
 
 -- Add the exclude_from_load_value column
 ALTER TABLE truckload_order_assignments 

@@ -522,9 +522,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     // Now calculate totalQuotes exactly like invoice page does
     // For split loads: only the truckload with "full quote - misc" gets the quote counted
     // The truckload with "misc" does NOT get the quote counted (only the misc addition/deduction applies)
+    // Also exclude orders where excludeFromLoadValue is true
     const totalQuotes = flatOrders.reduce((sum, order) => {
-      // Skip if explicitly excluded from load value
-      if (order.excludeFromLoadValue) {
+      // Skip if excluded from load value
+      if (order.excludeFromLoadValue === true) {
         return sum
       }
       
