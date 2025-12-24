@@ -626,17 +626,28 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum
     }, 0)
     
-    // Split load deductions/additions from load value (only count those with orderId and splitLoadId)
+    // Get list of order IDs in the current truckload (as strings for comparison)
+    const currentOrderIds = new Set(truckload.orders.map(o => String(o.orderId)))
+    
+    // Split load deductions/additions from load value (only count those with orderId and splitLoadId that match current truckload)
     const splitLoadDeductionsFromLoadValue = truckload.deductions.reduce((sum, deduction) => {
+      // Must have splitLoadId, orderId, and the orderId must match an order in this truckload
       if (deduction.splitLoadId && deduction.orderId && !deduction.isAddition && deduction.appliesTo === 'load_value') {
-        return sum + deduction.deduction
+        // Check if orderId matches an order in current truckload (same logic as invoice page)
+        if (currentOrderIds.has(String(deduction.orderId))) {
+          return sum + deduction.deduction
+        }
       }
       return sum
     }, 0)
     
     const splitLoadAdditionsToLoadValue = truckload.deductions.reduce((sum, deduction) => {
+      // Must have splitLoadId, orderId, and the orderId must match an order in this truckload
       if (deduction.splitLoadId && deduction.orderId && deduction.isAddition && deduction.appliesTo === 'load_value') {
-        return sum + deduction.deduction
+        // Check if orderId matches an order in current truckload (same logic as invoice page)
+        if (currentOrderIds.has(String(deduction.orderId))) {
+          return sum + deduction.deduction
+        }
       }
       return sum
     }, 0)
@@ -667,17 +678,25 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       return sum
     }, 0)
     
-    // Split load deductions/additions from driver pay (only count those with orderId and splitLoadId)
+    // Split load deductions/additions from driver pay (only count those with orderId and splitLoadId that match current truckload)
     const splitLoadDeductionsFromDriverPay = truckload.deductions.reduce((sum, deduction) => {
+      // Must have splitLoadId, orderId, and the orderId must match an order in this truckload
       if (deduction.splitLoadId && deduction.orderId && !deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.deduction
+        // Check if orderId matches an order in current truckload (same logic as invoice page)
+        if (currentOrderIds.has(String(deduction.orderId))) {
+          return sum + deduction.deduction
+        }
       }
       return sum
     }, 0)
     
     const splitLoadAdditionsToDriverPay = truckload.deductions.reduce((sum, deduction) => {
+      // Must have splitLoadId, orderId, and the orderId must match an order in this truckload
       if (deduction.splitLoadId && deduction.orderId && deduction.isAddition && deduction.appliesTo === 'driver_pay') {
-        return sum + deduction.deduction
+        // Check if orderId matches an order in current truckload (same logic as invoice page)
+        if (currentOrderIds.has(String(deduction.orderId))) {
+          return sum + deduction.deduction
+        }
       }
       return sum
     }, 0)
@@ -1462,11 +1481,23 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 )}
                                 
                                 {/* Split Load Deductions from Load Value - Detailed */}
-                                {truckload.deductions.filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0).length > 0 && (
-                                  <div className="bg-red-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
-                                    <div className="text-xs font-semibold text-red-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Deductions (LV)</div>
-                                    {truckload.deductions
-                                      .filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
+                                {(() => {
+                                  // Get list of order IDs in the current truckload (as strings for comparison)
+                                  const currentOrderIds = new Set(truckload.orders.map(o => String(o.orderId)))
+                                  // Filter split load deductions to only those where orderId matches current truckload
+                                  const filteredSplitLoadDeductions = truckload.deductions.filter(d => 
+                                    d.splitLoadId && 
+                                    d.orderId && 
+                                    !d.isAddition && 
+                                    d.appliesTo === 'load_value' && 
+                                    d.deduction > 0 &&
+                                    currentOrderIds.has(String(d.orderId))
+                                  )
+                                  
+                                  return filteredSplitLoadDeductions.length > 0 && (
+                                    <div className="bg-red-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                      <div className="text-xs font-semibold text-red-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Deductions (LV)</div>
+                                      {filteredSplitLoadDeductions
                                       .map((ded) => {
                                         // Create description based on other driver's assignment
                                         let description = 'Split load deduction (misc portion)'
@@ -1490,14 +1521,27 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                       <span className="text-red-600 font-bold print:font-semibold">-${tlTotals.splitLoadDeductionsFromLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
-                                )}
+                                  )
+                                })()}
                                 
                                 {/* Split Load Additions to Load Value - Detailed */}
-                                {truckload.deductions.filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0).length > 0 && (
-                                  <div className="bg-green-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
-                                    <div className="text-xs font-semibold text-green-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Additions (LV)</div>
-                                    {truckload.deductions
-                                      .filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'load_value' && d.deduction > 0)
+                                {(() => {
+                                  // Get list of order IDs in the current truckload (as strings for comparison)
+                                  const currentOrderIds = new Set(truckload.orders.map(o => String(o.orderId)))
+                                  // Filter split load additions to only those where orderId matches current truckload
+                                  const filteredSplitLoadAdditions = truckload.deductions.filter(d => 
+                                    d.splitLoadId && 
+                                    d.orderId && 
+                                    d.isAddition && 
+                                    d.appliesTo === 'load_value' && 
+                                    d.deduction > 0 &&
+                                    currentOrderIds.has(String(d.orderId))
+                                  )
+                                  
+                                  return filteredSplitLoadAdditions.length > 0 && (
+                                    <div className="bg-green-50 rounded px-2 py-1 print:px-1 print:py-0.5 print:rounded">
+                                      <div className="text-xs font-semibold text-green-700 mb-0.5 print:text-xs print:mb-0 print:font-medium">Split Load Additions (LV)</div>
+                                      {filteredSplitLoadAdditions
                                       .map((ded) => {
                                         // Create description based on other driver's assignment
                                         let description = 'Split load addition (misc portion)'
@@ -1521,7 +1565,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                       <span className="text-green-600 font-bold print:font-semibold">+${tlTotals.splitLoadAdditionsToLoadValue.toFixed(2)}</span>
                                     </div>
                                   </div>
-                                )}
+                                  )
+                                })()}
                                 
                                 {/* Manual Additions to Load Value - Detailed */}
                                 {truckload.deductions.filter(d => d.isManual && d.isAddition && d.appliesTo === 'load_value' && !d.orderId && !d.splitLoadId && d.deduction > 0).length > 0 && (
@@ -1608,11 +1653,23 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   )}
                                   
                                   {/* Split Load Deductions from Driver Pay - Detailed */}
-                                  {truckload.deductions.filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'driver_pay' && d.deduction > 0).length > 0 && (
-                                    <div className="bg-red-50 rounded px-2 py-1">
-                                      <div className="text-xs font-semibold text-red-700 mb-0.5">Split Load Deductions (DP)</div>
-                                      {truckload.deductions
-                                        .filter(d => d.splitLoadId && d.orderId && !d.isAddition && d.appliesTo === 'driver_pay' && d.deduction > 0)
+                                  {(() => {
+                                    // Get list of order IDs in the current truckload (as strings for comparison)
+                                    const currentOrderIds = new Set(truckload.orders.map(o => String(o.orderId)))
+                                    // Filter split load deductions to only those where orderId matches current truckload
+                                    const filteredSplitLoadDeductions = truckload.deductions.filter(d => 
+                                      d.splitLoadId && 
+                                      d.orderId && 
+                                      !d.isAddition && 
+                                      d.appliesTo === 'driver_pay' && 
+                                      d.deduction > 0 &&
+                                      currentOrderIds.has(String(d.orderId))
+                                    )
+                                    
+                                    return filteredSplitLoadDeductions.length > 0 && (
+                                      <div className="bg-red-50 rounded px-2 py-1">
+                                        <div className="text-xs font-semibold text-red-700 mb-0.5">Split Load Deductions (DP)</div>
+                                        {filteredSplitLoadDeductions
                                         .map((ded) => {
                                           // Create description based on other driver's assignment
                                           let description = 'Split load deduction (misc portion)'
@@ -1636,14 +1693,27 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                         <span className="text-red-600 font-bold">-${tlTotals.splitLoadDeductionsFromDriverPay.toFixed(2)}</span>
                                       </div>
                                     </div>
-                                  )}
+                                    )
+                                  })()}
                                   
                                   {/* Split Load Additions to Driver Pay - Detailed */}
-                                  {truckload.deductions.filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'driver_pay' && d.deduction > 0).length > 0 && (
-                                    <div className="bg-green-50 rounded px-2 py-1">
-                                      <div className="text-xs font-semibold text-green-700 mb-0.5">Split Load Additions (DP)</div>
-                                      {truckload.deductions
-                                        .filter(d => d.splitLoadId && d.orderId && d.isAddition && d.appliesTo === 'driver_pay' && d.deduction > 0)
+                                  {(() => {
+                                    // Get list of order IDs in the current truckload (as strings for comparison)
+                                    const currentOrderIds = new Set(truckload.orders.map(o => String(o.orderId)))
+                                    // Filter split load additions to only those where orderId matches current truckload
+                                    const filteredSplitLoadAdditions = truckload.deductions.filter(d => 
+                                      d.splitLoadId && 
+                                      d.orderId && 
+                                      d.isAddition && 
+                                      d.appliesTo === 'driver_pay' && 
+                                      d.deduction > 0 &&
+                                      currentOrderIds.has(String(d.orderId))
+                                    )
+                                    
+                                    return filteredSplitLoadAdditions.length > 0 && (
+                                      <div className="bg-green-50 rounded px-2 py-1">
+                                        <div className="text-xs font-semibold text-green-700 mb-0.5">Split Load Additions (DP)</div>
+                                        {filteredSplitLoadAdditions
                                         .map((ded) => {
                                           // Create description based on other driver's assignment
                                           let description = 'Split load addition (misc portion)'
@@ -1667,7 +1737,8 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                         <span className="text-green-600 font-bold">+${tlTotals.splitLoadAdditionsToDriverPay.toFixed(2)}</span>
                                       </div>
                                     </div>
-                                  )}
+                                    )
+                                  })()}
                                   
                                   {/* Manual Additions to Driver Pay - Detailed */}
                                   {truckload.deductions.filter(d => d.isManual && d.isAddition && (d.appliesTo === 'driver_pay' || !d.appliesTo) && !d.orderId && !d.splitLoadId && d.deduction > 0).length > 0 && (
