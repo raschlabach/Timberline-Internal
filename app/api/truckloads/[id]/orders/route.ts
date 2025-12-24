@@ -19,6 +19,27 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
 
+    // Check if exclude_from_load_value column exists
+    let hasExcludeFromLoadValue = false
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'exclude_from_load_value'
+      `)
+      hasExcludeFromLoadValue = columnCheck.rows.length > 0
+    } catch (e) {
+      // Column check failed, assume it doesn't exist
+      hasExcludeFromLoadValue = false
+    }
+
+    // Build the query with conditional exclude_from_load_value column
+    const excludeColumnSelect = hasExcludeFromLoadValue 
+      ? 'COALESCE(toa.exclude_from_load_value, false) as exclude_from_load_value,'
+      : 'false as exclude_from_load_value,'
+    
     const result = await query(`
       WITH skids_summary AS (
         SELECT 
@@ -98,7 +119,7 @@ export async function GET(
         toa.sequence_number,
         toa.is_completed as stop_completed,
         toa.assignment_quote,
-        COALESCE(toa.exclude_from_load_value, false) as exclude_from_load_value,
+        ${excludeColumnSelect}
         o.status,
         -- Pickup customer details
         json_build_object(
