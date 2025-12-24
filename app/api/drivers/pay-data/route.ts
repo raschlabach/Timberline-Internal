@@ -335,8 +335,28 @@ export async function GET(request: NextRequest) {
     `)
     const hasAssignmentQuote = assignmentQuoteCheck.rows.length > 0
 
+    // Check if exclude_from_load_value column exists
+    let hasExcludeFromLoadValue = false
+    try {
+      const excludeCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'exclude_from_load_value'
+      `)
+      hasExcludeFromLoadValue = excludeCheck.rows.length > 0
+    } catch (e) {
+      hasExcludeFromLoadValue = false
+    }
+
     let ordersResult
     if (hasAssignmentQuote) {
+      // Build the query with conditional exclude_from_load_value column
+      const excludeColumnSelect = hasExcludeFromLoadValue 
+        ? 'COALESCE(toa.exclude_from_load_value, false) as "excludeFromLoadValue",'
+        : 'false as "excludeFromLoadValue",'
+      
       ordersResult = await query(`
         SELECT 
           o.id as "orderId",
@@ -345,6 +365,7 @@ export async function GET(request: NextRequest) {
           o.freight_quote as "fullQuote",
           toa.assignment_quote as "assignmentQuote",
           COALESCE(toa.assignment_quote, o.freight_quote) as "freightQuote",
+          ${excludeColumnSelect}
           COALESCE(
             (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
             0
@@ -376,13 +397,18 @@ export async function GET(request: NextRequest) {
         ORDER BY toa.truckload_id, toa.sequence_number
       `, [truckloadIds])
     } else {
+      // Build the query with conditional exclude_from_load_value column for fallback
+      const excludeColumnSelectFallback = hasExcludeFromLoadValue 
+        ? 'COALESCE(toa.exclude_from_load_value, false) as "excludeFromLoadValue",'
+        : 'false as "excludeFromLoadValue",'
+      
       ordersResult = await query(`
         SELECT 
           o.id as "orderId",
           toa.truckload_id as "truckloadId",
           toa.assignment_type as "assignmentType",
           o.freight_quote as "freightQuote",
-          COALESCE(toa.exclude_from_load_value, false) as "excludeFromLoadValue",
+          ${excludeColumnSelectFallback}
           COALESCE(
             (SELECT SUM(s.width * s.length * s.quantity) FROM skids s WHERE s.order_id = o.id),
             0

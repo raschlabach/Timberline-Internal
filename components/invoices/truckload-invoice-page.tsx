@@ -1053,7 +1053,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     
     // Calculate total quotes from grouped orders (each order counted once)
     // Exclude orders where assignment_quote is the misc value (the smaller portion)
+    // Also exclude orders where excludeFromLoadValue is true
     const totalQuotes = groupedOrders.reduce((sum, order) => {
+      // Skip if excluded from load value
+      if (order.excludeFromLoadValue === true) {
+        return sum
+      }
+      
       if (order.freightQuote) {
         // Parse quote string (could be "$123.45" or "123.45")
         const cleaned = order.freightQuote.replace(/[^0-9.-]/g, '')
