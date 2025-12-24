@@ -699,25 +699,32 @@ export async function GET(request: NextRequest) {
           // Map excludeFromLoadValue - handle boolean, string, number, or undefined
           // Always include this field in the response (default to false if not present)
           // The query should always return this field (either from DB or as 'false')
+          // PostgreSQL returns quoted column names exactly as specified, so check for "excludeFromLoadValue"
           let excludeFromLoadValue = false
-          if (order.hasOwnProperty('excludeFromLoadValue')) {
+          
+          // Check both possible property names (with and without quotes)
+          const excludeValue = order.excludeFromLoadValue !== undefined 
+            ? order.excludeFromLoadValue 
+            : (order as any)['excludeFromLoadValue']
+          
+          if (excludeValue !== undefined && excludeValue !== null) {
             // Field exists in query result
-            if (order.excludeFromLoadValue === true || order.excludeFromLoadValue === 1) {
+            if (excludeValue === true || excludeValue === 1) {
               excludeFromLoadValue = true
-            } else if (typeof order.excludeFromLoadValue === 'string') {
-              excludeFromLoadValue = order.excludeFromLoadValue.toLowerCase() === 'true'
-            } else if (order.excludeFromLoadValue === false || order.excludeFromLoadValue === 0 || order.excludeFromLoadValue === 'false') {
+            } else if (typeof excludeValue === 'string') {
+              excludeFromLoadValue = excludeValue.toLowerCase() === 'true'
+            } else if (excludeValue === false || excludeValue === 0 || excludeValue === 'false') {
               excludeFromLoadValue = false
             }
           } else {
             // Debug: Log if field is missing from query result
             // This should not happen if the query includes the field
-            console.log('[Driver Pay API] WARNING: excludeFromLoadValue missing from order:', order.orderId, 'Order keys:', Object.keys(order))
+            console.log('[Driver Pay API] WARNING: excludeFromLoadValue missing from order:', order.orderId, 'Order keys:', Object.keys(order), 'Order object:', JSON.stringify(order).substring(0, 200))
           }
           
-          // Debug: Log the value being set
-          if (excludeFromLoadValue) {
-            console.log('[Driver Pay API] Order', order.orderId, 'has excludeFromLoadValue = true')
+          // Debug: Log the value being set for first few orders
+          if (truckload.orders.length < 3) {
+            console.log('[Driver Pay API] Order', order.orderId, 'excludeFromLoadValue:', excludeFromLoadValue, 'raw value:', order.excludeFromLoadValue)
           }
           // If field doesn't exist in query result, it defaults to false
           
