@@ -336,6 +336,7 @@ export async function GET(request: NextRequest) {
     const hasAssignmentQuote = assignmentQuoteCheck.rows.length > 0
 
     // Check if exclude_from_load_value column exists
+    // Also try to create it if it doesn't exist (for backward compatibility)
     let hasExcludeFromLoadValue = false
     try {
       const excludeCheck = await query(`
@@ -346,6 +347,20 @@ export async function GET(request: NextRequest) {
         AND column_name = 'exclude_from_load_value'
       `)
       hasExcludeFromLoadValue = excludeCheck.rows.length > 0
+      
+      // If column doesn't exist, try to create it
+      if (!hasExcludeFromLoadValue) {
+        try {
+          await query(`
+            ALTER TABLE truckload_order_assignments 
+            ADD COLUMN IF NOT EXISTS exclude_from_load_value BOOLEAN DEFAULT FALSE
+          `)
+          hasExcludeFromLoadValue = true
+        } catch (createError) {
+          // Column creation failed, continue with hasExcludeFromLoadValue = false
+          console.log('Could not create exclude_from_load_value column:', createError)
+        }
+      }
     } catch (e) {
       hasExcludeFromLoadValue = false
     }
@@ -356,6 +371,10 @@ export async function GET(request: NextRequest) {
       const excludeColumnSelect = hasExcludeFromLoadValue 
         ? 'COALESCE(toa.exclude_from_load_value, false) as "excludeFromLoadValue",'
         : 'false as "excludeFromLoadValue",'
+      
+      // Debug: Log the exclude column select to verify it's being included
+      console.log('[Driver Pay API] excludeColumnSelect:', excludeColumnSelect)
+      console.log('[Driver Pay API] hasExcludeFromLoadValue:', hasExcludeFromLoadValue)
       
       ordersResult = await query(`
         SELECT 
@@ -672,13 +691,32 @@ export async function GET(request: NextRequest) {
       if (driver) {
         const truckload = driver.truckloads.find((t: any) => t.id === order.truckloadId)
         if (truckload) {
+          // Map excludeFromLoadValue - handle boolean, string, number, or undefined
+          // Always include this field in the response (default to false if not present)
+          // The query should always return this field (either from DB or as 'false')
+          let excludeFromLoadValue = false
+          if (order.hasOwnProperty('excludeFromLoadValue')) {
+            // Field exists in query result
+            if (order.excludeFromLoadValue === true || order.excludeFromLoadValue === 1) {
+              excludeFromLoadValue = true
+            } else if (typeof order.excludeFromLoadValue === 'string') {
+              excludeFromLoadValue = order.excludeFromLoadValue.toLowerCase() === 'true'
+            } else if (order.excludeFromLoadValue === false || order.excludeFromLoadValue === 0 || order.excludeFromLoadValue === 'false') {
+              excludeFromLoadValue = false
+            }
+          } else {
+            // Debug: Log if field is missing from query result
+            console.log('[Driver Pay API] excludeFromLoadValue missing from order:', order.orderId, 'Order keys:', Object.keys(order))
+          }
+          // If field doesn't exist in query result, it defaults to false
+          
           truckload.orders.push({
             orderId: order.orderId,
             assignmentType: order.assignmentType,
             freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
             fullQuote: order.fullQuote ? parseFloat(order.fullQuote) : null,
             assignmentQuote: order.assignmentQuote ? parseFloat(order.assignmentQuote) : null,
-            excludeFromLoadValue: order.excludeFromLoadValue === true || order.excludeFromLoadValue === 'true' || order.excludeFromLoadValue === 1,
+            excludeFromLoadValue: excludeFromLoadValue, // Always include this field in response
             footage: parseFloat(order.footage) || 0,
             pickupCustomerName: order.pickupCustomerName,
             deliveryCustomerName: order.deliveryCustomerName,
