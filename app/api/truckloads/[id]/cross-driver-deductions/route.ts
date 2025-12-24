@@ -266,11 +266,26 @@ export async function GET(
     `)
     const hasOrderId = orderIdCheck.rows.length > 0
 
+    // Check if split_load_id column exists (new simplified system)
+    const splitLoadIdCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'cross_driver_freight_deductions'
+      AND column_name = 'split_load_id'
+    `)
+    const hasSplitLoadId = splitLoadIdCheck.rows.length > 0
+
     const client = await getClient()
     
     try {
       let result
       if (hasAppliesTo && hasOrderId) {
+        // Exclude split load deductions: check split_load_id IS NULL (new system) OR comment NOT LIKE '%split load%' (old system)
+        const splitLoadFilter = hasSplitLoadId 
+          ? 'AND split_load_id IS NULL'
+          : "AND (comment IS NULL OR comment NOT LIKE '%split load%')"
+        
         result = await client.query(`
           SELECT 
             id,
@@ -287,10 +302,15 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND is_addition = false
-            AND (comment IS NULL OR comment NOT LIKE '%split load%')
+            ${splitLoadFilter}
           ORDER BY created_at DESC
         `, [truckloadId])
       } else if (hasAppliesTo) {
+        // Exclude split load deductions: check split_load_id IS NULL (new system) OR comment NOT LIKE '%split load%' (old system)
+        const splitLoadFilter = hasSplitLoadId 
+          ? 'AND split_load_id IS NULL'
+          : "AND (comment IS NULL OR comment NOT LIKE '%split load%')"
+        
         result = await client.query(`
           SELECT 
             id,
@@ -306,10 +326,15 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND is_addition = false
-            AND (comment IS NULL OR comment NOT LIKE '%split load%')
+            ${splitLoadFilter}
           ORDER BY created_at DESC
         `, [truckloadId])
       } else {
+        // Exclude split load deductions: check split_load_id IS NULL (new system) OR comment NOT LIKE '%split load%' (old system)
+        const splitLoadFilter = hasSplitLoadId 
+          ? 'AND split_load_id IS NULL'
+          : "AND (comment IS NULL OR comment NOT LIKE '%split load%')"
+        
         result = await client.query(`
           SELECT 
             id,
@@ -323,7 +348,7 @@ export async function GET(
           WHERE truckload_id = $1
             AND is_manual = true
             AND is_addition = false
-            AND (comment IS NULL OR comment NOT LIKE '%split load%')
+            ${splitLoadFilter}
           ORDER BY created_at DESC
         `, [truckloadId])
       }
