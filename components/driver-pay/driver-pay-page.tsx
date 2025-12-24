@@ -17,7 +17,7 @@ function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number)
   return new Date(year, month - 1, day)
 }
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings, Printer } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings, Printer, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -1729,6 +1729,25 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                     Manual
                                   </Button>
                                 </div>
+                                {editingPayMethod === truckload.id && tempPayMethod?.method === 'automatic' && (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      size="sm"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => savePayMethod(truckload.id)}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs px-2"
+                                      onClick={cancelEditPayMethod}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
                                 {((editingPayMethod === truckload.id ? tempPayMethod?.method : truckload.payCalculationMethod) === 'hourly') && (
                                   <div className="flex items-center gap-1">
                                     <Input
