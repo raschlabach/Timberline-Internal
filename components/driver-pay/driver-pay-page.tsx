@@ -68,7 +68,7 @@ interface Order {
   freightQuote: number | null
   fullQuote?: number | null
   assignmentQuote?: number | null
-  excludeFromLoadValue?: boolean
+  excludeFromLoadValue?: boolean | string | number
   footage: number
   pickupCustomerName: string | null
   deliveryCustomerName: string | null
@@ -525,7 +525,10 @@ export default function DriverPayPage({}: DriverPayPageProps) {
     // Also exclude orders where excludeFromLoadValue is true
     const totalQuotes = flatOrders.reduce((sum, order) => {
       // Skip if excluded from load value
-      if (order.excludeFromLoadValue === true) {
+      // Check explicitly for true (PostgreSQL booleans come as booleans, but be defensive)
+      if (order.excludeFromLoadValue === true || 
+          (typeof order.excludeFromLoadValue === 'string' && order.excludeFromLoadValue.toLowerCase() === 'true') ||
+          order.excludeFromLoadValue === 1) {
         return sum
       }
       

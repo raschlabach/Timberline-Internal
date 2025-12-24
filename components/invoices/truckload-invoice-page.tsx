@@ -1055,8 +1055,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     // Exclude orders where assignment_quote is the misc value (the smaller portion)
     // Also exclude orders where excludeFromLoadValue is true
     const totalQuotes = groupedOrders.reduce((sum, order) => {
-      // Skip if excluded from load value
-      if (order.excludeFromLoadValue === true) {
+      // Skip if excluded from load value (handle boolean or truthy values)
+      if (order.excludeFromLoadValue === true || Boolean(order.excludeFromLoadValue)) {
         return sum
       }
       
