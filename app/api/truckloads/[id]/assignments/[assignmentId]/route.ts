@@ -39,6 +39,44 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Assignment not found or does not belong to this truckload' }, { status: 404 })
     }
 
+    // Check if exclude_from_load_value column exists
+    let hasExcludeFromLoadValue = false
+    try {
+      const columnCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckload_order_assignments'
+        AND column_name = 'exclude_from_load_value'
+      `)
+      hasExcludeFromLoadValue = columnCheck.rows.length > 0
+    } catch (e) {
+      // Column check failed, assume it doesn't exist
+      hasExcludeFromLoadValue = false
+    }
+
+    // If column doesn't exist, create it
+    if (!hasExcludeFromLoadValue) {
+      try {
+        await query(`
+          ALTER TABLE truckload_order_assignments 
+          ADD COLUMN IF NOT EXISTS exclude_from_load_value BOOLEAN DEFAULT FALSE
+        `)
+        // Create index for performance
+        await query(`
+          CREATE INDEX IF NOT EXISTS idx_assignments_exclude_from_load_value 
+          ON truckload_order_assignments(exclude_from_load_value) 
+          WHERE exclude_from_load_value = TRUE
+        `)
+      } catch (e) {
+        console.error('Error creating exclude_from_load_value column:', e)
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Failed to create exclude_from_load_value column. Please run the migration manually.' 
+        }, { status: 500 })
+      }
+    }
+
     // Update the exclude_from_load_value field
     const result = await query(
       `UPDATE truckload_order_assignments 
