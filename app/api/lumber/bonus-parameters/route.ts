@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { query } from '@/lib/db'
 
-// GET /api/users - Get all active users
+// GET /api/lumber/bonus-parameters - Get bonus parameters
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession()
@@ -11,15 +11,14 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await query(
-      `SELECT id, username, full_name, email, role
-       FROM users
+      `SELECT * FROM lumber_bonus_parameters
        WHERE is_active = TRUE
-       ORDER BY full_name`
+       ORDER BY bf_min`
     )
 
     return NextResponse.json(result.rows)
   } catch (error) {
-    console.error('Error fetching users:', error)
+    console.error('Error fetching bonus parameters:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

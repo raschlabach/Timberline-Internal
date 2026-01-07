@@ -2,24 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { query } from '@/lib/db'
 
-// GET /api/users - Get all active users
-export async function GET(request: NextRequest) {
+// DELETE /api/lumber/trucking/notes/[noteId] - Delete a trucking note
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { noteId: string } }
+) {
   try {
     const session = await getServerSession()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const result = await query(
-      `SELECT id, username, full_name, email, role
-       FROM users
-       WHERE is_active = TRUE
-       ORDER BY full_name`
-    )
+    await query('DELETE FROM lumber_trucking_notes WHERE id = $1', [params.noteId])
 
-    return NextResponse.json(result.rows)
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error fetching users:', error)
+    console.error('Error deleting trucking note:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

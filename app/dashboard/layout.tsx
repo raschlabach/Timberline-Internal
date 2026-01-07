@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -98,6 +98,81 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               label="Pricing Notes"
               isActive={isActiveSubRoute('/dashboard/pricing-notes')}
             />
+            
+            {/* Lumber Tracker Section */}
+            <div className="pt-4 pb-2 px-4">
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Lumber Tracker
+              </div>
+            </div>
+            
+            <NavItem
+              href="/dashboard/lumber/incoming"
+              icon={<Trees size={20} />}
+              label="Incoming Loads"
+              isActive={isActiveSubRoute('/dashboard/lumber')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/create"
+              icon={<Package size={16} />}
+              label="Create Load"
+              isActive={isActiveRoute('/dashboard/lumber/create')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/po"
+              icon={<FileBox size={16} />}
+              label="PO Page"
+              isActive={isActiveRoute('/dashboard/lumber/po')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/trucking"
+              icon={<Truck size={16} />}
+              label="Trucking"
+              isActive={isActiveRoute('/dashboard/lumber/trucking')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/invoices"
+              icon={<FileText size={16} />}
+              label="Invoice Page"
+              isActive={isActiveRoute('/dashboard/lumber/invoices')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/all-loads"
+              icon={<List size={16} />}
+              label="All Loads"
+              isActive={isActiveRoute('/dashboard/lumber/all-loads')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/inventory"
+              icon={<PackageCheck size={16} />}
+              label="Inventory"
+              isActive={isActiveRoute('/dashboard/lumber/inventory')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/tally-entry"
+              icon={<ClipboardList size={16} />}
+              label="Tally Entry"
+              isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/rip-entry"
+              icon={<Hammer size={16} />}
+              label="Rip Entry"
+              isActive={isActiveRoute('/dashboard/lumber/rip-entry')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/ripped-packs"
+              icon={<PackageCheck size={16} />}
+              label="Ripped Packs"
+              isActive={isActiveRoute('/dashboard/lumber/ripped-packs')}
+            />
+            <SubNavItem
+              href="/dashboard/lumber/rip-bonus"
+              icon={<TrendingUp size={16} />}
+              label="Rip Bonus"
+              isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
+            />
+            
             {isAdmin && (
               <NavItem
                 href="/dashboard/users"
