@@ -28,6 +28,8 @@ export default function CreateLoadPage() {
   const { toast } = useToast()
   
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
+  const [species, setSpecies] = useState<any[]>([])
+  const [grades, setGrades] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   
   // Form state
@@ -51,20 +53,24 @@ export default function CreateLoadPage() {
   }, [status, router])
 
   useEffect(() => {
-    async function fetchSuppliers() {
+    async function fetchData() {
       try {
-        const response = await fetch('/api/lumber/suppliers')
-        if (response.ok) {
-          const data = await response.json()
-          setSuppliers(data)
-        }
+        const [suppliersRes, speciesRes, gradesRes] = await Promise.all([
+          fetch('/api/lumber/suppliers'),
+          fetch('/api/lumber/species'),
+          fetch('/api/lumber/grades')
+        ])
+        
+        if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
+        if (speciesRes.ok) setSpecies(await speciesRes.json())
+        if (gradesRes.ok) setGrades(await gradesRes.json())
       } catch (error) {
-        console.error('Error fetching suppliers:', error)
+        console.error('Error fetching data:', error)
       }
     }
 
     if (status === 'authenticated') {
-      fetchSuppliers()
+      fetchData()
     }
   }, [status])
 
@@ -295,22 +301,40 @@ export default function CreateLoadPage() {
               <div key={index} className="grid grid-cols-6 gap-3 items-end p-4 border rounded-lg bg-gray-50">
                 <div>
                   <Label>Species *</Label>
-                  <Input
-                    value={item.species}
-                    onChange={(e) => handleItemChange(index, 'species', e.target.value)}
-                    placeholder="e.g., Ash"
-                    required
-                  />
+                  <Select 
+                    value={item.species} 
+                    onValueChange={(val) => handleItemChange(index, 'species', val)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select species" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {species.map(sp => (
+                        <SelectItem key={sp.id} value={sp.name}>
+                          {sp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div>
                   <Label>Grade *</Label>
-                  <Input
-                    value={item.grade}
-                    onChange={(e) => handleItemChange(index, 'grade', e.target.value)}
-                    placeholder="e.g., Fas/Uppers"
-                    required
-                  />
+                  <Select 
+                    value={item.grade} 
+                    onValueChange={(val) => handleItemChange(index, 'grade', val)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select grade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {grades.map(grade => (
+                        <SelectItem key={grade.id} value={grade.name}>
+                          {grade.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>

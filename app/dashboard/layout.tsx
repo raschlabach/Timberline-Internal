@@ -172,6 +172,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               label="Rip Bonus"
               isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
             />
+            {isAdmin && (
+              <SubNavItem
+                href="/dashboard/lumber/admin"
+                icon={<UserCog size={16} />}
+                label="Admin"
+                isActive={isActiveRoute('/dashboard/lumber/admin')}
+              />
+            )}
             
             {isAdmin && (
               <NavItem
