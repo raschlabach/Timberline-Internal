@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#d084d0', '#a4de6c']
 
@@ -27,6 +28,8 @@ export default function InventoryPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [monthlyRipped, setMonthlyRipped] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -66,32 +69,24 @@ export default function InventoryPage() {
     )
   }
 
-  // Prepare chart data
-  const speciesData = inventoryGroups.reduce((acc: any[], group) => {
-    const existing = acc.find(item => item.name === group.species)
-    if (existing) {
-      existing.value += Number(group.current_inventory) || 0
-    } else {
-      acc.push({
-        name: group.species,
+  // Prepare chart data based on toggle
+  const chartData = chartView === 'species' 
+    ? inventoryGroups.reduce((acc: any[], group) => {
+        const existing = acc.find(item => item.name === group.species)
+        if (existing) {
+          existing.value += Number(group.current_inventory) || 0
+        } else {
+          acc.push({
+            name: group.species,
+            value: Number(group.current_inventory) || 0
+          })
+        }
+        return acc
+      }, []).sort((a, b) => b.value - a.value)
+    : inventoryGroups.map(group => ({
+        name: `${group.species} ${group.grade}`,
         value: Number(group.current_inventory) || 0
-      })
-    }
-    return acc
-  }, [])
-
-  const gradeData = inventoryGroups.reduce((acc: any[], group) => {
-    const existing = acc.find(item => item.name === group.grade)
-    if (existing) {
-      existing.value += Number(group.current_inventory) || 0
-    } else {
-      acc.push({
-        name: group.grade,
-        value: Number(group.current_inventory) || 0
-      })
-    }
-    return acc
-  }, [])
+      })).sort((a, b) => b.value - a.value)
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -100,6 +95,16 @@ export default function InventoryPage() {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
+  function toggleRow(key: string) {
+    const newExpanded = new Set(expandedRows)
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key)
+    } else {
+      newExpanded.add(key)
+    }
+    setExpandedRows(newExpanded)
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -107,87 +112,127 @@ export default function InventoryPage() {
         <p className="text-gray-600 mt-1">Current inventory levels and tracking</p>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Inventory by Species Chart */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-sm font-semibold mb-3">Inventory by Species</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={speciesData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(value: any) => `${Number(value).toLocaleString()} BF`} />
-              <Bar dataKey="value" fill="#0088FE" />
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Chart Section */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-semibold">Inventory Chart</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setChartView('species')}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                chartView === 'species'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              By Species
+            </button>
+            <button
+              onClick={() => setChartView('species-grade')}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                chartView === 'species-grade'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              By Species & Grade
+            </button>
+          </div>
         </div>
-
-        {/* Inventory by Grade Chart */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-sm font-semibold mb-3">Inventory by Grade</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={gradeData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {gradeData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: any) => `${Number(value).toLocaleString()} BF`} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis 
+              dataKey="name" 
+              tick={{ fontSize: 10 }} 
+              angle={chartView === 'species-grade' ? -45 : 0}
+              textAnchor={chartView === 'species-grade' ? 'end' : 'middle'}
+              height={chartView === 'species-grade' ? 80 : 30}
+            />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip formatter={(value: any) => `${Number(value).toLocaleString()} BF`} />
+            <Bar dataKey="value" fill="#0088FE" />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Compact Inventory Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-4 py-2 bg-gray-800 text-white">
           <h2 className="text-sm font-semibold">Current Inventory Detail</h2>
+          <p className="text-[10px] text-gray-300 mt-0.5">
+            Inventory = Actual BF (arrived) - Finished BF (ripped). Excludes loads marked as completely finished.
+          </p>
         </div>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
+              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase w-8"></th>
               <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species</th>
               <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Grade</th>
+              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Total BF</th>
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Finished</th>
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Inventory</th>
+              <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-600 uppercase">Loads</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {inventoryGroups.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
+                <td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-500">
                   No inventory data available
                 </td>
               </tr>
             ) : (
-              inventoryGroups.map((group, idx) => (
-                <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-xs font-medium">{group.thickness}</td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.species}</td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right">
-                    {Number(group.total_actual_footage || 0).toLocaleString()}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right">
-                    {Number(group.total_finished_footage || 0).toLocaleString()}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
-                    {Number(group.current_inventory || 0).toLocaleString()}
-                  </td>
-                </tr>
-              ))
+              inventoryGroups.map((group, idx) => {
+                const rowKey = `${group.species}-${group.grade}-${group.thickness}`
+                const isExpanded = expandedRows.has(rowKey)
+                return (
+                  <>
+                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-2 py-1.5">
+                        <button
+                          onClick={() => toggleRow(rowKey)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs font-medium">{group.species}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.thickness}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right">
+                        {Number(group.total_actual_footage || 0).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right">
+                        {Number(group.total_finished_footage || 0).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
+                        {Number(group.current_inventory || 0).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
+                        <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                          {group.load_count}
+                        </span>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-blue-100'}>
+                        <td></td>
+                        <td colSpan={7} className="px-4 py-2">
+                          <div className="text-xs">
+                            <span className="font-semibold text-gray-700">Load IDs: </span>
+                            <span className="text-gray-600">
+                              {group.load_ids.join(', ')}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )
+              })
             )}
           </tbody>
         </table>

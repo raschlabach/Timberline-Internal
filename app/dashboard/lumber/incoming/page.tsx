@@ -264,14 +264,14 @@ export default function IncomingLoadsPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-800 text-white sticky top-0">
             <tr>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Load ID</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Supplier</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Items</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Est. Footage</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Price</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">ETA</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Type</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium uppercase">Actions</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Load ID</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Supplier</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Items</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Est. BF</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Price</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">ETA</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Type</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -289,66 +289,68 @@ export default function IncomingLoadsPage() {
                     loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                   }`}
                 >
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString()}`}>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString()}`}>
                       {load.load_id}
-                    </div>
+                    </span>
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="text-xs font-medium text-gray-900">{load.supplier_name}</div>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className="text-xs font-medium text-gray-900">{load.supplier_name}</span>
                     {load.location_name && (
-                      <div className="text-[10px] text-gray-500 truncate max-w-[150px]">{load.location_name}</div>
+                      <span className="text-[10px] text-gray-500 ml-1">({load.location_name})</span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="text-xs space-y-0.5">
+                  <td className="px-2 py-1">
+                    <div className="text-xs flex flex-wrap gap-x-2 gap-y-0.5">
                       {load.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-1.5">
+                        <span key={idx} className="whitespace-nowrap">
                           <span className="font-medium">{item.species}</span>
-                          <span className="text-gray-500">{item.grade}</span>
+                          <span className="text-gray-500 mx-0.5">{item.grade}</span>
                           <span className="text-[10px] bg-gray-200 px-1 rounded">{item.thickness}</span>
-                        </div>
+                        </span>
                       ))}
                     </div>
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="text-xs space-y-0.5">
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className="text-xs">
                       {load.items.map((item, idx) => (
-                        <div key={idx}>
+                        <span key={idx}>
                           {item.estimated_footage?.toLocaleString() || '-'}
-                        </div>
+                          {idx < load.items.length - 1 && ', '}
+                        </span>
                       ))}
-                    </div>
+                    </span>
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="text-xs space-y-0.5">
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className="text-xs">
                       {load.items.map((item, idx) => (
-                        <div key={idx}>
+                        <span key={idx}>
                           ${item.price?.toFixed(2) || '-'}
-                        </div>
+                          {idx < load.items.length - 1 && ', '}
+                        </span>
                       ))}
-                    </div>
+                    </span>
                   </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="text-xs">
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className="text-xs">
                       {load.estimated_delivery_date ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
-                    </div>
+                    </span>
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="text-xs capitalize">{load.pickup_or_delivery || '-'}</div>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    <span className="text-xs capitalize">{load.pickup_or_delivery || '-'}</span>
                     {load.pickup_number && (
-                      <div className="text-[10px] text-gray-500">#{load.pickup_number}</div>
+                      <span className="text-[10px] text-gray-500 ml-1">#{load.pickup_number}</span>
                     )}
                     {load.plant && (
-                      <div className="text-[10px] text-gray-500 truncate max-w-[80px]">{load.plant}</div>
+                      <span className="text-[10px] text-gray-500 ml-1">{load.plant}</span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td className="px-2 py-1">
                     <div className="flex gap-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs px-2"
+                        className="h-6 text-[10px] px-1.5"
                         onClick={() => router.push(`/dashboard/lumber/data-entry/${load.id}`)}
                       >
                         Entry
@@ -356,7 +358,7 @@ export default function IncomingLoadsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0"
+                        className="h-6 w-6 p-0"
                         onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
                       >
                         <Info className="h-3 w-3" />

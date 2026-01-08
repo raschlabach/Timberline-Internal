@@ -314,6 +314,8 @@ export interface InventoryGroup {
   total_actual_footage: number
   total_finished_footage: number
   current_inventory: number
+  load_ids: string[]
+  load_count: number
 }
 
 export interface InventoryLoad {
