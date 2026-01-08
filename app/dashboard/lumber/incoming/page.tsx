@@ -24,9 +24,9 @@ export default function IncomingLoadsPage() {
   const [isLoading, setIsLoading] = useState(true)
   
   // Filter states
-  const [selectedSupplier, setSelectedSupplier] = useState<string>('')
-  const [selectedSpecies, setSelectedSpecies] = useState<string>('')
-  const [selectedGrade, setSelectedGrade] = useState<string>('')
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('all')
+  const [selectedSpecies, setSelectedSpecies] = useState<string>('all')
+  const [selectedGrade, setSelectedGrade] = useState<string>('all')
   
   // Unique values for filters
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -88,19 +88,19 @@ export default function IncomingLoadsPage() {
     }
 
     // Apply supplier filter
-    if (selectedSupplier !== '') {
+    if (selectedSupplier !== 'all') {
       filtered = filtered.filter(load => load.supplier_name === selectedSupplier)
     }
 
     // Apply species filter
-    if (selectedSpecies !== '') {
+    if (selectedSpecies !== 'all') {
       filtered = filtered.filter(load =>
         load.items.some(item => item.species === selectedSpecies)
       )
     }
 
     // Apply grade filter
-    if (selectedGrade !== '') {
+    if (selectedGrade !== 'all') {
       filtered = filtered.filter(load =>
         load.items.some(item => item.grade === selectedGrade)
       )
@@ -111,12 +111,12 @@ export default function IncomingLoadsPage() {
 
   function clearAllFilters() {
     setSearchTerm('')
-    setSelectedSupplier('')
-    setSelectedSpecies('')
-    setSelectedGrade('')
+    setSelectedSupplier('all')
+    setSelectedSpecies('all')
+    setSelectedGrade('all')
   }
 
-  const hasActiveFilters = searchTerm !== '' || selectedSupplier !== '' || selectedSpecies !== '' || selectedGrade !== ''
+  const hasActiveFilters = searchTerm !== '' || selectedSupplier !== 'all' || selectedSpecies !== 'all' || selectedGrade !== 'all'
 
   if (status === 'loading' || isLoading) {
     return (
@@ -177,7 +177,7 @@ export default function IncomingLoadsPage() {
               <SelectValue placeholder="All Suppliers" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Suppliers</SelectItem>
+              <SelectItem value="all">All Suppliers</SelectItem>
               {suppliers.map(supplier => (
                 <SelectItem key={supplier} value={supplier}>
                   {supplier}
@@ -192,7 +192,7 @@ export default function IncomingLoadsPage() {
               <SelectValue placeholder="All Species" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Species</SelectItem>
+              <SelectItem value="all">All Species</SelectItem>
               {species.map(sp => (
                 <SelectItem key={sp} value={sp}>
                   {sp}
@@ -207,7 +207,7 @@ export default function IncomingLoadsPage() {
               <SelectValue placeholder="All Grades" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Grades</SelectItem>
+              <SelectItem value="all">All Grades</SelectItem>
               {grades.map(grade => (
                 <SelectItem key={grade} value={grade}>
                   {grade}
@@ -228,26 +228,26 @@ export default function IncomingLoadsPage() {
                 </button>
               </div>
             )}
-            {selectedSupplier && (
+            {selectedSupplier !== 'all' && (
               <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
                 Supplier: {selectedSupplier}
-                <button onClick={() => setSelectedSupplier('')} className="hover:text-green-900">
+                <button onClick={() => setSelectedSupplier('all')} className="hover:text-green-900">
                   <X className="h-3 w-3" />
                 </button>
               </div>
             )}
-            {selectedSpecies && (
+            {selectedSpecies !== 'all' && (
               <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
                 Species: {selectedSpecies}
-                <button onClick={() => setSelectedSpecies('')} className="hover:text-purple-900">
+                <button onClick={() => setSelectedSpecies('all')} className="hover:text-purple-900">
                   <X className="h-3 w-3" />
                 </button>
               </div>
             )}
-            {selectedGrade && (
+            {selectedGrade !== 'all' && (
               <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
                 Grade: {selectedGrade}
-                <button onClick={() => setSelectedGrade('')} className="hover:text-orange-900">
+                <button onClick={() => setSelectedGrade('all')} className="hover:text-orange-900">
                   <X className="h-3 w-3" />
                 </button>
               </div>
