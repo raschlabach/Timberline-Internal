@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { LumberLoadWithDetails } from '@/types/lumber'
 import { Button } from '@/components/ui/button'
 import { Download, FileText } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 
 export default function POPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
+  
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [generatingPO, setGeneratingPO] = useState<number | null>(null)
@@ -63,10 +63,7 @@ export default function POPage() {
         window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
 
-        toast({
-          title: 'PO Generated',
-          description: `Purchase order for ${load.load_id} has been downloaded`
-        })
+        toast.success(`Purchase order for ${load.load_id} has been downloaded`)
 
         // Refresh the list
         fetchLoads()
@@ -75,11 +72,7 @@ export default function POPage() {
       }
     } catch (error) {
       console.error('Error generating PO:', error)
-      toast({
-        title: 'Error generating PO',
-        description: 'An error occurred while generating the purchase order',
-        variant: 'destructive'
-      })
+      toast.error('Failed to generate PO')
     } finally {
       setGeneratingPO(null)
     }

@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RefreshCcw, Save } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 
 interface User {
   id: number
@@ -26,7 +26,7 @@ interface User {
 export default function RipEntryPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
+  
   
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -137,10 +137,7 @@ export default function RipEntryPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Pack saved',
-          description: 'Rip data has been saved'
-        })
+        toast.success('Pack saved')
         
         // Refresh packs
         if (selectedLoad) {
@@ -149,21 +146,13 @@ export default function RipEntryPage() {
       }
     } catch (error) {
       console.error('Error saving pack:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to save pack data',
-        variant: 'destructive'
-      })
+      toast.success('Error')
     }
   }
 
   async function handleFinishPack(packId: number) {
     if (!operatorId) {
-      toast({
-        title: 'Missing Operator',
-        description: 'Please select an operator before finishing packs',
-        variant: 'destructive'
-      })
+      toast.success('Missing Operator')
       return
     }
 
@@ -181,10 +170,7 @@ export default function RipEntryPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Pack finished',
-          description: 'Pack has been marked as complete'
-        })
+        toast.success('Pack finished')
         
         // Refresh
         if (selectedLoad) {
@@ -193,11 +179,7 @@ export default function RipEntryPage() {
       }
     } catch (error) {
       console.error('Error finishing pack:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to finish pack',
-        variant: 'destructive'
-      })
+      toast.success('Error')
     }
   }
 
@@ -214,10 +196,7 @@ export default function RipEntryPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Load quality saved',
-          description: 'Quality rating has been updated'
-        })
+        toast.success('Load quality saved')
       }
     } catch (error) {
       console.error('Error saving load quality:', error)

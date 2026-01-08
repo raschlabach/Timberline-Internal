@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness } from '@/types/lumber'
 import { Plus, Trash2, ArrowLeft } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 
 const THICKNESSES: Thickness[] = ['4/4', '5/4', '6/4', '7/4', '8/4']
 const LUMBER_TYPES = ['dried', 'green']
@@ -25,7 +25,7 @@ const PICKUP_OR_DELIVERY_OPTIONS = ['pickup', 'delivery']
 export default function CreateLoadPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
+  
   
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
   const [species, setSpecies] = useState<any[]>([])
@@ -94,21 +94,13 @@ export default function CreateLoadPage() {
     e.preventDefault()
     
     if (!loadId || !supplierId) {
-      toast({
-        title: 'Missing required fields',
-        description: 'Please fill in Load ID and Supplier',
-        variant: 'destructive'
-      })
+      toast.error('Please fill in Load ID and Supplier')
       return
     }
 
     const hasValidItems = items.every(item => item.species && item.grade && item.thickness)
     if (!hasValidItems) {
-      toast({
-        title: 'Invalid items',
-        description: 'Please fill in species, grade, and thickness for all items',
-        variant: 'destructive'
-      })
+      toast.error('Please fill in species, grade, and thickness for all items')
       return
     }
 
@@ -131,26 +123,15 @@ export default function CreateLoadPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Load created successfully',
-          description: `Load ${loadId} has been created`
-        })
+        toast.success(`Load ${loadId} has been created`)
         router.push('/dashboard/lumber/incoming')
       } else {
         const error = await response.json()
-        toast({
-          title: 'Error creating load',
-          description: error.message || 'An error occurred',
-          variant: 'destructive'
-        })
+        toast.error(error.message || 'Failed to create load')
       }
     } catch (error) {
       console.error('Error creating load:', error)
-      toast({
-        title: 'Error creating load',
-        description: 'An unexpected error occurred',
-        variant: 'destructive'
-      })
+      toast.error('An unexpected error occurred')
     } finally {
       setIsLoading(false)
     }

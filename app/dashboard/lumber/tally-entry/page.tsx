@@ -15,12 +15,12 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Plus, Trash2, Save, Check } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 
 export default function TallyEntryPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
+  
   
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
   const [selectedLoad, setSelectedLoad] = useState<LumberLoadWithDetails | null>(null)
@@ -122,22 +122,14 @@ export default function TallyEntryPage() {
 
     const item = selectedLoad.items.find(i => i.id === selectedItemId)
     if (!item || !item.actual_footage) {
-      toast({
-        title: 'Error',
-        description: 'Load item not found or missing actual footage',
-        variant: 'destructive'
-      })
+      toast.success('Error')
       return
     }
 
     // Validate that tallies sum to actual footage
     const totalTallied = tallies.reduce((sum, t) => sum + t.tally_board_feet, 0)
     if (Math.abs(totalTallied - item.actual_footage) > 0.01) {
-      toast({
-        title: 'Tally Mismatch',
-        description: `Pack tallies (${totalTallied.toLocaleString()} BF) must equal actual footage (${item.actual_footage.toLocaleString()} BF)`,
-        variant: 'destructive'
-      })
+      toast.error(`Pack tallies (${totalTallied.toLocaleString()} BF) must equal actual footage (${item.actual_footage.toLocaleString()} BF)`)
       return
     }
 
@@ -145,11 +137,7 @@ export default function TallyEntryPage() {
     const packIds = tallies.map(t => t.pack_id)
     const uniqueIds = new Set(packIds)
     if (uniqueIds.size !== packIds.length || packIds.some(id => id === 0)) {
-      toast({
-        title: 'Invalid Pack IDs',
-        description: 'All pack IDs must be unique and non-zero',
-        variant: 'destructive'
-      })
+      toast.success('Invalid Pack IDs')
       return
     }
 
@@ -164,27 +152,16 @@ export default function TallyEntryPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Tallies saved',
-          description: `${tallies.length} pack tallies have been created`
-        })
+        toast.success(`${tallies.length} pack tallies have been created`)
         setIsDialogOpen(false)
         fetchLoads()
       } else {
         const error = await response.json()
-        toast({
-          title: 'Error saving tallies',
-          description: error.message || 'An error occurred',
-          variant: 'destructive'
-        })
+        toast.success('Error saving tallies')
       }
     } catch (error) {
       console.error('Error saving tallies:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to save tallies',
-        variant: 'destructive'
-      })
+      toast.success('Error')
     }
   }
 

@@ -15,12 +15,12 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { FileText, ExternalLink } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 
 export default function InvoicesPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
+  
   
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -77,10 +77,7 @@ export default function InvoicesPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Invoice status updated',
-          description: 'Invoice tracking has been saved'
-        })
+        toast.success('Invoice status updated')
         setIsDialogOpen(false)
         fetchLoads()
       } else {
@@ -88,11 +85,7 @@ export default function InvoicesPage() {
       }
     } catch (error) {
       console.error('Error updating invoice status:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to update invoice status',
-        variant: 'destructive'
-      })
+      toast.success('Error')
     }
   }
 

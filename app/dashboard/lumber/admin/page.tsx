@@ -14,14 +14,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
 import { Plus, Edit2, Trash2, Building2, TreePine, Award } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 import { LumberSupplierWithLocations } from '@/types/lumber'
 
 interface Species {
@@ -41,7 +35,6 @@ interface Grade {
 export default function LumberAdminPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
   
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
   const [species, setSpecies] = useState<Species[]>([])
@@ -122,18 +115,18 @@ export default function LumberAdminPage() {
       })
 
       if (response.ok) {
-        toast({ title: `Supplier ${editingSupplier ? 'updated' : 'created'} successfully` })
+        toast.success(`Supplier ${editingSupplier ? 'updated' : 'created'} successfully`)
         setSupplierDialogOpen(false)
         setEditingSupplier(null)
         setSupplierForm({ name: '', notes: '' })
         fetchData()
       } else {
         const error = await response.json()
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+        toast.error(error.message || 'Failed to save supplier')
       }
     } catch (error) {
       console.error('Error saving supplier:', error)
-      toast({ title: 'Error', description: 'Failed to save supplier', variant: 'destructive' })
+      toast.error('Failed to save supplier')
     }
   }
 
@@ -148,7 +141,7 @@ export default function LumberAdminPage() {
       })
 
       if (response.ok) {
-        toast({ title: 'Location added successfully' })
+        toast.success('Location added successfully')
         setLocationDialogOpen(false)
         setLocationForm({
           location_name: '',
@@ -164,7 +157,7 @@ export default function LumberAdminPage() {
         fetchData()
       } else {
         const error = await response.json()
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+        toast.error(error.message || 'Failed to add location')
       }
     } catch (error) {
       console.error('Error saving location:', error)
@@ -185,14 +178,14 @@ export default function LumberAdminPage() {
       })
 
       if (response.ok) {
-        toast({ title: `Species ${editingSpecies ? 'updated' : 'created'} successfully` })
+        toast.success(`Species ${editingSpecies ? 'updated' : 'created'} successfully`)
         setSpeciesDialogOpen(false)
         setEditingSpecies(null)
         setSpeciesForm({ name: '', display_order: 0 })
         fetchData()
       } else {
         const error = await response.json()
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+        toast.error(error.message || 'Failed to save species')
       }
     } catch (error) {
       console.error('Error saving species:', error)
@@ -205,11 +198,12 @@ export default function LumberAdminPage() {
     try {
       const response = await fetch(`/api/lumber/species/${id}`, { method: 'DELETE' })
       if (response.ok) {
-        toast({ title: 'Species deactivated' })
+        toast.success('Species deactivated')
         fetchData()
       }
     } catch (error) {
       console.error('Error deleting species:', error)
+      toast.error('Failed to deactivate species')
     }
   }
 
@@ -227,14 +221,14 @@ export default function LumberAdminPage() {
       })
 
       if (response.ok) {
-        toast({ title: `Grade ${editingGrade ? 'updated' : 'created'} successfully` })
+        toast.success(`Grade ${editingGrade ? 'updated' : 'created'} successfully`)
         setGradeDialogOpen(false)
         setEditingGrade(null)
         setGradeForm({ name: '', display_order: 0 })
         fetchData()
       } else {
         const error = await response.json()
-        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+        toast.error(error.message || 'Failed to save grade')
       }
     } catch (error) {
       console.error('Error saving grade:', error)
@@ -247,11 +241,12 @@ export default function LumberAdminPage() {
     try {
       const response = await fetch(`/api/lumber/grades/${id}`, { method: 'DELETE' })
       if (response.ok) {
-        toast({ title: 'Grade deactivated' })
+        toast.success('Grade deactivated')
         fetchData()
       }
     } catch (error) {
       console.error('Error deleting grade:', error)
+      toast.error('Failed to deactivate grade')
     }
   }
 
@@ -276,57 +271,38 @@ export default function LumberAdminPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="suppliers" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="suppliers" className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            Suppliers
-          </TabsTrigger>
-          <TabsTrigger value="species" className="flex items-center gap-2">
-            <TreePine className="h-4 w-4" />
-            Species
-          </TabsTrigger>
-          <TabsTrigger value="grades" className="flex items-center gap-2">
-            <Award className="h-4 w-4" />
-            Grades
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Suppliers Tab */}
-        <TabsContent value="suppliers" className="space-y-4">
+      <div className="grid grid-cols-3 gap-6">
+        {/* Suppliers Column */}
+        <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Suppliers</h2>
-            <Button onClick={() => {
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Suppliers
+            </h2>
+            <Button size="sm" onClick={() => {
               setEditingSupplier(null)
               setSupplierForm({ name: '', notes: '' })
               setSupplierDialogOpen(true)
             }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Supplier
+              <Plus className="h-3 w-3" />
             </Button>
           </div>
 
-          <div className="bg-white rounded-lg shadow divide-y">
+          <div className="bg-white rounded-lg shadow divide-y max-h-[calc(100vh-250px)] overflow-y-auto">
             {suppliers.map(supplier => (
-              <div key={supplier.id} className="p-4">
+              <div key={supplier.id} className="p-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg">{supplier.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm truncate">{supplier.name}</h3>
                     {supplier.notes && (
-                      <p className="text-sm text-gray-600 mt-1">{supplier.notes}</p>
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2">{supplier.notes}</p>
                     )}
                     
                     {supplier.locations.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <div className="text-sm font-medium text-gray-700">Locations:</div>
+                      <div className="mt-2 space-y-1">
                         {supplier.locations.map(location => (
-                          <div key={location.id} className="text-sm pl-4 border-l-2 border-gray-200">
+                          <div key={location.id} className="text-xs pl-2 border-l-2 border-gray-200">
                             <div className="font-medium">{location.location_name}</div>
-                            {location.address && (
-                              <div className="text-gray-600">
-                                {location.address}, {location.city}, {location.state} {location.zip_code}
-                              </div>
-                            )}
                             {location.phone_number_1 && (
                               <div className="text-gray-600">{location.phone_number_1}</div>
                             )}
@@ -336,81 +312,87 @@ export default function LumberAdminPage() {
                     )}
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 ml-2">
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
                       onClick={() => {
                         setSelectedSupplierId(supplier.id)
                         setLocationDialogOpen(true)
                       }}
                     >
-                      Add Location
+                      <Plus className="h-3 w-3" />
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
                       onClick={() => {
                         setEditingSupplier(supplier)
                         setSupplierForm({ name: supplier.name, notes: supplier.notes || '' })
                         setSupplierDialogOpen(true)
                       }}
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Edit2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </TabsContent>
+        </div>
 
-        {/* Species Tab */}
-        <TabsContent value="species" className="space-y-4">
+        {/* Species Column */}
+        <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Species</h2>
-            <Button onClick={() => {
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <TreePine className="h-5 w-5" />
+              Species
+            </h2>
+            <Button size="sm" onClick={() => {
               setEditingSpecies(null)
               setSpeciesForm({ name: '', display_order: 0 })
               setSpeciesDialogOpen(true)
             }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Species
+              <Plus className="h-3 w-3" />
             </Button>
           </div>
 
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-hidden max-h-[calc(100vh-250px)] overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Display Order</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {species.map(sp => (
                   <tr key={sp.id}>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{sp.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{sp.display_order}</td>
-                    <td className="px-6 py-4 text-sm text-right space-x-2">
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900">{sp.name}</td>
+                    <td className="px-3 py-2 text-sm text-gray-900">{sp.display_order}</td>
+                    <td className="px-3 py-2 text-sm text-right space-x-1">
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
                         onClick={() => {
                           setEditingSpecies(sp)
                           setSpeciesForm({ name: sp.name, display_order: sp.display_order })
                           setSpeciesDialogOpen(true)
                         }}
                       >
-                        <Edit2 className="h-4 w-4" />
+                        <Edit2 className="h-3 w-3" />
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
+                        className="h-8 w-8 p-0"
                         onClick={() => handleDeleteSpecies(sp.id)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </td>
                   </tr>
@@ -418,54 +400,58 @@ export default function LumberAdminPage() {
               </tbody>
             </table>
           </div>
-        </TabsContent>
+        </div>
 
-        {/* Grades Tab */}
-        <TabsContent value="grades" className="space-y-4">
+        {/* Grades Column */}
+        <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Grades</h2>
-            <Button onClick={() => {
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Award className="h-5 w-5" />
+              Grades
+            </h2>
+            <Button size="sm" onClick={() => {
               setEditingGrade(null)
               setGradeForm({ name: '', display_order: 0 })
               setGradeDialogOpen(true)
             }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Grade
+              <Plus className="h-3 w-3" />
             </Button>
           </div>
 
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-hidden max-h-[calc(100vh-250px)] overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Display Order</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {grades.map(grade => (
                   <tr key={grade.id}>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{grade.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{grade.display_order}</td>
-                    <td className="px-6 py-4 text-sm text-right space-x-2">
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900">{grade.name}</td>
+                    <td className="px-3 py-2 text-sm text-gray-900">{grade.display_order}</td>
+                    <td className="px-3 py-2 text-sm text-right space-x-1">
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
                         onClick={() => {
                           setEditingGrade(grade)
                           setGradeForm({ name: grade.name, display_order: grade.display_order })
                           setGradeDialogOpen(true)
                         }}
                       >
-                        <Edit2 className="h-4 w-4" />
+                        <Edit2 className="h-3 w-3" />
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
+                        className="h-8 w-8 p-0"
                         onClick={() => handleDeleteGrade(grade.id)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </td>
                   </tr>
@@ -473,8 +459,8 @@ export default function LumberAdminPage() {
               </tbody>
             </table>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* Supplier Dialog */}
       <Dialog open={supplierDialogOpen} onOpenChange={setSupplierDialogOpen}>

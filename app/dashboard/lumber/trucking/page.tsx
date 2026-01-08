@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Truck, Plus, Save, Trash2 } from 'lucide-react'
-import { useToast } from '@/components/ui/use-toast'
+import { toast } from 'sonner'
 
 interface TruckingNote {
   id: number
@@ -34,7 +34,7 @@ interface TruckingNote {
 export default function TruckingPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { toast } = useToast()
+  
   
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
   const [drivers, setDrivers] = useState<LumberDriver[]>([])
@@ -99,10 +99,7 @@ export default function TruckingPage() {
       })
 
       if (response.ok) {
-        toast({
-          title: 'Driver assigned',
-          description: 'Driver assignment has been saved'
-        })
+        toast.success('Driver assigned')
         setIsDialogOpen(false)
         fetchData()
       } else {
@@ -110,11 +107,7 @@ export default function TruckingPage() {
       }
     } catch (error) {
       console.error('Error assigning driver:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to assign driver',
-        variant: 'destructive'
-      })
+      toast.success('Error')
     }
   }
 
@@ -133,18 +126,11 @@ export default function TruckingPage() {
         const notesRes = await fetch('/api/lumber/trucking/notes')
         if (notesRes.ok) setNotes(await notesRes.json())
         
-        toast({
-          title: 'Note added',
-          description: 'Trucking note has been saved'
-        })
+        toast.success('Note added')
       }
     } catch (error) {
       console.error('Error adding note:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to add note',
-        variant: 'destructive'
-      })
+      toast.success('Error')
     }
   }
 
@@ -156,10 +142,7 @@ export default function TruckingPage() {
 
       if (response.ok) {
         setNotes(notes.filter(n => n.id !== noteId))
-        toast({
-          title: 'Note deleted',
-          description: 'Trucking note has been removed'
-        })
+        toast.success('Note deleted')
       }
     } catch (error) {
       console.error('Error deleting note:', error)
