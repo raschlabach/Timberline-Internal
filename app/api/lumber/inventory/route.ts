@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         GROUP BY load_item_id
       ) finished_packs ON li.id = finished_packs.load_item_id
       WHERE li.actual_footage IS NOT NULL
-        AND l.all_packs_finished = FALSE
+        AND COALESCE(l.all_packs_finished, FALSE) = FALSE
       GROUP BY li.species, li.grade, li.thickness
       ORDER BY li.species, li.grade, li.thickness
     `)
