@@ -225,6 +225,35 @@ export interface LumberBonusParameter {
   updated_at: string
 }
 
+export interface LumberLoadPresetItem {
+  id?: number
+  preset_id?: number
+  species: string
+  grade: string
+  thickness: Thickness
+  estimated_footage: number | null
+  price: number | null
+  display_order?: number
+}
+
+export interface LumberLoadPreset {
+  id: number
+  preset_name: string
+  supplier_id: number
+  supplier_name?: string
+  supplier_location_id: number | null
+  supplier_location_name?: string | null
+  lumber_type: string | null
+  pickup_or_delivery: string | null
+  comments: string | null
+  is_favorite: boolean
+  created_by: number
+  created_by_name?: string
+  created_at: string
+  updated_at: string
+  items: LumberLoadPresetItem[]
+}
+
 export interface DailyRipSummary {
   work_date: string
   total_hours: number

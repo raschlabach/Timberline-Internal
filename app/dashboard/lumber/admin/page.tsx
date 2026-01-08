@@ -33,6 +33,16 @@ interface Grade {
   is_active: boolean
 }
 
+interface LoadIdRange {
+  id: number
+  range_name: string
+  start_range: number
+  end_range: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export default function LumberAdminPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -40,6 +50,7 @@ export default function LumberAdminPage() {
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
   const [species, setSpecies] = useState<Species[]>([])
   const [grades, setGrades] = useState<Grade[]>([])
+  const [loadIdRanges, setLoadIdRanges] = useState<LoadIdRange[]>([])
   const [isLoading, setIsLoading] = useState(true)
   
   // Dialog states
@@ -47,17 +58,20 @@ export default function LumberAdminPage() {
   const [speciesDialogOpen, setSpeciesDialogOpen] = useState(false)
   const [gradeDialogOpen, setGradeDialogOpen] = useState(false)
   const [locationDialogOpen, setLocationDialogOpen] = useState(false)
+  const [rangeDialogOpen, setRangeDialogOpen] = useState(false)
   
   // Edit states
   const [editingSupplier, setEditingSupplier] = useState<any>(null)
   const [editingSpecies, setEditingSpecies] = useState<any>(null)
   const [editingGrade, setEditingGrade] = useState<any>(null)
+  const [editingRange, setEditingRange] = useState<any>(null)
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null)
   
   // Form states
   const [supplierForm, setSupplierForm] = useState({ name: '', notes: '' })
   const [speciesForm, setSpeciesForm] = useState({ name: '', display_order: 0 })
   const [gradeForm, setGradeForm] = useState({ name: '', display_order: 0 })
+  const [rangeForm, setRangeForm] = useState({ range_name: '', start_range: 1000, end_range: 9999 })
   const [locationForm, setLocationForm] = useState({
     location_name: '',
     address: '',
@@ -80,15 +94,17 @@ export default function LumberAdminPage() {
 
   async function fetchData() {
     try {
-      const [suppliersRes, speciesRes, gradesRes] = await Promise.all([
+      const [suppliersRes, speciesRes, gradesRes, rangesRes] = await Promise.all([
         fetch('/api/lumber/suppliers'),
         fetch('/api/lumber/species'),
-        fetch('/api/lumber/grades')
+        fetch('/api/lumber/grades'),
+        fetch('/api/lumber/load-id-ranges')
       ])
 
       if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
       if (speciesRes.ok) setSpecies(await speciesRes.json())
       if (gradesRes.ok) setGrades(await gradesRes.json())
+      if (rangesRes.ok) setLoadIdRanges(await rangesRes.json())
     } catch (error) {
       console.error('Error fetching admin data:', error)
     } finally {
@@ -251,6 +267,71 @@ export default function LumberAdminPage() {
     }
   }
 
+  // Load ID Range functions
+  async function handleSaveRange() {
+    try {
+      const url = editingRange 
+        ? `/api/lumber/load-id-ranges/${editingRange.id}`
+        : '/api/lumber/load-id-ranges'
+      
+      const response = await fetch(url, {
+        method: editingRange ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...rangeForm,
+          is_active: !editingRange // New ranges are active by default
+        })
+      })
+
+      if (response.ok) {
+        toast.success(`Load ID range ${editingRange ? 'updated' : 'created'} successfully`)
+        setRangeDialogOpen(false)
+        setEditingRange(null)
+        setRangeForm({ range_name: '', start_range: 1000, end_range: 9999 })
+        fetchData()
+      } else {
+        const error = await response.json()
+        toast.error(error.message || 'Failed to save load ID range')
+      }
+    } catch (error) {
+      console.error('Error saving load ID range:', error)
+      toast.error('Failed to save load ID range')
+    }
+  }
+
+  async function handleSetActiveRange(id: number) {
+    try {
+      const response = await fetch(`/api/lumber/load-id-ranges/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: true })
+      })
+
+      if (response.ok) {
+        toast.success('Active range updated')
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Error setting active range:', error)
+      toast.error('Failed to set active range')
+    }
+  }
+
+  async function handleDeleteRange(id: number) {
+    if (!confirm('Are you sure you want to delete this range?')) return
+
+    try {
+      const response = await fetch(`/api/lumber/load-id-ranges/${id}`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('Range deleted')
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Error deleting range:', error)
+      toast.error('Failed to delete range')
+    }
+  }
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -268,8 +349,77 @@ export default function LumberAdminPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Lumber Admin</h1>
         <p className="text-gray-600 mt-1">
-          Manage suppliers, species, and grades
+          Manage suppliers, species, grades, and load ID ranges
         </p>
+      </div>
+
+      {/* Load ID Ranges Section */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Load ID Ranges</h2>
+            <p className="text-sm text-gray-600">Manage automatic load ID assignment ranges</p>
+          </div>
+          <Button size="sm" onClick={() => {
+            setEditingRange(null)
+            setRangeForm({ range_name: '', start_range: 1000, end_range: 9999 })
+            setRangeDialogOpen(true)
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Range
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {loadIdRanges.map(range => (
+            <div 
+              key={range.id} 
+              className={`p-3 rounded-lg border-2 ${
+                range.is_active 
+                  ? 'border-green-500 bg-green-50' 
+                  : 'border-gray-200 bg-gray-50'
+              }`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-sm">{range.range_name}</h3>
+                    {range.is_active && (
+                      <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">Active</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Range: {range.start_range.toLocaleString()} - {range.end_range.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {(range.end_range - range.start_range + 1).toLocaleString()} IDs available
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  {!range.is_active && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handleSetActiveRange(range.id)}
+                      title="Set as active"
+                    >
+                      <Award className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                    onClick={() => handleDeleteRange(range.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
@@ -637,6 +787,56 @@ export default function LumberAdminPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setGradeDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveGrade}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load ID Range Dialog */}
+      <Dialog open={rangeDialogOpen} onOpenChange={setRangeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingRange ? 'Edit' : 'Add'} Load ID Range</DialogTitle>
+            <DialogDescription>
+              {editingRange ? 'Update load ID range' : 'Create a new load ID range for automatic assignment'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="range-name">Range Name *</Label>
+              <Input
+                id="range-name"
+                placeholder="e.g., 2024 Range, Main Range"
+                value={rangeForm.range_name}
+                onChange={(e) => setRangeForm({ ...rangeForm, range_name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-range">Start Range *</Label>
+                <Input
+                  id="start-range"
+                  type="number"
+                  value={rangeForm.start_range}
+                  onChange={(e) => setRangeForm({ ...rangeForm, start_range: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="end-range">End Range *</Label>
+                <Input
+                  id="end-range"
+                  type="number"
+                  value={rangeForm.end_range}
+                  onChange={(e) => setRangeForm({ ...rangeForm, end_range: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              This range will contain {(rangeForm.end_range - rangeForm.start_range + 1).toLocaleString()} available load IDs
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRangeDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveRange}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

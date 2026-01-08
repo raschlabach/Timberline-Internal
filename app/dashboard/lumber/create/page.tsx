@@ -14,9 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness } from '@/types/lumber'
-import { Plus, Trash2, ArrowLeft } from 'lucide-react'
+import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness, LumberLoadPreset } from '@/types/lumber'
+import { Plus, Trash2, ArrowLeft, BookmarkIcon, Star, Save } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Card, CardContent } from '@/components/ui/card'
 
 const THICKNESSES: Thickness[] = ['4/4', '5/4', '6/4', '7/4', '8/4']
 const LUMBER_TYPES = ['dried', 'green']
@@ -30,18 +39,21 @@ export default function CreateLoadPage() {
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
   const [species, setSpecies] = useState<any[]>([])
   const [grades, setGrades] = useState<any[]>([])
+  const [presets, setPresets] = useState<LumberLoadPreset[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [presetsDialogOpen, setPresetsDialogOpen] = useState(false)
+  const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false)
+  const [presetName, setPresetName] = useState('')
   
   // Form state
-  const [loadId, setLoadId] = useState('')
   const [supplierId, setSupplierId] = useState<number | null>(null)
   const [supplierLocationId, setSupplierLocationId] = useState<number | null>(null)
   const [lumberType, setLumberType] = useState<string>('')
   const [pickupOrDelivery, setPickupOrDelivery] = useState<string>('')
   const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState('')
   const [comments, setComments] = useState('')
-  const [items, setItems] = useState<CreateLoadItemInput[]>([
-    { species: '', grade: '', thickness: '4/4', estimated_footage: null, price: null }
+  const [items, setItems] = useState<(CreateLoadItemInput & { load_id: string })[]>([
+    { load_id: '', species: '', grade: '', thickness: '4/4', estimated_footage: null, price: null }
   ])
 
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
@@ -55,15 +67,20 @@ export default function CreateLoadPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [suppliersRes, speciesRes, gradesRes] = await Promise.all([
+        const [suppliersRes, speciesRes, gradesRes, presetsRes] = await Promise.all([
           fetch('/api/lumber/suppliers'),
           fetch('/api/lumber/species'),
-          fetch('/api/lumber/grades')
+          fetch('/api/lumber/grades'),
+          fetch('/api/lumber/presets')
         ])
         
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
         if (speciesRes.ok) setSpecies(await speciesRes.json())
         if (gradesRes.ok) setGrades(await gradesRes.json())
+        if (presetsRes.ok) setPresets(await presetsRes.json())
+
+        // Fetch the first available load ID
+        await fetchNextLoadId(0)
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -74,8 +91,43 @@ export default function CreateLoadPage() {
     }
   }, [status])
 
-  function handleAddItem() {
-    setItems([...items, { species: '', grade: '', thickness: '4/4', estimated_footage: null, price: null }])
+  async function fetchNextLoadId(itemIndex: number) {
+    try {
+      const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.loadIds && data.loadIds.length > 0) {
+          const newItems = [...items]
+          newItems[itemIndex] = { ...newItems[itemIndex], load_id: data.loadIds[0] }
+          setItems(newItems)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching next load ID:', error)
+    }
+  }
+
+  async function handleAddItem() {
+    const newIndex = items.length
+    setItems([...items, { load_id: '', species: '', grade: '', thickness: '4/4', estimated_footage: null, price: null }])
+    
+    // Fetch next available load ID for the new item
+    try {
+      const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.loadIds && data.loadIds.length > 0) {
+          // Update the newly added item with the load ID
+          setItems(prevItems => {
+            const updated = [...prevItems]
+            updated[newIndex] = { ...updated[newIndex], load_id: data.loadIds[0] }
+            return updated
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching next load ID:', error)
+    }
   }
 
   function handleRemoveItem(index: number) {
@@ -84,53 +136,153 @@ export default function CreateLoadPage() {
     }
   }
 
-  function handleItemChange(index: number, field: keyof CreateLoadItemInput, value: any) {
+  function handleItemChange(index: number, field: keyof (CreateLoadItemInput & { load_id: string }), value: any) {
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
     setItems(newItems)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    
-    if (!loadId || !supplierId) {
-      toast.error('Please fill in Load ID and Supplier')
+  async function loadPreset(preset: LumberLoadPreset) {
+    // Fill shared fields
+    setSupplierId(preset.supplier_id)
+    setSupplierLocationId(preset.supplier_location_id)
+    setLumberType(preset.lumber_type || '')
+    setPickupOrDelivery(preset.pickup_or_delivery || '')
+    setComments(preset.comments || '')
+
+    // Fetch load IDs for all items
+    try {
+      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=${preset.items.length}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.loadIds && data.loadIds.length >= preset.items.length) {
+          // Map preset items to form items with load IDs
+          const newItems = preset.items.map((presetItem, index) => ({
+            load_id: data.loadIds[index],
+            species: presetItem.species,
+            grade: presetItem.grade,
+            thickness: presetItem.thickness,
+            estimated_footage: presetItem.estimated_footage,
+            price: presetItem.price
+          }))
+          setItems(newItems)
+          toast.success(`Loaded preset: ${preset.preset_name}`)
+          setPresetsDialogOpen(false)
+        } else {
+          toast.error('Not enough available load IDs for this preset')
+        }
+      }
+    } catch (error) {
+      console.error('Error loading preset:', error)
+      toast.error('Failed to load preset')
+    }
+  }
+
+  async function togglePresetFavorite(presetId: number) {
+    try {
+      const response = await fetch(`/api/lumber/presets/${presetId}/toggle-favorite`, {
+        method: 'POST'
+      })
+      if (response.ok) {
+        // Refresh presets
+        const presetsRes = await fetch('/api/lumber/presets')
+        if (presetsRes.ok) setPresets(await presetsRes.json())
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+    }
+  }
+
+  async function saveAsPreset() {
+    if (!presetName.trim()) {
+      toast.error('Please enter a preset name')
       return
     }
 
-    const hasValidItems = items.every(item => item.species && item.grade && item.thickness)
+    if (!supplierId) {
+      toast.error('Please select a supplier before saving preset')
+      return
+    }
+
+    if (items.length === 0 || !items.every(item => item.species && item.grade && item.thickness)) {
+      toast.error('Please complete all item details before saving preset')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/lumber/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preset_name: presetName,
+          supplier_id: supplierId,
+          supplier_location_id: supplierLocationId,
+          lumber_type: lumberType,
+          pickup_or_delivery: pickupOrDelivery,
+          comments: comments,
+          items: items.map(({ load_id, ...rest }) => rest) // Remove load_id from items
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Preset saved successfully')
+        setSavePresetDialogOpen(false)
+        setPresetName('')
+        // Refresh presets
+        const presetsRes = await fetch('/api/lumber/presets')
+        if (presetsRes.ok) setPresets(await presetsRes.json())
+      } else {
+        toast.error('Failed to save preset')
+      }
+    } catch (error) {
+      console.error('Error saving preset:', error)
+      toast.error('Failed to save preset')
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    
+    if (!supplierId) {
+      toast.error('Please select a supplier')
+      return
+    }
+
+    const hasValidItems = items.every(item => item.load_id && item.species && item.grade && item.thickness)
     if (!hasValidItems) {
-      toast.error('Please fill in species, grade, and thickness for all items')
+      toast.error('Please fill in Load ID, species, grade, and thickness for all items')
       return
     }
 
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/lumber/loads', {
+      const response = await fetch('/api/lumber/loads/bulk-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          load_id: loadId,
-          supplier_id: supplierId,
-          supplier_location_id: supplierLocationId,
-          lumber_type: lumberType || null,
-          pickup_or_delivery: pickupOrDelivery || null,
-          estimated_delivery_date: estimatedDeliveryDate || null,
-          comments: comments || null,
+          shared_fields: {
+            supplier_id: supplierId,
+            supplier_location_id: supplierLocationId,
+            lumber_type: lumberType || null,
+            pickup_or_delivery: pickupOrDelivery || null,
+            estimated_delivery_date: estimatedDeliveryDate || null,
+            comments: comments || null
+          },
           items
         })
       })
 
       if (response.ok) {
-        toast.success(`Load ${loadId} has been created`)
+        const result = await response.json()
+        toast.success(`${result.created} load(s) created successfully`)
         router.push('/dashboard/lumber/incoming')
       } else {
         const error = await response.json()
-        toast.error(error.message || 'Failed to create load')
+        toast.error(error.message || 'Failed to create loads')
       }
     } catch (error) {
-      console.error('Error creating load:', error)
+      console.error('Error creating loads:', error)
       toast.error('An unexpected error occurred')
     } finally {
       setIsLoading(false)
@@ -145,37 +297,61 @@ export default function CreateLoadPage() {
     )
   }
 
+  const favoritePresets = presets.filter(p => p.is_favorite)
+  const groupedPresets = presets.reduce((acc, preset) => {
+    const key = preset.supplier_name || 'Unknown'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(preset)
+    return acc
+  }, {} as Record<string, LumberLoadPreset[]>)
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create New Load</h1>
-          <p className="text-gray-600 mt-1">Enter load details and estimated information</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Create New Load</h1>
+            <p className="text-gray-600 mt-1">Enter load details and estimated information</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSavePresetDialogOpen(true)}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Save as Preset
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setPresetsDialogOpen(true)}
+          >
+            <BookmarkIcon className="h-4 w-4 mr-2" />
+            Load Preset
+          </Button>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-6">
-        {/* Basic Information */}
+        {/* Shared Information (applies to all items) */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Shared Information</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            These details will apply to all load items below. Each item will get its own unique Load ID.
+          </p>
+        </div>
+        
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="loadId">Load ID *</Label>
-            <Input
-              id="loadId"
-              value={loadId}
-              onChange={(e) => setLoadId(e.target.value)}
-              placeholder="e.g., R-4276"
-              required
-            />
-          </div>
-
           <div>
             <Label htmlFor="supplier">Supplier *</Label>
             <Select value={supplierId?.toString() || ''} onValueChange={(val) => setSupplierId(parseInt(val))}>
@@ -279,7 +455,17 @@ export default function CreateLoadPage() {
 
           <div className="space-y-4">
             {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-6 gap-3 items-end p-4 border rounded-lg bg-gray-50">
+              <div key={index} className="grid grid-cols-7 gap-3 items-end p-4 border rounded-lg bg-gray-50">
+                <div>
+                  <Label>Load ID *</Label>
+                  <Input
+                    value={item.load_id}
+                    onChange={(e) => handleItemChange(index, 'load_id', e.target.value)}
+                    placeholder="Auto-assigned"
+                    required
+                  />
+                </div>
+                
                 <div>
                   <Label>Species *</Label>
                   <Select 
@@ -389,6 +575,132 @@ export default function CreateLoadPage() {
           </Button>
         </div>
       </form>
+
+      {/* Load Preset Dialog */}
+      <Dialog open={presetsDialogOpen} onOpenChange={setPresetsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Load Preset</DialogTitle>
+            <DialogDescription>
+              Select a preset to quickly fill the form. Presets are grouped by supplier.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Favorites Section */}
+            {favoritePresets.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                  Favorites
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {favoritePresets.map(preset => (
+                    <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1" onClick={() => loadPreset(preset)}>
+                            <h4 className="font-semibold">{preset.preset_name}</h4>
+                            <p className="text-sm text-gray-600">{preset.supplier_name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {preset.items.length} item(s) - {preset.lumber_type || 'N/A'}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              togglePresetFavorite(preset.id)
+                            }}
+                          >
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Grouped by Supplier */}
+            {Object.entries(groupedPresets).map(([supplierName, supplierPresets]) => (
+              <div key={supplierName}>
+                <h3 className="text-lg font-semibold mb-3">{supplierName}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {supplierPresets.map(preset => (
+                    <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1" onClick={() => loadPreset(preset)}>
+                            <h4 className="font-semibold">{preset.preset_name}</h4>
+                            {preset.supplier_location_name && (
+                              <p className="text-xs text-gray-500">{preset.supplier_location_name}</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              {preset.items.length} item(s) - {preset.lumber_type || 'N/A'}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {preset.items.slice(0, 3).map((item, idx) => (
+                                <span key={idx} className="text-xs bg-gray-100 px-2 py-0.5 rounded">
+                                  {item.species} {item.grade}
+                                </span>
+                              ))}
+                              {preset.items.length > 3 && (
+                                <span className="text-xs text-gray-500">+{preset.items.length - 3} more</span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              togglePresetFavorite(preset.id)
+                            }}
+                          >
+                            <Star className={`h-4 w-4 ${preset.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Preset Dialog */}
+      <Dialog open={savePresetDialogOpen} onOpenChange={setSavePresetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save as Preset</DialogTitle>
+            <DialogDescription>
+              Save the current form configuration as a preset for quick access later
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="preset-name">Preset Name *</Label>
+              <Input
+                id="preset-name"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="e.g., Cherry 4/4 & 5/4 Mix"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSavePresetDialogOpen(false)}>Cancel</Button>
+            <Button onClick={saveAsPreset}>Save Preset</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
