@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Plus, Edit2, Trash2, Building2, TreePine, Award } from 'lucide-react'
@@ -467,6 +468,9 @@ export default function LumberAdminPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingSupplier ? 'Edit' : 'Add'} Supplier</DialogTitle>
+            <DialogDescription>
+              {editingSupplier ? 'Update supplier information' : 'Create a new lumber supplier'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
@@ -499,6 +503,7 @@ export default function LumberAdminPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add Location</DialogTitle>
+            <DialogDescription>Add a new location for this supplier</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div>
@@ -571,6 +576,9 @@ export default function LumberAdminPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingSpecies ? 'Edit' : 'Add'} Species</DialogTitle>
+            <DialogDescription>
+              {editingSpecies ? 'Update species information' : 'Add a new lumber species'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
@@ -603,6 +611,9 @@ export default function LumberAdminPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingGrade ? 'Edit' : 'Add'} Grade</DialogTitle>
+            <DialogDescription>
+              {editingGrade ? 'Update grade information' : 'Add a new lumber grade'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
