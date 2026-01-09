@@ -61,121 +61,241 @@ export async function POST(request: NextRequest) {
     console.log('Helvetica-Bold font embedded')
     
     const poNumber = `R-${load.load_id}`
-    const currentDate = new Date().toLocaleDateString()
+    const currentDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
     const deliveryMonth = load.estimated_delivery_date 
       ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       : 'TBD'
 
-    let yPos = 750
+    const pageWidth = 612
+    const pageHeight = 792
+    const margin = 40
+    const blueColor = rgb(0.2, 0.4, 0.8) // Professional blue
 
-    // Header
-    page.drawText('PURCHASE ORDER', {
-      x: 306 - (fontBold.widthOfTextAtSize('PURCHASE ORDER', 24) / 2),
-      y: yPos,
+    let yPos = pageHeight - margin
+
+    // Header with blue background
+    page.drawRectangle({
+      x: 0,
+      y: yPos - 60,
+      width: pageWidth,
+      height: 60,
+      color: blueColor
+    })
+
+    // Title
+    const titleText = 'PURCHASE ORDER'
+    page.drawText(titleText, {
+      x: margin,
+      y: yPos - 35,
       size: 24,
       font: fontBold,
-      color: rgb(0, 0, 0)
+      color: rgb(1, 1, 1)
     })
-    yPos -= 40
 
-    // PO Number and Dates
-    page.drawText(`PO Number: ${poNumber}`, { x: 50, y: yPos, size: 11, font })
-    yPos -= 15
-    page.drawText(`Date: ${currentDate}`, { x: 50, y: yPos, size: 11, font })
-    yPos -= 15
-    page.drawText(`Estimated Delivery: ${deliveryMonth}`, { x: 50, y: yPos, size: 11, font })
+    // PO Number in header
+    page.drawText(`PO #: ${poNumber}`, {
+      x: pageWidth - margin - fontBold.widthOfTextAtSize(`PO #: ${poNumber}`, 14),
+      y: yPos - 35,
+      size: 14,
+      font: fontBold,
+      color: rgb(1, 1, 1)
+    })
+
+    yPos -= 80
+
+    // Date and Delivery Info Box
+    page.drawRectangle({
+      x: pageWidth - margin - 180,
+      y: yPos - 70,
+      width: 180,
+      height: 70,
+      color: rgb(0.95, 0.97, 1),
+      borderColor: blueColor,
+      borderWidth: 1
+    })
+
+    page.drawText('ORDER DETAILS', {
+      x: pageWidth - margin - 170,
+      y: yPos - 20,
+      size: 9,
+      font: fontBold,
+      color: blueColor
+    })
+
+    page.drawText(`Date: ${currentDate}`, {
+      x: pageWidth - margin - 170,
+      y: yPos - 38,
+      size: 9,
+      font
+    })
+
+    page.drawText(`Delivery: ${deliveryMonth}`, {
+      x: pageWidth - margin - 170,
+      y: yPos - 54,
+      size: 9,
+      font
+    })
+
+    // Customer Section
+    page.drawText('BILLED TO', {
+      x: margin,
+      y: yPos - 20,
+      size: 10,
+      font: fontBold,
+      color: blueColor
+    })
+
+    yPos -= 38
+    page.drawText('RNR Enterprises', { x: margin, y: yPos, size: 11, font: fontBold })
+    yPos -= 14
+    page.drawText('1361 Co Rd', { x: margin, y: yPos, size: 10, font })
+    yPos -= 13
+    page.drawText('Sugarcreek, OH 44681', { x: margin, y: yPos, size: 10, font })
     yPos -= 30
 
-    // Customer Info
-    page.drawText('CUSTOMER:', { x: 50, y: yPos, size: 12, font: fontBold })
-    yPos -= 15
-    page.drawText('RNR Enterprises', { x: 50, y: yPos, size: 11, font })
-    yPos -= 14
-    page.drawText('1361 Co Rd', { x: 50, y: yPos, size: 11, font })
-    yPos -= 14
-    page.drawText('Sugarcreek, OH 44681', { x: 50, y: yPos, size: 11, font })
-    yPos -= 30
+    // Supplier Section
+    page.drawText('SHIP TO', {
+      x: margin,
+      y: yPos,
+      size: 10,
+      font: fontBold,
+      color: blueColor
+    })
 
-    // Supplier Info
-    page.drawText('SUPPLIER:', { x: 50, y: yPos, size: 12, font: fontBold })
-    yPos -= 15
-    page.drawText(load.supplier_name || 'N/A', { x: 50, y: yPos, size: 11, font })
+    yPos -= 18
+    page.drawText(load.supplier_name || 'N/A', { x: margin, y: yPos, size: 11, font: fontBold })
     yPos -= 14
     if (load.location_name) {
-      page.drawText(load.location_name, { x: 50, y: yPos, size: 11, font })
-      yPos -= 14
+      page.drawText(load.location_name, { x: margin, y: yPos, size: 10, font })
+      yPos -= 13
     }
     if (load.address) {
-      page.drawText(load.address, { x: 50, y: yPos, size: 11, font })
-      yPos -= 14
+      page.drawText(load.address, { x: margin, y: yPos, size: 10, font })
+      yPos -= 13
     }
     if (load.city || load.state || load.zip_code) {
-      page.drawText(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`, { x: 50, y: yPos, size: 11, font })
-      yPos -= 14
+      page.drawText(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`, { x: margin, y: yPos, size: 10, font })
+      yPos -= 13
     }
-    yPos -= 20
+    yPos -= 25
 
-    // Table Header
-    page.drawText('Qty (BF)', { x: 50, y: yPos, size: 10, font: fontBold })
-    page.drawText('Species', { x: 120, y: yPos, size: 10, font: fontBold })
-    page.drawText('Grade', { x: 220, y: yPos, size: 10, font: fontBold })
-    page.drawText('Thickness', { x: 290, y: yPos, size: 10, font: fontBold })
-    page.drawText('Price/BF', { x: 370, y: yPos, size: 10, font: fontBold })
-    page.drawText('Pickup/Del', { x: 460, y: yPos, size: 10, font: fontBold })
-    yPos -= 5
-    
-    // Line under header
-    page.drawLine({
-      start: { x: 50, y: yPos },
-      end: { x: 550, y: yPos },
-      thickness: 1,
-      color: rgb(0, 0, 0)
+    // Items Table
+    const tableTop = yPos
+    const tableHeaderHeight = 25
+    const rowHeight = 22
+
+    // Table header background
+    page.drawRectangle({
+      x: margin,
+      y: tableTop - tableHeaderHeight,
+      width: pageWidth - (2 * margin),
+      height: tableHeaderHeight,
+      color: rgb(0.95, 0.97, 1)
     })
-    yPos -= 15
 
-    // Items
-    itemsResult.rows.forEach((item: any) => {
+    // Table header border
+    page.drawRectangle({
+      x: margin,
+      y: tableTop - tableHeaderHeight,
+      width: pageWidth - (2 * margin),
+      height: tableHeaderHeight,
+      borderColor: blueColor,
+      borderWidth: 1.5
+    })
+
+    // Column headers
+    const cols = {
+      qty: margin + 5,
+      species: margin + 75,
+      grade: margin + 175,
+      thickness: margin + 250,
+      price: margin + 330,
+      pickup: margin + 420
+    }
+
+    page.drawText('QTY (BF)', { x: cols.qty, y: tableTop - 17, size: 9, font: fontBold, color: blueColor })
+    page.drawText('SPECIES', { x: cols.species, y: tableTop - 17, size: 9, font: fontBold, color: blueColor })
+    page.drawText('GRADE', { x: cols.grade, y: tableTop - 17, size: 9, font: fontBold, color: blueColor })
+    page.drawText('THICK', { x: cols.thickness, y: tableTop - 17, size: 9, font: fontBold, color: blueColor })
+    page.drawText('PRICE/BF', { x: cols.price, y: tableTop - 17, size: 9, font: fontBold, color: blueColor })
+    page.drawText('TYPE', { x: cols.pickup, y: tableTop - 17, size: 9, font: fontBold, color: blueColor })
+
+    yPos = tableTop - tableHeaderHeight - 5
+
+    // Table rows with alternating colors
+    itemsResult.rows.forEach((item: any, index: number) => {
       const price = Number(item.price) || 0
       const footage = Number(item.estimated_footage) || 0
       const thickness = item.thickness ? String(item.thickness) : ''
       
-      page.drawText(footage.toLocaleString(), { x: 50, y: yPos, size: 10, font })
-      page.drawText(item.species || '', { x: 120, y: yPos, size: 10, font })
-      page.drawText(item.grade || '', { x: 220, y: yPos, size: 10, font })
-      page.drawText(thickness, { x: 290, y: yPos, size: 10, font })
-      page.drawText(`$${price.toFixed(2)}`, { x: 370, y: yPos, size: 10, font })
-      page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', { x: 460, y: yPos, size: 10, font })
-      yPos -= 20
-    })
+      // Alternating row background
+      if (index % 2 === 0) {
+        page.drawRectangle({
+          x: margin,
+          y: yPos - rowHeight + 5,
+          width: pageWidth - (2 * margin),
+          height: rowHeight,
+          color: rgb(0.98, 0.98, 0.98)
+        })
+      }
 
-    yPos -= 5
-    // Line after items
-    page.drawLine({
-      start: { x: 50, y: yPos },
-      end: { x: 550, y: yPos },
-      thickness: 1,
-      color: rgb(0, 0, 0)
-    })
-    yPos -= 20
-
-    // Comments
-    if (load.comments) {
-      page.drawText('COMMENTS:', { x: 50, y: yPos, size: 11, font: fontBold })
       yPos -= 15
+      page.drawText(footage.toLocaleString(), { x: cols.qty, y: yPos, size: 10, font })
+      page.drawText(item.species || '', { x: cols.species, y: yPos, size: 10, font })
+      page.drawText(item.grade || '', { x: cols.grade, y: yPos, size: 10, font })
+      page.drawText(thickness, { x: cols.thickness, y: yPos, size: 10, font })
+      page.drawText(`$${price.toFixed(2)}`, { x: cols.price, y: yPos, size: 10, font })
+      page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', { x: cols.pickup, y: yPos, size: 10, font })
+      yPos -= 7
+    })
+
+    // Table bottom border
+    page.drawLine({
+      start: { x: margin, y: yPos },
+      end: { x: pageWidth - margin, y: yPos },
+      thickness: 1.5,
+      color: blueColor
+    })
+
+    yPos -= 25
+
+    // Comments Section
+    if (load.comments) {
+      page.drawText('COMMENTS', {
+        x: margin,
+        y: yPos,
+        size: 10,
+        font: fontBold,
+        color: blueColor
+      })
+      yPos -= 15
+
+      // Comments box
+      const commentsBoxHeight = 60
+      page.drawRectangle({
+        x: margin,
+        y: yPos - commentsBoxHeight + 10,
+        width: pageWidth - (2 * margin),
+        height: commentsBoxHeight,
+        color: rgb(0.98, 0.98, 0.98),
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 1
+      })
+
+      yPos -= 10
       const commentLines = load.comments.split('\n')
       commentLines.forEach((line: string) => {
-        // Wrap long lines
-        const maxWidth = 500
+        const maxWidth = pageWidth - (2 * margin) - 20
         const words = line.split(' ')
         let currentLine = ''
         
         words.forEach((word: string) => {
           const testLine = currentLine + (currentLine ? ' ' : '') + word
-          const width = font.widthOfTextAtSize(testLine, 10)
+          const width = font.widthOfTextAtSize(testLine, 9)
           
           if (width > maxWidth && currentLine) {
-            page.drawText(currentLine, { x: 50, y: yPos, size: 10, font })
-            yPos -= 14
+            page.drawText(currentLine, { x: margin + 10, y: yPos, size: 9, font })
+            yPos -= 12
             currentLine = word
           } else {
             currentLine = testLine
@@ -183,23 +303,33 @@ export async function POST(request: NextRequest) {
         })
         
         if (currentLine) {
-          page.drawText(currentLine, { x: 50, y: yPos, size: 10, font })
-          yPos -= 14
+          page.drawText(currentLine, { x: margin + 10, y: yPos, size: 9, font })
+          yPos -= 12
         }
       })
-      yPos -= 10
+      yPos -= 20
     }
 
-    // Important Notice
-    yPos -= 20
+    // Important Notice Box
+    yPos -= 10
+    page.drawRectangle({
+      x: margin,
+      y: yPos - 40,
+      width: pageWidth - (2 * margin),
+      height: 40,
+      color: rgb(1, 0.95, 0.95),
+      borderColor: rgb(0.8, 0.2, 0.2),
+      borderWidth: 2
+    })
+
     const noticeText = 'PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK'
-    const noticeWidth = fontBold.widthOfTextAtSize(noticeText, 16)
+    const noticeWidth = fontBold.widthOfTextAtSize(noticeText, 14)
     page.drawText(noticeText, {
-      x: 306 - (noticeWidth / 2),
-      y: yPos,
-      size: 16,
+      x: (pageWidth - noticeWidth) / 2,
+      y: yPos - 25,
+      size: 14,
       font: fontBold,
-      color: rgb(1, 0, 0) // Red
+      color: rgb(0.8, 0, 0)
     })
 
     // Generate PDF buffer
