@@ -55,6 +55,7 @@ export default function LoadInfoPage() {
   const [invoiceTotal, setInvoiceTotal] = useState('')
   const [invoiceDate, setInvoiceDate] = useState('')
   const [allPacksFinished, setAllPacksFinished] = useState(false)
+  const [poGenerated, setPoGenerated] = useState(false)
   
   // Reference data
   const [suppliers, setSuppliers] = useState<any[]>([])

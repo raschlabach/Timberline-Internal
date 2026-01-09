@@ -135,11 +135,15 @@ export async function POST(request: NextRequest) {
 
     // Items
     itemsResult.rows.forEach((item: any) => {
-      page.drawText((item.estimated_footage || 0).toLocaleString(), { x: 50, y: yPos, size: 10, font })
+      const price = Number(item.price) || 0
+      const footage = Number(item.estimated_footage) || 0
+      const thickness = item.thickness ? String(item.thickness) : ''
+      
+      page.drawText(footage.toLocaleString(), { x: 50, y: yPos, size: 10, font })
       page.drawText(item.species || '', { x: 120, y: yPos, size: 10, font })
       page.drawText(item.grade || '', { x: 220, y: yPos, size: 10, font })
-      page.drawText(item.thickness?.toString() || '', { x: 290, y: yPos, size: 10, font })
-      page.drawText(`$${(item.price || 0).toFixed(2)}`, { x: 370, y: yPos, size: 10, font })
+      page.drawText(thickness, { x: 290, y: yPos, size: 10, font })
+      page.drawText(`$${price.toFixed(2)}`, { x: 370, y: yPos, size: 10, font })
       page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', { x: 460, y: yPos, size: 10, font })
       yPos -= 20
     })
