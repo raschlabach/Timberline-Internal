@@ -127,17 +127,38 @@ export default function RipEntryPage() {
           }
         })
         setPackEdits(edits)
+        
+        // Pre-populate operator/stacker from last assigned pack
+        if (data.length > 0) {
+          // Find the most recent pack with operator assigned (work backwards)
+          const lastAssignedPack = [...data].reverse().find((pack: LumberPackWithDetails) => pack.operator_id)
+          if (lastAssignedPack) {
+            setOperatorId(lastAssignedPack.operator_id?.toString() || '')
+            setStacker1Id(lastAssignedPack.stacker_1_id?.toString() || '')
+            setStacker2Id(lastAssignedPack.stacker_2_id?.toString() || '')
+            setStacker3Id(lastAssignedPack.stacker_3_id?.toString() || '')
+            setStacker4Id(lastAssignedPack.stacker_4_id?.toString() || '')
+          } else {
+            // No packs assigned yet, reset to empty
+            setOperatorId('')
+            setStacker1Id('')
+            setStacker2Id('')
+            setStacker3Id('')
+            setStacker4Id('')
+          }
+        } else {
+          // No packs, reset to empty
+          setOperatorId('')
+          setStacker1Id('')
+          setStacker2Id('')
+          setStacker3Id('')
+          setStacker4Id('')
+        }
       }
     } catch (error) {
       console.error('Error fetching packs:', error)
     }
     
-    // Reset operators/stackers
-    setOperatorId('')
-    setStacker1Id('')
-    setStacker2Id('')
-    setStacker3Id('')
-    setStacker4Id('')
     setLoadQuality(load.load_quality?.toString() || '')
   }
 
@@ -746,15 +767,15 @@ export default function RipEntryPage() {
                 </div>
               )}
 
-              {/* Operator/Stacker Selection - Better Layout */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Team Assignment</h3>
-                <div className="grid grid-cols-3 gap-3">
+              {/* Operator/Stacker Selection - Compact Layout */}
+              <div className="bg-gray-50 p-2 rounded">
+                <h3 className="text-xs font-semibold text-gray-900 mb-2">Team Assignment</h3>
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <Label className="text-sm font-medium mb-1">Operator</Label>
+                    <Label className="text-xs mb-1">Operator</Label>
                     <Select value={operatorId} onValueChange={setOperatorId}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select operator" />
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         {operators.map(operator => (
@@ -766,10 +787,10 @@ export default function RipEntryPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-1">Stacker 1</Label>
+                    <Label className="text-xs mb-1">Stacker 1</Label>
                     <Select value={stacker1Id} onValueChange={setStacker1Id}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select stacker" />
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         {operators.map(operator => (
@@ -781,10 +802,10 @@ export default function RipEntryPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-1">Stacker 2</Label>
+                    <Label className="text-xs mb-1">Stacker 2</Label>
                     <Select value={stacker2Id} onValueChange={setStacker2Id}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select stacker" />
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         {operators.map(operator => (
@@ -796,10 +817,10 @@ export default function RipEntryPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-1">Stacker 3</Label>
+                    <Label className="text-xs mb-1">Stacker 3</Label>
                     <Select value={stacker3Id} onValueChange={setStacker3Id}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select stacker" />
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         {operators.map(operator => (
@@ -811,10 +832,10 @@ export default function RipEntryPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-1">Stacker 4</Label>
+                    <Label className="text-xs mb-1">Stacker 4</Label>
                     <Select value={stacker4Id} onValueChange={setStacker4Id}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select stacker" />
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         {operators.map(operator => (
@@ -826,7 +847,7 @@ export default function RipEntryPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-1">Load Quality (0-100)</Label>
+                    <Label className="text-xs mb-1">Quality (0-100)</Label>
                     <Input
                       type="number"
                       min="0"
@@ -834,8 +855,8 @@ export default function RipEntryPage() {
                       value={loadQuality}
                       onChange={(e) => setLoadQuality(e.target.value)}
                       onBlur={handleSaveLoadQuality}
-                      className="h-9"
-                      placeholder="Enter quality score"
+                      className="h-8 text-xs"
+                      placeholder="0-100"
                     />
                   </div>
                 </div>
@@ -923,9 +944,9 @@ export default function RipEntryPage() {
                 <div className="grid grid-cols-2 gap-3">
                   {/* Pack Info */}
                   <div>
-                    <div className="flex justify-between items-center mb-1">
+                    <div className="flex justify-between items-center h-6 mb-1">
                       <h3 className="text-xs font-semibold">Pack Information</h3>
-                      <Button onClick={handleAddPack} size="sm" className="h-6 px-2 text-xs" variant="outline">
+                      <Button onClick={handleAddPack} size="sm" className="h-5 px-2 text-xs" variant="outline">
                         <Plus className="h-3 w-3 mr-1" />
                         Add Pack
                       </Button>
@@ -1008,7 +1029,9 @@ export default function RipEntryPage() {
 
                 {/* Rip Yield & Comments */}
                 <div>
-                  <h3 className="text-xs font-semibold mb-1">Rip Yield & Comments</h3>
+                  <div className="h-6 mb-1 flex items-center">
+                    <h3 className="text-xs font-semibold">Rip Yield & Comments</h3>
+                  </div>
                   <div className="border rounded overflow-auto" style={{ maxHeight: '350px' }}>
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50 sticky top-0">
