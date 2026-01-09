@@ -20,14 +20,42 @@ export async function PATCH(
     const values: any[] = []
     let paramIndex = 1
 
+    // Allow updating all load item fields
+    if (body.species !== undefined) {
+      updates.push(`species = $${paramIndex++}`)
+      values.push(body.species)
+    }
+
+    if (body.grade !== undefined) {
+      updates.push(`grade = $${paramIndex++}`)
+      values.push(body.grade)
+    }
+
+    if (body.thickness !== undefined) {
+      updates.push(`thickness = $${paramIndex++}`)
+      values.push(body.thickness)
+    }
+
+    if (body.estimated_footage !== undefined) {
+      updates.push(`estimated_footage = $${paramIndex++}`)
+      values.push(body.estimated_footage)
+    }
+
     if (body.actual_footage !== undefined) {
       updates.push(`actual_footage = $${paramIndex++}`)
       values.push(body.actual_footage)
     }
 
+    if (body.price !== undefined) {
+      updates.push(`price = $${paramIndex++}`)
+      values.push(body.price)
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`)
 
     values.push(params.itemId)
     const result = await query(
