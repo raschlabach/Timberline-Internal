@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness, LumberLoadPreset } from '@/types/lumber'
-import { Plus, Trash2, ArrowLeft, BookmarkIcon, Star, Save } from 'lucide-react'
+import { Plus, Trash2, Copy, ArrowLeft, BookmarkIcon, Star, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -47,7 +47,7 @@ export default function CreateLoadPage() {
   // Form state
   const [supplierId, setSupplierId] = useState<number | null>(null)
   const [supplierLocationId, setSupplierLocationId] = useState<number | null>(null)
-  const [lumberType, setLumberType] = useState<string>('')
+  const [lumberType, setLumberType] = useState<string>('dried')
   const [pickupOrDelivery, setPickupOrDelivery] = useState<string>('')
   const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState('')
   const [comments, setComments] = useState('')
@@ -78,8 +78,25 @@ export default function CreateLoadPage() {
         if (gradesRes.ok) setGrades(await gradesRes.json())
         if (presetsRes.ok) setPresets(await presetsRes.json())
 
-        // Fetch the first available load ID
-        await fetchNextLoadId(0)
+        // Fetch the first available load ID for initial item
+        try {
+          const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
+          if (response.ok) {
+            const data = await response.json()
+            if (data.loadIds && data.loadIds.length > 0) {
+              setItems([{ 
+                load_id: data.loadIds[0], 
+                species: '', 
+                grade: '', 
+                thickness: '4/4', 
+                estimated_footage: null, 
+                price: null 
+              }])
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching initial load ID:', error)
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -89,22 +106,6 @@ export default function CreateLoadPage() {
       fetchData()
     }
   }, [status])
-
-  async function fetchNextLoadId(itemIndex: number) {
-    try {
-      const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
-      if (response.ok) {
-        const data = await response.json()
-        if (data.loadIds && data.loadIds.length > 0) {
-          const newItems = [...items]
-          newItems[itemIndex] = { ...newItems[itemIndex], load_id: data.loadIds[0] }
-          setItems(newItems)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching next load ID:', error)
-    }
-  }
 
   async function handleAddItem() {
     const newIndex = items.length
@@ -117,6 +118,40 @@ export default function CreateLoadPage() {
         const data = await response.json()
         if (data.loadIds && data.loadIds.length > 0) {
           // Update the newly added item with the load ID
+          setItems(prevItems => {
+            const updated = [...prevItems]
+            updated[newIndex] = { ...updated[newIndex], load_id: data.loadIds[0] }
+            return updated
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching next load ID:', error)
+    }
+  }
+
+  async function handleCopyItem(index: number) {
+    const itemToCopy = items[index]
+    const newIndex = items.length
+    
+    // Create a copy without the load_id
+    const copiedItem = {
+      load_id: '',
+      species: itemToCopy.species,
+      grade: itemToCopy.grade,
+      thickness: itemToCopy.thickness,
+      estimated_footage: itemToCopy.estimated_footage,
+      price: itemToCopy.price
+    }
+    
+    setItems([...items, copiedItem])
+    
+    // Fetch next available load ID for the copied item
+    try {
+      const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.loadIds && data.loadIds.length > 0) {
           setItems(prevItems => {
             const updated = [...prevItems]
             updated[newIndex] = { ...updated[newIndex], load_id: data.loadIds[0] }
@@ -145,18 +180,36 @@ export default function CreateLoadPage() {
     // Fill shared fields
     setSupplierId(preset.supplier_id)
     setSupplierLocationId(preset.supplier_location_id)
-    setLumberType(preset.lumber_type || '')
+    setLumberType(preset.lumber_type || 'dried')
     setPickupOrDelivery(preset.pickup_or_delivery || '')
     setComments(preset.comments || '')
 
+    // Parse items if they come as a string (PostgreSQL JSON column)
+    let presetItems = preset.items
+    if (typeof preset.items === 'string') {
+      try {
+        presetItems = JSON.parse(preset.items)
+      } catch (e) {
+        console.error('Error parsing preset items:', e)
+        toast.error('Failed to parse preset items')
+        return
+      }
+    }
+
+    // Ensure items is an array
+    if (!Array.isArray(presetItems) || presetItems.length === 0) {
+      toast.error('This preset has no items')
+      return
+    }
+
     // Fetch load IDs for all items
     try {
-      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=${preset.items.length}`)
+      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=${presetItems.length}`)
       if (response.ok) {
         const data = await response.json()
-        if (data.loadIds && data.loadIds.length >= preset.items.length) {
+        if (data.loadIds && data.loadIds.length >= presetItems.length) {
           // Map preset items to form items with load IDs
-          const newItems = preset.items.map((presetItem, index) => ({
+          const newItems = presetItems.map((presetItem: any, index: number) => ({
             load_id: data.loadIds[index],
             species: presetItem.species,
             grade: presetItem.grade,
@@ -165,7 +218,7 @@ export default function CreateLoadPage() {
             price: presetItem.price
           }))
           setItems(newItems)
-          toast.success(`Loaded preset: ${preset.preset_name}`)
+          toast.success(`Loaded preset: ${preset.preset_name} (${presetItems.length} items)`)
         } else {
           toast.error('Not enough available load IDs for this preset')
         }
@@ -538,13 +591,23 @@ export default function CreateLoadPage() {
                   />
                 </div>
 
-                <div>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCopyItem(index)}
+                    title="Copy this item"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRemoveItem(index)}
                     disabled={items.length === 1}
+                    title="Remove this item"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
