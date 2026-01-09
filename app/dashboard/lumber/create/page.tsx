@@ -301,7 +301,7 @@ export default function CreateLoadPage() {
 
     const hasValidItems = items.every(item => item.load_id && item.species && item.grade && item.thickness)
     if (!hasValidItems) {
-      toast.error('Please fill in Load ID, species, grade, and thickness for all items')
+      toast.error('Please fill in species, grade, and thickness for all items')
       return
     }
 
@@ -503,12 +503,12 @@ export default function CreateLoadPage() {
             {items.map((item, index) => (
               <div key={index} className="grid grid-cols-7 gap-3 items-end p-4 border rounded-lg bg-gray-50">
                 <div>
-                  <Label>Load ID *</Label>
+                  <Label>Load ID</Label>
                   <Input
                     value={item.load_id}
-                    onChange={(e) => handleItemChange(index, 'load_id', e.target.value)}
-                    placeholder="Auto-assigned"
-                    required
+                    placeholder="Auto-assigned..."
+                    readOnly
+                    className="bg-gray-100 cursor-not-allowed"
                   />
                 </div>
                 
