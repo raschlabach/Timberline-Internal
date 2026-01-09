@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     try {
       availableResult = await query(`
         SELECT n 
-        FROM generate_series($1, $2) n
+        FROM generate_series($1::INTEGER, $2::INTEGER) n
         WHERE NOT EXISTS (
           SELECT 1 FROM lumber_loads WHERE load_id = n::TEXT
         )
