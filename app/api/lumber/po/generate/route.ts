@@ -222,6 +222,9 @@ export async function POST(request: NextRequest) {
 
     yPos = tableTop - tableHeaderHeight - 5
 
+    // Store the starting position for side borders
+    const tableContentTop = tableTop - tableHeaderHeight
+
     // Table rows with alternating colors
     itemsResult.rows.forEach((item: any, index: number) => {
       const price = Number(item.price) || 0
@@ -245,7 +248,7 @@ export async function POST(request: NextRequest) {
       page.drawText(item.grade || '', { x: cols.grade, y: yPos, size: 10, font })
       page.drawText(thickness, { x: cols.thickness, y: yPos, size: 10, font })
       page.drawText(`$${price.toFixed(2)}`, { x: cols.price, y: yPos, size: 10, font })
-      page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', { x: cols.pickup, y: yPos, size: 10, font })
+      page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivered', { x: cols.pickup, y: yPos, size: 10, font })
       yPos -= 7
     })
 
@@ -253,6 +256,21 @@ export async function POST(request: NextRequest) {
     page.drawLine({
       start: { x: margin, y: yPos },
       end: { x: pageWidth - margin, y: yPos },
+      thickness: 1.5,
+      color: blueColor
+    })
+
+    // Left and right table borders
+    const tableContentBottom = yPos
+    page.drawLine({
+      start: { x: margin, y: tableContentTop },
+      end: { x: margin, y: tableContentBottom },
+      thickness: 1.5,
+      color: blueColor
+    })
+    page.drawLine({
+      start: { x: pageWidth - margin, y: tableContentTop },
+      end: { x: pageWidth - margin, y: tableContentBottom },
       thickness: 1.5,
       color: blueColor
     })
