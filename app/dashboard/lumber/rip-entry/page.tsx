@@ -380,11 +380,11 @@ export default function RipEntryPage() {
       return
     }
 
-    // Validate that tallies sum to actual footage
+    // Warn if tallies don't match actual footage, but allow saving
     const totalTallied = tallies.reduce((sum, t) => sum + t.tally_board_feet, 0)
     if (Math.abs(totalTallied - item.actual_footage) > 0.01) {
-      toast.error(`Pack tallies (${totalTallied.toLocaleString()} BF) must equal actual footage (${item.actual_footage.toLocaleString()} BF)`)
-      return
+      const diff = totalTallied - item.actual_footage
+      toast.warning(`⚠️ Warning: Pack tallies (${totalTallied.toLocaleString()} BF) don't match actual footage (${item.actual_footage.toLocaleString()} BF). Difference: ${diff.toFixed(2)} BF. Saving anyway...`)
     }
 
     // Validate pack IDs are unique and non-zero
@@ -670,33 +670,41 @@ export default function RipEntryPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLoads.map((load: any) => (
-                  <tr
-                    key={load.id}
-                    className="cursor-pointer hover:bg-blue-50"
-                    onClick={() => handleSelectLoad(load.id)}
-                  >
-                    <td className="px-2 py-1 border-t">{load.load_id}</td>
-                    <td className="px-2 py-1 border-t">{load.supplier_name}</td>
-                    <td className="px-2 py-1 border-t">
-                      {load.items?.map((i: any) => i.species).join(', ')}
-                    </td>
-                    <td className="px-2 py-1 border-t">
-                      {load.items?.map((i: any) => i.grade).join(', ')}
-                    </td>
-                    <td className="px-2 py-1 border-t">
-                      {load.total_footage?.toLocaleString() || '0'}
-                    </td>
-                    <td className="px-2 py-1 border-t">
-                      {load.current_footage?.toLocaleString() || '0'}
-                    </td>
-                    <td className="px-2 py-1 border-t">
-                      {load.actual_arrival_date 
-                        ? new Date(load.actual_arrival_date).toLocaleDateString()
-                        : '-'}
-                    </td>
-                  </tr>
-                ))}
+                {filteredLoads.map((load: any) => {
+                  // Check if load has tallies by comparing total vs current footage
+                  const hasTallies = load.total_footage && load.total_footage > 0
+                  const bgColor = hasTallies 
+                    ? 'bg-green-50 hover:bg-green-100' 
+                    : 'bg-yellow-50 hover:bg-yellow-100'
+                  
+                  return (
+                    <tr
+                      key={load.id}
+                      className={`cursor-pointer border-t ${bgColor}`}
+                      onClick={() => handleSelectLoad(load.id)}
+                    >
+                      <td className="px-2 py-1">{load.load_id}</td>
+                      <td className="px-2 py-1">{load.supplier_name}</td>
+                      <td className="px-2 py-1">
+                        {load.items?.map((i: any) => i.species).join(', ')}
+                      </td>
+                      <td className="px-2 py-1">
+                        {load.items?.map((i: any) => i.grade).join(', ')}
+                      </td>
+                      <td className="px-2 py-1">
+                        {load.total_footage?.toLocaleString() || '0'}
+                      </td>
+                      <td className="px-2 py-1 font-bold">
+                        {load.current_footage?.toLocaleString() || '0'}
+                      </td>
+                      <td className="px-2 py-1">
+                        {load.actual_arrival_date 
+                          ? new Date(load.actual_arrival_date).toLocaleDateString()
+                          : '-'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
