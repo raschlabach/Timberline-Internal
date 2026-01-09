@@ -12,7 +12,14 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await query(`
-      SELECT * FROM lumber_loads_for_rip_entry
+      SELECT 
+        l.*,
+        s.name as supplier_name
+      FROM lumber_loads l
+      JOIN lumber_suppliers s ON l.supplier_id = s.id
+      WHERE l.all_packs_tallied = TRUE 
+        AND COALESCE(l.all_packs_finished, FALSE) = FALSE
+      ORDER BY l.actual_arrival_date
     `)
 
     // Fetch items for each load
