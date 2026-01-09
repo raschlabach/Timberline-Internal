@@ -490,15 +490,15 @@ export default function RipEntryPage() {
 
   const totalPacks = packs.length
   const finishedPacks = packs.filter(p => p.is_finished).length
-  const totalBF = packs.reduce((sum, p) => sum + p.tally_board_feet, 0)
-  const finishedBF = packs.filter(p => p.is_finished).reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
+  const totalBF = packs.reduce((sum, p) => sum + Number(p.tally_board_feet || 0), 0)
+  const finishedBF = packs.filter(p => p.is_finished).reduce((sum, p) => sum + Number(p.actual_board_feet || 0), 0)
   const remainingBF = totalBF - finishedBF
-  const avgLength = packs.length > 0 ? packs.reduce((sum, p) => sum + p.length, 0) / packs.length : 0
+  const avgLength = packs.length > 0 ? packs.reduce((sum, p) => sum + Number(p.length || 0), 0) / packs.length : 0
 
   // Group packs by length for the remaining display
   const remainingByLength = packs.filter(p => !p.is_finished).reduce((acc, pack) => {
-    const len = pack.length
-    acc[len] = (acc[len] || 0) + pack.tally_board_feet
+    const len = Number(pack.length || 0)
+    acc[len] = (acc[len] || 0) + Number(pack.tally_board_feet || 0)
     return acc
   }, {} as { [key: number]: number })
 
@@ -690,7 +690,7 @@ export default function RipEntryPage() {
                     {selectedLoad.items.map((item, idx) => (
                       <span key={idx}>{item.species} - {item.grade}</span>
                     ))}
-                    <span>{totalBF.toLocaleString()} ft</span>
+                    <span>{Math.round(totalBF).toLocaleString()} ft</span>
                     <span>{selectedLoad.actual_arrival_date && new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -810,11 +810,11 @@ export default function RipEntryPage() {
 
               {/* Current Load Status */}
               <div className="text-xs text-gray-700 flex gap-3 py-1 border-t border-b">
-                <span>{remainingBF.toLocaleString()} Ft Left</span>
+                <span>{Math.round(remainingBF).toLocaleString()} Ft Left</span>
                 {selectedLoad.items.map((item, idx) => (
                   <span key={idx}>{item.species} - {item.grade}</span>
                 ))}
-                <span>{totalBF.toLocaleString()} ft</span>
+                <span>{Math.round(totalBF).toLocaleString()} ft</span>
               </div>
 
               {/* Conditional: Show Tally Entry if no packs exist, otherwise show pack tables */}
@@ -921,11 +921,11 @@ export default function RipEntryPage() {
                             <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
                               <td className="px-1 py-1 border-t">
                                 {pack.is_finished ? (
-                                  <span className="px-1">{pack.pack_id}</span>
+                                  <span className="px-1">{Math.round(pack.pack_id)}</span>
                                 ) : (
                                   <Input
                                     type="number"
-                                    value={packEdits[pack.id]?.pack_id ?? pack.pack_id}
+                                    value={packEdits[pack.id]?.pack_id ?? Math.round(pack.pack_id)}
                                     onChange={(e) => handlePackEdit(pack.id, 'pack_id', parseInt(e.target.value) || 0)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     className="h-6 text-xs"
@@ -934,11 +934,11 @@ export default function RipEntryPage() {
                               </td>
                               <td className="px-1 py-1 border-t">
                                 {pack.is_finished ? (
-                                  <span className="px-1">{pack.length}</span>
+                                  <span className="px-1">{Math.round(pack.length)}</span>
                                 ) : (
                                   <Input
                                     type="number"
-                                    value={packEdits[pack.id]?.length ?? pack.length}
+                                    value={packEdits[pack.id]?.length ?? Math.round(pack.length)}
                                     onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     className="h-6 text-xs"
@@ -947,11 +947,11 @@ export default function RipEntryPage() {
                               </td>
                               <td className="px-1 py-1 border-t">
                                 {pack.is_finished ? (
-                                  <span className="px-1">{pack.tally_board_feet}</span>
+                                  <span className="px-1">{Math.round(pack.tally_board_feet)}</span>
                                 ) : (
                                   <Input
                                     type="number"
-                                    value={packEdits[pack.id]?.tally_board_feet ?? pack.tally_board_feet}
+                                    value={packEdits[pack.id]?.tally_board_feet ?? Math.round(pack.tally_board_feet)}
                                     onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     className="h-6 text-xs"

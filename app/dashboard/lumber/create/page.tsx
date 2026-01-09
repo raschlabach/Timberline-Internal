@@ -270,8 +270,8 @@ export default function CreateLoadPage() {
       return
     }
 
-    if (items.length === 0 || !items.every(item => item.species && item.grade && item.thickness)) {
-      toast.error('Please complete all item details before saving preset')
+    if (items.length === 0 || !items.every(item => item.species && item.grade && item.thickness && item.price)) {
+      toast.error('Please complete all item details (including price) before saving preset')
       return
     }
 
@@ -325,9 +325,9 @@ export default function CreateLoadPage() {
     }
 
     // Check if all required fields are filled
-    const invalidItems = items.filter(item => !item.species || !item.grade || !item.thickness)
+    const invalidItems = items.filter(item => !item.species || !item.grade || !item.thickness || !item.price)
     if (invalidItems.length > 0) {
-      toast.error('Please fill in species, grade, and thickness for all items')
+      toast.error('Please fill in species, grade, thickness, and price for all items')
       console.error('Invalid items:', invalidItems)
       return
     }
@@ -608,7 +608,7 @@ export default function CreateLoadPage() {
                 </div>
 
                 <div>
-                  <Label>Price</Label>
+                  <Label>Price *</Label>
                   <Input
                     type="number"
                     step="0.01"

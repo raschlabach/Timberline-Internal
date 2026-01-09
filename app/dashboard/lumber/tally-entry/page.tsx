@@ -28,9 +28,10 @@ export default function TallyEntryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   
-  const [tallies, setTallies] = useState<PackTallyInput[]>([
-    { pack_id: 0, length: 8, tally_board_feet: 0 }
-  ])
+  const [tallies, setTallies] = useState<PackTallyInput[]>(
+    Array.from({ length: 12 }, () => ({ pack_id: 0, length: 0, tally_board_feet: 0 }))
+  )
+  const [rowCount, setRowCount] = useState(12)
   
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
@@ -63,7 +64,8 @@ export default function TallyEntryPage() {
   function handleOpenTallyDialog(load: LumberLoadWithDetails, itemId: number) {
     setSelectedLoad(load)
     setSelectedItemId(itemId)
-    setTallies([{ pack_id: 0, length: 8, tally_board_feet: 0 }])
+    setTallies(Array.from({ length: 12 }, () => ({ pack_id: 0, length: 0, tally_board_feet: 0 })))
+    setRowCount(12)
     setIsDialogOpen(true)
     
     // Focus first input after dialog opens
@@ -74,12 +76,36 @@ export default function TallyEntryPage() {
   }
 
   function handleAddRow() {
-    setTallies([...tallies, { pack_id: 0, length: 8, tally_board_feet: 0 }])
+    setTallies([...tallies, { pack_id: 0, length: 0, tally_board_feet: 0 }])
+    setRowCount(tallies.length + 1)
   }
 
   function handleRemoveRow(index: number) {
     if (tallies.length > 1) {
       setTallies(tallies.filter((_, i) => i !== index))
+      setRowCount(tallies.length - 1)
+    }
+  }
+
+  function handleSetRowCount() {
+    const targetCount = rowCount
+    if (targetCount < 1) {
+      toast.error('Row count must be at least 1')
+      return
+    }
+    
+    const currentCount = tallies.length
+    if (targetCount > currentCount) {
+      // Add rows
+      const newRows = Array.from({ length: targetCount - currentCount }, () => ({ 
+        pack_id: 0, 
+        length: 0, 
+        tally_board_feet: 0 
+      }))
+      setTallies([...tallies, ...newRows])
+    } else if (targetCount < currentCount) {
+      // Remove rows from the end
+      setTallies(tallies.slice(0, targetCount))
     }
   }
 
@@ -272,14 +298,33 @@ export default function TallyEntryPage() {
           <div className="py-4 space-y-4">
             <div className="flex items-center justify-between">
               <Label>Pack Tallies (use Tab or Enter to navigate)</Label>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleAddRow}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Row
-              </Button>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="rowCount" className="text-sm whitespace-nowrap">Rows:</Label>
+                <Input
+                  id="rowCount"
+                  type="number"
+                  value={rowCount}
+                  onChange={(e) => setRowCount(parseInt(e.target.value) || 1)}
+                  className="w-20 h-8 text-sm"
+                  min="1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSetRowCount}
+                  variant="outline"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAddRow}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Row
+                </Button>
+              </div>
             </div>
 
             {/* Excel-like Grid */}

@@ -97,7 +97,7 @@ export default function LoadInfoPage() {
           setActualArrivalDate(loadData.actual_arrival_date?.split('T')[0] || '')
           setPickupNumber(loadData.pickup_number || '')
           setPlant(loadData.plant || '')
-          setTruckDriver(loadData.truck_driver_id?.toString() || '')
+          setTruckDriver(loadData.driver_id?.toString() || '')
           setPickupDate(loadData.pickup_date?.split('T')[0] || '')
           setInvoiceNumber(loadData.invoice_number || '')
           setInvoiceTotal(loadData.invoice_total?.toString() || '')
@@ -139,11 +139,11 @@ export default function LoadInfoPage() {
           estimated_delivery_date: estimatedDeliveryDate || null,
           comments,
           actual_arrival_date: actualArrivalDate || null,
-          pickup_number: pickupNumber,
-          plant,
-          truck_driver_id: truckDriver ? parseInt(truckDriver) : null,
+          pickup_number: pickupNumber || null,
+          plant: plant || null,
+          truck_driver_id: truckDriver && truckDriver !== 'none' ? parseInt(truckDriver) : null,
           pickup_date: pickupDate || null,
-          invoice_number: invoiceNumber,
+          invoice_number: invoiceNumber || null,
           invoice_total: invoiceTotal ? parseFloat(invoiceTotal) : null,
           invoice_date: invoiceDate || null,
           all_packs_finished: allPacksFinished,
@@ -384,7 +384,7 @@ export default function LoadInfoPage() {
                     <Input
                       type="number"
                       value={item.estimated_footage || ''}
-                      onChange={(e) => updateItem(idx, 'estimated_footage', e.target.value ? parseFloat(e.target.value) : null)}
+                      onChange={(e) => updateItem(idx, 'estimated_footage', e.target.value ? parseInt(e.target.value) : null)}
                       className="mt-1"
                     />
                   </div>
@@ -393,7 +393,7 @@ export default function LoadInfoPage() {
                     <Input
                       type="number"
                       value={item.actual_footage || ''}
-                      onChange={(e) => updateItem(idx, 'actual_footage', e.target.value ? parseFloat(e.target.value) : null)}
+                      onChange={(e) => updateItem(idx, 'actual_footage', e.target.value ? parseInt(e.target.value) : null)}
                       className="mt-1"
                     />
                   </div>
