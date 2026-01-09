@@ -93,9 +93,16 @@ export default function CreateLoadPage() {
                 price: null 
               }])
             }
+          } else {
+            const errorData = await response.json()
+            if (response.status === 404) {
+              toast.error('No Load ID range configured. Please set one up in Lumber Admin.')
+            }
+            console.error('Load ID API error:', errorData)
           }
         } catch (error) {
           console.error('Error fetching initial load ID:', error)
+          toast.error('Failed to fetch initial Load ID. Please refresh the page.')
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -222,10 +229,18 @@ export default function CreateLoadPage() {
         } else {
           toast.error('Not enough available load IDs for this preset')
         }
+      } else {
+        const errorData = await response.json()
+        if (response.status === 404) {
+          toast.error('No Load ID range configured. Please set one up in Lumber Admin.')
+        } else {
+          toast.error(errorData.error || 'Failed to get load IDs')
+        }
+        console.error('Load ID API error:', errorData)
       }
     } catch (error) {
       console.error('Error loading preset:', error)
-      toast.error('Failed to load preset')
+      toast.error('Failed to load preset. Check console for details.')
     }
   }
 
@@ -294,14 +309,26 @@ export default function CreateLoadPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     
+    console.log('Submitting with items:', items)
+    
     if (!supplierId) {
       toast.error('Please select a supplier')
       return
     }
 
-    const hasValidItems = items.every(item => item.load_id && item.species && item.grade && item.thickness)
-    if (!hasValidItems) {
+    // Check if all items have Load IDs (should be auto-assigned)
+    const missingLoadIds = items.filter(item => !item.load_id)
+    if (missingLoadIds.length > 0) {
+      toast.error('Some items are missing Load IDs. Please refresh the page and try again.')
+      console.error('Items missing Load IDs:', missingLoadIds)
+      return
+    }
+
+    // Check if all required fields are filled
+    const invalidItems = items.filter(item => !item.species || !item.grade || !item.thickness)
+    if (invalidItems.length > 0) {
       toast.error('Please fill in species, grade, and thickness for all items')
+      console.error('Invalid items:', invalidItems)
       return
     }
 
