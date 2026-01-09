@@ -156,11 +156,11 @@ export default function TallyEntryPage() {
       return
     }
 
-    // Validate that tallies sum to actual footage
+    // Warn if tallies don't match actual footage, but allow saving
     const totalTallied = tallies.reduce((sum, t) => sum + t.tally_board_feet, 0)
     if (Math.abs(totalTallied - item.actual_footage) > 0.01) {
-      toast.error(`Pack tallies (${totalTallied.toLocaleString()} BF) must equal actual footage (${item.actual_footage.toLocaleString()} BF)`)
-      return
+      const diff = totalTallied - item.actual_footage
+      toast.warning(`⚠️ Warning: Pack tallies (${totalTallied.toLocaleString()} BF) don't match actual footage (${item.actual_footage.toLocaleString()} BF). Difference: ${diff.toFixed(2)} BF. Saving anyway...`)
     }
 
     // Validate pack IDs are unique and non-zero
