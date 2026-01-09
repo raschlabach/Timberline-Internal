@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
-import PDFDocument from 'pdfkit'
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 
 // POST /api/lumber/po/generate - Generate PO PDF
 export async function POST(request: NextRequest) {
@@ -47,12 +47,12 @@ export async function POST(request: NextRequest) {
       [load_id]
     )
 
-    // Generate PDF
-    const doc = new PDFDocument({ margin: 50 })
-    const chunks: Buffer[] = []
-
-    // Collect PDF data
-    doc.on('data', (chunk) => chunks.push(chunk))
+    // Generate PDF using pdf-lib
+    const pdfDoc = await PDFDocument.create()
+    const page = pdfDoc.addPage([612, 792]) // Letter size
+    
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
     
     const poNumber = `R-${load.load_id}`
     const currentDate = new Date().toLocaleDateString()
@@ -60,109 +60,141 @@ export async function POST(request: NextRequest) {
       ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       : 'TBD'
 
+    let yPos = 750
+
     // Header
-    doc.fontSize(24).font('Helvetica-Bold').text('PURCHASE ORDER', { align: 'center' })
-    doc.moveDown(1)
+    page.drawText('PURCHASE ORDER', {
+      x: 306 - (fontBold.widthOfTextAtSize('PURCHASE ORDER', 24) / 2),
+      y: yPos,
+      size: 24,
+      font: fontBold,
+      color: rgb(0, 0, 0)
+    })
+    yPos -= 40
 
     // PO Number and Dates
-    doc.fontSize(11).font('Helvetica')
-    doc.text(`PO Number: ${poNumber}`)
-    doc.text(`Date: ${currentDate}`)
-    doc.text(`Estimated Delivery: ${deliveryMonth}`)
-    doc.moveDown(1)
+    page.drawText(`PO Number: ${poNumber}`, { x: 50, y: yPos, size: 11, font })
+    yPos -= 15
+    page.drawText(`Date: ${currentDate}`, { x: 50, y: yPos, size: 11, font })
+    yPos -= 15
+    page.drawText(`Estimated Delivery: ${deliveryMonth}`, { x: 50, y: yPos, size: 11, font })
+    yPos -= 30
 
-    // Customer Info (RNR Enterprises)
-    doc.fontSize(12).font('Helvetica-Bold')
-    doc.text('CUSTOMER:')
-    doc.fontSize(11).font('Helvetica')
-    doc.text('RNR Enterprises')
-    doc.text('1361 Co Rd')
-    doc.text('Sugarcreek, OH 44681')
-    doc.moveDown(1)
+    // Customer Info
+    page.drawText('CUSTOMER:', { x: 50, y: yPos, size: 12, font: fontBold })
+    yPos -= 15
+    page.drawText('RNR Enterprises', { x: 50, y: yPos, size: 11, font })
+    yPos -= 14
+    page.drawText('1361 Co Rd', { x: 50, y: yPos, size: 11, font })
+    yPos -= 14
+    page.drawText('Sugarcreek, OH 44681', { x: 50, y: yPos, size: 11, font })
+    yPos -= 30
 
     // Supplier Info
-    doc.fontSize(12).font('Helvetica-Bold')
-    doc.text('SUPPLIER:')
-    doc.fontSize(11).font('Helvetica')
-    doc.text(load.supplier_name || 'N/A')
-    if (load.location_name) doc.text(load.location_name)
-    if (load.address) doc.text(load.address)
+    page.drawText('SUPPLIER:', { x: 50, y: yPos, size: 12, font: fontBold })
+    yPos -= 15
+    page.drawText(load.supplier_name || 'N/A', { x: 50, y: yPos, size: 11, font })
+    yPos -= 14
+    if (load.location_name) {
+      page.drawText(load.location_name, { x: 50, y: yPos, size: 11, font })
+      yPos -= 14
+    }
+    if (load.address) {
+      page.drawText(load.address, { x: 50, y: yPos, size: 11, font })
+      yPos -= 14
+    }
     if (load.city || load.state || load.zip_code) {
-      doc.text(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`)
+      page.drawText(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`, { x: 50, y: yPos, size: 11, font })
+      yPos -= 14
     }
-    doc.moveDown(1.5)
-
-    // Items Table
-    const tableTop = doc.y
-    const colPositions = {
-      qty: 50,
-      species: 120,
-      grade: 220,
-      thickness: 290,
-      price: 360,
-      pickup: 450
-    }
+    yPos -= 20
 
     // Table Header
-    doc.fontSize(10).font('Helvetica-Bold')
-    doc.text('Qty (BF)', colPositions.qty, tableTop)
-    doc.text('Species', colPositions.species, tableTop)
-    doc.text('Grade', colPositions.grade, tableTop)
-    doc.text('Thickness', colPositions.thickness, tableTop)
-    doc.text('Price/BF', colPositions.price, tableTop)
-    doc.text('Pickup/Del', colPositions.pickup, tableTop)
+    page.drawText('Qty (BF)', { x: 50, y: yPos, size: 10, font: fontBold })
+    page.drawText('Species', { x: 120, y: yPos, size: 10, font: fontBold })
+    page.drawText('Grade', { x: 220, y: yPos, size: 10, font: fontBold })
+    page.drawText('Thickness', { x: 290, y: yPos, size: 10, font: fontBold })
+    page.drawText('Price/BF', { x: 370, y: yPos, size: 10, font: fontBold })
+    page.drawText('Pickup/Del', { x: 460, y: yPos, size: 10, font: fontBold })
+    yPos -= 5
     
     // Line under header
-    const lineY = tableTop + 15
-    doc.moveTo(50, lineY).lineTo(550, lineY).stroke()
-    
+    page.drawLine({
+      start: { x: 50, y: yPos },
+      end: { x: 550, y: yPos },
+      thickness: 1,
+      color: rgb(0, 0, 0)
+    })
+    yPos -= 15
+
     // Items
-    let itemY = lineY + 10
-    doc.font('Helvetica')
     itemsResult.rows.forEach((item: any) => {
-      if (itemY > 700) {
-        doc.addPage()
-        itemY = 50
-      }
-      
-      doc.text((item.estimated_footage || 0).toLocaleString(), colPositions.qty, itemY, { width: 60 })
-      doc.text(item.species || '', colPositions.species, itemY, { width: 90 })
-      doc.text(item.grade || '', colPositions.grade, itemY, { width: 60 })
-      doc.text(item.thickness?.toString() || '', colPositions.thickness, itemY, { width: 60 })
-      doc.text(`$${(item.price || 0).toFixed(2)}`, colPositions.price, itemY, { width: 80 })
-      doc.text(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', colPositions.pickup, itemY)
-      
-      itemY += 25
+      page.drawText((item.estimated_footage || 0).toLocaleString(), { x: 50, y: yPos, size: 10, font })
+      page.drawText(item.species || '', { x: 120, y: yPos, size: 10, font })
+      page.drawText(item.grade || '', { x: 220, y: yPos, size: 10, font })
+      page.drawText(item.thickness?.toString() || '', { x: 290, y: yPos, size: 10, font })
+      page.drawText(`$${(item.price || 0).toFixed(2)}`, { x: 370, y: yPos, size: 10, font })
+      page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', { x: 460, y: yPos, size: 10, font })
+      yPos -= 20
     })
 
+    yPos -= 5
     // Line after items
-    doc.moveTo(50, itemY).lineTo(550, itemY).stroke()
-    itemY += 20
+    page.drawLine({
+      start: { x: 50, y: yPos },
+      end: { x: 550, y: yPos },
+      thickness: 1,
+      color: rgb(0, 0, 0)
+    })
+    yPos -= 20
 
     // Comments
     if (load.comments) {
-      doc.font('Helvetica-Bold').fontSize(11)
-      doc.text('COMMENTS:', 50, itemY)
-      itemY += 15
-      doc.font('Helvetica').fontSize(10)
-      doc.text(load.comments, 50, itemY, { width: 500 })
-      itemY = doc.y + 20
+      page.drawText('COMMENTS:', { x: 50, y: yPos, size: 11, font: fontBold })
+      yPos -= 15
+      const commentLines = load.comments.split('\n')
+      commentLines.forEach((line: string) => {
+        // Wrap long lines
+        const maxWidth = 500
+        const words = line.split(' ')
+        let currentLine = ''
+        
+        words.forEach((word: string) => {
+          const testLine = currentLine + (currentLine ? ' ' : '') + word
+          const width = font.widthOfTextAtSize(testLine, 10)
+          
+          if (width > maxWidth && currentLine) {
+            page.drawText(currentLine, { x: 50, y: yPos, size: 10, font })
+            yPos -= 14
+            currentLine = word
+          } else {
+            currentLine = testLine
+          }
+        })
+        
+        if (currentLine) {
+          page.drawText(currentLine, { x: 50, y: yPos, size: 10, font })
+          yPos -= 14
+        }
+      })
+      yPos -= 10
     }
 
     // Important Notice
-    doc.moveDown(2)
-    doc.fontSize(16).font('Helvetica-Bold').fillColor('red')
-    doc.text('PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK', { align: 'center' })
-
-    // Finalize PDF
-    doc.end()
-
-    // Wait for PDF to be generated
-    const pdfBuffer = await new Promise<Buffer>((resolve) => {
-      doc.on('end', () => {
-        resolve(Buffer.concat(chunks))
-      })
+    yPos -= 20
+    const noticeText = 'PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK'
+    const noticeWidth = fontBold.widthOfTextAtSize(noticeText, 16)
+    page.drawText(noticeText, {
+      x: 306 - (noticeWidth / 2),
+      y: yPos,
+      size: 16,
+      font: fontBold,
+      color: rgb(1, 0, 0) // Red
     })
+
+    // Generate PDF buffer
+    const pdfBytes = await pdfDoc.save()
+    const pdfBuffer = Buffer.from(pdfBytes)
 
     // Return PDF
     return new NextResponse(pdfBuffer, {
