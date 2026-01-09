@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Customer Section
-    page.drawText('BILLED TO', {
+    page.drawText('CUSTOMER', {
       x: margin,
       y: yPos - 20,
       size: 10,
@@ -148,13 +148,13 @@ export async function POST(request: NextRequest) {
     yPos -= 38
     page.drawText('RNR Enterprises', { x: margin, y: yPos, size: 11, font: fontBold })
     yPos -= 14
-    page.drawText('1361 Co Rd', { x: margin, y: yPos, size: 10, font })
+    page.drawText('1361 County Road 108', { x: margin, y: yPos, size: 10, font })
     yPos -= 13
     page.drawText('Sugarcreek, OH 44681', { x: margin, y: yPos, size: 10, font })
     yPos -= 30
 
     // Supplier Section
-    page.drawText('SHIP TO', {
+    page.drawText('VENDOR', {
       x: margin,
       y: yPos,
       size: 10,
@@ -310,26 +310,16 @@ export async function POST(request: NextRequest) {
       yPos -= 20
     }
 
-    // Important Notice Box
-    yPos -= 10
-    page.drawRectangle({
-      x: margin,
-      y: yPos - 40,
-      width: pageWidth - (2 * margin),
-      height: 40,
-      color: rgb(1, 0.95, 0.95),
-      borderColor: rgb(0.8, 0.2, 0.2),
-      borderWidth: 2
-    })
-
-    const noticeText = 'PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK'
-    const noticeWidth = fontBold.widthOfTextAtSize(noticeText, 14)
+    // Important Notice at Bottom
+    const bottomY = 60
+    const noticeText = 'Please use our PO number(s) on all paperwork'
+    const noticeWidth = font.widthOfTextAtSize(noticeText, 10)
     page.drawText(noticeText, {
       x: (pageWidth - noticeWidth) / 2,
-      y: yPos - 25,
-      size: 14,
+      y: bottomY,
+      size: 10,
       font: fontBold,
-      color: rgb(0.8, 0, 0)
+      color: rgb(0.3, 0.3, 0.3)
     })
 
     // Generate PDF buffer
