@@ -912,10 +912,10 @@ export default function RipEntryPage() {
                       <table className="w-full text-xs">
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
-                            <th className="px-2 py-1 text-left">Pack ID</th>
-                            <th className="px-2 py-1 text-left">Lth</th>
-                            <th className="px-2 py-1 text-left">Brd Ft</th>
-                            <th className="px-2 py-1"></th>
+                            <th className="px-2 py-1 text-left w-24">Pack ID</th>
+                            <th className="px-2 py-1 text-left w-24">Lth</th>
+                            <th className="px-2 py-1 text-left w-24">Brd Ft</th>
+                            <th className="px-2 py-1 w-12"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -993,10 +993,10 @@ export default function RipEntryPage() {
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50 sticky top-0">
                         <tr>
-                          <th className="px-2 py-1 text-left">Act Brd Ft</th>
-                          <th className="px-2 py-1 text-left">Rip Yield</th>
-                          <th className="px-2 py-1 text-left">Comments</th>
-                          <th className="px-2 py-1"></th>
+                          <th className="px-2 py-1 text-left w-24">Act Brd Ft</th>
+                          <th className="px-2 py-1 text-left w-24">Rip Yield</th>
+                          <th className="px-2 py-1 text-left w-24">Comments</th>
+                          <th className="px-2 py-1 w-12"></th>
                         </tr>
                       </thead>
                       <tbody>
