@@ -47,12 +47,18 @@ export async function POST(request: NextRequest) {
       [load_id]
     )
 
+    console.log('Starting PDF generation for load:', load.load_id)
+
     // Generate PDF using pdf-lib
     const pdfDoc = await PDFDocument.create()
+    console.log('PDF document created')
     const page = pdfDoc.addPage([612, 792]) // Letter size
+    console.log('Page added')
     
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    console.log('Helvetica font embedded')
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    console.log('Helvetica-Bold font embedded')
     
     const poNumber = `R-${load.load_id}`
     const currentDate = new Date().toLocaleDateString()
@@ -193,8 +199,11 @@ export async function POST(request: NextRequest) {
     })
 
     // Generate PDF buffer
+    console.log('Generating PDF bytes...')
     const pdfBytes = await pdfDoc.save()
+    console.log('PDF bytes generated, size:', pdfBytes.length)
     const pdfBuffer = Buffer.from(pdfBytes)
+    console.log('PDF buffer created')
 
     // Return PDF
     return new NextResponse(pdfBuffer, {
@@ -203,8 +212,14 @@ export async function POST(request: NextRequest) {
         'Content-Disposition': `attachment; filename="PO-${poNumber}.pdf"`
       }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating PO:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Error stack:', error.stack)
+    console.error('Error message:', error.message)
+    return NextResponse.json({ 
+      error: 'Internal server error', 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 })
   }
 }
