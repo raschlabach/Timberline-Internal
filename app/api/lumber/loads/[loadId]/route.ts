@@ -73,9 +73,12 @@ export async function PATCH(
 
     // Build dynamic update query
     const allowedFields = [
+      'load_id', 'supplier_id', 'lumber_type', 'pickup_or_delivery',
+      'estimated_delivery_date', 'comments',
       'actual_arrival_date', 'pickup_number', 'plant', 'pickup_date',
-      'invoice_number', 'invoice_total', 'invoice_date', 'driver_id',
-      'assigned_pickup_date', 'entered_in_quickbooks', 'is_paid', 'load_quality'
+      'invoice_number', 'invoice_total', 'invoice_date', 'driver_id', 'truck_driver_id',
+      'assigned_pickup_date', 'entered_in_quickbooks', 'is_paid', 'load_quality',
+      'all_packs_tallied', 'all_packs_finished'
     ]
 
     for (const field of allowedFields) {
