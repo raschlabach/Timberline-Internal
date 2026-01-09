@@ -29,7 +29,7 @@ export default function TallyEntryPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   
   const [tallies, setTallies] = useState<PackTallyInput[]>(
-    Array.from({ length: 12 }, () => ({ pack_id: 0, length: 0, tally_board_feet: 0 }))
+    Array.from({ length: 12 }, () => ({ pack_id: '', length: 0, tally_board_feet: 0 }))
   )
   const [rowCount, setRowCount] = useState(12)
   
@@ -64,7 +64,7 @@ export default function TallyEntryPage() {
   function handleOpenTallyDialog(load: LumberLoadWithDetails, itemId: number) {
     setSelectedLoad(load)
     setSelectedItemId(itemId)
-    setTallies(Array.from({ length: 12 }, () => ({ pack_id: 0, length: 0, tally_board_feet: 0 })))
+    setTallies(Array.from({ length: 12 }, () => ({ pack_id: '', length: 0, tally_board_feet: 0 })))
     setRowCount(12)
     setIsDialogOpen(true)
     
@@ -76,7 +76,7 @@ export default function TallyEntryPage() {
   }
 
   function handleAddRow() {
-    setTallies([...tallies, { pack_id: 0, length: 0, tally_board_feet: 0 }])
+    setTallies([...tallies, { pack_id: '', length: 0, tally_board_feet: 0 }])
     setRowCount(tallies.length + 1)
   }
 
@@ -98,7 +98,7 @@ export default function TallyEntryPage() {
     if (targetCount > currentCount) {
       // Add rows
       const newRows = Array.from({ length: targetCount - currentCount }, () => ({ 
-        pack_id: 0, 
+        pack_id: '', 
         length: 0, 
         tally_board_feet: 0 
       }))
@@ -109,7 +109,7 @@ export default function TallyEntryPage() {
     }
   }
 
-  function handleTallyChange(index: number, field: keyof PackTallyInput, value: number) {
+  function handleTallyChange(index: number, field: keyof PackTallyInput, value: string | number) {
     const newTallies = [...tallies]
     newTallies[index] = { ...newTallies[index], [field]: value }
     setTallies(newTallies)
@@ -346,9 +346,9 @@ export default function TallyEntryPage() {
                       <td className="px-4 py-2">
                         <Input
                           ref={(el) => { inputRefs.current[`${index}-pack_id`] = el }}
-                          type="number"
+                          type="text"
                           value={tally.pack_id || ''}
-                          onChange={(e) => handleTallyChange(index, 'pack_id', parseInt(e.target.value) || 0)}
+                          onChange={(e) => handleTallyChange(index, 'pack_id', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, index, 'pack_id')}
                           className="text-sm h-8"
                         />

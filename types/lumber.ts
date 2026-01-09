@@ -207,7 +207,7 @@ export interface LumberPackWithDetails extends LumberPack {
 }
 
 export interface PackTallyInput {
-  pack_id: number
+  pack_id: string | number
   length: number
   tally_board_feet: number
 }
