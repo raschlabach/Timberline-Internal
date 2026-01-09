@@ -22,6 +22,7 @@ import { LumberSupplierWithLocations } from '@/types/lumber'
 interface Species {
   id: number
   name: string
+  color: string
   display_order: number
   is_active: boolean
 }
@@ -69,7 +70,7 @@ export default function LumberAdminPage() {
   
   // Form states
   const [supplierForm, setSupplierForm] = useState({ name: '', notes: '' })
-  const [speciesForm, setSpeciesForm] = useState({ name: '', display_order: 0 })
+  const [speciesForm, setSpeciesForm] = useState({ name: '', color: '#6B7280', display_order: 0 })
   const [gradeForm, setGradeForm] = useState({ name: '', display_order: 0 })
   const [rangeForm, setRangeForm] = useState({ range_name: '', start_range: 1000, end_range: 9999 })
   const [locationForm, setLocationForm] = useState({
@@ -198,7 +199,7 @@ export default function LumberAdminPage() {
         toast.success(`Species ${editingSpecies ? 'updated' : 'created'} successfully`)
         setSpeciesDialogOpen(false)
         setEditingSpecies(null)
-        setSpeciesForm({ name: '', display_order: 0 })
+        setSpeciesForm({ name: '', color: '#6B7280', display_order: 0 })
         fetchData()
       } else {
         const error = await response.json()
@@ -503,7 +504,7 @@ export default function LumberAdminPage() {
             </h2>
             <Button size="sm" onClick={() => {
               setEditingSpecies(null)
-              setSpeciesForm({ name: '', display_order: 0 })
+              setSpeciesForm({ name: '', color: '#6B7280', display_order: 0 })
               setSpeciesDialogOpen(true)
             }}>
               <Plus className="h-3 w-3" />
@@ -514,6 +515,7 @@ export default function LumberAdminPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Color</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -522,6 +524,15 @@ export default function LumberAdminPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {species.map(sp => (
                   <tr key={sp.id}>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-6 h-6 rounded border border-gray-300"
+                          style={{ backgroundColor: sp.color || '#6B7280' }}
+                        />
+                        <span className="text-xs text-gray-500 font-mono">{sp.color || '#6B7280'}</span>
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-sm font-medium text-gray-900">{sp.name}</td>
                     <td className="px-3 py-2 text-sm text-gray-900">{sp.display_order}</td>
                     <td className="px-3 py-2 text-sm text-right space-x-1">
@@ -531,7 +542,7 @@ export default function LumberAdminPage() {
                         className="h-8 w-8 p-0"
                         onClick={() => {
                           setEditingSpecies(sp)
-                          setSpeciesForm({ name: sp.name, display_order: sp.display_order })
+                          setSpeciesForm({ name: sp.name, color: sp.color || '#6B7280', display_order: sp.display_order })
                           setSpeciesDialogOpen(true)
                         }}
                       >
@@ -738,6 +749,29 @@ export default function LumberAdminPage() {
                 value={speciesForm.name}
                 onChange={(e) => setSpeciesForm({ ...speciesForm, name: e.target.value })}
               />
+            </div>
+            <div>
+              <Label htmlFor="species-color">Color</Label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="species-color"
+                  type="color"
+                  value={speciesForm.color}
+                  onChange={(e) => setSpeciesForm({ ...speciesForm, color: e.target.value })}
+                  className="w-20 h-10 cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  value={speciesForm.color}
+                  onChange={(e) => setSpeciesForm({ ...speciesForm, color: e.target.value })}
+                  placeholder="#6B7280"
+                  className="flex-1 font-mono"
+                />
+                <div 
+                  className="w-10 h-10 rounded border-2 border-gray-300"
+                  style={{ backgroundColor: speciesForm.color }}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="species-order">Display Order</Label>

@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { LumberLoadWithDetails } from '@/types/lumber'
 import { Button } from '@/components/ui/button'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function POPage() {
@@ -15,6 +15,7 @@ export default function POPage() {
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [generatingPO, setGeneratingPO] = useState<number | null>(null)
+  const [markingAsSent, setMarkingAsSent] = useState<number | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -75,6 +76,31 @@ export default function POPage() {
       toast.error('Failed to generate PO')
     } finally {
       setGeneratingPO(null)
+    }
+  }
+
+  async function handleMarkAsSent(load: LumberLoadWithDetails) {
+    setMarkingAsSent(load.id)
+    
+    try {
+      const response = await fetch(`/api/lumber/loads/${load.id}/mark-po-sent`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (response.ok) {
+        toast.success(`Load ${load.load_id} marked as PO sent`)
+        
+        // Refresh the list to remove this load
+        fetchLoads()
+      } else {
+        throw new Error('Failed to mark as sent')
+      }
+    } catch (error) {
+      console.error('Error marking PO as sent:', error)
+      toast.error('Failed to mark PO as sent')
+    } finally {
+      setMarkingAsSent(null)
     }
   }
 
@@ -172,14 +198,25 @@ export default function POPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Button
-                        size="sm"
-                        onClick={() => handleGeneratePO(load)}
-                        disabled={generatingPO === load.id}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        {generatingPO === load.id ? 'Generating...' : 'Generate PO'}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleGeneratePO(load)}
+                          disabled={generatingPO === load.id || markingAsSent === load.id}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          {generatingPO === load.id ? 'Generating...' : 'Generate PO'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMarkAsSent(load)}
+                          disabled={generatingPO === load.id || markingAsSent === load.id}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          {markingAsSent === load.id ? 'Marking...' : 'Mark as Sent'}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )

@@ -37,10 +37,10 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await query(
-      `INSERT INTO lumber_species (name, display_order, is_active)
-       VALUES ($1, $2, $3)
+      `INSERT INTO lumber_species (name, color, display_order, is_active)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [body.name, body.display_order || 0, body.is_active !== false]
+      [body.name, body.color || '#6B7280', body.display_order || 0, body.is_active !== false]
     )
 
     return NextResponse.json(result.rows[0], { status: 201 })

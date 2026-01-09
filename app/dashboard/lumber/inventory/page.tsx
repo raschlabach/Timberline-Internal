@@ -30,6 +30,7 @@ export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
+  const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -39,15 +40,25 @@ export default function InventoryPage() {
 
   async function fetchInventoryData() {
     try {
-      const [inventoryRes, packsRes, monthlyRes] = await Promise.all([
+      const [inventoryRes, packsRes, monthlyRes, speciesRes] = await Promise.all([
         fetch('/api/lumber/inventory'),
         fetch('/api/lumber/packs/recent?limit=50'),
-        fetch(`/api/lumber/inventory/monthly?month=${selectedMonth}&year=${selectedYear}`)
+        fetch(`/api/lumber/inventory/monthly?month=${selectedMonth}&year=${selectedYear}`),
+        fetch('/api/lumber/species')
       ])
 
       if (inventoryRes.ok) setInventoryGroups(await inventoryRes.json())
       if (packsRes.ok) setRecentPacks(await packsRes.json())
       if (monthlyRes.ok) setMonthlyRipped(await monthlyRes.json())
+      
+      if (speciesRes.ok) {
+        const speciesData = await speciesRes.json()
+        const colorMap: Record<string, string> = {}
+        speciesData.forEach((sp: any) => {
+          colorMap[sp.name] = sp.color || '#6B7280'
+        })
+        setSpeciesColors(colorMap)
+      }
     } catch (error) {
       console.error('Error fetching inventory:', error)
     } finally {
@@ -78,14 +89,16 @@ export default function InventoryPage() {
         } else {
           acc.push({
             name: group.species,
-            value: Number(group.current_inventory) || 0
+            value: Number(group.current_inventory) || 0,
+            color: speciesColors[group.species] || '#6B7280'
           })
         }
         return acc
       }, []).sort((a, b) => b.value - a.value)
     : inventoryGroups.map(group => ({
         name: `${group.species} ${group.grade}`,
-        value: Number(group.current_inventory) || 0
+        value: Number(group.current_inventory) || 0,
+        color: speciesColors[group.species] || '#6B7280'
       })).sort((a, b) => b.value - a.value)
 
   const months = [
@@ -151,7 +164,11 @@ export default function InventoryPage() {
             />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={(value: any) => `${Number(value).toLocaleString()} BF`} />
-            <Bar dataKey="value" fill="#0088FE" />
+            <Bar dataKey="value">
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -199,7 +216,15 @@ export default function InventoryPage() {
                           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
                       </td>
-                      <td className="px-2 py-1.5 whitespace-nowrap text-xs font-medium">{group.species}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs font-medium">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="w-3 h-3 rounded flex-shrink-0" 
+                            style={{ backgroundColor: speciesColors[group.species] || '#6B7280' }}
+                          />
+                          {group.species}
+                        </div>
+                      </td>
                       <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.thickness}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right">

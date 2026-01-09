@@ -1,6 +1,27 @@
 // Lumber Tracker System Types
 
 // ============================================================================
+// REFERENCE DATA
+// ============================================================================
+
+export interface LumberSpecies {
+  id: number
+  name: string
+  color: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface LumberGrade {
+  id: number
+  name: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================================
 // SUPPLIERS
 // ============================================================================
 

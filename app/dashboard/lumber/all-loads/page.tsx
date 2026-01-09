@@ -15,6 +15,7 @@ export default function AllLoadsPage() {
   const [filteredLoads, setFilteredLoads] = useState<LumberLoadWithDetails[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -23,23 +24,36 @@ export default function AllLoadsPage() {
   }, [status, router])
 
   useEffect(() => {
-    async function fetchLoads() {
+    async function fetchData() {
       try {
-        const response = await fetch('/api/lumber/loads')
-        if (response.ok) {
-          const data = await response.json()
+        const [loadsRes, speciesRes] = await Promise.all([
+          fetch('/api/lumber/loads'),
+          fetch('/api/lumber/species')
+        ])
+        
+        if (loadsRes.ok) {
+          const data = await loadsRes.json()
           setLoads(data)
           setFilteredLoads(data)
         }
+        
+        if (speciesRes.ok) {
+          const speciesData = await speciesRes.json()
+          const colorMap: Record<string, string> = {}
+          speciesData.forEach((sp: any) => {
+            colorMap[sp.name] = sp.color || '#6B7280'
+          })
+          setSpeciesColors(colorMap)
+        }
       } catch (error) {
-        console.error('Error fetching loads:', error)
+        console.error('Error fetching data:', error)
       } finally {
         setIsLoading(false)
       }
     }
 
     if (status === 'authenticated') {
-      fetchLoads()
+      fetchData()
     }
   }, [status])
 
@@ -72,10 +86,10 @@ export default function AllLoadsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">All Loads</h1>
-        <p className="text-gray-600 mt-1">Complete history of all lumber loads</p>
+        <h1 className="text-2xl font-bold text-gray-900">All Loads</h1>
+        <p className="text-sm text-gray-600 mt-1">Complete history of all lumber loads ({filteredLoads.length} {filteredLoads.length === 1 ? 'load' : 'loads'})</p>
       </div>
 
       {/* Search Bar */}
@@ -90,127 +104,135 @@ export default function AllLoadsPage() {
         />
       </div>
 
-      {/* Loads Table */}
+      {/* Loads Table - Compact Design */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Load ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Supplier
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Species / Grade
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actual Footage
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Arrival Date
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Invoice #
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead className="bg-gray-800 text-white sticky top-0 z-10">
+              <tr>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Load ID
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Supplier
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Species / Grade
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Actual Footage
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Arrival
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Invoice
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
+                  
+                </th>
+              </tr>
+            </thead>
+            <tbody>
             {filteredLoads.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={8} className="px-2 py-8 text-center text-xs text-gray-500">
                   {loads.length === 0 ? 'No loads found' : 'No loads match your search'}
                 </td>
               </tr>
             ) : (
-              filteredLoads.map((load) => (
-                <tr key={load.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{load.load_id}</div>
-                    <div className="text-xs text-gray-500">
+              filteredLoads.map((load, loadIdx) => (
+                <tr 
+                  key={load.id} 
+                  className={`hover:bg-gray-100 ${loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                >
+                  <td className="px-2 py-1.5">
+                    <div className="text-xs font-semibold text-gray-900">{load.load_id}</div>
+                    <div className="text-[10px] text-gray-500">
                       {new Date(load.created_at).toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{load.supplier_name}</div>
+                  <td className="px-2 py-1.5">
+                    <div className="text-xs text-gray-900">{load.supplier_name}</div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
+                  <td className="px-2 py-1.5">
+                    <div className="text-xs text-gray-900 flex flex-wrap gap-x-2 gap-y-0.5">
                       {load.items.map((item, idx) => (
-                        <div key={idx}>
-                          {item.species} - {item.grade} ({item.thickness})
-                        </div>
+                        <span key={idx} className="flex items-center gap-1">
+                          <span 
+                            className="w-2 h-2 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: speciesColors[item.species] || '#6B7280' }}
+                          />
+                          {item.species} {item.grade} [{item.thickness}]
+                        </span>
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                  <td className="px-2 py-1.5">
+                    <div className="text-xs text-gray-900">
                       {load.items.map((item, idx) => (
-                        <div key={idx}>
-                          {item.actual_footage ? `${item.actual_footage.toLocaleString()} ft` : '-'}
-                        </div>
+                        <span key={idx}>
+                          {item.actual_footage ? `${item.actual_footage.toLocaleString()}` : '-'}{idx < load.items.length - 1 && ', '}
+                        </span>
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                  <td className="px-2 py-1.5">
+                    <div className="text-xs text-gray-900">
                       {load.actual_arrival_date 
-                        ? new Date(load.actual_arrival_date).toLocaleDateString() 
+                        ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                         : '-'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{load.invoice_number || '-'}</div>
+                  <td className="px-2 py-1.5">
+                    <div className="text-xs text-gray-900">{load.invoice_number || '-'}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col gap-1">
-                      {!load.actual_arrival_date && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Incoming
-                        </span>
-                      )}
-                      {load.actual_arrival_date && !load.all_packs_tallied && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                          Needs Tally
-                        </span>
-                      )}
-                      {load.all_packs_tallied && !load.all_packs_finished && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                          In Progress
-                        </span>
-                      )}
-                      {load.all_packs_finished && !load.is_paid && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                          Pending Payment
-                        </span>
-                      )}
-                      {load.is_paid && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                          Complete
-                        </span>
-                      )}
-                    </div>
+                  <td className="px-2 py-1.5">
+                    {!load.actual_arrival_date && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">
+                        Incoming
+                      </span>
+                    )}
+                    {load.actual_arrival_date && !load.all_packs_tallied && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
+                        Tally
+                      </span>
+                    )}
+                    {load.all_packs_tallied && !load.all_packs_finished && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">
+                        Ripping
+                      </span>
+                    )}
+                    {load.all_packs_finished && !load.is_paid && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800">
+                        Payment
+                      </span>
+                    )}
+                    {load.is_paid && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">
+                        Complete
+                      </span>
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td className="px-2 py-1.5">
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="h-6 px-2"
                       onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
                     >
-                      <Info className="h-4 w-4" />
+                      <Info className="h-3 w-3" />
                     </Button>
                   </td>
                 </tr>
               ))
             )}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

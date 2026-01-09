@@ -19,12 +19,13 @@ export async function PATCH(
     const result = await query(
       `UPDATE lumber_species
        SET name = COALESCE($1, name),
-           display_order = COALESCE($2, display_order),
-           is_active = COALESCE($3, is_active),
+           color = COALESCE($2, color),
+           display_order = COALESCE($3, display_order),
+           is_active = COALESCE($4, is_active),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4
+       WHERE id = $5
        RETURNING *`,
-      [body.name, body.display_order, body.is_active, params.speciesId]
+      [body.name, body.color, body.display_order, body.is_active, params.speciesId]
     )
 
     if (result.rows.length === 0) {

@@ -89,7 +89,7 @@ export default function TallyEntryPage() {
     setTallies(newTallies)
   }
 
-  // Handle Tab and Enter key navigation like Excel
+  // Handle Tab and Enter key navigation - moves DOWN columns instead of across rows
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>, rowIndex: number, field: keyof PackTallyInput) {
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault()
@@ -97,21 +97,25 @@ export default function TallyEntryPage() {
       const fields: (keyof PackTallyInput)[] = ['pack_id', 'length', 'tally_board_feet']
       const currentFieldIndex = fields.indexOf(field)
       
-      // If we're at the last field of the last row, add a new row
-      if (field === 'tally_board_feet' && rowIndex === tallies.length - 1) {
-        handleAddRow()
-        setTimeout(() => {
-          const nextInput = inputRefs.current[`${rowIndex + 1}-pack_id`]
+      // Check if we're at the last row of current column
+      if (rowIndex === tallies.length - 1) {
+        // Last row - check if we're on the last column
+        if (field === 'tally_board_feet') {
+          // Last cell - add new row and go to first column
+          handleAddRow()
+          setTimeout(() => {
+            const nextInput = inputRefs.current[`${rowIndex + 1}-pack_id`]
+            if (nextInput) nextInput.focus()
+          }, 10)
+        } else {
+          // Move to first row of next column
+          const nextField = fields[currentFieldIndex + 1]
+          const nextInput = inputRefs.current[`0-${nextField}`]
           if (nextInput) nextInput.focus()
-        }, 10)
-      } else if (currentFieldIndex < fields.length - 1) {
-        // Move to next field in same row
-        const nextField = fields[currentFieldIndex + 1]
-        const nextInput = inputRefs.current[`${rowIndex}-${nextField}`]
-        if (nextInput) nextInput.focus()
+        }
       } else {
-        // Move to first field of next row
-        const nextInput = inputRefs.current[`${rowIndex + 1}-pack_id`]
+        // Not last row - move down in same column
+        const nextInput = inputRefs.current[`${rowIndex + 1}-${field}`]
         if (nextInput) nextInput.focus()
       }
     }

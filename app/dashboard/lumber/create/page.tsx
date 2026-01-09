@@ -41,7 +41,6 @@ export default function CreateLoadPage() {
   const [grades, setGrades] = useState<any[]>([])
   const [presets, setPresets] = useState<LumberLoadPreset[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [presetsDialogOpen, setPresetsDialogOpen] = useState(false)
   const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false)
   const [presetName, setPresetName] = useState('')
   
@@ -167,7 +166,6 @@ export default function CreateLoadPage() {
           }))
           setItems(newItems)
           toast.success(`Loaded preset: ${preset.preset_name}`)
-          setPresetsDialogOpen(false)
         } else {
           toast.error('Not enough available load IDs for this preset')
         }
@@ -306,7 +304,7 @@ export default function CreateLoadPage() {
   }, {} as Record<string, LumberLoadPreset[]>)
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button
@@ -322,25 +320,20 @@ export default function CreateLoadPage() {
             <p className="text-gray-600 mt-1">Enter load details and estimated information</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSavePresetDialogOpen(true)}
-          >
-            <Save className="h-4 w-4 mr-2" />
-            Save as Preset
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPresetsDialogOpen(true)}
-          >
-            <BookmarkIcon className="h-4 w-4 mr-2" />
-            Load Preset
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setSavePresetDialogOpen(true)}
+        >
+          <Save className="h-4 w-4 mr-2" />
+          Save as Preset
+        </Button>
       </div>
+
+      {/* Two Column Layout: Form on left, Presets on right */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Form - Takes up 2 columns */}
+        <div className="lg:col-span-2">
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-6">
         {/* Shared Information (applies to all items) */}
@@ -575,105 +568,100 @@ export default function CreateLoadPage() {
           </Button>
         </div>
       </form>
+        </div>
 
-      {/* Load Preset Dialog */}
-      <Dialog open={presetsDialogOpen} onOpenChange={setPresetsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Load Preset</DialogTitle>
-            <DialogDescription>
-              Select a preset to quickly fill the form. Presets are grouped by supplier.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Favorites Section */}
-            {favoritePresets.length > 0 && (
-              <div>
-                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                  Favorites
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {favoritePresets.map(preset => (
-                    <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1" onClick={() => loadPreset(preset)}>
-                            <h4 className="font-semibold">{preset.preset_name}</h4>
-                            <p className="text-sm text-gray-600">{preset.supplier_name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {preset.items.length} item(s) - {preset.lumber_type || 'N/A'}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              togglePresetFavorite(preset.id)
-                            }}
-                          >
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Grouped by Supplier */}
-            {Object.entries(groupedPresets).map(([supplierName, supplierPresets]) => (
-              <div key={supplierName}>
-                <h3 className="text-lg font-semibold mb-3">{supplierName}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {supplierPresets.map(preset => (
-                    <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1" onClick={() => loadPreset(preset)}>
-                            <h4 className="font-semibold">{preset.preset_name}</h4>
-                            {preset.supplier_location_name && (
-                              <p className="text-xs text-gray-500">{preset.supplier_location_name}</p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              {preset.items.length} item(s) - {preset.lumber_type || 'N/A'}
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {preset.items.slice(0, 3).map((item, idx) => (
-                                <span key={idx} className="text-xs bg-gray-100 px-2 py-0.5 rounded">
-                                  {item.species} {item.grade}
-                                </span>
-                              ))}
-                              {preset.items.length > 3 && (
-                                <span className="text-xs text-gray-500">+{preset.items.length - 3} more</span>
-                              )}
+        {/* Presets Sidebar - Takes up 1 column */}
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-lg shadow p-4 sticky top-6 max-h-[calc(100vh-100px)] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">Load Presets</h2>
+            
+            <div className="space-y-6">
+              {/* Favorites Section */}
+              {favoritePresets.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2 text-gray-700">
+                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    Favorites
+                  </h3>
+                  <div className="space-y-2">
+                    {favoritePresets.map(preset => (
+                      <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors border-yellow-200">
+                        <CardContent className="p-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0" onClick={() => loadPreset(preset)}>
+                              <h4 className="font-medium text-sm truncate">{preset.preset_name}</h4>
+                              <p className="text-xs text-gray-600 truncate">{preset.supplier_name}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {preset.items.length} item(s)
+                              </p>
                             </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 flex-shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                togglePresetFavorite(preset.id)
+                              }}
+                            >
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              togglePresetFavorite(preset.id)
-                            }}
-                          >
-                            <Star className={`h-4 w-4 ${preset.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
+
+              {/* Grouped by Supplier */}
+              {Object.entries(groupedPresets).map(([supplierName, supplierPresets]) => (
+                <div key={supplierName}>
+                  <h3 className="text-sm font-semibold mb-2 text-gray-700">{supplierName}</h3>
+                  <div className="space-y-2">
+                    {supplierPresets.map(preset => (
+                      <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                        <CardContent className="p-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0" onClick={() => loadPreset(preset)}>
+                              <h4 className="font-medium text-sm truncate">{preset.preset_name}</h4>
+                              {preset.supplier_location_name && (
+                                <p className="text-xs text-gray-500 truncate">{preset.supplier_location_name}</p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                {preset.items.length} item(s) - {preset.lumber_type || 'N/A'}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 flex-shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                togglePresetFavorite(preset.id)
+                              }}
+                            >
+                              <Star className={`h-3 w-3 ${preset.is_favorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {presets.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-8">
+                  No presets saved yet. Create a load and save it as a preset.
+                </p>
+              )}
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
 
       {/* Save Preset Dialog */}
       <Dialog open={savePresetDialogOpen} onOpenChange={setSavePresetDialogOpen}>

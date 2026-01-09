@@ -32,6 +32,7 @@ export default function IncomingLoadsPage() {
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [species, setSpecies] = useState<string[]>([])
   const [grades, setGrades] = useState<string[]>([])
+  const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -40,11 +41,15 @@ export default function IncomingLoadsPage() {
   }, [status, router])
 
   useEffect(() => {
-    async function fetchLoads() {
+    async function fetchData() {
       try {
-        const response = await fetch('/api/lumber/loads/incoming')
-        if (response.ok) {
-          const data = await response.json()
+        const [loadsRes, speciesRes] = await Promise.all([
+          fetch('/api/lumber/loads/incoming'),
+          fetch('/api/lumber/species')
+        ])
+        
+        if (loadsRes.ok) {
+          const data = await loadsRes.json()
           setLoads(data)
           setFilteredLoads(data)
           
@@ -57,15 +62,24 @@ export default function IncomingLoadsPage() {
           setSpecies(uniqueSpecies)
           setGrades(uniqueGrades)
         }
+        
+        if (speciesRes.ok) {
+          const speciesData = await speciesRes.json()
+          const colorMap: Record<string, string> = {}
+          speciesData.forEach((sp: any) => {
+            colorMap[sp.name] = sp.color || '#6B7280'
+          })
+          setSpeciesColors(colorMap)
+        }
       } catch (error) {
-        console.error('Error fetching incoming loads:', error)
+        console.error('Error fetching data:', error)
       } finally {
         setIsLoading(false)
       }
     }
 
     if (status === 'authenticated') {
-      fetchLoads()
+      fetchData()
     }
   }, [status])
 
@@ -303,7 +317,11 @@ export default function IncomingLoadsPage() {
                   <td className="px-2 py-1">
                     <div className="text-xs flex flex-wrap gap-x-2 gap-y-0.5">
                       {load.items.map((item, idx) => (
-                        <span key={idx} className="whitespace-nowrap">
+                        <span key={idx} className="whitespace-nowrap flex items-center gap-1">
+                          <span 
+                            className="w-2 h-2 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: speciesColors[item.species] || '#6B7280' }}
+                          />
                           <span className="font-medium">{item.species}</span>
                           <span className="text-gray-500 mx-0.5">{item.grade}</span>
                           <span className="text-[10px] bg-gray-200 px-1 rounded">{item.thickness}</span>
