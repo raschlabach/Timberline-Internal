@@ -682,29 +682,53 @@ export default function RipEntryPage() {
         </div>
       ) : (
         /* Edit Pack Data - Full Width when load selected */
-        <div className="bg-white rounded shadow p-3 space-y-3">
+        <div className="bg-white rounded shadow p-4 space-y-4">
           {selectedLoad && (
             <>
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="font-semibold text-sm mb-2">
-                    Edit {selectedLoad.load_id} Data
-                  </h2>
-                  <div className="text-xs text-gray-700 flex gap-3 items-center flex-wrap mb-2">
-                    <span className="font-semibold">{selectedLoad.load_id}</span>
-                    <span>{selectedLoad.supplier_name}</span>
-                    {selectedLoad.items.map((item, idx) => (
-                      <span key={idx}>{item.species} - {item.grade}</span>
-                    ))}
-                    <span>{Math.round(totalBF).toLocaleString()} ft</span>
-                    <span>{selectedLoad.actual_arrival_date && new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}</span>
+              {/* Load Header with Better Organization */}
+              <div className="flex justify-between items-start border-b pb-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Load {selectedLoad.load_id}
+                    </h2>
+                    <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                      {Math.round(remainingBF).toLocaleString()} ft remaining
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    <div>
+                      <span className="text-gray-500">Supplier:</span>
+                      <span className="ml-2 font-medium">{selectedLoad.supplier_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Total:</span>
+                      <span className="ml-2 font-medium">{Math.round(totalBF).toLocaleString()} ft</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Wood:</span>
+                      <span className="ml-2 font-medium">
+                        {selectedLoad.items.map((item, idx) => (
+                          <span key={idx}>{idx > 0 ? ', ' : ''}{item.species} - {item.grade}</span>
+                        ))}
+                      </span>
+                    </div>
+                    {selectedLoad.actual_arrival_date && (
+                      <div>
+                        <span className="text-gray-500">Arrival:</span>
+                        <span className="ml-2 font-medium">
+                          {new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
-                {/* Complete Load Button - Always Visible */}
+                {/* Complete Load Button */}
                 <Button
                   onClick={handleMarkLoadComplete}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 text-sm"
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2"
                 >
                   Complete Load
                 </Button>
@@ -722,105 +746,99 @@ export default function RipEntryPage() {
                 </div>
               )}
 
-              {/* Operator/Stacker Selection - Compact Row */}
-              <div className="grid grid-cols-7 gap-2">
-                <div>
-                  <Label className="text-xs">Operator</Label>
-                  <Select value={operatorId} onValueChange={setOperatorId}>
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {operators.map(operator => (
-                        <SelectItem key={operator.id} value={operator.id.toString()}>
-                          {operator.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Operator/Stacker Selection - Better Layout */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Team Assignment</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-sm font-medium mb-1">Operator</Label>
+                    <Select value={operatorId} onValueChange={setOperatorId}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select operator" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map(operator => (
+                          <SelectItem key={operator.id} value={operator.id.toString()}>
+                            {operator.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-1">Stacker 1</Label>
+                    <Select value={stacker1Id} onValueChange={setStacker1Id}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select stacker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map(operator => (
+                          <SelectItem key={operator.id} value={operator.id.toString()}>
+                            {operator.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-1">Stacker 2</Label>
+                    <Select value={stacker2Id} onValueChange={setStacker2Id}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select stacker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map(operator => (
+                          <SelectItem key={operator.id} value={operator.id.toString()}>
+                            {operator.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-1">Stacker 3</Label>
+                    <Select value={stacker3Id} onValueChange={setStacker3Id}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select stacker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map(operator => (
+                          <SelectItem key={operator.id} value={operator.id.toString()}>
+                            {operator.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-1">Stacker 4</Label>
+                    <Select value={stacker4Id} onValueChange={setStacker4Id}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select stacker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map(operator => (
+                          <SelectItem key={operator.id} value={operator.id.toString()}>
+                            {operator.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-1">Load Quality (0-100)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={loadQuality}
+                      onChange={(e) => setLoadQuality(e.target.value)}
+                      onBlur={handleSaveLoadQuality}
+                      className="h-9"
+                      placeholder="Enter quality score"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs">Stacker 1</Label>
-                  <Select value={stacker1Id} onValueChange={setStacker1Id}>
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {operators.map(operator => (
-                        <SelectItem key={operator.id} value={operator.id.toString()}>
-                          {operator.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Stacker 2</Label>
-                  <Select value={stacker2Id} onValueChange={setStacker2Id}>
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {operators.map(operator => (
-                        <SelectItem key={operator.id} value={operator.id.toString()}>
-                          {operator.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Stacker 3</Label>
-                  <Select value={stacker3Id} onValueChange={setStacker3Id}>
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {operators.map(operator => (
-                        <SelectItem key={operator.id} value={operator.id.toString()}>
-                          {operator.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Stacker 4</Label>
-                  <Select value={stacker4Id} onValueChange={setStacker4Id}>
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {operators.map(operator => (
-                        <SelectItem key={operator.id} value={operator.id.toString()}>
-                          {operator.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Load Quality</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={loadQuality}
-                    onChange={(e) => setLoadQuality(e.target.value)}
-                    onBlur={handleSaveLoadQuality}
-                    className="h-7 text-xs"
-                    placeholder="0-100"
-                  />
-                </div>
-              </div>
-
-              {/* Current Load Status */}
-              <div className="text-xs text-gray-700 flex gap-3 py-1 border-t border-b">
-                <span>{Math.round(remainingBF).toLocaleString()} Ft Left</span>
-                {selectedLoad.items.map((item, idx) => (
-                  <span key={idx}>{item.species} - {item.grade}</span>
-                ))}
-                <span>{Math.round(totalBF).toLocaleString()} ft</span>
               </div>
 
               {/* Conditional: Show Tally Entry if no packs exist, otherwise show pack tables */}
