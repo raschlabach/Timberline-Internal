@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { InventoryGroup, LumberPackWithDetails } from '@/types/lumber'
+import { InventoryGroup, InventoryLoadDetail, LumberPackWithDetails } from '@/types/lumber'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -47,7 +47,38 @@ export default function InventoryPage() {
         fetch('/api/lumber/species')
       ])
 
-      if (inventoryRes.ok) setInventoryGroups(await inventoryRes.json())
+      if (inventoryRes.ok) {
+        const loadDetails: InventoryLoadDetail[] = await inventoryRes.json()
+        
+        // Group by species, grade, thickness
+        const grouped: Record<string, InventoryGroup> = {}
+        
+        loadDetails.forEach(load => {
+          const key = `${load.species}|${load.grade}|${load.thickness}`
+          
+          if (!grouped[key]) {
+            grouped[key] = {
+              species: load.species,
+              grade: load.grade,
+              thickness: load.thickness,
+              total_actual_footage: 0,
+              total_finished_footage: 0,
+              current_inventory: 0,
+              load_count: 0,
+              loads: []
+            }
+          }
+          
+          grouped[key].total_actual_footage += Number(load.actual_footage) || 0
+          grouped[key].total_finished_footage += Number(load.finished_footage) || 0
+          grouped[key].current_inventory += Number(load.load_inventory) || 0
+          grouped[key].load_count += 1
+          grouped[key].loads.push(load)
+        })
+        
+        setInventoryGroups(Object.values(grouped))
+      }
+      
       if (packsRes.ok) setRecentPacks(await packsRes.json())
       if (monthlyRes.ok) setMonthlyRipped(await monthlyRes.json())
       
@@ -242,19 +273,30 @@ export default function InventoryPage() {
                         </span>
                       </td>
                     </tr>
-                    {isExpanded && (
-                      <tr className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-blue-100'}>
-                        <td></td>
-                        <td colSpan={7} className="px-4 py-2">
-                          <div className="text-xs">
-                            <span className="font-semibold text-gray-700">Load IDs: </span>
-                            <span className="text-gray-600">
-                              {group.load_ids.join(', ')}
-                            </span>
-                          </div>
+                    {isExpanded && group.loads && group.loads.map((load, loadIdx) => (
+                      <tr key={`${idx}-${loadIdx}`} className="bg-blue-50 border-t border-blue-200">
+                        <td className="px-2 py-1.5"></td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs">
+                          <span className="text-blue-700 font-semibold">└ {load.load_id}</span>
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.grade}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.thickness}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
+                          {Number(load.actual_footage || 0).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
+                          {Number(load.finished_footage || 0).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right font-semibold text-blue-700">
+                          {Number(load.load_inventory || 0).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
+                          <span className="text-gray-600">
+                            {load.finished_pack_count}/{load.pack_count}
+                          </span>
                         </td>
                       </tr>
-                    )}
+                    ))}
                   </>
                 )
               })

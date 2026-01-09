@@ -11,18 +11,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get inventory grouped by species and grade with load details
+    // Get inventory with load-level details
     // Excludes loads marked as all_packs_finished to prevent showing completed loads
     const result = await query(`
       SELECT 
         li.species,
         li.grade,
         li.thickness,
-        SUM(li.actual_footage) as total_actual_footage,
-        SUM(COALESCE(finished_packs.finished_footage, 0)) as total_finished_footage,
-        SUM(li.actual_footage) - SUM(COALESCE(finished_packs.finished_footage, 0)) as current_inventory,
-        ARRAY_AGG(DISTINCT l.load_id ORDER BY l.load_id) as load_ids,
-        COUNT(DISTINCT l.id) as load_count
+        l.load_id,
+        l.id as load_db_id,
+        li.actual_footage,
+        COALESCE(finished_packs.finished_footage, 0) as finished_footage,
+        li.actual_footage - COALESCE(finished_packs.finished_footage, 0) as load_inventory,
+        COALESCE(pack_counts.total_packs, 0) as pack_count,
+        COALESCE(pack_counts.finished_pack_count, 0) as finished_pack_count
       FROM lumber_load_items li
       JOIN lumber_loads l ON li.load_id = l.id
       LEFT JOIN (
@@ -33,10 +35,17 @@ export async function GET(request: NextRequest) {
         WHERE is_finished = TRUE
         GROUP BY load_item_id
       ) finished_packs ON li.id = finished_packs.load_item_id
+      LEFT JOIN (
+        SELECT 
+          load_item_id,
+          COUNT(*) as total_packs,
+          COUNT(CASE WHEN is_finished = TRUE THEN 1 END) as finished_pack_count
+        FROM lumber_packs
+        GROUP BY load_item_id
+      ) pack_counts ON li.id = pack_counts.load_item_id
       WHERE li.actual_footage IS NOT NULL
         AND COALESCE(l.all_packs_finished, FALSE) = FALSE
-      GROUP BY li.species, li.grade, li.thickness
-      ORDER BY li.species, li.grade, li.thickness
+      ORDER BY li.species, li.grade, li.thickness, l.load_id
     `)
 
     return NextResponse.json(result.rows)

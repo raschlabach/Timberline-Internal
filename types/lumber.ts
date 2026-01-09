@@ -328,6 +328,19 @@ export interface LumberTruckingNote {
 // INVENTORY
 // ============================================================================
 
+export interface InventoryLoadDetail {
+  species: string
+  grade: string
+  thickness: Thickness
+  load_id: string
+  load_db_id: number
+  actual_footage: number
+  finished_footage: number
+  load_inventory: number
+  pack_count: number
+  finished_pack_count: number
+}
+
 export interface InventoryGroup {
   species: string
   grade: string
@@ -335,8 +348,8 @@ export interface InventoryGroup {
   total_actual_footage: number
   total_finished_footage: number
   current_inventory: number
-  load_ids: string[]
   load_count: number
+  loads: InventoryLoadDetail[]
 }
 
 export interface InventoryLoad {
