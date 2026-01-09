@@ -47,7 +47,7 @@ export default function RipEntryPage() {
   
   // Pack editing state
   const [packEdits, setPackEdits] = useState<{ [packId: number]: { 
-    pack_id: number | null,
+    pack_id: string | number | null,
     length: number | null,
     tally_board_feet: number | null,
     actual_board_feet: number | null,
@@ -340,7 +340,13 @@ export default function RipEntryPage() {
 
   function handleTallyChange(index: number, field: string, value: any) {
     const newTallies = [...tallies]
-    newTallies[index] = { ...newTallies[index], [field]: field === 'pack_id' || field === 'length' ? parseInt(value) || 0 : parseFloat(value) || 0 }
+    if (field === 'pack_id') {
+      newTallies[index] = { ...newTallies[index], [field]: value }
+    } else if (field === 'length') {
+      newTallies[index] = { ...newTallies[index], [field]: parseInt(value) || 0 }
+    } else {
+      newTallies[index] = { ...newTallies[index], [field]: parseFloat(value) || 0 }
+    }
     setTallies(newTallies)
   }
 
@@ -856,7 +862,7 @@ export default function RipEntryPage() {
                               <tr key={index}>
                                 <td className="px-1 py-1 border-t">
                                   <Input
-                                    type="number"
+                                    type="text"
                                     value={tally.pack_id || ''}
                                     onChange={(e) => handleTallyChange(index, 'pack_id', e.target.value)}
                                     className="h-7 text-xs"
@@ -921,12 +927,12 @@ export default function RipEntryPage() {
                             <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
                               <td className="px-1 py-1 border-t">
                                 {pack.is_finished ? (
-                                  <span className="px-1">{Math.round(pack.pack_id)}</span>
+                                  <span className="px-1">{pack.pack_id}</span>
                                 ) : (
                                   <Input
-                                    type="number"
-                                    value={packEdits[pack.id]?.pack_id ?? Math.round(pack.pack_id)}
-                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', parseInt(e.target.value) || 0)}
+                                    type="text"
+                                    value={packEdits[pack.id]?.pack_id ?? pack.pack_id}
+                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     className="h-6 text-xs"
                                   />
