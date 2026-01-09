@@ -12,13 +12,26 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await query(`
-      SELECT 
+      SELECT
         l.*,
-        s.name as supplier_name
+        s.name as supplier_name,
+        json_agg(
+          json_build_object(
+            'id', li.id,
+            'species', li.species,
+            'grade', li.grade,
+            'thickness', li.thickness,
+            'estimated_footage', li.estimated_footage,
+            'actual_footage', li.actual_footage,
+            'price', li.price
+          ) ORDER BY li.id
+        ) as items
       FROM lumber_loads l
       JOIN lumber_suppliers s ON l.supplier_id = s.id
-      WHERE l.all_packs_tallied = TRUE 
-        AND COALESCE(l.all_packs_finished, FALSE) = FALSE
+      LEFT JOIN lumber_load_items li ON l.id = li.load_id
+      WHERE COALESCE(l.all_packs_finished, FALSE) = FALSE
+        AND EXISTS (SELECT 1 FROM lumber_load_items WHERE load_id = l.id AND actual_footage IS NOT NULL)
+      GROUP BY l.id, s.name
       ORDER BY l.actual_arrival_date
     `)
 

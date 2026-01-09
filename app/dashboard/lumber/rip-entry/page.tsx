@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { RefreshCcw, Save } from 'lucide-react'
+import { RefreshCcw, Save, ArrowLeft, Trash2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface User {
@@ -37,6 +37,9 @@ export default function RipEntryPage() {
   
   // Pack editing state
   const [packEdits, setPackEdits] = useState<{ [packId: number]: { 
+    pack_id: number | null,
+    length: number | null,
+    tally_board_feet: number | null,
     actual_board_feet: number | null,
     rip_yield: number | null,
     rip_comments: string | null
@@ -49,6 +52,12 @@ export default function RipEntryPage() {
   const [stacker3Id, setStacker3Id] = useState<string>('')
   const [stacker4Id, setStacker4Id] = useState<string>('')
   const [loadQuality, setLoadQuality] = useState<string>('')
+  
+  // Tally creation state (for loads without tallies)
+  const [tallies, setTallies] = useState<{ pack_id: number, length: number, tally_board_feet: number }[]>([
+    { pack_id: 0, length: 0, tally_board_feet: 0 }
+  ])
+  const [selectedItemIdForTally, setSelectedItemIdForTally] = useState<number | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -95,6 +104,9 @@ export default function RipEntryPage() {
         const edits: typeof packEdits = {}
         data.forEach((pack: LumberPackWithDetails) => {
           edits[pack.id] = {
+            pack_id: pack.pack_id,
+            length: pack.length,
+            tally_board_feet: pack.tally_board_feet,
             actual_board_feet: pack.actual_board_feet,
             rip_yield: pack.rip_yield,
             rip_comments: pack.rip_comments
@@ -113,6 +125,20 @@ export default function RipEntryPage() {
     setStacker3Id('')
     setStacker4Id('')
     setLoadQuality(load.load_quality?.toString() || '')
+  }
+
+  function handleBackToList() {
+    setSelectedLoad(null)
+    setPacks([])
+    setPackEdits({})
+    setOperatorId('')
+    setStacker1Id('')
+    setStacker2Id('')
+    setStacker3Id('')
+    setStacker4Id('')
+    setLoadQuality('')
+    setTallies([{ pack_id: 0, length: 0, tally_board_feet: 0 }])
+    setSelectedItemIdForTally(null)
   }
 
   function handlePackEdit(packId: number, field: string, value: any) {
@@ -231,6 +257,133 @@ export default function RipEntryPage() {
     }
   }
 
+  async function handleAddPack() {
+    if (!selectedLoad || !selectedLoad.items || selectedLoad.items.length === 0) {
+      toast.error('No load items found')
+      return
+    }
+
+    // Use the first item's ID as default
+    const loadItemId = selectedLoad.items[0].id
+
+    try {
+      const response = await fetch(`/api/lumber/packs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          load_id: selectedLoad.id,
+          load_item_id: loadItemId,
+          pack_id: 0,
+          length: 0,
+          tally_board_feet: 0
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Pack added')
+        
+        // Refresh packs
+        if (selectedLoad) {
+          handleSelectLoad(selectedLoad.id)
+        }
+      } else {
+        toast.error('Failed to add pack')
+      }
+    } catch (error) {
+      console.error('Error adding pack:', error)
+      toast.error('Error adding pack')
+    }
+  }
+
+  async function handleDeletePack(packId: number) {
+    if (!confirm('Delete this pack? This cannot be undone.')) return
+
+    try {
+      const response = await fetch(`/api/lumber/packs/${packId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        toast.success('Pack deleted')
+        
+        // Refresh packs
+        if (selectedLoad) {
+          handleSelectLoad(selectedLoad.id)
+        }
+      } else {
+        toast.error('Failed to delete pack')
+      }
+    } catch (error) {
+      console.error('Error deleting pack:', error)
+      toast.error('Error deleting pack')
+    }
+  }
+
+  // Tally creation functions
+  function handleAddTallyRow() {
+    setTallies([...tallies, { pack_id: 0, length: 0, tally_board_feet: 0 }])
+  }
+
+  function handleTallyChange(index: number, field: string, value: any) {
+    const newTallies = [...tallies]
+    newTallies[index] = { ...newTallies[index], [field]: field === 'pack_id' || field === 'length' ? parseInt(value) || 0 : parseFloat(value) || 0 }
+    setTallies(newTallies)
+  }
+
+  async function handleSaveTallies() {
+    if (!selectedLoad || !selectedItemIdForTally) return
+
+    const item = selectedLoad.items?.find(i => i.id === selectedItemIdForTally)
+    if (!item || !item.actual_footage) {
+      toast.error('No actual footage set for this item')
+      return
+    }
+
+    // Validate that tallies sum to actual footage
+    const totalTallied = tallies.reduce((sum, t) => sum + t.tally_board_feet, 0)
+    if (Math.abs(totalTallied - item.actual_footage) > 0.01) {
+      toast.error(`Pack tallies (${totalTallied.toLocaleString()} BF) must equal actual footage (${item.actual_footage.toLocaleString()} BF)`)
+      return
+    }
+
+    // Validate pack IDs are unique and non-zero
+    const packIds = tallies.map(t => t.pack_id)
+    const uniqueIds = new Set(packIds)
+    if (uniqueIds.size !== packIds.length || packIds.some(id => id === 0)) {
+      toast.error('Pack IDs must be unique and non-zero')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/lumber/packs/create-tallies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          load_item_id: selectedItemIdForTally,
+          tallies
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Tallies saved successfully')
+        
+        // Refresh packs for this load
+        if (selectedLoad) {
+          handleSelectLoad(selectedLoad.id)
+        }
+        
+        // Reset tally state
+        setTallies([{ pack_id: 0, length: 0, tally_board_feet: 0 }])
+        setSelectedItemIdForTally(null)
+      } else {
+        toast.error('Failed to save tallies')
+      }
+    } catch (error) {
+      console.error('Error saving tallies:', error)
+      toast.error('Error saving tallies')
+    }
+  }
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -239,7 +392,7 @@ export default function RipEntryPage() {
     )
   }
 
-  const filteredLoads = loads.filter(load =>
+  const filteredLoads: LumberLoadWithDetails[] = loads.filter(load =>
     searchTerm === '' ||
     load.load_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     load.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -266,13 +419,24 @@ export default function RipEntryPage() {
   return (
     <div className="p-3 space-y-4 max-w-7xl mx-auto">
       {/* Compact Header */}
-      <div className="bg-white rounded shadow p-3">
+      <div className="bg-white rounded shadow p-3 flex items-center gap-3">
+        {selectedLoad && (
+          <Button
+            onClick={handleBackToList}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to List
+          </Button>
+        )}
         <h1 className="text-xl font-bold">Rip Entry</h1>
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
-        {/* Load Selector - Compact */}
-        <div className="col-span-2 bg-white rounded shadow p-3">
+      {!selectedLoad ? (
+        /* Load Selector - Full Width when no load selected */
+        <div className="bg-white rounded shadow p-3">
           <h2 className="font-semibold mb-2 text-sm">Inventory Loads</h2>
           <p className="text-xs text-gray-600 mb-2">Select a load from inventory to rip</p>
           <Input
@@ -292,12 +456,10 @@ export default function RipEntryPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLoads.map(load => (
+                {filteredLoads.map((load: LumberLoadWithDetails) => (
                   <tr
                     key={load.id}
-                    className={`cursor-pointer hover:bg-blue-50 ${
-                      selectedLoad?.id === load.id ? 'bg-blue-100' : ''
-                    }`}
+                    className="cursor-pointer hover:bg-blue-50"
                     onClick={() => handleSelectLoad(load.id)}
                   >
                     <td className="px-2 py-1 border-t">{load.load_id}</td>
@@ -313,47 +475,45 @@ export default function RipEntryPage() {
             </table>
           </div>
         </div>
-
-        {/* Edit Pack Data - Compact */}
-        <div className="col-span-3 bg-white rounded shadow p-3 space-y-3">
-          {selectedLoad ? (
+      ) : (
+        /* Edit Pack Data - Full Width when load selected */
+        <div className="bg-white rounded shadow p-3 space-y-3">
+          {selectedLoad && (
             <>
-              <div>
-                <h2 className="font-semibold text-sm mb-2">
-                  Edit {selectedLoad.load_id} Data
-                </h2>
-                <div className="text-xs text-gray-700 flex gap-3 items-center flex-wrap mb-2">
-                  <span className="font-semibold">{selectedLoad.load_id}</span>
-                  <span>{selectedLoad.supplier_name}</span>
-                  {selectedLoad.items.map((item, idx) => (
-                    <span key={idx}>{item.species} - {item.grade}</span>
-                  ))}
-                  <span>{totalBF.toLocaleString()} ft</span>
-                  <span>{selectedLoad.actual_arrival_date && new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}</span>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="font-semibold text-sm mb-2">
+                    Edit {selectedLoad.load_id} Data
+                  </h2>
+                  <div className="text-xs text-gray-700 flex gap-3 items-center flex-wrap mb-2">
+                    <span className="font-semibold">{selectedLoad.load_id}</span>
+                    <span>{selectedLoad.supplier_name}</span>
+                    {selectedLoad.items.map((item, idx) => (
+                      <span key={idx}>{item.species} - {item.grade}</span>
+                    ))}
+                    <span>{totalBF.toLocaleString()} ft</span>
+                    <span>{selectedLoad.actual_arrival_date && new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}</span>
+                  </div>
                 </div>
+                
+                {/* Complete Load Button - Always Visible */}
+                <Button
+                  onClick={handleMarkLoadComplete}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 text-sm"
+                >
+                  Complete Load
+                </Button>
               </div>
 
-              {/* All Packs Finished Banner */}
+              {/* All Packs Finished Notification */}
               {packs.length > 0 && packs.every(p => p.is_finished) && (
-                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-green-900 flex items-center gap-2">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      All Packs Finished!
-                    </h3>
-                    <p className="text-sm text-green-700 mt-1">
-                      All {packs.length} packs in this load have been ripped and finished. 
-                      Click the button to mark the entire load as complete.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleMarkLoadComplete}
-                    className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6"
-                  >
-                    Mark Load as Complete
-                  </Button>
+                <div className="bg-green-50 border-l-4 border-green-500 p-3 rounded">
+                  <p className="text-sm text-green-900 font-medium flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    All {packs.length} packs finished! Click "Complete Load" button to finalize.
+                  </p>
                 </div>
               )}
 
@@ -458,37 +618,174 @@ export default function RipEntryPage() {
                 <span>{totalBF.toLocaleString()} ft</span>
               </div>
 
-              {/* Pack Tables - Side by Side, Compact */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Pack Info */}
-                <div>
-                  <h3 className="text-xs font-semibold mb-1">Pack Information</h3>
-                  <div className="border rounded overflow-auto" style={{ maxHeight: '350px' }}>
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50 sticky top-0">
-                        <tr>
-                          <th className="px-2 py-1 text-left">Pack ID</th>
-                          <th className="px-2 py-1 text-left">Lth</th>
-                          <th className="px-2 py-1 text-left">Brd Ft</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {packs.map(pack => (
-                          <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
-                            <td className="px-2 py-1 border-t">{pack.pack_id}</td>
-                            <td className="px-2 py-1 border-t">{pack.length}</td>
-                            <td className="px-2 py-1 border-t">{pack.tally_board_feet}</td>
-                          </tr>
+              {/* Conditional: Show Tally Entry if no packs exist, otherwise show pack tables */}
+              {packs.length === 0 ? (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-semibold mb-3 text-blue-900">No Tallies Entered Yet - Create Pack Tallies</h3>
+                  
+                  {/* Item Selection */}
+                  <div className="mb-4">
+                    <Label className="text-sm">Select Item to Tally</Label>
+                    <Select value={selectedItemIdForTally?.toString() || ''} onValueChange={(val) => setSelectedItemIdForTally(parseInt(val))}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Choose species/grade/thickness" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedLoad?.items?.map(item => (
+                          <SelectItem key={item.id} value={item.id.toString()}>
+                            {item.species} - {item.grade} - {item.thickness}" - {item.actual_footage?.toLocaleString()} BF
+                          </SelectItem>
                         ))}
-                        <tr className="bg-gray-100 font-semibold">
-                          <td className="px-2 py-1">{totalPacks} Packs</td>
-                          <td className="px-2 py-1">{avgLength.toFixed(2)}</td>
-                          <td className="px-2 py-1">{totalBF.toLocaleString()} BF</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {/* Tally Input Table */}
+                  {selectedItemIdForTally && (
+                    <>
+                      <div className="border rounded overflow-auto mb-3" style={{ maxHeight: '300px' }}>
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-800 text-white sticky top-0">
+                            <tr>
+                              <th className="px-2 py-1 text-left">Pack ID</th>
+                              <th className="px-2 py-1 text-left">Length (ft)</th>
+                              <th className="px-2 py-1 text-left">Board Feet</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tallies.map((tally, index) => (
+                              <tr key={index}>
+                                <td className="px-1 py-1 border-t">
+                                  <Input
+                                    type="number"
+                                    value={tally.pack_id || ''}
+                                    onChange={(e) => handleTallyChange(index, 'pack_id', e.target.value)}
+                                    className="h-7 text-xs"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-t">
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    value={tally.length || ''}
+                                    onChange={(e) => handleTallyChange(index, 'length', e.target.value)}
+                                    className="h-7 text-xs"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-t">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={tally.tally_board_feet || ''}
+                                    onChange={(e) => handleTallyChange(index, 'tally_board_feet', e.target.value)}
+                                    className="h-7 text-xs"
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button onClick={handleAddTallyRow} size="sm" variant="outline">
+                          Add Row
+                        </Button>
+                        <Button onClick={handleSaveTallies} size="sm" className="bg-blue-600 text-white">
+                          Save Tallies
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Pack Info */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <h3 className="text-xs font-semibold">Pack Information</h3>
+                      <Button onClick={handleAddPack} size="sm" className="h-6 px-2 text-xs" variant="outline">
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Pack
+                      </Button>
+                    </div>
+                    <div className="border rounded overflow-auto" style={{ maxHeight: '350px' }}>
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-2 py-1 text-left">Pack ID</th>
+                            <th className="px-2 py-1 text-left">Lth</th>
+                            <th className="px-2 py-1 text-left">Brd Ft</th>
+                            <th className="px-2 py-1"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {packs.map(pack => (
+                            <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
+                              <td className="px-1 py-1 border-t">
+                                {pack.is_finished ? (
+                                  <span className="px-1">{pack.pack_id}</span>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    value={packEdits[pack.id]?.pack_id ?? pack.pack_id}
+                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', parseInt(e.target.value) || 0)}
+                                    onBlur={() => handleSavePack(pack.id)}
+                                    className="h-6 text-xs"
+                                  />
+                                )}
+                              </td>
+                              <td className="px-1 py-1 border-t">
+                                {pack.is_finished ? (
+                                  <span className="px-1">{pack.length}</span>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    value={packEdits[pack.id]?.length ?? pack.length}
+                                    onChange={(e) => handlePackEdit(pack.id, 'length', parseFloat(e.target.value) || 0)}
+                                    onBlur={() => handleSavePack(pack.id)}
+                                    className="h-6 text-xs"
+                                  />
+                                )}
+                              </td>
+                              <td className="px-1 py-1 border-t">
+                                {pack.is_finished ? (
+                                  <span className="px-1">{pack.tally_board_feet}</span>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={packEdits[pack.id]?.tally_board_feet ?? pack.tally_board_feet}
+                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseFloat(e.target.value) || 0)}
+                                    onBlur={() => handleSavePack(pack.id)}
+                                    className="h-6 text-xs"
+                                  />
+                                )}
+                              </td>
+                              <td className="px-1 py-1 border-t">
+                                {!pack.is_finished && (
+                                  <Button
+                                    onClick={() => handleDeletePack(pack.id)}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-100 font-semibold">
+                            <td className="px-2 py-1">{totalPacks} Packs</td>
+                            <td className="px-2 py-1">{avgLength.toFixed(2)}</td>
+                            <td className="px-2 py-1" colSpan={2}>{totalBF.toLocaleString()} BF</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
 
                 {/* Rip Yield & Comments */}
                 <div>
@@ -573,9 +870,11 @@ export default function RipEntryPage() {
                     </table>
                   </div>
                 </div>
-              </div>
+                </div>
+              )}
 
-              {/* Remaining Board Feet by Length */}
+              {/* Remaining Board Feet by Length - Only show if packs exist */}
+              {packs.length > 0 && (
               <div className="border-t pt-2">
                 <h3 className="text-xs font-semibold mb-1">Board Feet Remaining</h3>
                 <div className="flex gap-4">
@@ -587,14 +886,11 @@ export default function RipEntryPage() {
                   ))}
                 </div>
               </div>
+              )}
             </>
-          ) : (
-            <div className="text-center text-gray-500 py-12">
-              Select a load to begin rip entry
-            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
