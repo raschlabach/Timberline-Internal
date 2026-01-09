@@ -73,13 +73,19 @@ export async function PATCH(
 
     // Build dynamic update query
     const allowedFields = [
-      'load_id', 'supplier_id', 'lumber_type', 'pickup_or_delivery',
+      'load_id', 'supplier_id', 'supplier_location_id', 'lumber_type', 'pickup_or_delivery',
       'estimated_delivery_date', 'comments',
       'actual_arrival_date', 'pickup_number', 'plant', 'pickup_date',
-      'invoice_number', 'invoice_total', 'invoice_date', 'driver_id', 'truck_driver_id',
+      'invoice_number', 'invoice_total', 'invoice_date', 'driver_id',
       'assigned_pickup_date', 'entered_in_quickbooks', 'is_paid', 'load_quality',
-      'all_packs_tallied', 'all_packs_finished'
+      'all_packs_tallied', 'all_packs_finished', 'po_generated', 'po_generated_at'
     ]
+    
+    // Map truck_driver_id to driver_id (frontend uses different name)
+    if (body.truck_driver_id !== undefined) {
+      body.driver_id = body.truck_driver_id
+      delete body.truck_driver_id
+    }
 
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
