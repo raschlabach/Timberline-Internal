@@ -50,12 +50,12 @@ export default function AllLoadsPage() {
       const filtered = loads.filter(load => {
         const search = searchTerm.toLowerCase()
         return (
-          load.load_id.toLowerCase().includes(search) ||
-          load.supplier_name.toLowerCase().includes(search) ||
-          load.items.some(item => 
-            item.species.toLowerCase().includes(search) ||
-            item.grade.toLowerCase().includes(search)
-          ) ||
+          load.load_id?.toLowerCase().includes(search) ||
+          load.supplier_name?.toLowerCase().includes(search) ||
+          (load.items && load.items.some(item => 
+            item.species?.toLowerCase().includes(search) ||
+            item.grade?.toLowerCase().includes(search)
+          )) ||
           load.invoice_number?.toLowerCase().includes(search)
         )
       })

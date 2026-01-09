@@ -76,12 +76,12 @@ export default function IncomingLoadsPage() {
     if (searchTerm !== '') {
       const search = searchTerm.toLowerCase()
       filtered = filtered.filter(load =>
-        load.load_id.toLowerCase().includes(search) ||
-        load.supplier_name.toLowerCase().includes(search) ||
-        load.items.some(item => 
-          item.species.toLowerCase().includes(search) ||
-          item.grade.toLowerCase().includes(search)
-        ) ||
+        load.load_id?.toLowerCase().includes(search) ||
+        load.supplier_name?.toLowerCase().includes(search) ||
+        (load.items && load.items.some(item => 
+          item.species?.toLowerCase().includes(search) ||
+          item.grade?.toLowerCase().includes(search)
+        )) ||
         load.pickup_number?.toLowerCase().includes(search) ||
         load.plant?.toLowerCase().includes(search)
       )
@@ -95,14 +95,14 @@ export default function IncomingLoadsPage() {
     // Apply species filter
     if (selectedSpecies !== 'all') {
       filtered = filtered.filter(load =>
-        load.items.some(item => item.species === selectedSpecies)
+        load.items && load.items.some(item => item.species === selectedSpecies)
       )
     }
 
     // Apply grade filter
     if (selectedGrade !== 'all') {
       filtered = filtered.filter(load =>
-        load.items.some(item => item.grade === selectedGrade)
+        load.items && load.items.some(item => item.grade === selectedGrade)
       )
     }
 
