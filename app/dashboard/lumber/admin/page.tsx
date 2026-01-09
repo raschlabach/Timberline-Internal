@@ -15,7 +15,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Edit2, Trash2, Building2, TreePine, Award } from 'lucide-react'
+import { Plus, Edit2, Trash2, Building2, TreePine, Award, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { LumberSupplierWithLocations } from '@/types/lumber'
 
@@ -44,6 +44,15 @@ interface LoadIdRange {
   updated_at: string
 }
 
+interface Operator {
+  id: number
+  name: string
+  is_active: boolean
+  display_order: number
+  created_at: string
+  updated_at: string
+}
+
 export default function LumberAdminPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -51,6 +60,7 @@ export default function LumberAdminPage() {
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
   const [species, setSpecies] = useState<Species[]>([])
   const [grades, setGrades] = useState<Grade[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [loadIdRanges, setLoadIdRanges] = useState<LoadIdRange[]>([])
   const [isLoading, setIsLoading] = useState(true)
   
@@ -58,6 +68,7 @@ export default function LumberAdminPage() {
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false)
   const [speciesDialogOpen, setSpeciesDialogOpen] = useState(false)
   const [gradeDialogOpen, setGradeDialogOpen] = useState(false)
+  const [operatorDialogOpen, setOperatorDialogOpen] = useState(false)
   const [locationDialogOpen, setLocationDialogOpen] = useState(false)
   const [rangeDialogOpen, setRangeDialogOpen] = useState(false)
   
@@ -65,6 +76,7 @@ export default function LumberAdminPage() {
   const [editingSupplier, setEditingSupplier] = useState<any>(null)
   const [editingSpecies, setEditingSpecies] = useState<any>(null)
   const [editingGrade, setEditingGrade] = useState<any>(null)
+  const [editingOperator, setEditingOperator] = useState<any>(null)
   const [editingRange, setEditingRange] = useState<any>(null)
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null)
   
@@ -72,6 +84,7 @@ export default function LumberAdminPage() {
   const [supplierForm, setSupplierForm] = useState({ name: '', notes: '' })
   const [speciesForm, setSpeciesForm] = useState({ name: '', color: '#6B7280', display_order: 0 })
   const [gradeForm, setGradeForm] = useState({ name: '', display_order: 0 })
+  const [operatorForm, setOperatorForm] = useState({ name: '', display_order: 0 })
   const [rangeForm, setRangeForm] = useState({ range_name: '', start_range: 1000, end_range: 9999 })
   const [locationForm, setLocationForm] = useState({
     location_name: '',
@@ -95,15 +108,17 @@ export default function LumberAdminPage() {
 
   async function fetchData() {
     try {
-      const [suppliersRes, speciesRes, gradesRes, rangesRes] = await Promise.all([
+      const [suppliersRes, speciesRes, gradesRes, operatorsRes, rangesRes] = await Promise.all([
         fetch('/api/lumber/suppliers'),
         fetch('/api/lumber/species'),
         fetch('/api/lumber/grades'),
+        fetch('/api/lumber/operators'),
         fetch('/api/lumber/load-id-ranges')
       ])
 
       if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
       if (speciesRes.ok) setSpecies(await speciesRes.json())
+      if (operatorsRes.ok) setOperators(await operatorsRes.json())
       if (gradesRes.ok) setGrades(await gradesRes.json())
       if (rangesRes.ok) setLoadIdRanges(await rangesRes.json())
     } catch (error) {
@@ -268,6 +283,73 @@ export default function LumberAdminPage() {
     }
   }
 
+  // Operator functions
+  async function handleSaveOperator() {
+    try {
+      const url = editingOperator 
+        ? `/api/lumber/operators/${editingOperator.id}`
+        : '/api/lumber/operators'
+      
+      const response = await fetch(url, {
+        method: editingOperator ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(operatorForm)
+      })
+
+      if (response.ok) {
+        toast.success(`Operator ${editingOperator ? 'updated' : 'created'} successfully`)
+        setOperatorDialogOpen(false)
+        setEditingOperator(null)
+        setOperatorForm({ name: '', display_order: 0 })
+        fetchData()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to save operator')
+      }
+    } catch (error) {
+      console.error('Error saving operator:', error)
+      toast.error('Failed to save operator')
+    }
+  }
+
+  async function handleDeleteOperator(id: number) {
+    if (!confirm('Are you sure you want to delete this operator? This will fail if they are assigned to any packs.')) return
+
+    try {
+      const response = await fetch(`/api/lumber/operators/${id}`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('Operator deleted')
+        fetchData()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete operator')
+      }
+    } catch (error) {
+      console.error('Error deleting operator:', error)
+      toast.error('Failed to delete operator')
+    }
+  }
+
+  async function handleToggleOperatorActive(operator: Operator) {
+    try {
+      const response = await fetch(`/api/lumber/operators/${operator.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !operator.is_active })
+      })
+
+      if (response.ok) {
+        toast.success(`Operator ${!operator.is_active ? 'activated' : 'deactivated'}`)
+        fetchData()
+      } else {
+        toast.error('Failed to update operator')
+      }
+    } catch (error) {
+      console.error('Error toggling operator:', error)
+      toast.error('Failed to update operator')
+    }
+  }
+
   // Load ID Range functions
   async function handleSaveRange() {
     try {
@@ -423,7 +505,7 @@ export default function LumberAdminPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-4 gap-6">
         {/* Suppliers Column */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -612,6 +694,82 @@ export default function LumberAdminPage() {
                         variant="ghost"
                         className="h-8 w-8 p-0"
                         onClick={() => handleDeleteGrade(grade.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Operators Column */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Operators & Stackers
+            </h2>
+            <Button size="sm" onClick={() => {
+              setEditingOperator(null)
+              setOperatorForm({ name: '', display_order: 0 })
+              setOperatorDialogOpen(true)
+            }}>
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+
+          <div className="bg-white rounded-lg shadow overflow-hidden max-h-[calc(100vh-250px)] overflow-y-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {operators.map(operator => (
+                  <tr key={operator.id} className={!operator.is_active ? 'bg-gray-100' : ''}>
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900">{operator.name}</td>
+                    <td className="px-3 py-2 text-sm">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        operator.is_active 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {operator.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-sm text-right space-x-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleToggleOperatorActive(operator)}
+                        title={operator.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        {operator.is_active ? '✓' : '○'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => {
+                          setEditingOperator(operator)
+                          setOperatorForm({ name: operator.name, display_order: operator.display_order })
+                          setOperatorDialogOpen(true)
+                        }}
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleDeleteOperator(operator.id)}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -821,6 +979,43 @@ export default function LumberAdminPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setGradeDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveGrade}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Operator Dialog */}
+      <Dialog open={operatorDialogOpen} onOpenChange={setOperatorDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingOperator ? 'Edit' : 'Add'} Operator/Stacker</DialogTitle>
+            <DialogDescription>
+              {editingOperator ? 'Update operator information' : 'Add a new operator or stacker'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="operator-name">Name *</Label>
+              <Input
+                id="operator-name"
+                value={operatorForm.name}
+                onChange={(e) => setOperatorForm({ ...operatorForm, name: e.target.value })}
+                placeholder="Enter full name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="operator-order">Display Order</Label>
+              <Input
+                id="operator-order"
+                type="number"
+                value={operatorForm.display_order}
+                onChange={(e) => setOperatorForm({ ...operatorForm, display_order: parseInt(e.target.value) || 0 })}
+              />
+              <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in dropdowns</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOperatorDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveOperator}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

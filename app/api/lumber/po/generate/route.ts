@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
+import { jsPDF } from 'jspdf'
 
-// POST /api/lumber/po/generate - Generate PO PDF (stub for now)
+// POST /api/lumber/po/generate - Generate PO PDF
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -46,43 +47,128 @@ export async function POST(request: NextRequest) {
       [load_id]
     )
 
-    // TODO: Implement actual PDF generation using a library like pdfkit or puppeteer
-    // For now, return a simple text response that can be used to generate a PO
-    const poText = `
-PURCHASE ORDER
---------------
-PO Number: PO-${load.load_id}
-Date: ${new Date().toLocaleDateString()}
+    // Generate PDF
+    const doc = new jsPDF()
+    
+    const poNumber = `R-${load.load_id}`
+    const currentDate = new Date().toLocaleDateString()
+    const deliveryMonth = load.estimated_delivery_date 
+      ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      : 'TBD'
 
-SUPPLIER:
-${load.supplier_name}
-${load.location_name || ''}
-${load.address || ''}
-${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}
+    let yPos = 20
 
-ITEMS:
-${itemsResult.rows.map((item, idx) => `
-${idx + 1}. ${item.species} - ${item.grade} (${item.thickness})
-   Estimated Footage: ${item.estimated_footage?.toLocaleString() || 'TBD'} BF
-   Price: $${item.price?.toFixed(2) || 'TBD'} per BF
-   Subtotal: $${((item.estimated_footage || 0) * (item.price || 0)).toFixed(2)}
-`).join('\n')}
+    // Header
+    doc.setFontSize(20)
+    doc.setFont('helvetica', 'bold')
+    doc.text('PURCHASE ORDER', 105, yPos, { align: 'center' })
+    yPos += 15
 
-TOTAL: $${itemsResult.rows.reduce((sum, item) => sum + ((item.estimated_footage || 0) * (item.price || 0)), 0).toFixed(2)}
+    // PO Number and Dates
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`PO Number: ${poNumber}`, 20, yPos)
+    yPos += 7
+    doc.text(`Date: ${currentDate}`, 20, yPos)
+    yPos += 7
+    doc.text(`Estimated Delivery: ${deliveryMonth}`, 20, yPos)
+    yPos += 15
 
-Estimated Delivery: ${load.estimated_delivery_date ? new Date(load.estimated_delivery_date).toLocaleDateString() : 'TBD'}
-Type: ${load.lumber_type || 'N/A'}
-Pickup/Delivery: ${load.pickup_or_delivery || 'N/A'}
+    // Customer Info (RNR Enterprises)
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('CUSTOMER:', 20, yPos)
+    yPos += 7
+    doc.setFont('helvetica', 'normal')
+    doc.text('RNR Enterprises', 20, yPos)
+    yPos += 6
+    doc.text('1361 Co Rd', 20, yPos)
+    yPos += 6
+    doc.text('Sugarcreek, OH 44681', 20, yPos)
+    yPos += 15
 
-Comments:
-${load.comments || 'None'}
-`
+    // Supplier Info
+    doc.setFont('helvetica', 'bold')
+    doc.text('SUPPLIER:', 20, yPos)
+    yPos += 7
+    doc.setFont('helvetica', 'normal')
+    doc.text(load.supplier_name || 'N/A', 20, yPos)
+    yPos += 6
+    if (load.location_name) {
+      doc.text(load.location_name, 20, yPos)
+      yPos += 6
+    }
+    if (load.address) {
+      doc.text(load.address, 20, yPos)
+      yPos += 6
+    }
+    if (load.city || load.state || load.zip_code) {
+      doc.text(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`, 20, yPos)
+      yPos += 6
+    }
+    yPos += 10
 
-    // Return as text/plain for now - in production this would be a PDF
-    return new NextResponse(poText, {
+    // Items Table Header
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text('Qty (BF)', 20, yPos)
+    doc.text('Species', 45, yPos)
+    doc.text('Grade', 75, yPos)
+    doc.text('Thickness', 100, yPos)
+    doc.text('Price/BF', 130, yPos)
+    doc.text('Pickup/Del', 160, yPos)
+    yPos += 2
+    doc.line(20, yPos, 190, yPos) // Line under header
+    yPos += 6
+
+    // Items
+    doc.setFont('helvetica', 'normal')
+    itemsResult.rows.forEach((item: any) => {
+      if (yPos > 250) { // New page if needed
+        doc.addPage()
+        yPos = 20
+      }
+      
+      doc.text((item.estimated_footage || 0).toLocaleString(), 20, yPos)
+      doc.text(item.species || '', 45, yPos)
+      doc.text(item.grade || '', 75, yPos)
+      doc.text(item.thickness?.toString() || '', 100, yPos)
+      doc.text(`$${(item.price || 0).toFixed(2)}`, 130, yPos)
+      doc.text(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', 160, yPos)
+      yPos += 7
+    })
+
+    yPos += 5
+    doc.line(20, yPos, 190, yPos) // Line after items
+    yPos += 10
+
+    // Comments
+    if (load.comments) {
+      doc.setFont('helvetica', 'bold')
+      doc.text('COMMENTS:', 20, yPos)
+      yPos += 7
+      doc.setFont('helvetica', 'normal')
+      const splitComments = doc.splitTextToSize(load.comments, 170)
+      doc.text(splitComments, 20, yPos)
+      yPos += (splitComments.length * 6) + 10
+    }
+
+    // Important Notice
+    yPos += 5
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 0, 0) // Red text
+    const noticeText = 'PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK'
+    doc.text(noticeText, 105, yPos, { align: 'center' })
+
+    // Generate PDF buffer
+    const pdfBuffer = Buffer.from(doc.output('arraybuffer'))
+
+    // Return PDF
+    return new NextResponse(pdfBuffer, {
       headers: {
-        'Content-Type': 'text/plain',
-        'Content-Disposition': `attachment; filename="PO-${load.load_id}.txt"`
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="PO-${poNumber}.pdf"`
       }
     })
   } catch (error) {

@@ -18,9 +18,10 @@ import {
 import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface User {
+interface Operator {
   id: number
-  full_name: string
+  name: string
+  is_active: boolean
 }
 
 export default function RipEntryPage() {
@@ -29,7 +30,7 @@ export default function RipEntryPage() {
   
   
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
-  const [users, setUsers] = useState<User[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [selectedLoad, setSelectedLoad] = useState<LumberLoadWithDetails | null>(null)
   const [packs, setPacks] = useState<LumberPackWithDetails[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -76,13 +77,17 @@ export default function RipEntryPage() {
 
   async function fetchLoads() {
     try {
-      const [loadsRes, usersRes] = await Promise.all([
+      const [loadsRes, operatorsRes] = await Promise.all([
         fetch('/api/lumber/loads/for-rip'),
-        fetch('/api/users')
+        fetch('/api/lumber/operators')
       ])
       
       if (loadsRes.ok) setLoads(await loadsRes.json())
-      if (usersRes.ok) setUsers(await usersRes.json())
+      if (operatorsRes.ok) {
+        const allOperators = await operatorsRes.json()
+        // Only show active operators
+        setOperators(allOperators.filter((op: Operator) => op.is_active))
+      }
     } catch (error) {
       console.error('Error fetching rip entry data:', error)
     } finally {
@@ -720,9 +725,9 @@ export default function RipEntryPage() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.full_name}
+                      {operators.map(operator => (
+                        <SelectItem key={operator.id} value={operator.id.toString()}>
+                          {operator.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -735,9 +740,9 @@ export default function RipEntryPage() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.full_name}
+                      {operators.map(operator => (
+                        <SelectItem key={operator.id} value={operator.id.toString()}>
+                          {operator.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -750,9 +755,9 @@ export default function RipEntryPage() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.full_name}
+                      {operators.map(operator => (
+                        <SelectItem key={operator.id} value={operator.id.toString()}>
+                          {operator.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -765,9 +770,9 @@ export default function RipEntryPage() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.full_name}
+                      {operators.map(operator => (
+                        <SelectItem key={operator.id} value={operator.id.toString()}>
+                          {operator.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -780,9 +785,9 @@ export default function RipEntryPage() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.full_name}
+                      {operators.map(operator => (
+                        <SelectItem key={operator.id} value={operator.id.toString()}>
+                          {operator.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
