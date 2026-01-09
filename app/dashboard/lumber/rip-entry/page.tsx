@@ -959,9 +959,9 @@ export default function RipEntryPage() {
                         Add Pack
                       </Button>
                     </div>
-                    <div className="border rounded overflow-auto" style={{ maxHeight: '350px' }}>
+                    <div className="border rounded">
                       <table className="w-full text-xs">
-                        <thead className="bg-gray-50 sticky top-0">
+                        <thead className="bg-gray-50">
                           <tr>
                             <th className="px-2 py-1 text-left w-24">Pack ID</th>
                             <th className="px-2 py-1 text-left w-24">Lth</th>
@@ -1040,9 +1040,9 @@ export default function RipEntryPage() {
                   <div className="h-6 mb-1 flex items-center">
                     <h3 className="text-xs font-semibold">Rip Yield & Comments</h3>
                   </div>
-                  <div className="border rounded overflow-auto" style={{ maxHeight: '350px' }}>
+                  <div className="border rounded">
                     <table className="w-full text-xs">
-                      <thead className="bg-gray-50 sticky top-0">
+                      <thead className="bg-gray-50">
                         <tr>
                           <th className="px-2 py-1 text-left w-24">Act Brd Ft</th>
                           <th className="px-2 py-1 text-left w-24">Rip Yield</th>
