@@ -865,7 +865,6 @@ export default function RipEntryPage() {
                                 <td className="px-1 py-1 border-t">
                                   <Input
                                     type="number"
-                                    step="0.1"
                                     value={tally.length || ''}
                                     onChange={(e) => handleTallyChange(index, 'length', e.target.value)}
                                     className="h-7 text-xs"
@@ -874,7 +873,6 @@ export default function RipEntryPage() {
                                 <td className="px-1 py-1 border-t">
                                   <Input
                                     type="number"
-                                    step="0.01"
                                     value={tally.tally_board_feet || ''}
                                     onChange={(e) => handleTallyChange(index, 'tally_board_feet', e.target.value)}
                                     className="h-7 text-xs"
@@ -940,9 +938,8 @@ export default function RipEntryPage() {
                                 ) : (
                                   <Input
                                     type="number"
-                                    step="0.1"
                                     value={packEdits[pack.id]?.length ?? pack.length}
-                                    onChange={(e) => handlePackEdit(pack.id, 'length', parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     className="h-6 text-xs"
                                   />
@@ -954,9 +951,8 @@ export default function RipEntryPage() {
                                 ) : (
                                   <Input
                                     type="number"
-                                    step="0.01"
                                     value={packEdits[pack.id]?.tally_board_feet ?? pack.tally_board_feet}
-                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     className="h-6 text-xs"
                                   />
@@ -978,8 +974,8 @@ export default function RipEntryPage() {
                           ))}
                           <tr className="bg-gray-100 font-semibold">
                             <td className="px-2 py-1">{totalPacks} Packs</td>
-                            <td className="px-2 py-1">{avgLength.toFixed(2)}</td>
-                            <td className="px-2 py-1" colSpan={2}>{totalBF.toLocaleString()} BF</td>
+                            <td className="px-2 py-1">{Math.round(avgLength)}</td>
+                            <td className="px-2 py-1" colSpan={2}>{Math.round(totalBF).toLocaleString()} BF</td>
                           </tr>
                         </tbody>
                       </table>
@@ -1008,9 +1004,8 @@ export default function RipEntryPage() {
                               ) : (
                                 <Input
                                   type="number"
-                                  step="0.01"
                                   value={packEdits[pack.id]?.actual_board_feet || ''}
-                                  onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseFloat(e.target.value) || null)}
+                                  onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseInt(e.target.value) || null)}
                                   onBlur={() => handleSavePack(pack.id)}
                                   className="h-6 text-xs px-1"
                                 />
@@ -1022,9 +1017,8 @@ export default function RipEntryPage() {
                               ) : (
                                 <Input
                                   type="number"
-                                  step="0.01"
                                   value={packEdits[pack.id]?.rip_yield || ''}
-                                  onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseFloat(e.target.value) || null)}
+                                  onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseInt(e.target.value) || null)}
                                   onBlur={() => handleSavePack(pack.id)}
                                   className="h-6 text-xs px-1"
                                 />
