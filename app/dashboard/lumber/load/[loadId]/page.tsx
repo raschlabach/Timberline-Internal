@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, Save, FileText, Trash2, Plus } from 'lucide-react'
+import { ArrowLeft, Save, FileText, Trash2, Plus, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface LoadItem {
   id: number
@@ -53,6 +54,7 @@ export default function LoadInfoPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceTotal, setInvoiceTotal] = useState('')
   const [invoiceDate, setInvoiceDate] = useState('')
+  const [allPacksFinished, setAllPacksFinished] = useState(false)
   
   // Reference data
   const [suppliers, setSuppliers] = useState<any[]>([])
@@ -99,6 +101,7 @@ export default function LoadInfoPage() {
           setInvoiceNumber(loadData.invoice_number || '')
           setInvoiceTotal(loadData.invoice_total?.toString() || '')
           setInvoiceDate(loadData.invoice_date?.split('T')[0] || '')
+          setAllPacksFinished(loadData.all_packs_finished || false)
         }
 
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
@@ -140,7 +143,8 @@ export default function LoadInfoPage() {
           pickup_date: pickupDate || null,
           invoice_number: invoiceNumber,
           invoice_total: invoiceTotal ? parseFloat(invoiceTotal) : null,
-          invoice_date: invoiceDate || null
+          invoice_date: invoiceDate || null,
+          all_packs_finished: allPacksFinished
         })
       })
 
@@ -500,6 +504,30 @@ export default function LoadInfoPage() {
                 onChange={(e) => setInvoiceDate(e.target.value)}
                 className="mt-1"
               />
+            </div>
+          </div>
+          
+          {/* Load Status */}
+          <div className="mt-6 pt-6 border-t">
+            <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+              <Checkbox 
+                id="all_packs_finished"
+                checked={allPacksFinished}
+                onCheckedChange={(checked) => setAllPacksFinished(checked === true)}
+              />
+              <div className="flex-1">
+                <Label 
+                  htmlFor="all_packs_finished" 
+                  className="text-base font-semibold cursor-pointer flex items-center gap-2"
+                >
+                  <CheckCircle2 className={`h-5 w-5 ${allPacksFinished ? 'text-green-600' : 'text-gray-400'}`} />
+                  Mark Load as Completely Finished
+                </Label>
+                <p className="text-xs text-gray-600 mt-1">
+                  Check this when all packs have been ripped and the load is complete. 
+                  This will remove it from inventory.
+                </p>
+              </div>
             </div>
           </div>
         </div>
