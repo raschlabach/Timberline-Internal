@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
-import { jsPDF } from 'jspdf'
+import PDFDocument from 'pdfkit'
 
 // POST /api/lumber/po/generate - Generate PO PDF
 export async function POST(request: NextRequest) {
@@ -48,7 +48,11 @@ export async function POST(request: NextRequest) {
     )
 
     // Generate PDF
-    const doc = new jsPDF()
+    const doc = new PDFDocument({ margin: 50 })
+    const chunks: Buffer[] = []
+
+    // Collect PDF data
+    doc.on('data', (chunk) => chunks.push(chunk))
     
     const poNumber = `R-${load.load_id}`
     const currentDate = new Date().toLocaleDateString()
@@ -56,113 +60,109 @@ export async function POST(request: NextRequest) {
       ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       : 'TBD'
 
-    let yPos = 20
-
     // Header
-    doc.setFontSize(20)
-    doc.setFont('helvetica', 'bold')
-    doc.text('PURCHASE ORDER', 105, yPos, { align: 'center' })
-    yPos += 15
+    doc.fontSize(24).font('Helvetica-Bold').text('PURCHASE ORDER', { align: 'center' })
+    doc.moveDown(1)
 
     // PO Number and Dates
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`PO Number: ${poNumber}`, 20, yPos)
-    yPos += 7
-    doc.text(`Date: ${currentDate}`, 20, yPos)
-    yPos += 7
-    doc.text(`Estimated Delivery: ${deliveryMonth}`, 20, yPos)
-    yPos += 15
+    doc.fontSize(11).font('Helvetica')
+    doc.text(`PO Number: ${poNumber}`)
+    doc.text(`Date: ${currentDate}`)
+    doc.text(`Estimated Delivery: ${deliveryMonth}`)
+    doc.moveDown(1)
 
     // Customer Info (RNR Enterprises)
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.text('CUSTOMER:', 20, yPos)
-    yPos += 7
-    doc.setFont('helvetica', 'normal')
-    doc.text('RNR Enterprises', 20, yPos)
-    yPos += 6
-    doc.text('1361 Co Rd', 20, yPos)
-    yPos += 6
-    doc.text('Sugarcreek, OH 44681', 20, yPos)
-    yPos += 15
+    doc.fontSize(12).font('Helvetica-Bold')
+    doc.text('CUSTOMER:')
+    doc.fontSize(11).font('Helvetica')
+    doc.text('RNR Enterprises')
+    doc.text('1361 Co Rd')
+    doc.text('Sugarcreek, OH 44681')
+    doc.moveDown(1)
 
     // Supplier Info
-    doc.setFont('helvetica', 'bold')
-    doc.text('SUPPLIER:', 20, yPos)
-    yPos += 7
-    doc.setFont('helvetica', 'normal')
-    doc.text(load.supplier_name || 'N/A', 20, yPos)
-    yPos += 6
-    if (load.location_name) {
-      doc.text(load.location_name, 20, yPos)
-      yPos += 6
-    }
-    if (load.address) {
-      doc.text(load.address, 20, yPos)
-      yPos += 6
-    }
+    doc.fontSize(12).font('Helvetica-Bold')
+    doc.text('SUPPLIER:')
+    doc.fontSize(11).font('Helvetica')
+    doc.text(load.supplier_name || 'N/A')
+    if (load.location_name) doc.text(load.location_name)
+    if (load.address) doc.text(load.address)
     if (load.city || load.state || load.zip_code) {
-      doc.text(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`, 20, yPos)
-      yPos += 6
+      doc.text(`${load.city || ''}, ${load.state || ''} ${load.zip_code || ''}`)
     }
-    yPos += 10
+    doc.moveDown(1.5)
 
-    // Items Table Header
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.text('Qty (BF)', 20, yPos)
-    doc.text('Species', 45, yPos)
-    doc.text('Grade', 75, yPos)
-    doc.text('Thickness', 100, yPos)
-    doc.text('Price/BF', 130, yPos)
-    doc.text('Pickup/Del', 160, yPos)
-    yPos += 2
-    doc.line(20, yPos, 190, yPos) // Line under header
-    yPos += 6
+    // Items Table
+    const tableTop = doc.y
+    const colPositions = {
+      qty: 50,
+      species: 120,
+      grade: 220,
+      thickness: 290,
+      price: 360,
+      pickup: 450
+    }
 
+    // Table Header
+    doc.fontSize(10).font('Helvetica-Bold')
+    doc.text('Qty (BF)', colPositions.qty, tableTop)
+    doc.text('Species', colPositions.species, tableTop)
+    doc.text('Grade', colPositions.grade, tableTop)
+    doc.text('Thickness', colPositions.thickness, tableTop)
+    doc.text('Price/BF', colPositions.price, tableTop)
+    doc.text('Pickup/Del', colPositions.pickup, tableTop)
+    
+    // Line under header
+    const lineY = tableTop + 15
+    doc.moveTo(50, lineY).lineTo(550, lineY).stroke()
+    
     // Items
-    doc.setFont('helvetica', 'normal')
+    let itemY = lineY + 10
+    doc.font('Helvetica')
     itemsResult.rows.forEach((item: any) => {
-      if (yPos > 250) { // New page if needed
+      if (itemY > 700) {
         doc.addPage()
-        yPos = 20
+        itemY = 50
       }
       
-      doc.text((item.estimated_footage || 0).toLocaleString(), 20, yPos)
-      doc.text(item.species || '', 45, yPos)
-      doc.text(item.grade || '', 75, yPos)
-      doc.text(item.thickness?.toString() || '', 100, yPos)
-      doc.text(`$${(item.price || 0).toFixed(2)}`, 130, yPos)
-      doc.text(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', 160, yPos)
-      yPos += 7
+      doc.text((item.estimated_footage || 0).toLocaleString(), colPositions.qty, itemY, { width: 60 })
+      doc.text(item.species || '', colPositions.species, itemY, { width: 90 })
+      doc.text(item.grade || '', colPositions.grade, itemY, { width: 60 })
+      doc.text(item.thickness?.toString() || '', colPositions.thickness, itemY, { width: 60 })
+      doc.text(`$${(item.price || 0).toFixed(2)}`, colPositions.price, itemY, { width: 80 })
+      doc.text(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivery', colPositions.pickup, itemY)
+      
+      itemY += 25
     })
 
-    yPos += 5
-    doc.line(20, yPos, 190, yPos) // Line after items
-    yPos += 10
+    // Line after items
+    doc.moveTo(50, itemY).lineTo(550, itemY).stroke()
+    itemY += 20
 
     // Comments
     if (load.comments) {
-      doc.setFont('helvetica', 'bold')
-      doc.text('COMMENTS:', 20, yPos)
-      yPos += 7
-      doc.setFont('helvetica', 'normal')
-      const splitComments = doc.splitTextToSize(load.comments, 170)
-      doc.text(splitComments, 20, yPos)
-      yPos += (splitComments.length * 6) + 10
+      doc.font('Helvetica-Bold').fontSize(11)
+      doc.text('COMMENTS:', 50, itemY)
+      itemY += 15
+      doc.font('Helvetica').fontSize(10)
+      doc.text(load.comments, 50, itemY, { width: 500 })
+      itemY = doc.y + 20
     }
 
     // Important Notice
-    yPos += 5
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(255, 0, 0) // Red text
-    const noticeText = 'PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK'
-    doc.text(noticeText, 105, yPos, { align: 'center' })
+    doc.moveDown(2)
+    doc.fontSize(16).font('Helvetica-Bold').fillColor('red')
+    doc.text('PLEASE USE OUR PO NUMBER(S) ON ALL PAPERWORK', { align: 'center' })
 
-    // Generate PDF buffer
-    const pdfBuffer = Buffer.from(doc.output('arraybuffer'))
+    // Finalize PDF
+    doc.end()
+
+    // Wait for PDF to be generated
+    const pdfBuffer = await new Promise<Buffer>((resolve) => {
+      doc.on('end', () => {
+        resolve(Buffer.concat(chunks))
+      })
+    })
 
     // Return PDF
     return new NextResponse(pdfBuffer, {
