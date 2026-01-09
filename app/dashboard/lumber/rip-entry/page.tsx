@@ -203,6 +203,34 @@ export default function RipEntryPage() {
     }
   }
 
+  async function handleMarkLoadComplete() {
+    if (!selectedLoad) return
+
+    try {
+      const response = await fetch(`/api/lumber/loads/${selectedLoad.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          all_packs_finished: true
+        })
+      })
+
+      if (response.ok) {
+        toast.success(`Load ${selectedLoad.load_id} marked as complete!`)
+        
+        // Clear selection and refresh loads
+        setSelectedLoad(null)
+        setPacks([])
+        fetchLoads()
+      } else {
+        toast.error('Failed to mark load as complete')
+      }
+    } catch (error) {
+      console.error('Error marking load complete:', error)
+      toast.error('Error marking load complete')
+    }
+  }
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -304,6 +332,30 @@ export default function RipEntryPage() {
                   <span>{selectedLoad.actual_arrival_date && new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}</span>
                 </div>
               </div>
+
+              {/* All Packs Finished Banner */}
+              {packs.length > 0 && packs.every(p => p.is_finished) && (
+                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-green-900 flex items-center gap-2">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      All Packs Finished!
+                    </h3>
+                    <p className="text-sm text-green-700 mt-1">
+                      All {packs.length} packs in this load have been ripped and finished. 
+                      Click the button to mark the entire load as complete.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleMarkLoadComplete}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6"
+                  >
+                    Mark Load as Complete
+                  </Button>
+                </div>
+              )}
 
               {/* Operator/Stacker Selection - Compact Row */}
               <div className="grid grid-cols-7 gap-2">

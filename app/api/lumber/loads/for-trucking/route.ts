@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
       LEFT JOIN lumber_supplier_locations sl ON l.supplier_location_id = sl.id
       LEFT JOIN lumber_drivers d ON l.driver_id = d.id
       LEFT JOIN lumber_load_items li ON l.id = li.load_id
-      WHERE l.pickup_or_delivery = 'pickup' AND l.actual_arrival_date IS NULL
+      WHERE COALESCE(l.all_packs_finished, FALSE) = FALSE
+        AND li.actual_footage IS NULL
       GROUP BY l.id, s.name, sl.location_name, sl.phone_number_1, sl.phone_number_2, d.name
       ORDER BY l.estimated_delivery_date NULLS LAST, l.created_at
     `)

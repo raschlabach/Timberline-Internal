@@ -43,25 +43,6 @@ export async function PATCH(
         ]
       )
 
-      const loadId = result.rows[0].load_id
-
-      // Check if all packs in the load are finished
-      const totalPacksResult = await query(
-        'SELECT COUNT(*) as total FROM lumber_packs WHERE load_id = $1',
-        [loadId]
-      )
-      const finishedPacksResult = await query(
-        'SELECT COUNT(*) as finished FROM lumber_packs WHERE load_id = $1 AND is_finished = TRUE',
-        [loadId]
-      )
-
-      if (totalPacksResult.rows[0].total === finishedPacksResult.rows[0].finished) {
-        await query(
-          'UPDATE lumber_loads SET all_packs_finished = TRUE WHERE id = $1',
-          [loadId]
-        )
-      }
-
       await query('COMMIT')
 
       return NextResponse.json({ success: true })
