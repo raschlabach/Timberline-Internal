@@ -103,6 +103,7 @@ export default function LoadInfoPage() {
           setInvoiceTotal(loadData.invoice_total?.toString() || '')
           setInvoiceDate(loadData.invoice_date?.split('T')[0] || '')
           setAllPacksFinished(loadData.all_packs_finished || false)
+          setPoGenerated(loadData.po_generated || false)
         }
 
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
@@ -145,7 +146,8 @@ export default function LoadInfoPage() {
           invoice_number: invoiceNumber,
           invoice_total: invoiceTotal ? parseFloat(invoiceTotal) : null,
           invoice_date: invoiceDate || null,
-          all_packs_finished: allPacksFinished
+          all_packs_finished: allPacksFinished,
+          po_generated: poGenerated
         })
       })
 
@@ -509,7 +511,7 @@ export default function LoadInfoPage() {
           </div>
           
           {/* Load Status */}
-          <div className="mt-6 pt-6 border-t">
+          <div className="mt-6 pt-6 border-t space-y-3">
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
               <Checkbox 
                 id="all_packs_finished"
@@ -527,6 +529,27 @@ export default function LoadInfoPage() {
                 <p className="text-xs text-gray-600 mt-1">
                   Check this when all packs have been ripped and the load is complete. 
                   This will remove it from inventory.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg border-2 border-dashed border-blue-300">
+              <Checkbox 
+                id="po_generated"
+                checked={poGenerated}
+                onCheckedChange={(checked) => setPoGenerated(checked === true)}
+              />
+              <div className="flex-1">
+                <Label 
+                  htmlFor="po_generated" 
+                  className="text-base font-semibold cursor-pointer flex items-center gap-2"
+                >
+                  <FileText className={`h-5 w-5 ${poGenerated ? 'text-blue-600' : 'text-gray-400'}`} />
+                  PO Generated
+                </Label>
+                <p className="text-xs text-gray-600 mt-1">
+                  Uncheck this to return the load to the PO page. 
+                  Check to mark PO as already generated.
                 </p>
               </div>
             </div>
