@@ -25,7 +25,13 @@ export async function GET(request: NextRequest) {
             'actual_footage', li.actual_footage,
             'price', li.price
           ) ORDER BY li.id
-        ) as items
+        ) as items,
+        COALESCE(SUM(li.actual_footage), 0) as total_footage,
+        COALESCE((
+          SELECT SUM(p.actual_board_feet)
+          FROM lumber_packs p
+          WHERE p.load_id = l.id AND p.is_finished = TRUE
+        ), 0) as finished_footage
       FROM lumber_loads l
       JOIN lumber_suppliers s ON l.supplier_id = s.id
       LEFT JOIN lumber_load_items li ON l.id = li.load_id
@@ -35,14 +41,9 @@ export async function GET(request: NextRequest) {
       ORDER BY l.actual_arrival_date
     `)
 
-    // Fetch items for each load
+    // Calculate remaining footage for each load
     for (const load of result.rows) {
-      const items = await query(
-        'SELECT * FROM lumber_load_items WHERE load_id = $1 ORDER BY id',
-        [load.id]
-      )
-      load.items = items.rows
-      load.documents = []
+      load.current_footage = load.total_footage - load.finished_footage
     }
 
     return NextResponse.json(result.rows)

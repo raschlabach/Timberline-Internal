@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { RefreshCcw, Save, ArrowLeft, Trash2, Plus } from 'lucide-react'
+import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface User {
@@ -34,6 +34,15 @@ export default function RipEntryPage() {
   const [packs, setPacks] = useState<LumberPackWithDetails[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  
+  // Filter states
+  const [supplierFilter, setSupplierFilter] = useState<string>('all')
+  const [speciesFilter, setSpeciesFilter] = useState<string>('all')
+  const [gradeFilter, setGradeFilter] = useState<string>('all')
+  
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string>('load_id')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   
   // Pack editing state
   const [packEdits, setPackEdits] = useState<{ [packId: number]: { 
@@ -392,15 +401,87 @@ export default function RipEntryPage() {
     )
   }
 
-  const filteredLoads: LumberLoadWithDetails[] = loads.filter(load =>
-    searchTerm === '' ||
-    load.load_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    load.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    load.items.some(item =>
-      item.species.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.grade.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  )
+  // Sorting function
+  function handleSort(column: string) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  // Filter and sort loads
+  const filteredLoads: LumberLoadWithDetails[] = loads
+    .filter(load => {
+      // Search filter
+      const matchesSearch = searchTerm === '' ||
+        load.load_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        load.supplier_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        load.items?.some(item =>
+          item.species?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.grade?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      
+      // Supplier filter
+      const matchesSupplier = supplierFilter === 'all' || load.supplier_name === supplierFilter
+      
+      // Species filter
+      const matchesSpecies = speciesFilter === 'all' || 
+        load.items?.some(item => item.species === speciesFilter)
+      
+      // Grade filter
+      const matchesGrade = gradeFilter === 'all' || 
+        load.items?.some(item => item.grade === gradeFilter)
+      
+      return matchesSearch && matchesSupplier && matchesSpecies && matchesGrade
+    })
+    .sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (sortColumn) {
+        case 'load_id':
+          aVal = parseInt(a.load_id) || 0
+          bVal = parseInt(b.load_id) || 0
+          break
+        case 'supplier':
+          aVal = a.supplier_name?.toLowerCase() || ''
+          bVal = b.supplier_name?.toLowerCase() || ''
+          break
+        case 'species':
+          aVal = a.items?.[0]?.species?.toLowerCase() || ''
+          bVal = b.items?.[0]?.species?.toLowerCase() || ''
+          break
+        case 'grade':
+          aVal = a.items?.[0]?.grade?.toLowerCase() || ''
+          bVal = b.items?.[0]?.grade?.toLowerCase() || ''
+          break
+        case 'footage':
+          aVal = (a as any).total_footage || 0
+          bVal = (b as any).total_footage || 0
+          break
+        case 'current':
+          aVal = (a as any).current_footage || 0
+          bVal = (b as any).current_footage || 0
+          break
+        case 'arrival':
+          aVal = a.actual_arrival_date ? new Date(a.actual_arrival_date).getTime() : 0
+          bVal = b.actual_arrival_date ? new Date(b.actual_arrival_date).getTime() : 0
+          break
+        default:
+          return 0
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+
+  // Extract unique values for filters
+  const uniqueSuppliers = ['all', ...Array.from(new Set(loads.map(l => l.supplier_name).filter(Boolean)))]
+  const uniqueSpecies = ['all', ...Array.from(new Set(loads.flatMap(l => l.items?.map(i => i.species) || []).filter(Boolean)))]
+  const uniqueGrades = ['all', ...Array.from(new Set(loads.flatMap(l => l.items?.map(i => i.grade) || []).filter(Boolean)))]
 
   const totalPacks = packs.length
   const finishedPacks = packs.filter(p => p.is_finished).length
@@ -439,35 +520,148 @@ export default function RipEntryPage() {
         <div className="bg-white rounded shadow p-3">
           <h2 className="font-semibold mb-2 text-sm">Inventory Loads</h2>
           <p className="text-xs text-gray-600 mb-2">Select a load from inventory to rip</p>
-          <Input
-            type="text"
-            placeholder="Search Loads..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="mb-2 text-sm h-8"
-          />
-          <div className="border rounded overflow-auto" style={{ maxHeight: '400px' }}>
+          
+          {/* Search and Filters */}
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            <Input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="text-sm h-8"
+            />
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="All Suppliers" />
+              </SelectTrigger>
+              <SelectContent>
+                {uniqueSuppliers.map((supplier) => (
+                  <SelectItem key={supplier} value={supplier}>
+                    {supplier === 'all' ? 'All Suppliers' : supplier}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={speciesFilter} onValueChange={setSpeciesFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="All Species" />
+              </SelectTrigger>
+              <SelectContent>
+                {uniqueSpecies.map((species) => (
+                  <SelectItem key={species} value={species}>
+                    {species === 'all' ? 'All Species' : species}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={gradeFilter} onValueChange={setGradeFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                {uniqueGrades.map((grade) => (
+                  <SelectItem key={grade} value={grade}>
+                    {grade === 'all' ? 'All Grades' : grade}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="border rounded overflow-auto" style={{ maxHeight: '500px' }}>
             <table className="w-full text-xs">
-              <thead className="bg-gray-50 sticky top-0">
+              <thead className="bg-gray-800 text-white sticky top-0">
                 <tr>
-                  <th className="px-2 py-1 text-left">Load ID</th>
-                  <th className="px-2 py-1 text-left">Species</th>
-                  <th className="px-2 py-1 text-left">Grade</th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('load_id')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Load ID
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('supplier')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Supplier
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('species')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Species
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('grade')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Grade
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('footage')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Total BF
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('current')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Current BF
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-2 text-left cursor-pointer hover:bg-gray-700"
+                    onClick={() => handleSort('arrival')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Arrival
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLoads.map((load: LumberLoadWithDetails) => (
+                {filteredLoads.map((load: any) => (
                   <tr
                     key={load.id}
                     className="cursor-pointer hover:bg-blue-50"
                     onClick={() => handleSelectLoad(load.id)}
                   >
                     <td className="px-2 py-1 border-t">{load.load_id}</td>
+                    <td className="px-2 py-1 border-t">{load.supplier_name}</td>
                     <td className="px-2 py-1 border-t">
-                      {load.items.map(i => i.species).join(', ')}
+                      {load.items?.map((i: any) => i.species).join(', ')}
                     </td>
                     <td className="px-2 py-1 border-t">
-                      {load.items.map(i => i.grade).join(', ')}
+                      {load.items?.map((i: any) => i.grade).join(', ')}
+                    </td>
+                    <td className="px-2 py-1 border-t">
+                      {load.total_footage?.toLocaleString() || '0'}
+                    </td>
+                    <td className="px-2 py-1 border-t">
+                      {load.current_footage?.toLocaleString() || '0'}
+                    </td>
+                    <td className="px-2 py-1 border-t">
+                      {load.actual_arrival_date 
+                        ? new Date(load.actual_arrival_date).toLocaleDateString()
+                        : '-'}
                     </td>
                   </tr>
                 ))}
