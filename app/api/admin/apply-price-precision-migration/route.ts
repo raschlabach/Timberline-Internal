@@ -14,8 +14,8 @@ export async function POST() {
 
     console.log('Starting price precision migration...')
 
-    // Read the migration file
-    const migrationPath = path.join(process.cwd(), 'database/migrations/change-price-precision.sql')
+    // Read the safe migration file (handles views)
+    const migrationPath = path.join(process.cwd(), 'database/migrations/change-price-precision-safe.sql')
     const sql = fs.readFileSync(migrationPath, 'utf8')
 
     // Execute the migration
