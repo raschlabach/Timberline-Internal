@@ -343,7 +343,7 @@ export default function IncomingLoadsPage() {
                     <span className="text-xs">
                       {load.items.map((item, idx) => (
                         <span key={idx}>
-                          ${item.price?.toFixed(2) || '-'}
+                          ${item.price?.toFixed(3) || '-'}
                           {idx < load.items.length - 1 && ', '}
                         </span>
                       ))}

@@ -611,10 +611,10 @@ export default function CreateLoadPage() {
                   <Label>Price *</Label>
                   <Input
                     type="number"
-                    step="0.01"
+                    step="0.001"
                     value={item.price || ''}
                     onChange={(e) => handleItemChange(index, 'price', e.target.value ? parseFloat(e.target.value) : null)}
-                    placeholder="0.00"
+                    placeholder="0.000"
                   />
                 </div>
 

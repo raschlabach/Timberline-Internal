@@ -401,7 +401,7 @@ export default function LoadInfoPage() {
                     <Label>Price per BF</Label>
                     <Input
                       type="number"
-                      step="0.01"
+                      step="0.001"
                       value={item.price || ''}
                       onChange={(e) => updateItem(idx, 'price', e.target.value ? parseFloat(e.target.value) : null)}
                       className="mt-1"

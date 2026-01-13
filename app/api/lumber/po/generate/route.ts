@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
       page.drawText(item.species || '', { x: cols.species, y: yPos, size: 10, font })
       page.drawText(item.grade || '', { x: cols.grade, y: yPos, size: 10, font })
       page.drawText(thickness, { x: cols.thickness, y: yPos, size: 10, font })
-      page.drawText(`$${price.toFixed(2)}`, { x: cols.price, y: yPos, size: 10, font })
+      page.drawText(`$${price.toFixed(3)}`, { x: cols.price, y: yPos, size: 10, font })
       page.drawText(load.pickup_or_delivery === 'pickup' ? 'Pickup' : 'Delivered', { x: cols.pickup, y: yPos, size: 10, font })
       yPos -= 7
     })
