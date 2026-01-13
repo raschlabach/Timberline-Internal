@@ -675,7 +675,7 @@ export default function RipEntryPage() {
                   const hasTallies = load.total_footage && load.total_footage > 0
                   const bgColor = hasTallies 
                     ? 'bg-green-50 hover:bg-green-100' 
-                    : 'bg-yellow-50 hover:bg-yellow-100'
+                    : 'bg-gray-100 hover:bg-gray-200'
                   
                   return (
                     <tr
