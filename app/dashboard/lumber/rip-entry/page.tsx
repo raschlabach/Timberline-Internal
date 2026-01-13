@@ -973,43 +973,34 @@ export default function RipEntryPage() {
                           {packs.map(pack => (
                             <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
                               <td className="px-1 py-1 border-t">
-                                {pack.is_finished ? (
-                                  <span className="px-1">{pack.pack_id}</span>
-                                ) : (
-                                  <Input
-                                    type="text"
-                                    value={packEdits[pack.id]?.pack_id ?? pack.pack_id}
-                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value)}
-                                    onBlur={() => handleSavePack(pack.id)}
-                                    className="h-6 text-xs"
-                                  />
-                                )}
+                                <Input
+                                  type="text"
+                                  value={pack.is_finished ? pack.pack_id : (packEdits[pack.id]?.pack_id ?? pack.pack_id)}
+                                  onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value)}
+                                  onBlur={() => handleSavePack(pack.id)}
+                                  disabled={pack.is_finished}
+                                  className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
+                                />
                               </td>
                               <td className="px-1 py-1 border-t">
-                                {pack.is_finished ? (
-                                  <span className="px-1">{Math.round(pack.length)}</span>
-                                ) : (
-                                  <Input
-                                    type="number"
-                                    value={packEdits[pack.id]?.length ?? Math.round(pack.length)}
-                                    onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
-                                    onBlur={() => handleSavePack(pack.id)}
-                                    className="h-6 text-xs"
-                                  />
-                                )}
+                                <Input
+                                  type="number"
+                                  value={pack.is_finished ? Math.round(pack.length) : (packEdits[pack.id]?.length ?? Math.round(pack.length))}
+                                  onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
+                                  onBlur={() => handleSavePack(pack.id)}
+                                  disabled={pack.is_finished}
+                                  className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
+                                />
                               </td>
                               <td className="px-1 py-1 border-t">
-                                {pack.is_finished ? (
-                                  <span className="px-1">{Math.round(pack.tally_board_feet)}</span>
-                                ) : (
-                                  <Input
-                                    type="number"
-                                    value={packEdits[pack.id]?.tally_board_feet ?? Math.round(pack.tally_board_feet)}
-                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
-                                    onBlur={() => handleSavePack(pack.id)}
-                                    className="h-6 text-xs"
-                                  />
-                                )}
+                                <Input
+                                  type="number"
+                                  value={pack.is_finished ? Math.round(pack.tally_board_feet) : (packEdits[pack.id]?.tally_board_feet ?? Math.round(pack.tally_board_feet))}
+                                  onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
+                                  onBlur={() => handleSavePack(pack.id)}
+                                  disabled={pack.is_finished}
+                                  className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
+                                />
                               </td>
                               <td className="px-1 py-1 border-t">
                                 {!pack.is_finished && (
@@ -1054,42 +1045,33 @@ export default function RipEntryPage() {
                         {packs.map(pack => (
                           <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
                             <td className="px-1 py-1 border-t">
-                              {pack.is_finished ? (
-                                <span className="text-xs">{pack.actual_board_feet}</span>
-                              ) : (
-                                <Input
-                                  type="number"
-                                  value={packEdits[pack.id]?.actual_board_feet || ''}
-                                  onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseInt(e.target.value) || null)}
-                                  onBlur={() => handleSavePack(pack.id)}
-                                  className="h-6 text-xs px-1"
-                                />
-                              )}
+                              <Input
+                                type="number"
+                                value={pack.is_finished ? (pack.actual_board_feet || '') : (packEdits[pack.id]?.actual_board_feet || '')}
+                                onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseInt(e.target.value) || null)}
+                                onBlur={() => handleSavePack(pack.id)}
+                                disabled={pack.is_finished}
+                                className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
+                              />
                             </td>
                             <td className="px-1 py-1 border-t">
-                              {pack.is_finished ? (
-                                <span className="text-xs">{pack.rip_yield}</span>
-                              ) : (
-                                <Input
-                                  type="number"
-                                  value={packEdits[pack.id]?.rip_yield || ''}
-                                  onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseInt(e.target.value) || null)}
-                                  onBlur={() => handleSavePack(pack.id)}
-                                  className="h-6 text-xs px-1"
-                                />
-                              )}
+                              <Input
+                                type="number"
+                                value={pack.is_finished ? (pack.rip_yield || '') : (packEdits[pack.id]?.rip_yield || '')}
+                                onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseInt(e.target.value) || null)}
+                                onBlur={() => handleSavePack(pack.id)}
+                                disabled={pack.is_finished}
+                                className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
+                              />
                             </td>
                             <td className="px-1 py-1 border-t">
-                              {pack.is_finished ? (
-                                <span className="text-xs">{pack.rip_comments || '-'}</span>
-                              ) : (
-                                <Input
-                                  value={packEdits[pack.id]?.rip_comments || ''}
-                                  onChange={(e) => handlePackEdit(pack.id, 'rip_comments', e.target.value)}
-                                  onBlur={() => handleSavePack(pack.id)}
-                                  className="h-6 text-xs px-1"
-                                />
-                              )}
+                              <Input
+                                value={pack.is_finished ? (pack.rip_comments || '') : (packEdits[pack.id]?.rip_comments || '')}
+                                onChange={(e) => handlePackEdit(pack.id, 'rip_comments', e.target.value)}
+                                onBlur={() => handleSavePack(pack.id)}
+                                disabled={pack.is_finished}
+                                className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
+                              />
                             </td>
                             <td className="px-1 py-1 border-t">
                               {!pack.is_finished && (
