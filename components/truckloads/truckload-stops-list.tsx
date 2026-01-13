@@ -146,7 +146,7 @@ interface SortableGroupedStopProps {
 }
 
 function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId, columnWidths }: SortableGroupedStopProps) {
-  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false)
+  const [transferStop, setTransferStop] = useState<TruckloadStop | null>(null)
   const [isUnassigning, setIsUnassigning] = useState(false)
 
   const {
@@ -455,7 +455,7 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                           {isUnassigning ? 'Unassigning...' : 'Unassign Stop'}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => setIsTransferDialogOpen(true)}
+                          onClick={() => setTransferStop(stop)}
                         >
                           <ArrowRightLeft className="h-4 w-4 mr-2" />
                           Transfer Stop
@@ -471,12 +471,12 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
       </Card>
 
       <TransferStopDialog
-        isOpen={isTransferDialogOpen}
-        onClose={() => setIsTransferDialogOpen(false)}
+        isOpen={!!transferStop}
+        onClose={() => setTransferStop(null)}
         onTransferComplete={onStopUpdate}
         currentTruckloadId={truckloadId}
-        orderId={groupedStop.stops[0]?.id || 0}
-        assignmentType={groupedStop.assignmentType}
+        orderId={transferStop?.id || 0}
+        assignmentType={transferStop?.assignment_type || 'pickup'}
       />
     </>
   )
