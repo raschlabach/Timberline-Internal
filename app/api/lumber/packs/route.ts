@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         updated_at
       ) VALUES ($1, $2, $3, $4, $5, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
-      [load_id, load_item_id, pack_id || 0, length || 0, tally_board_feet || 0]
+      [load_id, load_item_id, pack_id ?? null, length ?? null, tally_board_feet ?? null]
     )
 
     return NextResponse.json(result.rows[0], { status: 201 })

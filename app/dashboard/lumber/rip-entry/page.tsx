@@ -308,9 +308,9 @@ export default function RipEntryPage() {
         body: JSON.stringify({
           load_id: selectedLoad.id,
           load_item_id: loadItemId,
-          pack_id: 0,
-          length: 0,
-          tally_board_feet: 0
+          pack_id: null,
+          length: null,
+          tally_board_feet: null
         })
       })
 
@@ -904,8 +904,8 @@ export default function RipEntryPage() {
                                 <td className="px-1 py-1 border-t">
                                   <Input
                                     type="text"
-                                    value={pack.is_finished ? pack.pack_id : (packEdits[pack.id]?.pack_id ?? pack.pack_id)}
-                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value)}
+                                    value={pack.is_finished ? (pack.pack_id ?? '') : (packEdits[pack.id]?.pack_id ?? pack.pack_id ?? '')}
+                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value || null)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     disabled={pack.is_finished}
                                     className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
@@ -914,8 +914,8 @@ export default function RipEntryPage() {
                                 <td className="px-1 py-1 border-t">
                                   <Input
                                     type="number"
-                                    value={pack.is_finished ? Math.round(pack.length) : (packEdits[pack.id]?.length ?? Math.round(pack.length))}
-                                    onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
+                                    value={pack.is_finished ? (pack.length != null ? Math.round(pack.length) : '') : (packEdits[pack.id]?.length ?? (pack.length != null ? Math.round(pack.length) : ''))}
+                                    onChange={(e) => handlePackEdit(pack.id, 'length', e.target.value ? parseInt(e.target.value) : null)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     disabled={pack.is_finished}
                                     className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
@@ -924,8 +924,8 @@ export default function RipEntryPage() {
                                 <td className="px-1 py-1 border-t">
                                   <Input
                                     type="number"
-                                    value={pack.is_finished ? Math.round(pack.tally_board_feet) : (packEdits[pack.id]?.tally_board_feet ?? Math.round(pack.tally_board_feet))}
-                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
+                                    value={pack.is_finished ? (pack.tally_board_feet != null ? Math.round(pack.tally_board_feet) : '') : (packEdits[pack.id]?.tally_board_feet ?? (pack.tally_board_feet != null ? Math.round(pack.tally_board_feet) : ''))}
+                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', e.target.value ? parseInt(e.target.value) : null)}
                                     onBlur={() => handleSavePack(pack.id)}
                                     disabled={pack.is_finished}
                                     className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
