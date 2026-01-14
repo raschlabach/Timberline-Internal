@@ -432,7 +432,7 @@ export async function PATCH(
           WHERE id = $2
             AND truckload_id = $3
             AND is_manual = true
-            AND comment NOT LIKE '%split load%'
+            AND (comment IS NULL OR comment NOT LIKE '%split load%')
         `, [appliesTo, dbId, truckloadId])
       } else {
         // Column doesn't exist, can't update
