@@ -1539,14 +1539,16 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   }, [allDeductions, orders, totals.totalQuotes, driverLoadPercentage])
 
   // Filter pickup/delivery deductions for table display
-  // Same logic as calculation: has orderId, no splitLoadId (regardless of isManual flag)
+  // Must have isManual=true, orderId, no splitLoadId (same as driver pay page)
   const pickupDeliveryDeductionsForTable = useMemo(() => {
     const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
-    return allDeductions.filter(d => 
-      !d.splitLoadId && 
-      d.orderId && 
-      currentOrderIds.has(String(d.orderId))
-    )
+    return allDeductions.filter(d => {
+      const isManual = d.isManual === true || String(d.isManual) === 'true' || Number(d.isManual) === 1
+      return isManual &&
+        !d.splitLoadId && 
+        d.orderId && 
+        currentOrderIds.has(String(d.orderId))
+    })
   }, [allDeductions, orders])
 
   // Save calculated values to database when they change
@@ -3154,9 +3156,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           // Get list of order IDs in the current truckload (as strings for comparison)
                           const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
                           
-                          // Filter pickup/delivery deductions: has orderId, no splitLoadId (same logic as calculation)
+                          // Filter pickup/delivery deductions: isManual && orderId && !splitLoadId (same as driver pay page)
                           const pickupDeliveryDeductions = allDeductions.filter(deduction => {
-                            return !deduction.splitLoadId && 
+                            const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+                            return isManual &&
+                                   !deduction.splitLoadId && 
                                    deduction.orderId &&
                                    currentOrderIds.has(String(deduction.orderId))
                           })
