@@ -1336,6 +1336,18 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     // Get list of order IDs in the current truckload (as strings for comparison)
     const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
     
+    // Debug: Log all deductions to see what we're working with
+    console.log('[Invoice Payroll] All deductions:', allDeductions.length, allDeductions.map(d => ({
+      id: d.id,
+      orderId: d.orderId,
+      isManual: d.isManual,
+      isAddition: d.isAddition,
+      appliesTo: d.appliesTo,
+      splitLoadId: d.splitLoadId,
+      amount: d.amount,
+      inCurrentOrders: d.orderId ? currentOrderIds.has(String(d.orderId)) : false
+    })))
+    
     // Pickup/delivery deductions from load value (from table input, not split loads)
     // Same logic as driver pay page: isManual && !isAddition && !splitLoadId && orderId
     const pickupDeliveryDeductionsFromLoadValue = allDeductions.reduce((sum, deduction) => {
