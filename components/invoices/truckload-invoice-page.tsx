@@ -2878,7 +2878,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           setCrossDriverDeductionInput={setCrossDriverDeductionInput}
                           crossDriverDeductionToggles={crossDriverDeductionToggles}
                           setCrossDriverDeductionToggle={setCrossDriverDeductionToggle}
-                          crossDriverDeductions={crossDriverDeductions}
+                          crossDriverDeductions={useMemo(() => {
+                            const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
+                            return allDeductions.filter(d => 
+                              d.isManual && 
+                              !d.splitLoadId && 
+                              d.orderId && 
+                              currentOrderIds.has(String(d.orderId))
+                            )
+                          }, [allDeductions, orders])}
                           onOpenStopDeductionDialog={(orderId: string) => {
                             setStopDeductionDialogOrderId(orderId)
                             setStopDeductionDialogCommentType('manual')
@@ -3082,9 +3090,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                 </div>
                               </div>
                             ))}
-                            </div>
-                          )
-                        })()}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Right: Pickup/Delivery & Split Load Deductions List */}
