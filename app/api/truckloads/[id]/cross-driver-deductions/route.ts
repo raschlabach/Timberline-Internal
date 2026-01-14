@@ -354,8 +354,8 @@ export async function GET(
         amount: typeof row.amount === 'number' ? row.amount : parseFloat(String(row.amount || 0)) || 0,
         appliesTo: row.applies_to || 'driver_pay',
         comment: row.comment || null,
-        isAddition: row.is_addition || false,
-        isManual: row.is_manual || false,
+        isAddition: row.is_addition === true || row.is_addition === 'true' || row.is_addition === 1,
+        isManual: row.is_manual === true || row.is_manual === 'true' || row.is_manual === 1,
         splitLoadId: hasSplitLoadId ? (row.split_load_id ? row.split_load_id : null) : null
       }))
 
