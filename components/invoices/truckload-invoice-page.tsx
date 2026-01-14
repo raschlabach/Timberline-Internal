@@ -678,7 +678,9 @@ function SortableTableRow({
           }
           
           // If no deduction exists, show input/toggle/save buttons
-          const inputValue = crossDriverDeductionInputs.get(deductionKey) || ''
+          // Calculate preview value: $5 per 16 sq ft
+          const previewValue = row.footage ? ((row.footage / 16) * 5).toFixed(2) : '0.00'
+          const inputValue = crossDriverDeductionInputs.get(deductionKey) || previewValue
           const toggleValue = crossDriverDeductionToggles.get(deductionKey) || 'driver_pay'
           
           return (
@@ -686,7 +688,7 @@ function SortableTableRow({
               <Input
                 type="number"
                 step="0.01"
-                placeholder="$0.00"
+                placeholder={previewValue}
                 value={inputValue}
                 onChange={(e) => setCrossDriverDeductionInput(deductionKey, e.target.value)}
                 className="h-7 text-xs w-20 px-1.5"
@@ -721,7 +723,9 @@ function SortableTableRow({
                 variant="outline"
                 onClick={async (e) => {
                   e.stopPropagation()
-                  const amount = parseFloat(inputValue)
+                  // Use inputValue if set, otherwise use previewValue
+                  const valueToUse = crossDriverDeductionInputs.get(deductionKey) || previewValue
+                  const amount = parseFloat(valueToUse)
                   if (isNaN(amount) || amount <= 0) {
                     toast.error('Please enter a valid deduction amount')
                     return
@@ -729,7 +733,7 @@ function SortableTableRow({
                   await onSaveCrossDriverDeduction(row.orderId, action, otherDriverName, otherDate, customerName)
                 }}
                 className="h-7 w-7 p-0"
-                disabled={!inputValue || parseFloat(inputValue) <= 0}
+                disabled={parseFloat(inputValue || previewValue) <= 0}
                 title="Save deduction"
               >
                 <Check className="h-3.5 w-3.5" />
@@ -1727,7 +1731,20 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     if (!selectedTruckloadId) return
     
     const deductionKey = `${orderId}-${action}`
-    const amount = parseFloat(crossDriverDeductionInputs.get(deductionKey) || '0')
+    // Get the input value from the map
+    let inputAmount = crossDriverDeductionInputs.get(deductionKey)
+    
+    // If no input value, calculate preview: $5 per 16 sq ft
+    if (!inputAmount || inputAmount === '') {
+      const order = orders.find(o => String(o.orderId) === String(orderId))
+      if (order && order.footage) {
+        inputAmount = ((order.footage / 16) * 5).toFixed(2)
+      } else {
+        inputAmount = '0.00'
+      }
+    }
+    
+    const amount = parseFloat(inputAmount)
     const appliesTo = crossDriverDeductionToggles.get(deductionKey) || 'driver_pay'
     
     if (isNaN(amount) || amount <= 0) {
@@ -1767,7 +1784,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       console.error('Error saving cross-driver deduction:', error)
       toast.error('Failed to save deduction')
     }
-  }, [selectedTruckloadId, crossDriverDeductionInputs, crossDriverDeductionToggles, setCrossDriverDeductionInput, reloadAllDeductions])
+  }, [selectedTruckloadId, crossDriverDeductionInputs, crossDriverDeductionToggles, setCrossDriverDeductionInput, reloadAllDeductions, orders])
 
   // OLD FUNCTIONS DISABLED - These were creating auto deductions
   // All deductions must now be entered via the table input fields and saved individually
@@ -1866,7 +1883,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
 
     try {
-      const order = orders.find(o => o.orderId === stopDeductionDialogOrderId)
+      const order = orders.find(o => String(o.orderId) === String(stopDeductionDialogOrderId))
       if (!order) {
         toast.error('Order not found')
         return
@@ -1932,7 +1949,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       console.error('Error saving stop deduction:', error)
       toast.error('Failed to save deduction')
     }
-  }, [selectedTruckloadId, stopDeductionDialogOrderId, stopDeductionDialogAmount, stopDeductionDialogComment, stopDeductionDialogCommentType, stopDeductionDialogAppliesTo, stopDeductionDialogIsAddition, orders, selectedTruckload])
+  }, [selectedTruckloadId, stopDeductionDialogOrderId, stopDeductionDialogAmount, stopDeductionDialogComment, stopDeductionDialogCommentType, stopDeductionDialogAppliesTo, stopDeductionDialogIsAddition, orders, selectedTruckload, reloadAllDeductions])
 
   // DISABLED: updateCrossDriverFreightItem - was creating auto deductions
   function updateCrossDriverFreightItem(id: string, updates: Partial<CrossDriverFreightItem>): void {
@@ -3845,6 +3862,126 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 className={deductionDialogIsAddition ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
               >
                 {deductionDialogIsAddition ? 'Add Addition' : 'Add Deduction'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Stop Deduction/Addition Dialog */}
+        <Dialog open={stopDeductionDialogOpen} onOpenChange={setStopDeductionDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{stopDeductionDialogIsAddition ? 'Add Addition' : 'Add Deduction'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="stop-deduction-type">Type</Label>
+                <Select
+                  value={stopDeductionDialogCommentType}
+                  onValueChange={(value) => {
+                    setStopDeductionDialogCommentType(value as 'pickup' | 'delivery' | 'manual')
+                    // Auto-fill description based on type
+                    if (stopDeductionDialogOrderId) {
+                      const order = orders.find(o => String(o.orderId) === String(stopDeductionDialogOrderId))
+                      if (order) {
+                        if (value === 'pickup') {
+                          setStopDeductionDialogComment(`${order.pickupName} discount`)
+                        } else if (value === 'delivery') {
+                          setStopDeductionDialogComment(`${order.deliveryName} discount`)
+                        } else {
+                          setStopDeductionDialogComment('')
+                        }
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger id="stop-deduction-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pickup">Pickup</SelectItem>
+                    <SelectItem value="delivery">Delivery</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  {stopDeductionDialogCommentType === 'pickup' && 'Description will auto-fill with pickup customer name'}
+                  {stopDeductionDialogCommentType === 'delivery' && 'Description will auto-fill with delivery customer name'}
+                  {stopDeductionDialogCommentType === 'manual' && 'Enter a custom description'}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stop-deduction-comment">Description</Label>
+                <Textarea
+                  id="stop-deduction-comment"
+                  placeholder={stopDeductionDialogCommentType === 'pickup' ? 'Pickup customer discount' : stopDeductionDialogCommentType === 'delivery' ? 'Delivery customer discount' : 'Enter description...'}
+                  value={stopDeductionDialogComment}
+                  onChange={(e) => setStopDeductionDialogComment(e.target.value)}
+                  className="min-h-[80px]"
+                  rows={3}
+                  disabled={stopDeductionDialogCommentType !== 'manual'}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stop-deduction-applies-to">Applies To</Label>
+                <Select
+                  value={stopDeductionDialogAppliesTo}
+                  onValueChange={(value) => setStopDeductionDialogAppliesTo(value as 'load_value' | 'driver_pay')}
+                >
+                  <SelectTrigger id="stop-deduction-applies-to">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="load_value">Load Value</SelectItem>
+                    <SelectItem value="driver_pay">Driver Pay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stop-deduction-amount">Amount ($)</Label>
+                <Input
+                  id="stop-deduction-amount"
+                  type="number"
+                  placeholder="0.00"
+                  value={stopDeductionDialogAmount}
+                  onChange={(e) => setStopDeductionDialogAmount(e.target.value)}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stop-deduction-is-addition">Deduction or Addition</Label>
+                <Select
+                  value={stopDeductionDialogIsAddition ? 'addition' : 'deduction'}
+                  onValueChange={(value) => setStopDeductionDialogIsAddition(value === 'addition')}
+                >
+                  <SelectTrigger id="stop-deduction-is-addition">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deduction">Deduction</SelectItem>
+                    <SelectItem value="addition">Addition</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setStopDeductionDialogOpen(false)
+                setStopDeductionDialogOrderId(null)
+                setStopDeductionDialogCommentType('manual')
+                setStopDeductionDialogComment('')
+                setStopDeductionDialogAmount('')
+                setStopDeductionDialogAppliesTo('driver_pay')
+                setStopDeductionDialogIsAddition(false)
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveStopDeduction} 
+                className={stopDeductionDialogIsAddition ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+              >
+                {stopDeductionDialogIsAddition ? 'Add Addition' : 'Add Deduction'}
               </Button>
             </DialogFooter>
           </DialogContent>
