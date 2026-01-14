@@ -532,7 +532,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       
       if (isExcluded) {
         console.log('[Driver Pay Calc] Excluding order', order.orderId, 'from load value calculation. excludeFromLoadValue:', order.excludeFromLoadValue)
-        return sum
+              return sum
       }
       
       // Use fullQuote if available, otherwise parse freightQuote
@@ -635,7 +635,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       if (deduction.splitLoadId && deduction.orderId && !deduction.isAddition && deduction.appliesTo === 'load_value') {
         // Check if orderId matches an order in current truckload (same logic as invoice page)
         if (currentOrderIds.has(String(deduction.orderId))) {
-          return sum + deduction.deduction
+        return sum + deduction.deduction
         }
       }
       return sum

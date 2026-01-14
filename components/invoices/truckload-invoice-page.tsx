@@ -1287,8 +1287,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         throw new Error('Failed to load deductions')
       }
       
-      const data = await res.json()
-      if (data.success && data.deductions) {
+        const data = await res.json()
+        if (data.success && data.deductions) {
         setAllDeductions(data.deductions)
         
         // Filter client-side using same logic as driver pay page
@@ -1309,11 +1309,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           !d.comment.toLowerCase().includes('split load')
         )
         setManualDeductions(manuals)
-      } else {
+        } else {
         setAllDeductions([])
-        setSplitLoadDeductions([])
+          setSplitLoadDeductions([])
         setManualDeductions([])
-      }
+        }
     } catch (error) {
       console.error('Error loading deductions:', error)
       setAllDeductions([])
@@ -1378,10 +1378,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           !deduction.isAddition && 
           deduction.appliesTo === 'load_value' &&
           currentOrderIds.has(String(deduction.orderId))) {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
     const splitLoadAdditionsToLoadValue = allDeductions.reduce((sum, deduction) => {
       if (deduction.splitLoadId && 
@@ -1389,10 +1389,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deduction.isAddition && 
           deduction.appliesTo === 'load_value' &&
           currentOrderIds.has(String(deduction.orderId))) {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
     // Automatic deductions removed - no longer used
     const automaticDeductions = 0
@@ -1440,10 +1440,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           !deduction.isAddition && 
           deduction.appliesTo === 'driver_pay' &&
           currentOrderIds.has(String(deduction.orderId))) {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
     const splitLoadAdditionsToDriverPay = allDeductions.reduce((sum, deduction) => {
       if (deduction.splitLoadId && 
@@ -1451,10 +1451,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           deduction.isAddition && 
           deduction.appliesTo === 'driver_pay' &&
           currentOrderIds.has(String(deduction.orderId))) {
-        return sum + deduction.amount
-      }
-      return sum
-    }, 0)
+          return sum + deduction.amount
+        }
+        return sum
+      }, 0)
     
     // Calculate load value: Total Quotes - all deductions from load value + all additions to load value
     const loadValue = totalQuotes 
@@ -1753,15 +1753,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       
       const data = await response.json()
       if (data.success) {
-        // Reload deductions from database instead of adding to state (prevents duplicates)
-        const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
-          method: 'GET',
-          credentials: 'include'
-        })
-        // Reload all deductions
+        // Reload all deductions to refresh the list
         await reloadAllDeductions()
         
-        // Clear input
+        // Clear input after successful save
         setCrossDriverDeductionInput(deductionKey, '')
         
         toast.success('Deduction saved successfully')
@@ -2910,11 +2905,6 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               
                               const data = await response.json()
                               if (data.success) {
-                                // Reload deductions from database
-                                const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/cross-driver-deductions`, {
-                                  method: 'GET',
-                                  credentials: 'include'
-                                })
                                 // Reload all deductions
                                 await reloadAllDeductions()
                                 toast.success('Deduction deleted')
@@ -3125,15 +3115,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           
                           if (pickupDeliveryDeductions.length === 0 && filteredSplitLoadDeductions.length === 0) {
                             return (
-                              <div className="text-sm text-gray-600 border border-gray-300 rounded p-2">
-                                No deductions added
-                              </div>
+                          <div className="text-sm text-gray-600 border border-gray-300 rounded p-2">
+                            No deductions added
+                          </div>
                             )
                           }
                           
                           return (
-                            <div className="space-y-1.5 max-h-96 overflow-y-auto">
-                              {/* Pickup/Delivery Deductions */}
+                          <div className="space-y-1.5 max-h-96 overflow-y-auto">
+                            {/* Pickup/Delivery Deductions */}
                               {pickupDeliveryDeductions.map((deduction) => (
                               <div
                                 key={deduction.id}
@@ -3246,7 +3236,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                   </div>
                                 </div>
                               </div>
-                              ))}
+                            ))}
                             
                             {/* Split Load Deductions - Read Only (combined in same list) */}
                             {filteredSplitLoadDeductions.map((deduction) => (
@@ -3332,8 +3322,8 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                                   </div>
                                 </div>
                               </div>
-                              ))}
-                            </div>
+                            ))}
+                          </div>
                           )
                         })()}
                       </div>

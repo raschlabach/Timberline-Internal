@@ -164,6 +164,8 @@ export async function POST(
         }
       } else {
         // Pickup/delivery deduction (from table input)
+        // These are marked as is_manual = true because they are manually entered via the table input
+        // This matches the filtering logic in both invoice and driver pay pages
         if (hasAppliesTo && hasOrderId) {
           const result = await client.query(`
             INSERT INTO cross_driver_freight_deductions (
@@ -179,7 +181,7 @@ export async function POST(
               applies_to,
               created_at,
               updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, false, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id
           `, [truckloadId, parseInt(orderId), driverName, date, action, customerName, amountNum, appliesTo])
           
@@ -190,6 +192,8 @@ export async function POST(
             deductionId: `db-${result.rows[0].id}`
           })
         } else if (hasAppliesTo) {
+          // Pickup/delivery deduction without order_id (shouldn't happen, but handle gracefully)
+          // Mark as is_manual = true to match filtering logic
           const result = await client.query(`
             INSERT INTO cross_driver_freight_deductions (
               truckload_id,
@@ -203,7 +207,7 @@ export async function POST(
               applies_to,
               created_at,
               updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, false, false, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES ($1, $2, $3, $4, $5, $6, true, false, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id
           `, [truckloadId, driverName, date, action, customerName, amountNum, appliesTo])
           
