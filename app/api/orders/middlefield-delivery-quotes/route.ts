@@ -82,24 +82,24 @@ export async function POST(request: NextRequest) {
         // Handle deduction: delete existing if assignment quote is cleared, or update/create if set
         if (newAssignmentQuote === null || newAssignmentQuote <= 0) {
           // Delete existing deduction if assignment quote is cleared
-          await client.query(`
-            DELETE FROM cross_driver_freight_deductions
-            WHERE truckload_id = $1
-              AND comment LIKE '%' || $2 || '%split load%'
-              AND is_manual = true
-              AND applies_to = 'driver_pay'
-          `, [otherTruckloadId, customerNameForDeduction])
+            await client.query(`
+              DELETE FROM cross_driver_freight_deductions
+              WHERE truckload_id = $1
+                AND comment LIKE '%' || $2 || '%split load%'
+                AND is_manual = true
+                AND applies_to = 'driver_pay'
+            `, [otherTruckloadId, customerNameForDeduction])
         } else if (deductionAmount !== null && deductionAmount > 0) {
           // Check if deduction already exists
           const existingDeduction = await client.query(`
-            SELECT id
-            FROM cross_driver_freight_deductions
-            WHERE truckload_id = $1
-              AND comment LIKE '%' || $2 || '%split load%'
-              AND is_manual = true
-              AND applies_to = 'driver_pay'
-            LIMIT 1
-          `, [otherTruckloadId, customerNameForDeduction])
+              SELECT id
+              FROM cross_driver_freight_deductions
+              WHERE truckload_id = $1
+                AND comment LIKE '%' || $2 || '%split load%'
+                AND is_manual = true
+                AND applies_to = 'driver_pay'
+              LIMIT 1
+            `, [otherTruckloadId, customerNameForDeduction])
 
           const comment = `${customerNameForDeduction} split load`
 
@@ -113,14 +113,14 @@ export async function POST(request: NextRequest) {
             `, [deductionAmount, existingDeduction.rows[0].id])
           } else {
             // Create new deduction
-            await client.query(`
-              INSERT INTO cross_driver_freight_deductions (
-                truckload_id,
+              await client.query(`
+                INSERT INTO cross_driver_freight_deductions (
+                  truckload_id,
                 order_id,
-                deduction,
+                  deduction,
                 comment,
-                is_manual,
-                is_addition,
+                  is_manual,
+                  is_addition,
                 applies_to,
                 created_at,
                 updated_at

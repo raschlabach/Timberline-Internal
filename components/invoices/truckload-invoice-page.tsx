@@ -1538,11 +1538,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
   }, [allDeductions, orders, totals.totalQuotes, driverLoadPercentage])
 
-  // Filter pickup/delivery deductions for table display
-  // Has orderId, no splitLoadId (regardless of isManual flag)
+  // Filter pickup/delivery deductions for table display (same logic as driver pay page)
   const pickupDeliveryDeductionsForTable = useMemo(() => {
     const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
     return allDeductions.filter(d => 
+      d.isManual && 
       !d.splitLoadId && 
       d.orderId && 
       currentOrderIds.has(String(d.orderId))
@@ -3154,9 +3154,10 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           // Get list of order IDs in the current truckload (as strings for comparison)
                           const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
                           
-                          // Filter pickup/delivery deductions: has orderId, no splitLoadId (regardless of isManual)
+                          // Filter pickup/delivery deductions: isManual && !splitLoadId && orderId (same logic as driver pay page)
                           const pickupDeliveryDeductions = allDeductions.filter(deduction => {
-                            return !deduction.splitLoadId && 
+                            return deduction.isManual && 
+                                   !deduction.splitLoadId && 
                                    deduction.orderId &&
                                    currentOrderIds.has(String(deduction.orderId))
                           })
@@ -3398,6 +3399,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               <span className="text-base font-bold">${payrollCalculations.totalQuotes.toFixed(2)}</span>
                             </div>
                             
+                            {/* Pickup/Delivery Deductions from Load Value */}
+                            {payrollCalculations.pickupDeliveryDeductionsFromLoadValue > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Pickup/Delivery Deductions (from Load Value)</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.pickupDeliveryDeductionsFromLoadValue.toFixed(2)}</span>
+                              </div>
+                            )}
+                            
                             {/* Manual Deductions from Load Value - Subtotal Only */}
                             {payrollCalculations.manualDeductionsFromLoadValue > 0 && (
                               <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
@@ -3460,6 +3469,14 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                               </div>
                             )}
                             
+                            {/* Pickup/Delivery Deductions from Driver Pay */}
+                            {payrollCalculations.pickupDeliveryDeductionsFromDriverPay > 0 && (
+                              <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
+                                <span className="text-sm font-medium text-red-700">Pickup/Delivery Deductions (from Driver Pay)</span>
+                                <span className="text-base font-bold text-red-600">-${payrollCalculations.pickupDeliveryDeductionsFromDriverPay.toFixed(2)}</span>
+                              </div>
+                            )}
+                            
                             {/* Manual Deductions from Driver Pay - Subtotal Only */}
                             {payrollCalculations.manualDeductionsFromDriverPay > 0 && (
                               <div className="flex items-center justify-between bg-red-50 rounded px-3 py-2">
@@ -3493,6 +3510,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                             )}
                             
                             {(payrollCalculations.automaticDeductions === 0 && 
+                              payrollCalculations.pickupDeliveryDeductionsFromDriverPay === 0 &&
                               payrollCalculations.manualDeductionsFromDriverPay === 0 && 
                               payrollCalculations.splitLoadDeductionsFromDriverPay === 0 &&
                               payrollCalculations.manualAdditionsToDriverPay === 0 &&

@@ -114,8 +114,8 @@ export async function POST(request: Request) {
         if (pickup_count > 0 && delivery_count > 0) {
           // Both assignments exist - apply split load
           const isNewAssignmentFull = splitLoad.full_quote_assignment === assignmentType
-          const newAssignmentQuote = isNewAssignmentFull ? fullQuoteAmount : miscAmount
-          const existingAssignmentQuote = isNewAssignmentFull ? miscAmount : fullQuoteAmount
+        const newAssignmentQuote = isNewAssignmentFull ? fullQuoteAmount : miscAmount
+        const existingAssignmentQuote = isNewAssignmentFull ? miscAmount : fullQuoteAmount
 
           // Get existing assignment
           const existingAssignmentResult = await client.query(`
@@ -130,17 +130,17 @@ export async function POST(request: Request) {
           if (existingAssignmentResult.rows.length > 0) {
             const existingAssignment = existingAssignmentResult.rows[0]
 
-            // Update both assignment quotes
-            await client.query(`
-              UPDATE truckload_order_assignments
+        // Update both assignment quotes
+        await client.query(`
+          UPDATE truckload_order_assignments
               SET assignment_quote = $1, updated_at = CURRENT_TIMESTAMP
-              WHERE id = $2
-            `, [newAssignmentQuote, newAssignmentId])
+          WHERE id = $2
+        `, [newAssignmentQuote, newAssignmentId])
 
-            await client.query(`
-              UPDATE truckload_order_assignments
+        await client.query(`
+          UPDATE truckload_order_assignments
               SET assignment_quote = $1, updated_at = CURRENT_TIMESTAMP
-              WHERE id = $2
+          WHERE id = $2
             `, [existingAssignmentQuote, existingAssignment.id])
 
             // Get customer names
@@ -155,26 +155,26 @@ export async function POST(request: Request) {
             const miscTruckloadId = isNewAssignmentFull ? existingAssignment.truckload_id : truckloadId
 
             // Delete old deductions for this split load
-            await client.query(`
-              DELETE FROM cross_driver_freight_deductions
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions
               WHERE split_load_id = $1
             `, [splitLoad.id])
 
             // Create new deductions/additions
-            const fullQuoteDeductionComment = `${miscCustomerName} split load (misc portion)`
+        const fullQuoteDeductionComment = `${miscCustomerName} split load (misc portion)`
             const miscAdditionComment = `${fullQuoteCustomerName} split load (misc portion)`
 
             // Deduction on full quote truckload
-            await client.query(`
-              INSERT INTO cross_driver_freight_deductions (
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
                 truckload_id, order_id, split_load_id, deduction, comment,
                 is_manual, is_addition, applies_to, created_at, updated_at
               ) VALUES ($1, $2, $3, $4, $5, true, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             `, [fullQuoteTruckloadId, orderId, splitLoad.id, miscAmount, fullQuoteDeductionComment, splitLoad.full_quote_applies_to])
 
             // Addition on misc truckload
-            await client.query(`
-              INSERT INTO cross_driver_freight_deductions (
+          await client.query(`
+            INSERT INTO cross_driver_freight_deductions (
                 truckload_id, order_id, split_load_id, deduction, comment,
                 is_manual, is_addition, applies_to, created_at, updated_at
               ) VALUES ($1, $2, $3, $4, $5, true, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
