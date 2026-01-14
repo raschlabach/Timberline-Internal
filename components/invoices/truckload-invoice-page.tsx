@@ -1349,13 +1349,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })))
     
     // Pickup/delivery deductions from load value (from table input, not split loads)
-    // Count deductions that have orderId and no splitLoadId (regardless of isManual flag)
+    // Must have isManual=true, orderId, no splitLoadId (same as driver pay page)
     const pickupDeliveryDeductionsFromLoadValue = allDeductions.reduce((sum, deduction) => {
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
       const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
       const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
       
-      // Pickup/delivery deductions: have orderId, no splitLoadId, not an addition
-      if (!isAddition && 
+      // Pickup/delivery deductions: isManual && orderId && !splitLoadId && !isAddition (same as driver pay page)
+      if (isManual &&
+          !isAddition && 
           deduction.appliesTo === 'load_value' && 
           !hasSplitLoadId && 
           deduction.orderId &&
@@ -1427,13 +1429,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const automaticDeductions = 0
     
     // Pickup/delivery deductions from driver pay (from table input, not split loads)
-    // Count deductions that have orderId and no splitLoadId (regardless of isManual flag)
+    // Must have isManual=true, orderId, no splitLoadId (same as driver pay page)
     const pickupDeliveryDeductionsFromDriverPay = allDeductions.reduce((sum, deduction) => {
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
       const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
       const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
       
-      // Pickup/delivery deductions: have orderId, no splitLoadId, not an addition
-      if (!isAddition && 
+      // Pickup/delivery deductions: isManual && orderId && !splitLoadId && !isAddition (same as driver pay page)
+      if (isManual &&
+          !isAddition && 
           deduction.appliesTo === 'driver_pay' && 
           !hasSplitLoadId && 
           deduction.orderId &&
