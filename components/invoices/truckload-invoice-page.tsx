@@ -1339,10 +1339,29 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     // Pickup/delivery deductions from load value (from table input, not split loads)
     // Same logic as driver pay page: isManual && !isAddition && !splitLoadId && orderId
     const pickupDeliveryDeductionsFromLoadValue = allDeductions.reduce((sum, deduction) => {
-      if (deduction.isManual && 
-          !deduction.isAddition && 
+      // Check isManual more robustly (handle boolean, string, or number)
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+      const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
+      const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
+      
+      // Debug logging (remove in production)
+      if (process.env.NODE_ENV === 'development' && deduction.orderId && currentOrderIds.has(String(deduction.orderId))) {
+        console.log('[Invoice Calc] Deduction:', {
+          id: deduction.id,
+          orderId: deduction.orderId,
+          isManual,
+          isAddition,
+          appliesTo: deduction.appliesTo,
+          hasSplitLoadId,
+          amount: deduction.amount,
+          matches: isManual && !isAddition && deduction.appliesTo === 'load_value' && !hasSplitLoadId
+        })
+      }
+      
+      if (isManual && 
+          !isAddition && 
           deduction.appliesTo === 'load_value' && 
-          !deduction.splitLoadId && 
+          !hasSplitLoadId && 
           deduction.orderId &&
           currentOrderIds.has(String(deduction.orderId))) {
         return sum + deduction.amount
@@ -1353,10 +1372,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     // Manual deductions/additions from load value (with comments, not split loads)
     // Same logic as driver pay page: isManual && !splitLoadId && !orderId
     const manualDeductionsFromLoadValue = allDeductions.reduce((sum, deduction) => {
-      if (deduction.isManual && 
-          !deduction.isAddition && 
+      // Check isManual more robustly (handle boolean, string, or number)
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+      const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
+      const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
+      
+      if (isManual && 
+          !isAddition && 
           deduction.appliesTo === 'load_value' && 
-          !deduction.splitLoadId && 
+          !hasSplitLoadId && 
           !deduction.orderId) {
         return sum + deduction.amount
       }
@@ -1364,10 +1388,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }, 0)
     
     const manualAdditionsToLoadValue = allDeductions.reduce((sum, deduction) => {
-      if (deduction.isManual && 
-          deduction.isAddition && 
+      // Check isManual more robustly (handle boolean, string, or number)
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+      const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
+      const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
+      
+      if (isManual && 
+          isAddition && 
           deduction.appliesTo === 'load_value' && 
-          !deduction.splitLoadId && 
+          !hasSplitLoadId && 
           !deduction.orderId) {
         return sum + deduction.amount
       }
@@ -1403,10 +1432,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     
     // Pickup/delivery deductions from driver pay (from table input, not split loads)
     const pickupDeliveryDeductionsFromDriverPay = allDeductions.reduce((sum, deduction) => {
-      if (deduction.isManual && 
-          !deduction.isAddition && 
+      // Check isManual more robustly (handle boolean, string, or number)
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+      const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
+      const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
+      
+      if (isManual && 
+          !isAddition && 
           deduction.appliesTo === 'driver_pay' && 
-          !deduction.splitLoadId && 
+          !hasSplitLoadId && 
           deduction.orderId &&
           currentOrderIds.has(String(deduction.orderId))) {
         return sum + deduction.amount
@@ -1416,10 +1450,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     
     // Manual deductions/additions from driver pay (with comments, not split loads)
     const manualDeductionsFromDriverPay = allDeductions.reduce((sum, deduction) => {
-      if (deduction.isManual && 
-          !deduction.isAddition && 
+      // Check isManual more robustly (handle boolean, string, or number)
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+      const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
+      const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
+      
+      if (isManual && 
+          !isAddition && 
           (deduction.appliesTo === 'driver_pay' || !deduction.appliesTo) && 
-          !deduction.splitLoadId && 
+          !hasSplitLoadId && 
           !deduction.orderId) {
         return sum + deduction.amount
       }
@@ -1427,10 +1466,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }, 0)
     
     const manualAdditionsToDriverPay = allDeductions.reduce((sum, deduction) => {
-      if (deduction.isManual && 
-          deduction.isAddition && 
+      // Check isManual more robustly (handle boolean, string, or number)
+      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
+      const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
+      const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
+      
+      if (isManual && 
+          isAddition && 
           (deduction.appliesTo === 'driver_pay' || !deduction.appliesTo) && 
-          !deduction.splitLoadId && 
+          !hasSplitLoadId && 
           !deduction.orderId) {
         return sum + deduction.amount
       }
