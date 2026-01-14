@@ -870,86 +870,8 @@ export default function RipEntryPage() {
                 </div>
               </div>
 
-              {/* Conditional: Show Tally Entry if no packs exist, otherwise show pack tables */}
-              {packs.length === 0 ? (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <h3 className="text-sm font-semibold mb-3 text-blue-900">No Tallies Entered Yet - Create Pack Tallies</h3>
-                  
-                  {/* Item Selection */}
-                  <div className="mb-4">
-                    <Label className="text-sm">Select Item to Tally</Label>
-                    <Select value={selectedItemIdForTally?.toString() || ''} onValueChange={(val) => setSelectedItemIdForTally(parseInt(val))}>
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue placeholder="Choose species/grade/thickness" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedLoad?.items?.map(item => (
-                          <SelectItem key={item.id} value={item.id.toString()}>
-                            {item.species} - {item.grade} - {item.thickness}" - {item.actual_footage?.toLocaleString()} BF
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Tally Input Table */}
-                  {selectedItemIdForTally && (
-                    <>
-                      <div className="border rounded overflow-auto mb-3" style={{ maxHeight: '300px' }}>
-                        <table className="w-full text-xs">
-                          <thead className="bg-gray-800 text-white sticky top-0">
-                            <tr>
-                              <th className="px-2 py-1 text-left">Pack ID</th>
-                              <th className="px-2 py-1 text-left">Length (ft)</th>
-                              <th className="px-2 py-1 text-left">Board Feet</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tallies.map((tally, index) => (
-                              <tr key={index}>
-                                <td className="px-1 py-1 border-t">
-                                  <Input
-                                    type="text"
-                                    value={tally.pack_id || ''}
-                                    onChange={(e) => handleTallyChange(index, 'pack_id', e.target.value)}
-                                    className="h-7 text-xs"
-                                  />
-                                </td>
-                                <td className="px-1 py-1 border-t">
-                                  <Input
-                                    type="number"
-                                    value={tally.length || ''}
-                                    onChange={(e) => handleTallyChange(index, 'length', e.target.value)}
-                                    className="h-7 text-xs"
-                                  />
-                                </td>
-                                <td className="px-1 py-1 border-t">
-                                  <Input
-                                    type="number"
-                                    value={tally.tally_board_feet || ''}
-                                    onChange={(e) => handleTallyChange(index, 'tally_board_feet', e.target.value)}
-                                    className="h-7 text-xs"
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button onClick={handleAddTallyRow} size="sm" variant="outline">
-                          Add Row
-                        </Button>
-                        <Button onClick={handleSaveTallies} size="sm" className="bg-blue-600 text-white">
-                          Save Tallies
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
+              {/* Pack Tables - Always show, with Add Pack button for creating new tallies */}
+              <div className="grid grid-cols-2 gap-3">
                   {/* Pack Info */}
                   <div>
                     <div className="flex justify-between items-center h-6 mb-1">
@@ -970,52 +892,60 @@ export default function RipEntryPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {packs.map(pack => (
-                            <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
-                              <td className="px-1 py-1 border-t">
-                                <Input
-                                  type="text"
-                                  value={pack.is_finished ? pack.pack_id : (packEdits[pack.id]?.pack_id ?? pack.pack_id)}
-                                  onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value)}
-                                  onBlur={() => handleSavePack(pack.id)}
-                                  disabled={pack.is_finished}
-                                  className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
-                                />
-                              </td>
-                              <td className="px-1 py-1 border-t">
-                                <Input
-                                  type="number"
-                                  value={pack.is_finished ? Math.round(pack.length) : (packEdits[pack.id]?.length ?? Math.round(pack.length))}
-                                  onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
-                                  onBlur={() => handleSavePack(pack.id)}
-                                  disabled={pack.is_finished}
-                                  className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
-                                />
-                              </td>
-                              <td className="px-1 py-1 border-t">
-                                <Input
-                                  type="number"
-                                  value={pack.is_finished ? Math.round(pack.tally_board_feet) : (packEdits[pack.id]?.tally_board_feet ?? Math.round(pack.tally_board_feet))}
-                                  onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
-                                  onBlur={() => handleSavePack(pack.id)}
-                                  disabled={pack.is_finished}
-                                  className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
-                                />
-                              </td>
-                              <td className="px-1 py-1 border-t">
-                                {!pack.is_finished && (
-                                  <Button
-                                    onClick={() => handleDeletePack(pack.id)}
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                )}
+                          {packs.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-2 py-4 text-center text-gray-500 text-xs">
+                                No packs yet. Click "Add Pack" to create tallies.
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            packs.map(pack => (
+                              <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
+                                <td className="px-1 py-1 border-t">
+                                  <Input
+                                    type="text"
+                                    value={pack.is_finished ? pack.pack_id : (packEdits[pack.id]?.pack_id ?? pack.pack_id)}
+                                    onChange={(e) => handlePackEdit(pack.id, 'pack_id', e.target.value)}
+                                    onBlur={() => handleSavePack(pack.id)}
+                                    disabled={pack.is_finished}
+                                    className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-t">
+                                  <Input
+                                    type="number"
+                                    value={pack.is_finished ? Math.round(pack.length) : (packEdits[pack.id]?.length ?? Math.round(pack.length))}
+                                    onChange={(e) => handlePackEdit(pack.id, 'length', parseInt(e.target.value) || 0)}
+                                    onBlur={() => handleSavePack(pack.id)}
+                                    disabled={pack.is_finished}
+                                    className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-t">
+                                  <Input
+                                    type="number"
+                                    value={pack.is_finished ? Math.round(pack.tally_board_feet) : (packEdits[pack.id]?.tally_board_feet ?? Math.round(pack.tally_board_feet))}
+                                    onChange={(e) => handlePackEdit(pack.id, 'tally_board_feet', parseInt(e.target.value) || 0)}
+                                    onBlur={() => handleSavePack(pack.id)}
+                                    disabled={pack.is_finished}
+                                    className="h-6 text-xs disabled:opacity-100 disabled:cursor-not-allowed"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 border-t">
+                                  {!pack.is_finished && (
+                                    <Button
+                                      onClick={() => handleDeletePack(pack.id)}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
                           <tr className="bg-gray-100 font-semibold">
                             <td className="px-2 py-1">{totalPacks} Packs</td>
                             <td className="px-2 py-1">{Math.round(avgLength)}</td>
@@ -1042,51 +972,59 @@ export default function RipEntryPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {packs.map(pack => (
-                          <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
-                            <td className="px-1 py-1 border-t">
-                              <Input
-                                type="number"
-                                value={pack.is_finished ? (pack.actual_board_feet || '') : (packEdits[pack.id]?.actual_board_feet || '')}
-                                onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseInt(e.target.value) || null)}
-                                onBlur={() => handleSavePack(pack.id)}
-                                disabled={pack.is_finished}
-                                className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
-                              />
-                            </td>
-                            <td className="px-1 py-1 border-t">
-                              <Input
-                                type="number"
-                                value={pack.is_finished ? (pack.rip_yield || '') : (packEdits[pack.id]?.rip_yield || '')}
-                                onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseInt(e.target.value) || null)}
-                                onBlur={() => handleSavePack(pack.id)}
-                                disabled={pack.is_finished}
-                                className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
-                              />
-                            </td>
-                            <td className="px-1 py-1 border-t">
-                              <Input
-                                value={pack.is_finished ? (pack.rip_comments || '') : (packEdits[pack.id]?.rip_comments || '')}
-                                onChange={(e) => handlePackEdit(pack.id, 'rip_comments', e.target.value)}
-                                onBlur={() => handleSavePack(pack.id)}
-                                disabled={pack.is_finished}
-                                className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
-                              />
-                            </td>
-                            <td className="px-1 py-1 border-t">
-                              {!pack.is_finished && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleFinishPack(pack.id)}
-                                  className="h-6 px-2 text-xs"
-                                  disabled={!packEdits[pack.id]?.actual_board_feet || !packEdits[pack.id]?.rip_yield}
-                                >
-                                  <RefreshCcw className="h-3 w-3" />
-                                </Button>
-                              )}
+                        {packs.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-2 py-4 text-center text-gray-500 text-xs">
+                              No packs yet.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          packs.map(pack => (
+                            <tr key={pack.id} className={pack.is_finished ? 'bg-green-50' : ''}>
+                              <td className="px-1 py-1 border-t">
+                                <Input
+                                  type="number"
+                                  value={pack.is_finished ? (pack.actual_board_feet || '') : (packEdits[pack.id]?.actual_board_feet || '')}
+                                  onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseInt(e.target.value) || null)}
+                                  onBlur={() => handleSavePack(pack.id)}
+                                  disabled={pack.is_finished}
+                                  className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
+                                />
+                              </td>
+                              <td className="px-1 py-1 border-t">
+                                <Input
+                                  type="number"
+                                  value={pack.is_finished ? (pack.rip_yield || '') : (packEdits[pack.id]?.rip_yield || '')}
+                                  onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseInt(e.target.value) || null)}
+                                  onBlur={() => handleSavePack(pack.id)}
+                                  disabled={pack.is_finished}
+                                  className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
+                                />
+                              </td>
+                              <td className="px-1 py-1 border-t">
+                                <Input
+                                  value={pack.is_finished ? (pack.rip_comments || '') : (packEdits[pack.id]?.rip_comments || '')}
+                                  onChange={(e) => handlePackEdit(pack.id, 'rip_comments', e.target.value)}
+                                  onBlur={() => handleSavePack(pack.id)}
+                                  disabled={pack.is_finished}
+                                  className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
+                                />
+                              </td>
+                              <td className="px-1 py-1 border-t">
+                                {!pack.is_finished && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleFinishPack(pack.id)}
+                                    className="h-6 px-2 text-xs"
+                                    disabled={!packEdits[pack.id]?.actual_board_feet || !packEdits[pack.id]?.rip_yield}
+                                  >
+                                    <RefreshCcw className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                         <tr className="bg-gray-100 font-semibold">
                           <td className="px-2 py-1">{finishedBF.toLocaleString()} BF</td>
                           <td className="px-2 py-1">
@@ -1101,7 +1039,6 @@ export default function RipEntryPage() {
                   </div>
                 </div>
                 </div>
-              )}
 
               {/* Remaining Board Feet by Length - Only show if packs exist */}
               {packs.length > 0 && (
