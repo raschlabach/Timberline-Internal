@@ -1349,29 +1349,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     })))
     
     // Pickup/delivery deductions from load value (from table input, not split loads)
-    // Same logic as driver pay page: isManual && !isAddition && !splitLoadId && orderId
+    // Count deductions that have orderId and no splitLoadId (regardless of isManual flag)
     const pickupDeliveryDeductionsFromLoadValue = allDeductions.reduce((sum, deduction) => {
-      // Check isManual more robustly (handle boolean, string, or number)
-      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
       const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
       const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
       
-      // Debug logging (remove in production)
-      if (process.env.NODE_ENV === 'development' && deduction.orderId && currentOrderIds.has(String(deduction.orderId))) {
-        console.log('[Invoice Calc] Deduction:', {
-          id: deduction.id,
-          orderId: deduction.orderId,
-          isManual,
-          isAddition,
-          appliesTo: deduction.appliesTo,
-          hasSplitLoadId,
-          amount: deduction.amount,
-          matches: isManual && !isAddition && deduction.appliesTo === 'load_value' && !hasSplitLoadId
-        })
-      }
-      
-      if (isManual && 
-          !isAddition && 
+      // Pickup/delivery deductions: have orderId, no splitLoadId, not an addition
+      if (!isAddition && 
           deduction.appliesTo === 'load_value' && 
           !hasSplitLoadId && 
           deduction.orderId &&
@@ -1443,14 +1427,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     const automaticDeductions = 0
     
     // Pickup/delivery deductions from driver pay (from table input, not split loads)
+    // Count deductions that have orderId and no splitLoadId (regardless of isManual flag)
     const pickupDeliveryDeductionsFromDriverPay = allDeductions.reduce((sum, deduction) => {
-      // Check isManual more robustly (handle boolean, string, or number)
-      const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
       const isAddition = deduction.isAddition === true || String(deduction.isAddition) === 'true' || Number(deduction.isAddition) === 1
       const hasSplitLoadId = deduction.splitLoadId !== null && deduction.splitLoadId !== undefined
       
-      if (isManual && 
-          !isAddition && 
+      // Pickup/delivery deductions: have orderId, no splitLoadId, not an addition
+      if (!isAddition && 
           deduction.appliesTo === 'driver_pay' && 
           !hasSplitLoadId && 
           deduction.orderId &&
