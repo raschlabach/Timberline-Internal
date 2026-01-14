@@ -1538,11 +1538,11 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
     }
   }, [allDeductions, orders, totals.totalQuotes, driverLoadPercentage])
 
-  // Filter pickup/delivery deductions for table display (same logic as driver pay page)
+  // Filter pickup/delivery deductions for table display
+  // Has orderId, no splitLoadId (regardless of isManual flag)
   const pickupDeliveryDeductionsForTable = useMemo(() => {
     const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
     return allDeductions.filter(d => 
-      d.isManual && 
       !d.splitLoadId && 
       d.orderId && 
       currentOrderIds.has(String(d.orderId))
@@ -3154,10 +3154,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           // Get list of order IDs in the current truckload (as strings for comparison)
                           const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
                           
-                          // Filter pickup/delivery deductions: isManual && !splitLoadId && orderId (same logic as driver pay page)
+                          // Filter pickup/delivery deductions: has orderId, no splitLoadId (regardless of isManual)
                           const pickupDeliveryDeductions = allDeductions.filter(deduction => {
-                            return deduction.isManual && 
-                                   !deduction.splitLoadId && 
+                            return !deduction.splitLoadId && 
                                    deduction.orderId &&
                                    currentOrderIds.has(String(deduction.orderId))
                           })
