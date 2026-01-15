@@ -387,12 +387,20 @@ export default function InvoicesPage() {
         <div className="flex items-center gap-6 text-xs">
           <span className="font-medium text-gray-700">Color Key:</span>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-white border border-gray-300"></div>
-            <span>Normal</span>
+            <div className="w-4 h-4 rounded bg-yellow-100 border border-yellow-300"></div>
+            <span>No Invoice #</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-blue-100 border border-blue-300"></div>
+            <span>Has Invoice #</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-green-100 border border-green-300"></div>
+            <span>Invoice # + In QuickBooks</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded bg-red-100 border border-red-300"></div>
-            <span>Arrival & Invoice dates in different months</span>
+            <span>Date Mismatch (different months)</span>
           </div>
         </div>
       </div>
@@ -487,14 +495,20 @@ export default function InvoicesPage() {
                     arrivalDate.getFullYear() !== invoiceDate.getFullYear()
                   )
                   
+                  // Determine row color based on invoice status
+                  let rowColor = 'bg-yellow-50 hover:bg-yellow-100' // No invoice number
+                  if (monthMismatch) {
+                    rowColor = 'bg-red-100 hover:bg-red-200' // Date mismatch takes priority
+                  } else if (load.invoice_number && load.entered_in_quickbooks) {
+                    rowColor = 'bg-green-100 hover:bg-green-200' // Has invoice # AND in QB
+                  } else if (load.invoice_number) {
+                    rowColor = 'bg-blue-100 hover:bg-blue-200' // Has invoice # only
+                  }
+                  
                   return (
                   <tr 
                     key={load.id} 
-                    className={`hover:bg-blue-50 transition-colors ${
-                      monthMismatch 
-                        ? 'bg-red-100 hover:bg-red-200' 
-                        : loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                    }`}
+                    className={`transition-colors ${rowColor}`}
                   >
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="text-xs font-semibold text-gray-900">
