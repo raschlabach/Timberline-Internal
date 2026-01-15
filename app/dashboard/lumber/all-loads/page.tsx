@@ -7,7 +7,14 @@ import { LumberLoadWithDetails } from '@/types/lumber'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Search, Info, CheckCircle, XCircle } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Search, Info, CheckCircle, XCircle, X } from 'lucide-react'
 
 export default function AllLoadsPage() {
   const { data: session, status } = useSession()
@@ -19,6 +26,18 @@ export default function AllLoadsPage() {
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   const [selectedLoads, setSelectedLoads] = useState<Set<number>>(new Set())
   const [isUpdating, setIsUpdating] = useState(false)
+  
+  // Filter states
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('all')
+  const [selectedSpecies, setSelectedSpecies] = useState<string>('all')
+  const [selectedGrade, setSelectedGrade] = useState<string>('all')
+  const [selectedThickness, setSelectedThickness] = useState<string>('all')
+  
+  // Unique values for filters
+  const [suppliers, setSuppliers] = useState<string[]>([])
+  const [species, setSpecies] = useState<string[]>([])
+  const [grades, setGrades] = useState<string[]>([])
+  const [thicknesses, setThicknesses] = useState<string[]>([])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -38,6 +57,17 @@ export default function AllLoadsPage() {
           const data = await loadsRes.json()
           setLoads(data)
           setFilteredLoads(data)
+          
+          // Extract unique values for filters
+          const uniqueSuppliers = Array.from(new Set(data.map((l: any) => l.supplier_name).filter(Boolean))).sort() as string[]
+          const uniqueSpecies = Array.from(new Set(data.flatMap((l: any) => l.items?.map((i: any) => i.species) || []).filter(Boolean))).sort() as string[]
+          const uniqueGrades = Array.from(new Set(data.flatMap((l: any) => l.items?.map((i: any) => i.grade) || []).filter(Boolean))).sort() as string[]
+          const uniqueThicknesses = Array.from(new Set(data.flatMap((l: any) => l.items?.map((i: any) => i.thickness) || []).filter(Boolean))).sort() as string[]
+          
+          setSuppliers(uniqueSuppliers)
+          setSpecies(uniqueSpecies)
+          setGrades(uniqueGrades)
+          setThicknesses(uniqueThicknesses)
         }
         
         if (speciesRes.ok) {
@@ -61,24 +91,60 @@ export default function AllLoadsPage() {
   }, [status])
 
   useEffect(() => {
-    if (searchTerm === '') {
-      setFilteredLoads(loads)
-    } else {
-      const filtered = loads.filter(load => {
-        const search = searchTerm.toLowerCase()
-        return (
-          load.load_id?.toLowerCase().includes(search) ||
-          load.supplier_name?.toLowerCase().includes(search) ||
-          (load.items && load.items.some(item => 
-            item.species?.toLowerCase().includes(search) ||
-            item.grade?.toLowerCase().includes(search)
-          )) ||
-          load.invoice_number?.toLowerCase().includes(search)
-        )
-      })
-      setFilteredLoads(filtered)
+    let filtered = loads
+
+    // Apply search filter
+    if (searchTerm !== '') {
+      const search = searchTerm.toLowerCase()
+      filtered = filtered.filter(load =>
+        load.load_id?.toLowerCase().includes(search) ||
+        load.supplier_name?.toLowerCase().includes(search) ||
+        (load.items && load.items.some(item => 
+          item.species?.toLowerCase().includes(search) ||
+          item.grade?.toLowerCase().includes(search)
+        )) ||
+        load.invoice_number?.toLowerCase().includes(search)
+      )
     }
-  }, [searchTerm, loads])
+
+    // Apply supplier filter
+    if (selectedSupplier !== 'all') {
+      filtered = filtered.filter(load => load.supplier_name === selectedSupplier)
+    }
+
+    // Apply species filter
+    if (selectedSpecies !== 'all') {
+      filtered = filtered.filter(load =>
+        load.items && load.items.some(item => item.species === selectedSpecies)
+      )
+    }
+
+    // Apply grade filter
+    if (selectedGrade !== 'all') {
+      filtered = filtered.filter(load =>
+        load.items && load.items.some(item => item.grade === selectedGrade)
+      )
+    }
+
+    // Apply thickness filter
+    if (selectedThickness !== 'all') {
+      filtered = filtered.filter(load =>
+        load.items && load.items.some(item => item.thickness === selectedThickness)
+      )
+    }
+
+    setFilteredLoads(filtered)
+  }, [searchTerm, selectedSupplier, selectedSpecies, selectedGrade, selectedThickness, loads])
+
+  function clearAllFilters() {
+    setSearchTerm('')
+    setSelectedSupplier('all')
+    setSelectedSpecies('all')
+    setSelectedGrade('all')
+    setSelectedThickness('all')
+  }
+
+  const hasActiveFilters = searchTerm !== '' || selectedSupplier !== 'all' || selectedSpecies !== 'all' || selectedGrade !== 'all' || selectedThickness !== 'all'
 
   // Selection handlers
   const handleSelectAll = (checked: boolean) => {
@@ -118,23 +184,11 @@ export default function AllLoadsPage() {
       
       await Promise.all(promises)
       
-      // Refresh the loads
+      // Refresh the loads - the useEffect will handle filtering
       const loadsRes = await fetch('/api/lumber/loads')
       if (loadsRes.ok) {
         const data = await loadsRes.json()
         setLoads(data)
-        setFilteredLoads(searchTerm ? data.filter((load: LumberLoadWithDetails) => {
-          const search = searchTerm.toLowerCase()
-          return (
-            load.load_id?.toLowerCase().includes(search) ||
-            load.supplier_name?.toLowerCase().includes(search) ||
-            (load.items && load.items.some(item => 
-              item.species?.toLowerCase().includes(search) ||
-              item.grade?.toLowerCase().includes(search)
-            )) ||
-            load.invoice_number?.toLowerCase().includes(search)
-          )
-        }) : data)
       }
       
       // Clear selection
@@ -162,18 +216,145 @@ export default function AllLoadsPage() {
         <p className="text-sm text-gray-600 mt-1">Complete history of all lumber loads ({filteredLoads.length} {filteredLoads.length === 1 ? 'load' : 'loads'})</p>
       </div>
 
-      {/* Search Bar and Actions */}
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            type="text"
-            placeholder="Search by Load ID, Supplier, Species, Grade, or Invoice #..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearAllFilters}
+              className="h-7 text-xs"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear All
+            </Button>
+          )}
         </div>
+        
+        <div className="grid grid-cols-5 gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-9 text-sm"
+            />
+          </div>
+
+          {/* Supplier Filter */}
+          <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All Suppliers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Suppliers</SelectItem>
+              {suppliers.map(supplier => (
+                <SelectItem key={supplier} value={supplier}>
+                  {supplier}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Species Filter */}
+          <Select value={selectedSpecies} onValueChange={setSelectedSpecies}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All Species" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Species</SelectItem>
+              {species.map(sp => (
+                <SelectItem key={sp} value={sp}>
+                  {sp}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Grade Filter */}
+          <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All Grades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Grades</SelectItem>
+              {grades.map(grade => (
+                <SelectItem key={grade} value={grade}>
+                  {grade}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Thickness Filter */}
+          <Select value={selectedThickness} onValueChange={setSelectedThickness}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All Thicknesses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Thicknesses</SelectItem>
+              {thicknesses.map(thickness => (
+                <SelectItem key={thickness} value={thickness}>
+                  {thickness}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Active Filters Display */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t">
+            {searchTerm && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                Search: {searchTerm}
+                <button onClick={() => setSearchTerm('')} className="hover:text-blue-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {selectedSupplier !== 'all' && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
+                Supplier: {selectedSupplier}
+                <button onClick={() => setSelectedSupplier('all')} className="hover:text-green-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {selectedSpecies !== 'all' && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                Species: {selectedSpecies}
+                <button onClick={() => setSelectedSpecies('all')} className="hover:text-purple-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {selectedGrade !== 'all' && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
+                Grade: {selectedGrade}
+                <button onClick={() => setSelectedGrade('all')} className="hover:text-orange-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {selectedThickness !== 'all' && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-100 text-cyan-800 text-xs rounded">
+                Thickness: {selectedThickness}
+                <button onClick={() => setSelectedThickness('all')} className="hover:text-cyan-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            <div className="text-xs text-gray-500 self-center ml-auto">
+              Showing {filteredLoads.length} of {loads.length} loads
+            </div>
+          </div>
+        )}
         
         {/* Bulk Action Buttons - Show when items are selected */}
         {isSomeSelected && (

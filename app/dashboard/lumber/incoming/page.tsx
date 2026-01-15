@@ -27,11 +27,13 @@ export default function IncomingLoadsPage() {
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all')
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all')
   const [selectedGrade, setSelectedGrade] = useState<string>('all')
+  const [selectedThickness, setSelectedThickness] = useState<string>('all')
   
   // Unique values for filters
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [species, setSpecies] = useState<string[]>([])
   const [grades, setGrades] = useState<string[]>([])
+  const [thicknesses, setThicknesses] = useState<string[]>([])
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -57,10 +59,12 @@ export default function IncomingLoadsPage() {
           const uniqueSuppliers = Array.from(new Set(data.map((l: any) => l.supplier_name))).sort() as string[]
           const uniqueSpecies = Array.from(new Set(data.flatMap((l: any) => l.items.map((i: any) => i.species)))).sort() as string[]
           const uniqueGrades = Array.from(new Set(data.flatMap((l: any) => l.items.map((i: any) => i.grade)))).sort() as string[]
+          const uniqueThicknesses = Array.from(new Set(data.flatMap((l: any) => l.items.map((i: any) => i.thickness)))).sort() as string[]
           
           setSuppliers(uniqueSuppliers)
           setSpecies(uniqueSpecies)
           setGrades(uniqueGrades)
+          setThicknesses(uniqueThicknesses)
         }
         
         if (speciesRes.ok) {
@@ -120,17 +124,25 @@ export default function IncomingLoadsPage() {
       )
     }
 
+    // Apply thickness filter
+    if (selectedThickness !== 'all') {
+      filtered = filtered.filter(load =>
+        load.items && load.items.some(item => item.thickness === selectedThickness)
+      )
+    }
+
     setFilteredLoads(filtered)
-  }, [searchTerm, selectedSupplier, selectedSpecies, selectedGrade, loads])
+  }, [searchTerm, selectedSupplier, selectedSpecies, selectedGrade, selectedThickness, loads])
 
   function clearAllFilters() {
     setSearchTerm('')
     setSelectedSupplier('all')
     setSelectedSpecies('all')
     setSelectedGrade('all')
+    setSelectedThickness('all')
   }
 
-  const hasActiveFilters = searchTerm !== '' || selectedSupplier !== 'all' || selectedSpecies !== 'all' || selectedGrade !== 'all'
+  const hasActiveFilters = searchTerm !== '' || selectedSupplier !== 'all' || selectedSpecies !== 'all' || selectedGrade !== 'all' || selectedThickness !== 'all'
 
   if (status === 'loading' || isLoading) {
     return (
@@ -172,7 +184,7 @@ export default function IncomingLoadsPage() {
           )}
         </div>
         
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -229,6 +241,21 @@ export default function IncomingLoadsPage() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Thickness Filter */}
+          <Select value={selectedThickness} onValueChange={setSelectedThickness}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All Thicknesses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Thicknesses</SelectItem>
+              {thicknesses.map(thickness => (
+                <SelectItem key={thickness} value={thickness}>
+                  {thickness}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Active Filters Display */}
@@ -266,11 +293,34 @@ export default function IncomingLoadsPage() {
                 </button>
               </div>
             )}
+            {selectedThickness !== 'all' && (
+              <div className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-100 text-cyan-800 text-xs rounded">
+                Thickness: {selectedThickness}
+                <button onClick={() => setSelectedThickness('all')} className="hover:text-cyan-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             <div className="text-xs text-gray-500 self-center ml-auto">
               Showing {filteredLoads.length} of {loads.length} loads
             </div>
           </div>
         )}
+      </div>
+
+      {/* Color Legend */}
+      <div className="bg-white rounded-lg shadow p-3">
+        <div className="flex items-center gap-6 text-xs">
+          <span className="font-medium text-gray-700">Color Key:</span>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-white border border-gray-300"></div>
+            <span>Waiting for Arrival</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-green-100 border border-green-300"></div>
+            <span>Has Actual Footage (Needs Invoice/Docs)</span>
+          </div>
+        </div>
       </div>
 
       {/* Compact Loads Table */}
@@ -282,6 +332,7 @@ export default function IncomingLoadsPage() {
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Supplier</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Items</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Est. BF</th>
+              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Act. BF</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Price</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">ETA</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Type</th>
@@ -291,100 +342,117 @@ export default function IncomingLoadsPage() {
           <tbody className="divide-y divide-gray-200">
             {filteredLoads.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-500">
+                <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-500">
                   {loads.length === 0 ? 'No incoming loads found' : 'No loads match your search'}
                 </td>
               </tr>
             ) : (
-              filteredLoads.map((load, loadIdx) => (
-                <tr 
-                  key={load.id} 
-                  className={`hover:bg-blue-50 transition-colors ${
-                    loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                  }`}
-                >
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString()}`}>
-                      {load.load_id}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="text-xs font-medium text-gray-900">{load.supplier_name}</span>
-                    {load.location_name && (
-                      <span className="text-[10px] text-gray-500 ml-1">({load.location_name})</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1">
-                    <div className="text-xs flex flex-wrap gap-x-2 gap-y-0.5">
-                      {load.items.map((item, idx) => (
-                        <span key={idx} className="whitespace-nowrap flex items-center gap-1">
-                          <span 
-                            className="w-2 h-2 rounded-full flex-shrink-0" 
-                            style={{ backgroundColor: speciesColors[item.species] || '#6B7280' }}
-                          />
-                          <span className="font-medium">{item.species}</span>
-                          <span className="text-gray-500 mx-0.5">{item.grade}</span>
-                          <span className="text-[10px] bg-gray-200 px-1 rounded">{item.thickness}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="text-xs">
-                      {load.items.map((item, idx) => (
-                        <span key={idx}>
-                          {item.estimated_footage?.toLocaleString() || '-'}
-                          {idx < load.items.length - 1 && ', '}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="text-xs">
-                      {load.items.map((item, idx) => (
-                        <span key={idx}>
-                          ${item.price?.toFixed(3) || '-'}
-                          {idx < load.items.length - 1 && ', '}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="text-xs">
-                      {load.estimated_delivery_date ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="text-xs capitalize">{load.pickup_or_delivery || '-'}</span>
-                    {load.pickup_number && (
-                      <span className="text-[10px] text-gray-500 ml-1">#{load.pickup_number}</span>
-                    )}
-                    {load.plant && (
-                      <span className="text-[10px] text-gray-500 ml-1">{load.plant}</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1">
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-[10px] px-1.5"
-                        onClick={() => router.push(`/dashboard/lumber/data-entry/${load.id}`)}
-                      >
-                        Entry
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0"
-                        onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
-                      >
-                        <Info className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              filteredLoads.map((load, loadIdx) => {
+                // Check if any item has actual footage
+                const hasActualFootage = load.items?.some(item => item.actual_footage)
+                
+                return (
+                  <tr 
+                    key={load.id} 
+                    className={`hover:bg-blue-50 transition-colors ${
+                      hasActualFootage 
+                        ? 'bg-green-50 hover:bg-green-100' 
+                        : loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                    }`}
+                  >
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString()}`}>
+                        {load.load_id}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs font-medium text-gray-900">{load.supplier_name}</span>
+                      {load.location_name && (
+                        <span className="text-[10px] text-gray-500 ml-1">({load.location_name})</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
+                      <div className="text-xs flex flex-wrap gap-x-2 gap-y-0.5">
+                        {load.items.map((item, idx) => (
+                          <span key={idx} className="whitespace-nowrap flex items-center gap-1">
+                            <span 
+                              className="w-2 h-2 rounded-full flex-shrink-0" 
+                              style={{ backgroundColor: speciesColors[item.species] || '#6B7280' }}
+                            />
+                            <span className="font-medium">{item.species}</span>
+                            <span className="text-gray-500 mx-0.5">{item.grade}</span>
+                            <span className="text-[10px] bg-gray-200 px-1 rounded">{item.thickness}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.items.map((item, idx) => (
+                          <span key={idx}>
+                            {item.estimated_footage?.toLocaleString() || '-'}
+                            {idx < load.items.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className={`text-xs ${hasActualFootage ? 'font-semibold text-green-700' : ''}`}>
+                        {load.items.map((item, idx) => (
+                          <span key={idx}>
+                            {item.actual_footage?.toLocaleString() || '-'}
+                            {idx < load.items.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.items.map((item, idx) => (
+                          <span key={idx}>
+                            ${item.price?.toFixed(3) || '-'}
+                            {idx < load.items.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.estimated_delivery_date ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs capitalize">{load.pickup_or_delivery || '-'}</span>
+                      {load.pickup_number && (
+                        <span className="text-[10px] text-gray-500 ml-1">#{load.pickup_number}</span>
+                      )}
+                      {load.plant && (
+                        <span className="text-[10px] text-gray-500 ml-1">{load.plant}</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-1.5"
+                          onClick={() => router.push(`/dashboard/lumber/data-entry/${load.id}`)}
+                        >
+                          Entry
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
+                        >
+                          <Info className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
