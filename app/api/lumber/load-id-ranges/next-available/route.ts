@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
 
-// GET /api/lumber/load-id-ranges/next-available?count=1
+// GET /api/lumber/load-id-ranges/next-available?count=1&exclude=123,124,125
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -13,6 +13,10 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const count = parseInt(searchParams.get('count') || '1')
+    const excludeParam = searchParams.get('exclude') || ''
+    
+    // Parse excluded IDs (IDs already assigned in the form but not yet saved)
+    const excludeIds = excludeParam ? excludeParam.split(',').map(id => id.trim()).filter(Boolean) : []
 
     if (count < 1 || count > 100) {
       return NextResponse.json({ error: 'Count must be between 1 and 100' }, { status: 400 })
@@ -32,18 +36,26 @@ export async function GET(request: NextRequest) {
 
     const activeRange = rangeResult.rows[0]
 
-    // Find available IDs in the range
+    // Find available IDs in the range, excluding both DB entries and form-assigned IDs
     let availableResult
     try {
+      // Build the exclusion condition
+      const excludeCondition = excludeIds.length > 0 
+        ? `AND n::TEXT NOT IN (${excludeIds.map((_, i) => `$${i + 4}`).join(', ')})`
+        : ''
+      
+      const queryParams = [activeRange.start_range, activeRange.end_range, count, ...excludeIds]
+      
       availableResult = await query(`
         SELECT n 
         FROM generate_series($1::INTEGER, $2::INTEGER) n
         WHERE NOT EXISTS (
           SELECT 1 FROM lumber_loads WHERE load_id = n::TEXT
         )
+        ${excludeCondition}
         ORDER BY n
         LIMIT $3
-      `, [activeRange.start_range, activeRange.end_range, count])
+      `, queryParams)
     } catch (dbError) {
       console.error('Database query error:', dbError)
       return NextResponse.json({ 

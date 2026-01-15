@@ -116,11 +116,15 @@ export default function CreateLoadPage() {
 
   async function handleAddItem() {
     const newIndex = items.length
+    // Get currently assigned IDs to exclude from the search
+    const existingIds = items.map(item => item.load_id).filter(Boolean)
+    
     setItems([...items, { load_id: '', species: '', grade: '', thickness: '4/4', estimated_footage: null, price: null }])
     
-    // Fetch next available load ID for the new item
+    // Fetch next available load ID for the new item, excluding already assigned IDs
     try {
-      const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
+      const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
+      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=1${excludeParam}`)
       if (response.ok) {
         const data = await response.json()
         if (data.loadIds && data.loadIds.length > 0) {
@@ -140,6 +144,8 @@ export default function CreateLoadPage() {
   async function handleCopyItem(index: number) {
     const itemToCopy = items[index]
     const newIndex = items.length
+    // Get currently assigned IDs to exclude from the search
+    const existingIds = items.map(item => item.load_id).filter(Boolean)
     
     // Create a copy without the load_id
     const copiedItem = {
@@ -153,9 +159,10 @@ export default function CreateLoadPage() {
     
     setItems([...items, copiedItem])
     
-    // Fetch next available load ID for the copied item
+    // Fetch next available load ID for the copied item, excluding already assigned IDs
     try {
-      const response = await fetch('/api/lumber/load-id-ranges/next-available?count=1')
+      const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
+      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=1${excludeParam}`)
       if (response.ok) {
         const data = await response.json()
         if (data.loadIds && data.loadIds.length > 0) {
