@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { LumberLoadWithDetails } from '@/types/lumber'
+import { LumberLoadWithDetails, LumberPackWithDetails } from '@/types/lumber'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -14,7 +16,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Search, Info, CheckCircle, XCircle, X } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Search, Info, CheckCircle, XCircle, X, Package, Save, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+
+interface Operator {
+  id: number
+  name: string
+  is_active: boolean
+}
 
 export default function AllLoadsPage() {
   const { data: session, status } = useSession()
@@ -38,6 +53,14 @@ export default function AllLoadsPage() {
   const [species, setSpecies] = useState<string[]>([])
   const [grades, setGrades] = useState<string[]>([])
   const [thicknesses, setThicknesses] = useState<string[]>([])
+  
+  // Pack dialog states
+  const [packDialogOpen, setPackDialogOpen] = useState(false)
+  const [selectedLoadForPacks, setSelectedLoadForPacks] = useState<LumberLoadWithDetails | null>(null)
+  const [loadPacks, setLoadPacks] = useState<any[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
+  const [packEdits, setPackEdits] = useState<Record<number, any>>({})
+  const [isSavingPacks, setIsSavingPacks] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -48,9 +71,10 @@ export default function AllLoadsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [loadsRes, speciesRes] = await Promise.all([
+        const [loadsRes, speciesRes, operatorsRes] = await Promise.all([
           fetch('/api/lumber/loads'),
-          fetch('/api/lumber/species')
+          fetch('/api/lumber/species'),
+          fetch('/api/lumber/operators')
         ])
         
         if (loadsRes.ok) {
@@ -77,6 +101,10 @@ export default function AllLoadsPage() {
             colorMap[sp.name] = sp.color || '#6B7280'
           })
           setSpeciesColors(colorMap)
+        }
+        
+        if (operatorsRes.ok) {
+          setOperators(await operatorsRes.json())
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -198,6 +226,189 @@ export default function AllLoadsPage() {
       alert('Failed to update some loads. Please try again.')
     } finally {
       setIsUpdating(false)
+    }
+  }
+
+  // Pack dialog functions
+  async function openPackDialog(load: LumberLoadWithDetails) {
+    setSelectedLoadForPacks(load)
+    setPackDialogOpen(true)
+    setPackEdits({})
+    
+    try {
+      const response = await fetch(`/api/lumber/loads/${load.id}/packs`)
+      if (response.ok) {
+        const packs = await response.json()
+        setLoadPacks(packs)
+        // Initialize edits with current values
+        const edits: Record<number, any> = {}
+        packs.forEach((pack: any) => {
+          edits[pack.id] = {
+            pack_id: pack.pack_id || '',
+            length: pack.length || '',
+            tally_board_feet: pack.tally_board_feet || '',
+            actual_board_feet: pack.actual_board_feet || '',
+            rip_yield: pack.rip_yield || '',
+            rip_comments: pack.rip_comments || '',
+            operator_id: pack.operator_id?.toString() || '',
+            stacker_1_id: pack.stacker_1_id?.toString() || '',
+            stacker_2_id: pack.stacker_2_id?.toString() || '',
+            stacker_3_id: pack.stacker_3_id?.toString() || '',
+            stacker_4_id: pack.stacker_4_id?.toString() || '',
+            load_quality: pack.load_quality || '',
+            is_finished: pack.is_finished || false,
+            finished_at: pack.finished_at ? pack.finished_at.split('T')[0] : ''
+          }
+        })
+        setPackEdits(edits)
+      }
+    } catch (error) {
+      console.error('Error fetching packs:', error)
+      toast.error('Failed to load packs')
+    }
+  }
+
+  function updatePackEdit(packId: number, field: string, value: any) {
+    setPackEdits(prev => ({
+      ...prev,
+      [packId]: {
+        ...prev[packId],
+        [field]: value
+      }
+    }))
+  }
+
+  async function savePackChanges(packId: number) {
+    const edit = packEdits[packId]
+    if (!edit) return
+
+    setIsSavingPacks(true)
+    try {
+      // Save rip data
+      const response = await fetch(`/api/lumber/packs/${packId}/rip-data`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pack_id: edit.pack_id || null,
+          length: edit.length ? parseInt(edit.length) : null,
+          tally_board_feet: edit.tally_board_feet ? parseInt(edit.tally_board_feet) : null,
+          actual_board_feet: edit.actual_board_feet ? parseInt(edit.actual_board_feet) : null,
+          rip_yield: edit.rip_yield ? parseFloat(edit.rip_yield) : null,
+          rip_comments: edit.rip_comments || null,
+          operator_id: edit.operator_id ? parseInt(edit.operator_id) : null,
+          stacker_1_id: edit.stacker_1_id ? parseInt(edit.stacker_1_id) : null,
+          stacker_2_id: edit.stacker_2_id ? parseInt(edit.stacker_2_id) : null,
+          stacker_3_id: edit.stacker_3_id ? parseInt(edit.stacker_3_id) : null,
+          stacker_4_id: edit.stacker_4_id ? parseInt(edit.stacker_4_id) : null,
+          load_quality: edit.load_quality || null,
+          is_finished: edit.is_finished,
+          finished_at: edit.finished_at || null
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Pack saved')
+        // Refresh packs
+        if (selectedLoadForPacks) {
+          const packsRes = await fetch(`/api/lumber/loads/${selectedLoadForPacks.id}/packs`)
+          if (packsRes.ok) {
+            setLoadPacks(await packsRes.json())
+          }
+        }
+      } else {
+        toast.error('Failed to save pack')
+      }
+    } catch (error) {
+      console.error('Error saving pack:', error)
+      toast.error('Failed to save pack')
+    } finally {
+      setIsSavingPacks(false)
+    }
+  }
+
+  async function deletePack(packId: number) {
+    if (!confirm('Are you sure you want to delete this pack?')) return
+
+    try {
+      const response = await fetch(`/api/lumber/packs/${packId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        toast.success('Pack deleted')
+        setLoadPacks(prev => prev.filter(p => p.id !== packId))
+        const newEdits = { ...packEdits }
+        delete newEdits[packId]
+        setPackEdits(newEdits)
+      } else {
+        toast.error('Failed to delete pack')
+      }
+    } catch (error) {
+      console.error('Error deleting pack:', error)
+      toast.error('Failed to delete pack')
+    }
+  }
+
+  async function addNewPack() {
+    if (!selectedLoadForPacks) return
+
+    try {
+      // Get the first item's id for the pack
+      const loadItemId = selectedLoadForPacks.items[0]?.id
+      if (!loadItemId) {
+        toast.error('No load items found')
+        return
+      }
+
+      const response = await fetch('/api/lumber/packs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          load_id: selectedLoadForPacks.id,
+          load_item_id: loadItemId,
+          pack_id: null,
+          length: null,
+          tally_board_feet: null
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Pack added')
+        // Refresh packs
+        const packsRes = await fetch(`/api/lumber/loads/${selectedLoadForPacks.id}/packs`)
+        if (packsRes.ok) {
+          const packs = await packsRes.json()
+          setLoadPacks(packs)
+          // Initialize edit for new pack
+          const newPack = packs[packs.length - 1]
+          if (newPack) {
+            setPackEdits(prev => ({
+              ...prev,
+              [newPack.id]: {
+                pack_id: '',
+                length: '',
+                tally_board_feet: '',
+                actual_board_feet: '',
+                rip_yield: '',
+                rip_comments: '',
+                operator_id: '',
+                stacker_1_id: '',
+                stacker_2_id: '',
+                stacker_3_id: '',
+                stacker_4_id: '',
+                load_quality: '',
+                is_finished: false,
+                finished_at: ''
+              }
+            }))
+          }
+        }
+      } else {
+        toast.error('Failed to add pack')
+      }
+    } catch (error) {
+      console.error('Error adding pack:', error)
+      toast.error('Failed to add pack')
     }
   }
 
@@ -521,14 +732,26 @@ export default function AllLoadsPage() {
                     )}
                   </td>
                   <td className="px-2 py-1.5">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2"
-                      onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
-                    >
-                      <Info className="h-3 w-3" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2"
+                        onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
+                        title="Load Info"
+                      >
+                        <Info className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2"
+                        onClick={() => openPackDialog(load)}
+                        title="Edit Packs"
+                      >
+                        <Package className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -537,6 +760,267 @@ export default function AllLoadsPage() {
           </table>
         </div>
       </div>
+
+      {/* Pack Edit Dialog */}
+      <Dialog open={packDialogOpen} onOpenChange={setPackDialogOpen}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Edit Packs - Load {selectedLoadForPacks?.load_id}
+              <span className="text-sm font-normal text-gray-500 ml-2">
+                ({loadPacks.length} packs)
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto">
+            <div className="mb-4">
+              <Button size="sm" onClick={addNewPack}>
+                Add Pack
+              </Button>
+            </div>
+            
+            {loadPacks.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                No packs found for this load
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {loadPacks.map((pack, idx) => (
+                  <div key={pack.id} className="border rounded-lg p-4 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-sm">
+                        Pack #{idx + 1}
+                        {pack.is_finished && (
+                          <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                            Finished
+                          </span>
+                        )}
+                      </h4>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7"
+                          onClick={() => savePackChanges(pack.id)}
+                          disabled={isSavingPacks}
+                        >
+                          <Save className="h-3 w-3 mr-1" />
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-red-600 hover:text-red-700"
+                          onClick={() => deletePack(pack.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-6 gap-3">
+                      {/* Pack Info */}
+                      <div>
+                        <Label className="text-xs">Pack ID</Label>
+                        <Input
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.pack_id || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Length</Label>
+                        <Input
+                          type="number"
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.length || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'length', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Tally BF</Label>
+                        <Input
+                          type="number"
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.tally_board_feet || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'tally_board_feet', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Actual BF</Label>
+                        <Input
+                          type="number"
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.actual_board_feet || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Rip Yield %</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.rip_yield || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Load Quality</Label>
+                        <Select
+                          value={packEdits[pack.id]?.load_quality || 'none'}
+                          onValueChange={(val) => updatePackEdit(pack.id, 'load_quality', val === 'none' ? '' : val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-</SelectItem>
+                            <SelectItem value="Good">Good</SelectItem>
+                            <SelectItem value="Average">Average</SelectItem>
+                            <SelectItem value="Poor">Poor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Operator & Stackers */}
+                      <div>
+                        <Label className="text-xs">Operator</Label>
+                        <Select
+                          value={packEdits[pack.id]?.operator_id || 'none'}
+                          onValueChange={(val) => updatePackEdit(pack.id, 'operator_id', val === 'none' ? '' : val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-</SelectItem>
+                            {operators.filter(o => o.is_active).map(op => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Stacker 1</Label>
+                        <Select
+                          value={packEdits[pack.id]?.stacker_1_id || 'none'}
+                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_1_id', val === 'none' ? '' : val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-</SelectItem>
+                            {operators.filter(o => o.is_active).map(op => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Stacker 2</Label>
+                        <Select
+                          value={packEdits[pack.id]?.stacker_2_id || 'none'}
+                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_2_id', val === 'none' ? '' : val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-</SelectItem>
+                            {operators.filter(o => o.is_active).map(op => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Stacker 3</Label>
+                        <Select
+                          value={packEdits[pack.id]?.stacker_3_id || 'none'}
+                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_3_id', val === 'none' ? '' : val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-</SelectItem>
+                            {operators.filter(o => o.is_active).map(op => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Stacker 4</Label>
+                        <Select
+                          value={packEdits[pack.id]?.stacker_4_id || 'none'}
+                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_4_id', val === 'none' ? '' : val)}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-</SelectItem>
+                            {operators.filter(o => o.is_active).map(op => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Status & Date */}
+                      <div>
+                        <Label className="text-xs">Finished</Label>
+                        <div className="flex items-center h-8">
+                          <Checkbox
+                            checked={packEdits[pack.id]?.is_finished || false}
+                            onCheckedChange={(checked) => updatePackEdit(pack.id, 'is_finished', checked)}
+                          />
+                          <span className="ml-2 text-sm">
+                            {packEdits[pack.id]?.is_finished ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Finished Date</Label>
+                        <Input
+                          type="date"
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.finished_at || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'finished_at', e.target.value)}
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <Label className="text-xs">Comments</Label>
+                        <Input
+                          className="h-8 text-sm"
+                          value={packEdits[pack.id]?.rip_comments || ''}
+                          onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
+                          placeholder="Rip comments..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

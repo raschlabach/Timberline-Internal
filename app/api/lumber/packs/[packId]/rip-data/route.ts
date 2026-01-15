@@ -45,6 +45,38 @@ export async function PATCH(
       updates.push(`rip_comments = $${paramIndex++}`)
       values.push(body.rip_comments)
     }
+    if (body.operator_id !== undefined) {
+      updates.push(`operator_id = $${paramIndex++}`)
+      values.push(body.operator_id)
+    }
+    if (body.stacker_1_id !== undefined) {
+      updates.push(`stacker_1_id = $${paramIndex++}`)
+      values.push(body.stacker_1_id)
+    }
+    if (body.stacker_2_id !== undefined) {
+      updates.push(`stacker_2_id = $${paramIndex++}`)
+      values.push(body.stacker_2_id)
+    }
+    if (body.stacker_3_id !== undefined) {
+      updates.push(`stacker_3_id = $${paramIndex++}`)
+      values.push(body.stacker_3_id)
+    }
+    if (body.stacker_4_id !== undefined) {
+      updates.push(`stacker_4_id = $${paramIndex++}`)
+      values.push(body.stacker_4_id)
+    }
+    if (body.load_quality !== undefined) {
+      updates.push(`load_quality = $${paramIndex++}`)
+      values.push(body.load_quality)
+    }
+    if (body.is_finished !== undefined) {
+      updates.push(`is_finished = $${paramIndex++}`)
+      values.push(body.is_finished)
+    }
+    if (body.finished_at !== undefined) {
+      updates.push(`finished_at = $${paramIndex++}`)
+      values.push(body.finished_at || null)
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
