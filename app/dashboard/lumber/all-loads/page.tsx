@@ -761,264 +761,280 @@ export default function AllLoadsPage() {
         </div>
       </div>
 
-      {/* Pack Edit Dialog */}
+      {/* Pack Edit Dialog - Table Layout like Rip Entry */}
       <Dialog open={packDialogOpen} onOpenChange={setPackDialogOpen}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Edit Packs - Load {selectedLoadForPacks?.load_id}
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                ({loadPacks.length} packs)
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-auto">
-            <div className="mb-4">
-              <Button size="sm" onClick={addNewPack}>
+        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="pb-2 border-b">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Edit Packs - Load {selectedLoadForPacks?.load_id}
+                <span className="text-sm font-normal text-gray-500 ml-2">
+                  ({loadPacks.length} packs)
+                </span>
+              </DialogTitle>
+              <Button size="sm" onClick={addNewPack} className="h-7">
                 Add Pack
               </Button>
             </div>
-            
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto">
             {loadPacks.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
-                No packs found for this load
+                No packs found for this load. Click "Add Pack" to create one.
               </div>
             ) : (
-              <div className="space-y-4">
-                {loadPacks.map((pack, idx) => (
-                  <div key={pack.id} className="border rounded-lg p-4 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-sm">
-                        Pack #{idx + 1}
-                        {pack.is_finished && (
-                          <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
-                            Finished
-                          </span>
-                        )}
-                      </h4>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7"
-                          onClick={() => savePackChanges(pack.id)}
-                          disabled={isSavingPacks}
-                        >
-                          <Save className="h-3 w-3 mr-1" />
-                          Save
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-red-600 hover:text-red-700"
-                          onClick={() => deletePack(pack.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-6 gap-3">
-                      {/* Pack Info */}
-                      <div>
-                        <Label className="text-xs">Pack ID</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.pack_id || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Length</Label>
-                        <Input
-                          type="number"
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.length || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'length', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Tally BF</Label>
-                        <Input
-                          type="number"
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.tally_board_feet || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'tally_board_feet', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Actual BF</Label>
-                        <Input
-                          type="number"
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.actual_board_feet || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Rip Yield %</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.rip_yield || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Load Quality</Label>
-                        <Select
-                          value={packEdits[pack.id]?.load_quality || 'none'}
-                          onValueChange={(val) => updatePackEdit(pack.id, 'load_quality', val === 'none' ? '' : val)}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-</SelectItem>
-                            <SelectItem value="Good">Good</SelectItem>
-                            <SelectItem value="Average">Average</SelectItem>
-                            <SelectItem value="Poor">Poor</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Operator & Stackers */}
-                      <div>
-                        <Label className="text-xs">Operator</Label>
-                        <Select
-                          value={packEdits[pack.id]?.operator_id || 'none'}
-                          onValueChange={(val) => updatePackEdit(pack.id, 'operator_id', val === 'none' ? '' : val)}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-</SelectItem>
-                            {operators.filter(o => o.is_active).map(op => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Stacker 1</Label>
-                        <Select
-                          value={packEdits[pack.id]?.stacker_1_id || 'none'}
-                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_1_id', val === 'none' ? '' : val)}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-</SelectItem>
-                            {operators.filter(o => o.is_active).map(op => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Stacker 2</Label>
-                        <Select
-                          value={packEdits[pack.id]?.stacker_2_id || 'none'}
-                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_2_id', val === 'none' ? '' : val)}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-</SelectItem>
-                            {operators.filter(o => o.is_active).map(op => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Stacker 3</Label>
-                        <Select
-                          value={packEdits[pack.id]?.stacker_3_id || 'none'}
-                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_3_id', val === 'none' ? '' : val)}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-</SelectItem>
-                            {operators.filter(o => o.is_active).map(op => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Stacker 4</Label>
-                        <Select
-                          value={packEdits[pack.id]?.stacker_4_id || 'none'}
-                          onValueChange={(val) => updatePackEdit(pack.id, 'stacker_4_id', val === 'none' ? '' : val)}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-</SelectItem>
-                            {operators.filter(o => o.is_active).map(op => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Status & Date */}
-                      <div>
-                        <Label className="text-xs">Finished</Label>
-                        <div className="flex items-center h-8">
+              <div className="border rounded mt-2">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-800 text-white sticky top-0 z-10">
+                    <tr>
+                      <th className="px-1 py-2 text-left w-16">Pack ID</th>
+                      <th className="px-1 py-2 text-left w-12">Lth</th>
+                      <th className="px-1 py-2 text-left w-16">Tally BF</th>
+                      <th className="px-1 py-2 text-left w-16">Act BF</th>
+                      <th className="px-1 py-2 text-left w-14">Yield</th>
+                      <th className="px-1 py-2 text-left w-24">Operator</th>
+                      <th className="px-1 py-2 text-left w-24">Stacker 1</th>
+                      <th className="px-1 py-2 text-left w-24">Stacker 2</th>
+                      <th className="px-1 py-2 text-left w-24">Stacker 3</th>
+                      <th className="px-1 py-2 text-left w-24">Stacker 4</th>
+                      <th className="px-1 py-2 text-center w-12">Done</th>
+                      <th className="px-1 py-2 text-left w-28">Finish Date</th>
+                      <th className="px-1 py-2 text-left">Comments</th>
+                      <th className="px-1 py-2 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadPacks.map((pack, idx) => (
+                      <tr 
+                        key={pack.id} 
+                        className={`border-t ${packEdits[pack.id]?.is_finished ? 'bg-green-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                      >
+                        <td className="px-1 py-1">
+                          <Input
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.pack_id || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            type="number"
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.length || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'length', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            type="number"
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.tally_board_feet || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'tally_board_feet', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            type="number"
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.actual_board_feet || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.rip_yield || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select
+                            value={packEdits[pack.id]?.operator_id || 'none'}
+                            onValueChange={(val) => {
+                              updatePackEdit(pack.id, 'operator_id', val === 'none' ? '' : val)
+                              setTimeout(() => savePackChanges(pack.id), 100)
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {operators.filter(o => o.is_active).map(op => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {op.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select
+                            value={packEdits[pack.id]?.stacker_1_id || 'none'}
+                            onValueChange={(val) => {
+                              updatePackEdit(pack.id, 'stacker_1_id', val === 'none' ? '' : val)
+                              setTimeout(() => savePackChanges(pack.id), 100)
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {operators.filter(o => o.is_active).map(op => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {op.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select
+                            value={packEdits[pack.id]?.stacker_2_id || 'none'}
+                            onValueChange={(val) => {
+                              updatePackEdit(pack.id, 'stacker_2_id', val === 'none' ? '' : val)
+                              setTimeout(() => savePackChanges(pack.id), 100)
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {operators.filter(o => o.is_active).map(op => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {op.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select
+                            value={packEdits[pack.id]?.stacker_3_id || 'none'}
+                            onValueChange={(val) => {
+                              updatePackEdit(pack.id, 'stacker_3_id', val === 'none' ? '' : val)
+                              setTimeout(() => savePackChanges(pack.id), 100)
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {operators.filter(o => o.is_active).map(op => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {op.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select
+                            value={packEdits[pack.id]?.stacker_4_id || 'none'}
+                            onValueChange={(val) => {
+                              updatePackEdit(pack.id, 'stacker_4_id', val === 'none' ? '' : val)
+                              setTimeout(() => savePackChanges(pack.id), 100)
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {operators.filter(o => o.is_active).map(op => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {op.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1 text-center">
                           <Checkbox
                             checked={packEdits[pack.id]?.is_finished || false}
-                            onCheckedChange={(checked) => updatePackEdit(pack.id, 'is_finished', checked)}
+                            onCheckedChange={(checked) => {
+                              updatePackEdit(pack.id, 'is_finished', checked)
+                              setTimeout(() => savePackChanges(pack.id), 100)
+                            }}
                           />
-                          <span className="ml-2 text-sm">
-                            {packEdits[pack.id]?.is_finished ? 'Yes' : 'No'}
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Finished Date</Label>
-                        <Input
-                          type="date"
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.finished_at || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'finished_at', e.target.value)}
-                        />
-                      </div>
-                      <div className="col-span-4">
-                        <Label className="text-xs">Comments</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={packEdits[pack.id]?.rip_comments || ''}
-                          onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
-                          placeholder="Rip comments..."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            type="date"
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.finished_at || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'finished_at', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            className="h-7 text-xs w-full"
+                            value={packEdits[pack.id]?.rip_comments || ''}
+                            onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
+                            onBlur={() => savePackChanges(pack.id)}
+                            placeholder="Comments..."
+                          />
+                        </td>
+                        <td className="px-1 py-1 text-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => deletePack(pack.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
+          
+          {/* Summary Footer */}
+          {loadPacks.length > 0 && (
+            <div className="pt-2 border-t mt-2">
+              <div className="flex gap-6 text-xs">
+                <div>
+                  <span className="text-gray-500">Total Packs:</span>
+                  <span className="ml-1 font-semibold">{loadPacks.length}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Finished:</span>
+                  <span className="ml-1 font-semibold text-green-600">
+                    {loadPacks.filter(p => packEdits[p.id]?.is_finished).length}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Total Tally BF:</span>
+                  <span className="ml-1 font-semibold">
+                    {loadPacks.reduce((sum, p) => sum + (parseInt(packEdits[p.id]?.tally_board_feet) || 0), 0).toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Total Actual BF:</span>
+                  <span className="ml-1 font-semibold">
+                    {loadPacks.reduce((sum, p) => sum + (parseInt(packEdits[p.id]?.actual_board_feet) || 0), 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
