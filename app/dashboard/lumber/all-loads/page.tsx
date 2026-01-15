@@ -240,21 +240,21 @@ export default function AllLoadsPage() {
       if (response.ok) {
         const packs = await response.json()
         setLoadPacks(packs)
-        // Initialize edits with current values
+        // Initialize edits with current values - convert all to strings for inputs
         const edits: Record<number, any> = {}
         packs.forEach((pack: any) => {
           edits[pack.id] = {
-            pack_id: pack.pack_id || '',
-            length: pack.length || '',
-            tally_board_feet: pack.tally_board_feet || '',
-            actual_board_feet: pack.actual_board_feet || '',
-            rip_yield: pack.rip_yield || '',
+            pack_id: pack.pack_id != null ? String(pack.pack_id) : '',
+            length: pack.length != null ? String(pack.length) : '',
+            tally_board_feet: pack.tally_board_feet != null ? String(pack.tally_board_feet) : '',
+            actual_board_feet: pack.actual_board_feet != null ? String(pack.actual_board_feet) : '',
+            rip_yield: pack.rip_yield != null ? String(pack.rip_yield) : '',
             rip_comments: pack.rip_comments || '',
-            operator_id: pack.operator_id?.toString() || '',
-            stacker_1_id: pack.stacker_1_id?.toString() || '',
-            stacker_2_id: pack.stacker_2_id?.toString() || '',
-            stacker_3_id: pack.stacker_3_id?.toString() || '',
-            stacker_4_id: pack.stacker_4_id?.toString() || '',
+            operator_id: pack.operator_id != null ? String(pack.operator_id) : '',
+            stacker_1_id: pack.stacker_1_id != null ? String(pack.stacker_1_id) : '',
+            stacker_2_id: pack.stacker_2_id != null ? String(pack.stacker_2_id) : '',
+            stacker_3_id: pack.stacker_3_id != null ? String(pack.stacker_3_id) : '',
+            stacker_4_id: pack.stacker_4_id != null ? String(pack.stacker_4_id) : '',
             load_quality: pack.load_quality || '',
             is_finished: pack.is_finished || false,
             finished_at: pack.finished_at ? pack.finished_at.split('T')[0] : ''
@@ -278,44 +278,37 @@ export default function AllLoadsPage() {
     }))
   }
 
-  async function savePackChanges(packId: number) {
-    const edit = packEdits[packId]
+  // Save with current edit values passed directly to avoid stale state
+  async function savePackChangesWithValues(packId: number, currentEdits: Record<number, any>) {
+    const edit = currentEdits[packId]
     if (!edit) return
 
     setIsSavingPacks(true)
     try {
-      // Save rip data
       const response = await fetch(`/api/lumber/packs/${packId}/rip-data`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pack_id: edit.pack_id || null,
-          length: edit.length ? parseInt(edit.length) : null,
-          tally_board_feet: edit.tally_board_feet ? parseInt(edit.tally_board_feet) : null,
-          actual_board_feet: edit.actual_board_feet ? parseInt(edit.actual_board_feet) : null,
-          rip_yield: edit.rip_yield ? parseFloat(edit.rip_yield) : null,
+          length: edit.length !== '' ? parseInt(edit.length) : null,
+          tally_board_feet: edit.tally_board_feet !== '' ? parseInt(edit.tally_board_feet) : null,
+          actual_board_feet: edit.actual_board_feet !== '' ? parseInt(edit.actual_board_feet) : null,
+          rip_yield: edit.rip_yield !== '' ? parseFloat(edit.rip_yield) : null,
           rip_comments: edit.rip_comments || null,
-          operator_id: edit.operator_id ? parseInt(edit.operator_id) : null,
-          stacker_1_id: edit.stacker_1_id ? parseInt(edit.stacker_1_id) : null,
-          stacker_2_id: edit.stacker_2_id ? parseInt(edit.stacker_2_id) : null,
-          stacker_3_id: edit.stacker_3_id ? parseInt(edit.stacker_3_id) : null,
-          stacker_4_id: edit.stacker_4_id ? parseInt(edit.stacker_4_id) : null,
+          operator_id: edit.operator_id !== '' ? parseInt(edit.operator_id) : null,
+          stacker_1_id: edit.stacker_1_id !== '' ? parseInt(edit.stacker_1_id) : null,
+          stacker_2_id: edit.stacker_2_id !== '' ? parseInt(edit.stacker_2_id) : null,
+          stacker_3_id: edit.stacker_3_id !== '' ? parseInt(edit.stacker_3_id) : null,
+          stacker_4_id: edit.stacker_4_id !== '' ? parseInt(edit.stacker_4_id) : null,
           load_quality: edit.load_quality || null,
           is_finished: edit.is_finished,
           finished_at: edit.finished_at || null
         })
       })
 
-      if (response.ok) {
-        toast.success('Pack saved')
-        // Refresh packs
-        if (selectedLoadForPacks) {
-          const packsRes = await fetch(`/api/lumber/loads/${selectedLoadForPacks.id}/packs`)
-          if (packsRes.ok) {
-            setLoadPacks(await packsRes.json())
-          }
-        }
-      } else {
+      if (!response.ok) {
+        const errData = await response.json()
+        console.error('Save error:', errData)
         toast.error('Failed to save pack')
       }
     } catch (error) {
@@ -324,6 +317,10 @@ export default function AllLoadsPage() {
     } finally {
       setIsSavingPacks(false)
     }
+  }
+
+  async function savePackChanges(packId: number) {
+    await savePackChangesWithValues(packId, packEdits)
   }
 
   async function deletePack(packId: number) {
@@ -786,23 +783,23 @@ export default function AllLoadsPage() {
               </div>
             ) : (
               <div className="border rounded mt-2">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs table-fixed">
                   <thead className="bg-gray-800 text-white sticky top-0 z-10">
                     <tr>
-                      <th className="px-1 py-2 text-left w-16">Pack ID</th>
-                      <th className="px-1 py-2 text-left w-12">Lth</th>
-                      <th className="px-1 py-2 text-left w-16">Tally BF</th>
-                      <th className="px-1 py-2 text-left w-16">Act BF</th>
-                      <th className="px-1 py-2 text-left w-14">Yield</th>
-                      <th className="px-1 py-2 text-left w-24">Operator</th>
-                      <th className="px-1 py-2 text-left w-24">Stacker 1</th>
-                      <th className="px-1 py-2 text-left w-24">Stacker 2</th>
-                      <th className="px-1 py-2 text-left w-24">Stacker 3</th>
-                      <th className="px-1 py-2 text-left w-24">Stacker 4</th>
-                      <th className="px-1 py-2 text-center w-12">Done</th>
-                      <th className="px-1 py-2 text-left w-28">Finish Date</th>
-                      <th className="px-1 py-2 text-left">Comments</th>
-                      <th className="px-1 py-2 w-16"></th>
+                      <th className="px-1 py-2 text-left" style={{width: '80px'}}>Pack ID</th>
+                      <th className="px-1 py-2 text-left" style={{width: '60px'}}>Lth</th>
+                      <th className="px-1 py-2 text-left" style={{width: '80px'}}>Tally BF</th>
+                      <th className="px-1 py-2 text-left" style={{width: '80px'}}>Act BF</th>
+                      <th className="px-1 py-2 text-left" style={{width: '65px'}}>Yield</th>
+                      <th className="px-1 py-2 text-left" style={{width: '110px'}}>Operator</th>
+                      <th className="px-1 py-2 text-left" style={{width: '100px'}}>Stacker 1</th>
+                      <th className="px-1 py-2 text-left" style={{width: '100px'}}>Stacker 2</th>
+                      <th className="px-1 py-2 text-left" style={{width: '100px'}}>Stacker 3</th>
+                      <th className="px-1 py-2 text-left" style={{width: '100px'}}>Stacker 4</th>
+                      <th className="px-1 py-2 text-center" style={{width: '45px'}}>Done</th>
+                      <th className="px-1 py-2 text-left" style={{width: '115px'}}>Finish Date</th>
+                      <th className="px-1 py-2 text-left" style={{width: '100px'}}>Comments</th>
+                      <th className="px-1 py-2 text-center" style={{width: '70px'}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -813,56 +810,48 @@ export default function AllLoadsPage() {
                       >
                         <td className="px-1 py-1">
                           <Input
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.pack_id || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.pack_id ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Input
                             type="number"
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.length || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.length ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'length', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Input
                             type="number"
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.tally_board_feet || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.tally_board_feet ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'tally_board_feet', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Input
                             type="number"
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.actual_board_feet || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.actual_board_feet ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="0.1"
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.rip_yield || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.rip_yield ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Select
                             value={packEdits[pack.id]?.operator_id || 'none'}
-                            onValueChange={(val) => {
-                              updatePackEdit(pack.id, 'operator_id', val === 'none' ? '' : val)
-                              setTimeout(() => savePackChanges(pack.id), 100)
-                            }}
+                            onValueChange={(val) => updatePackEdit(pack.id, 'operator_id', val === 'none' ? '' : val)}
                           >
                             <SelectTrigger className="h-7 text-xs">
                               <SelectValue placeholder="-" />
@@ -880,10 +869,7 @@ export default function AllLoadsPage() {
                         <td className="px-1 py-1">
                           <Select
                             value={packEdits[pack.id]?.stacker_1_id || 'none'}
-                            onValueChange={(val) => {
-                              updatePackEdit(pack.id, 'stacker_1_id', val === 'none' ? '' : val)
-                              setTimeout(() => savePackChanges(pack.id), 100)
-                            }}
+                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_1_id', val === 'none' ? '' : val)}
                           >
                             <SelectTrigger className="h-7 text-xs">
                               <SelectValue placeholder="-" />
@@ -901,10 +887,7 @@ export default function AllLoadsPage() {
                         <td className="px-1 py-1">
                           <Select
                             value={packEdits[pack.id]?.stacker_2_id || 'none'}
-                            onValueChange={(val) => {
-                              updatePackEdit(pack.id, 'stacker_2_id', val === 'none' ? '' : val)
-                              setTimeout(() => savePackChanges(pack.id), 100)
-                            }}
+                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_2_id', val === 'none' ? '' : val)}
                           >
                             <SelectTrigger className="h-7 text-xs">
                               <SelectValue placeholder="-" />
@@ -922,10 +905,7 @@ export default function AllLoadsPage() {
                         <td className="px-1 py-1">
                           <Select
                             value={packEdits[pack.id]?.stacker_3_id || 'none'}
-                            onValueChange={(val) => {
-                              updatePackEdit(pack.id, 'stacker_3_id', val === 'none' ? '' : val)
-                              setTimeout(() => savePackChanges(pack.id), 100)
-                            }}
+                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_3_id', val === 'none' ? '' : val)}
                           >
                             <SelectTrigger className="h-7 text-xs">
                               <SelectValue placeholder="-" />
@@ -943,10 +923,7 @@ export default function AllLoadsPage() {
                         <td className="px-1 py-1">
                           <Select
                             value={packEdits[pack.id]?.stacker_4_id || 'none'}
-                            onValueChange={(val) => {
-                              updatePackEdit(pack.id, 'stacker_4_id', val === 'none' ? '' : val)
-                              setTimeout(() => savePackChanges(pack.id), 100)
-                            }}
+                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_4_id', val === 'none' ? '' : val)}
                           >
                             <SelectTrigger className="h-7 text-xs">
                               <SelectValue placeholder="-" />
@@ -964,39 +941,46 @@ export default function AllLoadsPage() {
                         <td className="px-1 py-1 text-center">
                           <Checkbox
                             checked={packEdits[pack.id]?.is_finished || false}
-                            onCheckedChange={(checked) => {
-                              updatePackEdit(pack.id, 'is_finished', checked)
-                              setTimeout(() => savePackChanges(pack.id), 100)
-                            }}
+                            onCheckedChange={(checked) => updatePackEdit(pack.id, 'is_finished', checked)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Input
                             type="date"
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.finished_at || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.finished_at ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'finished_at', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
                           />
                         </td>
                         <td className="px-1 py-1">
                           <Input
-                            className="h-7 text-xs w-full"
-                            value={packEdits[pack.id]?.rip_comments || ''}
+                            className="h-7 text-xs"
+                            value={packEdits[pack.id]?.rip_comments ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
-                            onBlur={() => savePackChanges(pack.id)}
-                            placeholder="Comments..."
                           />
                         </td>
                         <td className="px-1 py-1 text-center">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => deletePack(pack.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <div className="flex gap-1 justify-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 w-6 p-0"
+                              onClick={() => savePackChanges(pack.id)}
+                              disabled={isSavingPacks}
+                              title="Save"
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => deletePack(pack.id)}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
