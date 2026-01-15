@@ -133,12 +133,12 @@ export default function RipBonusPage() {
                       {/* Day Header */}
                       <div className="bg-gray-100 px-4 py-2 grid grid-cols-7 gap-4 text-sm font-semibold">
                         <div>{new Date(day.work_date).toLocaleDateString()}</div>
-                        <div className="text-right">{(day.total_hours || 0).toFixed(1)} hrs</div>
-                        <div className="text-right">{(day.total_bf || 0).toLocaleString()} BF</div>
-                        <div className="text-right">{(day.bf_per_hour || 0).toFixed(0)} BF/hr</div>
-                        <div className="text-right">${(day.bonus_rate || 0).toFixed(2)}</div>
-                        <div className="text-right text-green-600">${(day.bonus_total || 0).toFixed(2)}</div>
-                        <div className="text-right">{(day.total_bf || 0).toLocaleString()} BF</div>
+                        <div className="text-right">{Number(day.total_hours || 0).toFixed(1)} hrs</div>
+                        <div className="text-right">{Number(day.total_bf || 0).toLocaleString()} BF</div>
+                        <div className="text-right">{Number(day.bf_per_hour || 0).toFixed(0)} BF/hr</div>
+                        <div className="text-right">${Number(day.bonus_rate || 0).toFixed(2)}</div>
+                        <div className="text-right text-green-600">${Number(day.bonus_total || 0).toFixed(2)}</div>
+                        <div className="text-right">{Number(day.total_bf || 0).toLocaleString()} BF</div>
                       </div>
 
                       {/* Operator Breakdowns */}
@@ -146,10 +146,10 @@ export default function RipBonusPage() {
                         {(day.operator_breakdowns || []).map((op, opIdx) => (
                           <div key={opIdx} className="px-4 py-2 grid grid-cols-7 gap-4 text-sm hover:bg-gray-50">
                             <div className="col-span-2 pl-4 text-gray-700">{op.user_name || '-'}</div>
-                            <div className="text-right text-gray-700">{(op.bf_contributed || 0).toLocaleString()} BF</div>
-                            <div className="text-right text-gray-700">{(op.percentage || 0).toFixed(2)}%</div>
+                            <div className="text-right text-gray-700">{Number(op.bf_contributed || 0).toLocaleString()} BF</div>
+                            <div className="text-right text-gray-700">{Number(op.percentage || 0).toFixed(2)}%</div>
                             <div></div>
-                            <div className="text-right text-green-600">${(op.bonus_amount || 0).toFixed(2)}</div>
+                            <div className="text-right text-green-600">${Number(op.bonus_amount || 0).toFixed(2)}</div>
                             <div></div>
                           </div>
                         ))}
@@ -161,12 +161,12 @@ export default function RipBonusPage() {
                 {/* Summary Footer */}
                 <div className="mt-6 pt-4 border-t">
                   <div className="grid grid-cols-7 gap-4 text-sm font-bold">
-                    <div>Total Hours {report.total_hours || 0}</div>
-                    <div>Total RNR {(report.total_rnr || 0).toLocaleString()}</div>
-                    <div>Total Misc {(report.total_misc || 0).toLocaleString()}</div>
-                    <div>Total {(report.total_bf || 0).toLocaleString()}</div>
+                    <div>Total Hours {Number(report.total_hours || 0)}</div>
+                    <div>Total RNR {Number(report.total_rnr || 0).toLocaleString()}</div>
+                    <div>Total Misc {Number(report.total_misc || 0).toLocaleString()}</div>
+                    <div>Total {Number(report.total_bf || 0).toLocaleString()}</div>
                     <div></div>
-                    <div className="text-green-600">Total Bonus ${(report.total_bonus || 0).toFixed(2)}</div>
+                    <div className="text-green-600">Total Bonus ${Number(report.total_bonus || 0).toFixed(2)}</div>
                     <div></div>
                   </div>
                 </div>
@@ -194,9 +194,9 @@ export default function RipBonusPage() {
                   {report.operator_totals.map((op, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-4 py-2 text-sm">{op.user_name || '-'}</td>
-                      <td className="px-4 py-2 text-sm text-right">{(op.total_rip_ft || 0).toLocaleString()}</td>
+                      <td className="px-4 py-2 text-sm text-right">{Number(op.total_rip_ft || 0).toLocaleString()}</td>
                       <td className="px-4 py-2 text-sm text-right text-green-600 font-semibold">
-                        ${(op.total_bonus || 0).toFixed(2)}
+                        ${Number(op.total_bonus || 0).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -229,9 +229,9 @@ export default function RipBonusPage() {
               <tbody className="divide-y divide-blue-700">
                 {bonusParams.length > 0 ? bonusParams.map((param) => (
                   <tr key={param.id}>
-                    <td className="py-2">{(param.bf_min || 0).toLocaleString()}</td>
-                    <td className="py-2">{(param.bf_max || 0).toLocaleString()}</td>
-                    <td className="py-2 text-right">${(param.bonus_amount || 0).toFixed(2)}</td>
+                    <td className="py-2">{Number(param.bf_min || 0).toLocaleString()}</td>
+                    <td className="py-2">{Number(param.bf_max || 0).toLocaleString()}</td>
+                    <td className="py-2 text-right">${Number(param.bonus_amount || 0).toFixed(2)}</td>
                   </tr>
                 )) : (
                   <tr>
