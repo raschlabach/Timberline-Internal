@@ -155,10 +155,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {isLumberExpanded && (
               <>
                 <NavItem
-                  href="/dashboard/lumber/incoming"
+                  href="/dashboard/lumber/overview"
                   icon={<Trees size={20} />}
+                  label="Overview"
+                  isActive={isActiveRoute('/dashboard/lumber/overview')}
+                />
+                <SubNavItem
+                  href="/dashboard/lumber/incoming"
+                  icon={<Package size={16} />}
                   label="Incoming Loads"
-                  isActive={isActiveSubRoute('/dashboard/lumber')}
+                  isActive={isActiveRoute('/dashboard/lumber/incoming')}
                 />
                 <SubNavItem
                   href="/dashboard/lumber/create"
