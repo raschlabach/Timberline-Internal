@@ -188,21 +188,40 @@ export default function InventoryPage() {
     }
   }
 
-  // Sort groups based on tableSort setting
-  const sortedInventoryGroups = [...inventoryGroups].sort((a, b) => {
-    const speciesCompare = (a.species || '').localeCompare(b.species || '')
-    if (tableSort === 'species') {
-      // Sort by species only, then by current inventory descending within species
-      if (speciesCompare !== 0) return speciesCompare
-      return (Number(b.current_inventory) || 0) - (Number(a.current_inventory) || 0)
-    } else {
-      // Sort by species, then grade, then thickness
-      if (speciesCompare !== 0) return speciesCompare
-      const gradeCompare = (a.grade || '').localeCompare(b.grade || '')
-      if (gradeCompare !== 0) return gradeCompare
-      return (a.thickness || '').localeCompare(b.thickness || '')
-    }
-  })
+  // Process groups based on tableSort setting
+  const displayGroups = tableSort === 'species'
+    ? // Aggregate by species only - combine all grades/thicknesses
+      Object.values(
+        inventoryGroups.reduce((acc: Record<string, InventoryGroup>, group) => {
+          const key = group.species
+          if (!acc[key]) {
+            acc[key] = {
+              species: group.species,
+              grade: 'All Grades', // Placeholder to show it's aggregated
+              thickness: '4/4' as any, // Placeholder - not displayed in species view
+              total_actual_footage: 0,
+              total_finished_footage: 0,
+              current_inventory: 0,
+              load_count: 0,
+              loads: []
+            }
+          }
+          acc[key].total_actual_footage += Number(group.total_actual_footage) || 0
+          acc[key].total_finished_footage += Number(group.total_finished_footage) || 0
+          acc[key].current_inventory += Number(group.current_inventory) || 0
+          acc[key].load_count += group.load_count
+          acc[key].loads = [...acc[key].loads, ...group.loads]
+          return acc
+        }, {})
+      ).sort((a, b) => (a.species || '').localeCompare(b.species || ''))
+    : // Sort by species, grade, thickness (original behavior)
+      [...inventoryGroups].sort((a, b) => {
+        const speciesCompare = (a.species || '').localeCompare(b.species || '')
+        if (speciesCompare !== 0) return speciesCompare
+        const gradeCompare = (a.grade || '').localeCompare(b.grade || '')
+        if (gradeCompare !== 0) return gradeCompare
+        return (a.thickness || '').localeCompare(b.thickness || '')
+      })
 
   return (
     <div className="space-y-4">
@@ -296,8 +315,12 @@ export default function InventoryPage() {
             <tr>
               <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase w-8"></th>
               <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Grade</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
+              {tableSort === 'species-grade' && (
+                <>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Grade</th>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
+                </>
+              )}
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Total BF</th>
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Finished</th>
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Inventory</th>
@@ -305,18 +328,20 @@ export default function InventoryPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {sortedInventoryGroups.length === 0 ? (
+            {displayGroups.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-500">
+                <td colSpan={tableSort === 'species-grade' ? 8 : 6} className="px-3 py-8 text-center text-sm text-gray-500">
                   No inventory data available
                 </td>
               </tr>
             ) : (
-              sortedInventoryGroups.map((group, idx) => {
-                const rowKey = `${group.species}-${group.grade}-${group.thickness}`
+              displayGroups.map((group, idx) => {
+                const rowKey = tableSort === 'species' 
+                  ? group.species 
+                  : `${group.species}-${group.grade}-${group.thickness}`
                 const isExpanded = expandedRows.has(rowKey)
-                const prevGroup = idx > 0 ? sortedInventoryGroups[idx - 1] : null
-                const isNewSpecies = !prevGroup || prevGroup.species !== group.species
+                const prevGroup = idx > 0 ? displayGroups[idx - 1] : null
+                const isNewSpecies = tableSort === 'species-grade' && (!prevGroup || prevGroup.species !== group.species)
                 
                 return (
                   <>
@@ -338,8 +363,12 @@ export default function InventoryPage() {
                           {group.species}
                         </div>
                       </td>
-                      <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
-                      <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.thickness}</td>
+                      {tableSort === 'species-grade' && (
+                        <>
+                          <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.thickness}</td>
+                        </>
+                      )}
                       <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right">
                         {Number(group.total_actual_footage || 0).toLocaleString()}
                       </td>
@@ -370,8 +399,18 @@ export default function InventoryPage() {
                             </button>
                           </div>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.grade}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.thickness}</td>
+                        {tableSort === 'species-grade' ? (
+                          <>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.grade}</td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.thickness}</td>
+                          </>
+                        ) : (
+                          <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600" colSpan={1}>
+                            <span className="text-gray-500">{load.grade}</span>
+                            <span className="mx-1 text-gray-400">•</span>
+                            <span className="text-gray-500">{load.thickness}</span>
+                          </td>
+                        )}
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
                           {Number(load.actual_footage || 0).toLocaleString()}
                         </td>

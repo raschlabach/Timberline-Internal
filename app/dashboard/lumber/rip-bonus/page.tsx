@@ -38,8 +38,28 @@ export default function RipBonusPage() {
         fetch('/api/lumber/bonus-parameters')
       ])
 
-      if (reportRes.ok) setReport(await reportRes.json())
-      if (paramsRes.ok) setBonusParams(await paramsRes.json())
+      if (reportRes.ok) {
+        const reportData = await reportRes.json()
+        // Ensure the response has the expected structure
+        if (reportData && !reportData.error) {
+          setReport({
+            ...reportData,
+            daily_summaries: reportData.daily_summaries || [],
+            operator_totals: reportData.operator_totals || [],
+            total_hours: reportData.total_hours || 0,
+            total_bf: reportData.total_bf || 0,
+            total_bonus: reportData.total_bonus || 0,
+            total_rnr: reportData.total_rnr || 0,
+            total_misc: reportData.total_misc || 0
+          })
+        }
+      }
+      if (paramsRes.ok) {
+        const paramsData = await paramsRes.json()
+        if (Array.isArray(paramsData)) {
+          setBonusParams(paramsData)
+        }
+      }
     } catch (error) {
       console.error('Error fetching rip bonus data:', error)
     } finally {
@@ -104,7 +124,7 @@ export default function RipBonusPage() {
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-2xl font-bold mb-4">Daily Rips</h2>
             
-            {report && report.daily_summaries.length > 0 ? (
+            {report && report.daily_summaries && report.daily_summaries.length > 0 ? (
               <>
                 {/* Daily Breakdown */}
                 <div className="space-y-4">
@@ -161,7 +181,7 @@ export default function RipBonusPage() {
           {/* Operator Totals */}
           <div className="bg-white rounded-lg shadow p-4 mt-6">
             <h2 className="text-2xl font-bold mb-4">Rip Bonus</h2>
-            {report && report.operator_totals.length > 0 ? (
+            {report && report.operator_totals && report.operator_totals.length > 0 ? (
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
