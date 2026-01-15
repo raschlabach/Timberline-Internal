@@ -169,70 +169,111 @@ export default function TruckingPage() {
       <div className="grid grid-cols-3 gap-6">
         {/* Loads for Pickup */}
         <div className="col-span-2">
-          <h2 className="text-xl font-semibold mb-4">Loads Needing Pickup</h2>
+          <h2 className="text-xl font-semibold mb-4">Loads Needing Pickup ({loads.length})</h2>
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Load ID
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Supplier
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Driver
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Pickup Date
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loads.length === 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-800 text-white">
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      No loads needing pickup
-                    </td>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Load ID
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Supplier
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Species
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Grade
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Footage
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      ETA
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Pickup #
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Plant
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Driver
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Pickup Date
+                    </th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium uppercase">
+                      Action
+                    </th>
                   </tr>
-                ) : (
-                  loads.map((load) => (
-                    <tr key={load.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {load.load_id}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {load.supplier_name}
-                        {load.location_name && (
-                          <div className="text-xs text-gray-500">{load.location_name}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {load.driver_name || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {load.assigned_pickup_date 
-                          ? new Date(load.assigned_pickup_date).toLocaleDateString()
-                          : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAssignDriver(load)}
-                        >
-                          <Truck className="h-4 w-4 mr-1" />
-                          Assign
-                        </Button>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {loads.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                        No loads needing pickup
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    loads.map((load) => (
+                      <tr key={load.id} className="hover:bg-gray-50">
+                        <td className="px-2 py-2 text-xs font-medium text-gray-900">
+                          {load.load_id}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          <div className="font-medium">{load.supplier_name}</div>
+                          {load.location_name && (
+                            <div className="text-[10px] text-gray-500">{load.location_name}</div>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.items?.map((item: any) => item.species).filter(Boolean).join(', ') || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.items?.map((item: any) => item.grade).filter(Boolean).join(', ') || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.items?.reduce((sum: number, item: any) => sum + (item.estimated_footage || 0), 0).toLocaleString() || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.estimated_delivery_date 
+                            ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.pickup_number || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.plant || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.driver_name || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900">
+                          {load.assigned_pickup_date 
+                            ? new Date(load.assigned_pickup_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : '-'}
+                        </td>
+                        <td className="px-2 py-2 text-xs">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => handleAssignDriver(load)}
+                          >
+                            <Truck className="h-3 w-3 mr-1" />
+                            Assign
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
