@@ -154,6 +154,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             
             {isLumberExpanded && (
               <>
+                {/* Create Load Section */}
+                <NavItem
+                  href="/dashboard/lumber/create"
+                  icon={<Package size={20} />}
+                  label="Create Load"
+                  isActive={isActiveRoute('/dashboard/lumber/create')}
+                />
+                <SubNavItem
+                  href="/dashboard/lumber/po"
+                  icon={<FileBox size={16} />}
+                  label="PO Page"
+                  isActive={isActiveRoute('/dashboard/lumber/po')}
+                />
+                
+                {/* Overview Section */}
                 <NavItem
                   href="/dashboard/lumber/overview"
                   icon={<Trees size={20} />}
@@ -165,18 +180,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<Package size={16} />}
                   label="Incoming Loads"
                   isActive={isActiveRoute('/dashboard/lumber/incoming')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/create"
-                  icon={<Package size={16} />}
-                  label="Create Load"
-                  isActive={isActiveRoute('/dashboard/lumber/create')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/po"
-                  icon={<FileBox size={16} />}
-                  label="PO Page"
-                  isActive={isActiveRoute('/dashboard/lumber/po')}
                 />
                 <SubNavItem
                   href="/dashboard/lumber/trucking"
@@ -196,15 +199,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   label="All Loads"
                   isActive={isActiveRoute('/dashboard/lumber/all-loads')}
                 />
-                <SubNavItem
-                  href="/dashboard/lumber/inventory"
-                  icon={<PackageCheck size={16} />}
-                  label="Inventory"
-                  isActive={isActiveRoute('/dashboard/lumber/inventory')}
-                />
-                <SubNavItem
+                
+                {/* Tally Entry Section */}
+                <NavItem
                   href="/dashboard/lumber/tally-entry"
-                  icon={<ClipboardList size={16} />}
+                  icon={<ClipboardList size={20} />}
                   label="Tally Entry"
                   isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
                 />
@@ -220,12 +219,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   label="Ripped Packs"
                   isActive={isActiveRoute('/dashboard/lumber/ripped-packs')}
                 />
+                
+                {/* Inventory Section */}
+                <NavItem
+                  href="/dashboard/lumber/inventory"
+                  icon={<PackageCheck size={20} />}
+                  label="Inventory"
+                  isActive={isActiveRoute('/dashboard/lumber/inventory')}
+                />
                 <SubNavItem
                   href="/dashboard/lumber/rip-bonus"
                   icon={<TrendingUp size={16} />}
                   label="Rip Bonus"
                   isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
                 />
+                
                 {isAdmin && (
                   <SubNavItem
                     href="/dashboard/lumber/admin"

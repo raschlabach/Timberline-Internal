@@ -18,9 +18,11 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await query(
-      `SELECT id, username, full_name, email, role, is_active, created_at, updated_at, driver_color, driver_phone
-       FROM users
-       ORDER BY full_name`
+      `SELECT u.id, u.username, u.full_name, u.email, u.role, u.is_active, u.created_at, u.updated_at,
+              d.color as driver_color, d.phone as driver_phone
+       FROM users u
+       LEFT JOIN drivers d ON u.id = d.user_id
+       ORDER BY u.full_name`
     )
 
     return NextResponse.json({ success: true, users: result.rows })
@@ -58,14 +60,26 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
+    // Create user
     const result = await query(
-      `INSERT INTO users (username, password_hash, full_name, email, role, is_active, driver_color, driver_phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO users (username, password_hash, full_name, email, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, username, full_name, email, role, is_active, created_at`,
-      [username, hashedPassword, fullName, email || null, role, isActive !== false, driverColor || null, driverPhone || null]
+      [username, hashedPassword, fullName, email || null, role, isActive !== false]
     )
 
-    return NextResponse.json({ success: true, user: result.rows[0] })
+    const newUser = result.rows[0]
+
+    // If role is driver, also create driver record
+    if (role === 'driver' && (driverColor || driverPhone)) {
+      await query(
+        `INSERT INTO drivers (user_id, color, phone) VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE SET color = $2, phone = $3`,
+        [newUser.id, driverColor || '#000000', driverPhone || null]
+      )
+    }
+
+    return NextResponse.json({ success: true, user: newUser })
   } catch (error) {
     console.error('Error creating user:', error)
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
@@ -103,24 +117,37 @@ export async function PUT(request: NextRequest) {
       const hashedPassword = await bcrypt.hash(password, 10)
       result = await query(
         `UPDATE users 
-         SET username = $1, password_hash = $2, full_name = $3, email = $4, role = $5, is_active = $6, driver_color = $7, driver_phone = $8, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $9
+         SET username = $1, password_hash = $2, full_name = $3, email = $4, role = $5, is_active = $6, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $7
          RETURNING id, username, full_name, email, role, is_active`,
-        [username, hashedPassword, fullName, email || null, role, isActive !== false, driverColor || null, driverPhone || null, id]
+        [username, hashedPassword, fullName, email || null, role, isActive !== false, id]
       )
     } else {
       // Update without changing password
       result = await query(
         `UPDATE users 
-         SET username = $1, full_name = $2, email = $3, role = $4, is_active = $5, driver_color = $6, driver_phone = $7, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $8
+         SET username = $1, full_name = $2, email = $3, role = $4, is_active = $5, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $6
          RETURNING id, username, full_name, email, role, is_active`,
-        [username, fullName, email || null, role, isActive !== false, driverColor || null, driverPhone || null, id]
+        [username, fullName, email || null, role, isActive !== false, id]
       )
     }
 
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 })
+    }
+
+    // Handle driver record
+    if (role === 'driver') {
+      // Upsert driver record
+      await query(
+        `INSERT INTO drivers (user_id, color, phone) VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE SET color = $2, phone = $3`,
+        [id, driverColor || '#000000', driverPhone || null]
+      )
+    } else {
+      // Remove driver record if user is no longer a driver
+      await query('DELETE FROM drivers WHERE user_id = $1', [id])
     }
 
     return NextResponse.json({ success: true, user: result.rows[0] })
