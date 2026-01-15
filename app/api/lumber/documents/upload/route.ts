@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
+import { put } from '@vercel/blob'
 import { query } from '@/lib/db'
-import { existsSync } from 'fs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,20 +22,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create unique filename
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const uniqueFilename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-    const uploadDir = join(process.cwd(), 'public', 'uploads')
-    const filepath = join(uploadDir, uniqueFilename)
+    // Create unique filename for blob storage
+    const uniqueFilename = `lumber-docs/${loadId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
 
-    // Ensure uploads directory exists
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
-
-    // Save file
-    await writeFile(filepath, buffer)
+    // Upload to Vercel Blob
+    const blob = await put(uniqueFilename, file, {
+      access: 'public',
+    })
 
     // Get user ID for uploaded_by (or null if not found)
     let uploadedByUserId = null
@@ -51,14 +42,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save document reference to database (using correct column names)
+    // Save document reference to database
     const result = await query(
       `INSERT INTO lumber_load_documents 
         (load_id, file_name, file_path, file_type, uploaded_by, created_at)
        VALUES 
         ((SELECT id FROM lumber_loads WHERE load_id = $1), $2, $3, $4, $5, NOW())
        RETURNING *`,
-      [loadId, file.name, `/uploads/${uniqueFilename}`, file.type, uploadedByUserId]
+      [loadId, file.name, blob.url, file.type, uploadedByUserId]
     )
 
     return NextResponse.json(result.rows[0])

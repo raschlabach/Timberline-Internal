@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
+import { del } from '@vercel/blob'
 
 export async function DELETE(
   request: NextRequest,
@@ -17,7 +16,7 @@ export async function DELETE(
 
     const { docId } = params
 
-    // Get the document first to get the file_path
+    // Get the document first to get the file_path (blob URL)
     const docResult = await query(
       'SELECT * FROM lumber_load_documents WHERE id = $1',
       [docId]
@@ -32,12 +31,13 @@ export async function DELETE(
     // Delete from database
     await query('DELETE FROM lumber_load_documents WHERE id = $1', [docId])
 
-    // Try to delete the physical file (don't fail if file doesn't exist)
+    // Try to delete from Vercel Blob (don't fail if file doesn't exist)
     try {
-      const filepath = join(process.cwd(), 'public', doc.file_path)
-      await unlink(filepath)
-    } catch (fileError) {
-      console.warn('Could not delete file:', fileError)
+      if (doc.file_path && doc.file_path.includes('blob.vercel-storage.com')) {
+        await del(doc.file_path)
+      }
+    } catch (blobError) {
+      console.warn('Could not delete blob:', blobError)
       // Continue anyway - the DB record is deleted
     }
 
