@@ -13,8 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye } from 'lucide-react'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#d084d0', '#a4de6c']
 
@@ -31,6 +37,12 @@ export default function InventoryPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
+  
+  // Rip Entry Dialog state
+  const [ripEntryDialogOpen, setRipEntryDialogOpen] = useState(false)
+  const [selectedLoadForRip, setSelectedLoadForRip] = useState<any>(null)
+  const [ripEntryPacks, setRipEntryPacks] = useState<LumberPackWithDetails[]>([])
+  const [isLoadingPacks, setIsLoadingPacks] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -149,6 +161,39 @@ export default function InventoryPage() {
     setExpandedRows(newExpanded)
   }
 
+  async function handleViewRipEntry(load: InventoryLoadDetail) {
+    setSelectedLoadForRip(load)
+    setRipEntryDialogOpen(true)
+    setIsLoadingPacks(true)
+    
+    try {
+      // First fetch the load details to get the database ID
+      const loadRes = await fetch(`/api/lumber/loads/by-load-id/${load.load_id}`)
+      if (loadRes.ok) {
+        const loadData = await loadRes.json()
+        if (loadData && loadData.id) {
+          // Fetch packs for this load
+          const packsRes = await fetch(`/api/lumber/packs/by-load/${loadData.id}`)
+          if (packsRes.ok) {
+            const packsData = await packsRes.json()
+            setRipEntryPacks(packsData)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching rip entry data:', error)
+    } finally {
+      setIsLoadingPacks(false)
+    }
+  }
+
+  // Sort groups by species alphabetically so same species are together
+  const sortedInventoryGroups = [...inventoryGroups].sort((a, b) => {
+    const speciesCompare = (a.species || '').localeCompare(b.species || '')
+    if (speciesCompare !== 0) return speciesCompare
+    return (a.grade || '').localeCompare(b.grade || '')
+  })
+
   return (
     <div className="space-y-4">
       <div>
@@ -226,19 +271,22 @@ export default function InventoryPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {inventoryGroups.length === 0 ? (
+            {sortedInventoryGroups.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-500">
                   No inventory data available
                 </td>
               </tr>
             ) : (
-              inventoryGroups.map((group, idx) => {
+              sortedInventoryGroups.map((group, idx) => {
                 const rowKey = `${group.species}-${group.grade}-${group.thickness}`
                 const isExpanded = expandedRows.has(rowKey)
+                const prevGroup = idx > 0 ? sortedInventoryGroups[idx - 1] : null
+                const isNewSpecies = !prevGroup || prevGroup.species !== group.species
+                
                 return (
                   <>
-                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={idx} className={`${isNewSpecies && idx > 0 ? 'border-t-2 border-gray-300' : ''} ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                       <td className="px-2 py-1.5">
                         <button
                           onClick={() => toggleRow(rowKey)}
@@ -277,7 +325,16 @@ export default function InventoryPage() {
                       <tr key={`${idx}-${loadIdx}`} className="bg-blue-50 border-t border-blue-200">
                         <td className="px-2 py-1.5"></td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs">
-                          <span className="text-blue-700 font-semibold">└ {load.load_id}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-700 font-semibold">└ {load.load_id}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
+                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded"
+                              title="View Rip Entry"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.grade}</td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.thickness}</td>
@@ -399,6 +456,142 @@ export default function InventoryPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Rip Entry View Dialog */}
+      <Dialog open={ripEntryDialogOpen} onOpenChange={setRipEntryDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Rip Entry View - Load {selectedLoadForRip?.load_id}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {isLoadingPacks ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Load Info */}
+              <div className="bg-gray-50 p-3 rounded">
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Load ID:</span>
+                    <span className="ml-2 font-medium">{selectedLoadForRip?.load_id}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Species:</span>
+                    <span className="ml-2 font-medium">{selectedLoadForRip?.species}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Grade:</span>
+                    <span className="ml-2 font-medium">{selectedLoadForRip?.grade}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pack Tables */}
+              {ripEntryPacks.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No pack data available for this load
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Pack Information */}
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Pack Information</h3>
+                    <div className="border rounded">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="px-2 py-1.5 text-left">Pack ID</th>
+                            <th className="px-2 py-1.5 text-left">Length</th>
+                            <th className="px-2 py-1.5 text-right">Tally BF</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ripEntryPacks.map((pack, idx) => (
+                            <tr key={pack.id} className={`${pack.is_finished ? 'bg-green-50' : ''} ${idx % 2 === 0 ? '' : 'bg-gray-50'}`}>
+                              <td className="px-2 py-1.5 border-t">{pack.pack_id || '-'}</td>
+                              <td className="px-2 py-1.5 border-t">{pack.length ? `${pack.length} ft` : '-'}</td>
+                              <td className="px-2 py-1.5 border-t text-right">{pack.tally_board_feet?.toLocaleString() || '-'}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-200 font-semibold">
+                            <td className="px-2 py-1.5" colSpan={2}>{ripEntryPacks.length} Packs</td>
+                            <td className="px-2 py-1.5 text-right">
+                              {ripEntryPacks.reduce((sum, p) => sum + (Number(p.tally_board_feet) || 0), 0).toLocaleString()} BF
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Rip Yield & Comments */}
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Rip Yield & Comments</h3>
+                    <div className="border rounded">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="px-2 py-1.5 text-right">Actual BF</th>
+                            <th className="px-2 py-1.5 text-right">Yield</th>
+                            <th className="px-2 py-1.5 text-left">Comments</th>
+                            <th className="px-2 py-1.5 text-center">Done</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ripEntryPacks.map((pack, idx) => (
+                            <tr key={pack.id} className={`${pack.is_finished ? 'bg-green-50' : ''} ${idx % 2 === 0 ? '' : 'bg-gray-50'}`}>
+                              <td className="px-2 py-1.5 border-t text-right">{pack.actual_board_feet?.toLocaleString() || '-'}</td>
+                              <td className="px-2 py-1.5 border-t text-right">{pack.rip_yield || '-'}</td>
+                              <td className="px-2 py-1.5 border-t truncate max-w-[100px]">{pack.rip_comments || '-'}</td>
+                              <td className="px-2 py-1.5 border-t text-center">
+                                {pack.is_finished ? (
+                                  <span className="text-green-600">✓</span>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-200 font-semibold">
+                            <td className="px-2 py-1.5 text-right">
+                              {ripEntryPacks.filter(p => p.is_finished).reduce((sum, p) => sum + (Number(p.actual_board_feet) || 0), 0).toLocaleString()} BF
+                            </td>
+                            <td className="px-2 py-1.5 text-right">
+                              {ripEntryPacks.filter(p => p.rip_yield).length > 0
+                                ? (ripEntryPacks.filter(p => p.rip_yield).reduce((sum, p) => sum + (p.rip_yield || 0), 0) / ripEntryPacks.filter(p => p.rip_yield).length).toFixed(1)
+                                : '-'} Avg
+                            </td>
+                            <td colSpan={2}></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary */}
+              {ripEntryPacks.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded text-sm">
+                  <div className="flex justify-between">
+                    <span>
+                      <strong>{ripEntryPacks.filter(p => p.is_finished).length}</strong> of <strong>{ripEntryPacks.length}</strong> packs finished
+                    </span>
+                    <span>
+                      <strong>{ripEntryPacks.filter(p => p.is_finished).reduce((sum, p) => sum + (Number(p.actual_board_feet) || 0), 0).toLocaleString()}</strong> BF ripped of{' '}
+                      <strong>{ripEntryPacks.reduce((sum, p) => sum + (Number(p.tally_board_feet) || 0), 0).toLocaleString()}</strong> BF total
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
