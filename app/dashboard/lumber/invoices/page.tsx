@@ -178,6 +178,10 @@ export default function InvoicesPage() {
           aVal = a.actual_arrival_date ? new Date(a.actual_arrival_date).getTime() : 0
           bVal = b.actual_arrival_date ? new Date(b.actual_arrival_date).getTime() : 0
           break
+        case 'invoice_date':
+          aVal = a.invoice_date ? new Date(a.invoice_date).getTime() : 0
+          bVal = b.invoice_date ? new Date(b.invoice_date).getTime() : 0
+          break
         default:
           return 0
       }
@@ -474,7 +478,15 @@ export default function InvoicesPage() {
                     {getSortIcon('arrival')}
                   </div>
                 </th>
-                <th className="px-2 py-1 text-left text-xs font-medium uppercase">QB</th>
+                <th 
+                  className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleSort('invoice_date')}
+                >
+                  <div className="flex items-center">
+                    Inv Date
+                    {getSortIcon('invoice_date')}
+                  </div>
+                </th>
                 <th className="px-2 py-1 text-left text-xs font-medium uppercase">Actions</th>
               </tr>
             </thead>
@@ -549,15 +561,11 @@ export default function InvoicesPage() {
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
-                      {load.entered_in_quickbooks ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">
-                          ✓
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
-                          -
-                        </span>
-                      )}
+                      <span className="text-xs">
+                        {load.invoice_date 
+                          ? new Date(load.invoice_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          : '-'}
+                      </span>
                     </td>
                     <td className="px-2 py-1">
                       <div className="flex gap-1">
@@ -601,142 +609,156 @@ export default function InvoicesPage() {
 
       {/* Invoice Management Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Manage Invoice - {selectedLoad?.load_id}</DialogTitle>
           </DialogHeader>
           
           {selectedLoad && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded text-sm">
-                <div>
-                  <Label className="text-xs text-gray-500">Supplier</Label>
-                  <div className="font-medium">{selectedLoad.supplier_name}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Invoice Number</Label>
-                  <div className="font-medium">{selectedLoad.invoice_number || '-'}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Invoice Total</Label>
-                  <div className="font-medium">
-                    {selectedLoad.invoice_total ? `$${Number(selectedLoad.invoice_total).toFixed(2)}` : '-'}
+            <div className="flex gap-4 h-[70vh]">
+              {/* Left Side - Info and Toggles */}
+              <div className="w-[280px] flex-shrink-0 flex flex-col">
+                <div className="space-y-3 p-3 bg-gray-50 rounded text-sm">
+                  <div>
+                    <Label className="text-xs text-gray-500">Supplier</Label>
+                    <div className="font-medium">{selectedLoad.supplier_name}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Number</Label>
+                    <div className="font-medium">{selectedLoad.invoice_number || '-'}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Total</Label>
+                    <div className="font-medium">
+                      {selectedLoad.invoice_total ? `$${Number(selectedLoad.invoice_total).toFixed(2)}` : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Date</Label>
+                    <div className="font-medium">
+                      {selectedLoad.invoice_date 
+                        ? new Date(selectedLoad.invoice_date).toLocaleDateString()
+                        : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Arrival Date</Label>
+                    <div className="font-medium">
+                      {selectedLoad.actual_arrival_date 
+                        ? new Date(selectedLoad.actual_arrival_date).toLocaleDateString()
+                        : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Species</Label>
+                    <div className="font-medium">
+                      {selectedLoad.items?.map(i => i.species).join(', ') || '-'}
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Invoice Date</Label>
-                  <div className="font-medium">
-                    {selectedLoad.invoice_date 
-                      ? new Date(selectedLoad.invoice_date).toLocaleDateString()
-                      : '-'}
+
+                {/* Status Toggles */}
+                <div className="space-y-3 pt-4 mt-4 border-t">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="quickbooks"
+                      checked={enteredInQuickbooks}
+                      onCheckedChange={(checked) => setEnteredInQuickbooks(checked as boolean)}
+                    />
+                    <Label htmlFor="quickbooks" className="cursor-pointer text-sm">
+                      Entered in QuickBooks
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="paid"
+                      checked={isPaid}
+                      onCheckedChange={(checked) => setIsPaid(checked as boolean)}
+                    />
+                    <Label htmlFor="paid" className="cursor-pointer font-semibold text-sm">
+                      Mark as Paid
+                    </Label>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Arrival Date</Label>
-                  <div className="font-medium">
-                    {selectedLoad.actual_arrival_date 
-                      ? new Date(selectedLoad.actual_arrival_date).toLocaleDateString()
-                      : '-'}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-500">Species</Label>
-                  <div className="font-medium">
-                    {selectedLoad.items?.map(i => i.species).join(', ') || '-'}
-                  </div>
+
+                {/* Action Buttons at Bottom of Left Side */}
+                <div className="mt-auto pt-4 flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSaveInvoiceStatus}>
+                    Save Changes
+                  </Button>
                 </div>
               </div>
 
-              {/* Paperwork Preview */}
-              {selectedLoad.documents && selectedLoad.documents.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm font-medium">Attached Documents ({selectedLoad.documents.length})</Label>
-                  </div>
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                    {selectedLoad.documents.map(doc => {
-                      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_name)
-                      const isPdf = /\.pdf$/i.test(doc.file_name)
-                      
-                      return (
-                        <div key={doc.id} className="border rounded overflow-hidden">
-                          <div className="flex items-center justify-between px-2 py-1 bg-gray-100 border-b">
-                            <div className="flex items-center gap-2 text-xs">
-                              <FileText className="h-3 w-3 text-gray-500" />
-                              <span className="font-medium truncate max-w-[300px]">{doc.file_name}</span>
+              {/* Right Side - Document Preview (Full Height) */}
+              <div className="flex-1 border rounded overflow-hidden flex flex-col min-w-0">
+                {selectedLoad.documents && selectedLoad.documents.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-100 border-b flex-shrink-0">
+                      <div className="flex items-center gap-2 text-sm">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium truncate">{selectedLoad.documents[0].file_name}</span>
+                        {selectedLoad.documents.length > 1 && (
+                          <span className="text-xs text-gray-500">+{selectedLoad.documents.length - 1} more</span>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => window.open(selectedLoad.documents[0].file_path, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open in New Tab
+                      </Button>
+                    </div>
+                    <div className="flex-1 bg-gray-50 overflow-auto">
+                      {(() => {
+                        const doc = selectedLoad.documents[0]
+                        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_name)
+                        const isPdf = /\.pdf$/i.test(doc.file_name)
+                        
+                        if (isImage) {
+                          return (
+                            <img 
+                              src={doc.file_path} 
+                              alt={doc.file_name}
+                              className="w-full h-full object-contain"
+                            />
+                          )
+                        } else if (isPdf) {
+                          return (
+                            <iframe
+                              src={doc.file_path}
+                              className="w-full h-full"
+                              title={doc.file_name}
+                            />
+                          )
+                        } else {
+                          return (
+                            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                              <FileText className="h-12 w-12 mr-3" />
+                              Preview not available - Click "Open in New Tab" to view
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 text-xs"
-                              onClick={() => window.open(doc.file_path, '_blank')}
-                            >
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              Open
-                            </Button>
-                          </div>
-                          <div className="bg-gray-50">
-                            {isImage ? (
-                              <img 
-                                src={doc.file_path} 
-                                alt={doc.file_name}
-                                className="w-full max-h-[300px] object-contain"
-                              />
-                            ) : isPdf ? (
-                              <iframe
-                                src={doc.file_path}
-                                className="w-full h-[350px]"
-                                title={doc.file_name}
-                              />
-                            ) : (
-                              <div className="flex items-center justify-center h-24 text-gray-500 text-sm">
-                                <FileText className="h-8 w-8 mr-2" />
-                                Preview not available - Click "Open" to view
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                          )
+                        }
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <FileText className="h-16 w-16 mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">No documents attached</p>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* Status Toggles */}
-              <div className="space-y-3 pt-3 border-t">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="quickbooks"
-                    checked={enteredInQuickbooks}
-                    onCheckedChange={(checked) => setEnteredInQuickbooks(checked as boolean)}
-                  />
-                  <Label htmlFor="quickbooks" className="cursor-pointer text-sm">
-                    Entered in QuickBooks
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="paid"
-                    checked={isPaid}
-                    onCheckedChange={(checked) => setIsPaid(checked as boolean)}
-                  />
-                  <Label htmlFor="paid" className="cursor-pointer font-semibold text-sm">
-                    Mark as Paid
-                  </Label>
-                </div>
+                )}
               </div>
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSaveInvoiceStatus}>
-              Save Changes
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
