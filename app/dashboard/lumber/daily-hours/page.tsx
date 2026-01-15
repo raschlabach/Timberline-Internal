@@ -26,8 +26,6 @@ import { toast } from 'sonner'
 
 interface WorkSession {
   id: number
-  operator_id: number
-  operator_name: string
   work_date: string
   start_time: string
   end_time: string
@@ -35,9 +33,10 @@ interface WorkSession {
   notes: string | null
 }
 
-interface Operator {
+interface Pack {
   id: number
-  name: string
+  actual_board_feet: number
+  finished_at: string
 }
 
 export default function DailyHoursPage() {
@@ -45,7 +44,8 @@ export default function DailyHoursPage() {
   const router = useRouter()
   
   const [workSessions, setWorkSessions] = useState<WorkSession[]>([])
-  const [operators, setOperators] = useState<Operator[]>([])
+  const [monthlyPacks, setMonthlyPacks] = useState<Pack[]>([])
+  const [yearlyData, setYearlyData] = useState<{ sessions: WorkSession[], packs: Pack[] }>({ sessions: [], packs: [] })
   const [isLoading, setIsLoading] = useState(true)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -54,9 +54,8 @@ export default function DailyHoursPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSession, setEditingSession] = useState<WorkSession | null>(null)
   const [formData, setFormData] = useState({
-    operator_id: '',
     work_date: new Date().toISOString().split('T')[0],
-    start_time: '07:00',
+    start_time: '05:30',
     end_time: '15:30',
     notes: ''
   })
@@ -69,16 +68,16 @@ export default function DailyHoursPage() {
 
   async function fetchData() {
     try {
-      const [sessionsRes, operatorsRes] = await Promise.all([
+      const [sessionsRes, packsRes] = await Promise.all([
         fetch(`/api/lumber/work-sessions?month=${selectedMonth}&year=${selectedYear}`),
-        fetch('/api/lumber/operators')
+        fetch(`/api/lumber/packs/finished?month=${selectedMonth}&year=${selectedYear}`)
       ])
 
       if (sessionsRes.ok) {
         setWorkSessions(await sessionsRes.json())
       }
-      if (operatorsRes.ok) {
-        setOperators(await operatorsRes.json())
+      if (packsRes.ok) {
+        setMonthlyPacks(await packsRes.json())
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -87,18 +86,42 @@ export default function DailyHoursPage() {
     }
   }
 
+  async function fetchYearlyData() {
+    try {
+      // Fetch all sessions and packs for the year
+      const sessionPromises = Array.from({ length: 12 }, (_, i) =>
+        fetch(`/api/lumber/work-sessions?month=${i + 1}&year=${selectedYear}`).then(r => r.ok ? r.json() : [])
+      )
+      const packPromises = Array.from({ length: 12 }, (_, i) =>
+        fetch(`/api/lumber/packs/finished?month=${i + 1}&year=${selectedYear}`).then(r => r.ok ? r.json() : [])
+      )
+
+      const [sessionsArrays, packsArrays] = await Promise.all([
+        Promise.all(sessionPromises),
+        Promise.all(packPromises)
+      ])
+
+      setYearlyData({
+        sessions: sessionsArrays.flat(),
+        packs: packsArrays.flat()
+      })
+    } catch (error) {
+      console.error('Error fetching yearly data:', error)
+    }
+  }
+
   useEffect(() => {
     if (status === 'authenticated') {
       fetchData()
+      fetchYearlyData()
     }
   }, [status, selectedMonth, selectedYear])
 
   function openAddDialog() {
     setEditingSession(null)
     setFormData({
-      operator_id: '',
       work_date: new Date().toISOString().split('T')[0],
-      start_time: '07:00',
+      start_time: '05:30',
       end_time: '15:30',
       notes: ''
     })
@@ -108,7 +131,6 @@ export default function DailyHoursPage() {
   function openEditDialog(session: WorkSession) {
     setEditingSession(session)
     setFormData({
-      operator_id: session.operator_id.toString(),
       work_date: session.work_date.split('T')[0],
       start_time: session.start_time.substring(0, 5),
       end_time: session.end_time.substring(0, 5),
@@ -118,7 +140,7 @@ export default function DailyHoursPage() {
   }
 
   async function handleSave() {
-    if (!formData.operator_id || !formData.work_date || !formData.start_time || !formData.end_time) {
+    if (!formData.work_date || !formData.start_time || !formData.end_time) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -134,7 +156,6 @@ export default function DailyHoursPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          operator_id: parseInt(formData.operator_id),
           work_date: formData.work_date,
           start_time: formData.start_time,
           end_time: formData.end_time,
@@ -182,14 +203,41 @@ export default function DailyHoursPage() {
   ]
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
-  // Calculate total hours for the month
-  const totalHours = workSessions.reduce((sum, s) => sum + Number(s.total_hours || 0), 0)
+  // Calculate monthly totals
+  const totalMonthlyHours = workSessions.reduce((sum, s) => sum + Number(s.total_hours || 0), 0)
+  const totalMonthlyBF = monthlyPacks.reduce((sum, p) => sum + Number(p.actual_board_feet || 0), 0)
+  const monthlyBFPerHour = totalMonthlyHours > 0 ? totalMonthlyBF / totalMonthlyHours : 0
+
+  // Calculate yearly totals
+  const totalYearlyHours = yearlyData.sessions.reduce((sum, s) => sum + Number(s.total_hours || 0), 0)
+  const totalYearlyBF = yearlyData.packs.reduce((sum, p) => sum + Number(p.actual_board_feet || 0), 0)
+  const yearlyBFPerHour = totalYearlyHours > 0 ? totalYearlyBF / totalYearlyHours : 0
+
+  // Get unique days worked
+  const uniqueMonthlyDays = new Set(workSessions.map(s => s.work_date.split('T')[0])).size
+  const uniqueYearlyDays = new Set(yearlyData.sessions.map(s => s.work_date.split('T')[0])).size
+
+  // Calculate daily averages
+  const avgDailyHoursMonthly = uniqueMonthlyDays > 0 ? totalMonthlyHours / uniqueMonthlyDays : 0
+  const avgDailyBFMonthly = uniqueMonthlyDays > 0 ? totalMonthlyBF / uniqueMonthlyDays : 0
+  const avgDailyHoursYearly = uniqueYearlyDays > 0 ? totalYearlyHours / uniqueYearlyDays : 0
+  const avgDailyBFYearly = uniqueYearlyDays > 0 ? totalYearlyBF / uniqueYearlyDays : 0
 
   // Group sessions by date
   const sessionsByDate = workSessions.reduce((acc: Record<string, WorkSession[]>, session) => {
     const date = session.work_date.split('T')[0]
     if (!acc[date]) acc[date] = []
     acc[date].push(session)
+    return acc
+  }, {})
+
+  // Group packs by date for daily BF calculation
+  const packsByDate = monthlyPacks.reduce((acc: Record<string, Pack[]>, pack) => {
+    if (pack.finished_at) {
+      const date = pack.finished_at.split('T')[0]
+      if (!acc[date]) acc[date] = []
+      acc[date].push(pack)
+    }
     return acc
   }, {})
 
@@ -247,21 +295,37 @@ export default function DailyHoursPage() {
         </div>
       </div>
 
-      {/* Summary Card */}
-      <div className="bg-blue-50 rounded-lg p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Clock className="h-8 w-8 text-blue-600" />
-          <div>
-            <div className="text-sm text-blue-600 font-medium">
-              {months[selectedMonth - 1]} {selectedYear} Total
-            </div>
-            <div className="text-2xl font-bold text-blue-900">
-              {totalHours.toFixed(1)} Hours
-            </div>
-          </div>
+      {/* Monthly Summary Cards */}
+      <div className="grid grid-cols-6 gap-4">
+        <div className="bg-blue-50 rounded-lg p-4">
+          <div className="text-xs text-blue-600 font-medium uppercase">Monthly Hours</div>
+          <div className="text-2xl font-bold text-blue-900">{totalMonthlyHours.toFixed(1)}</div>
+          <div className="text-xs text-blue-600">Avg: {avgDailyHoursMonthly.toFixed(1)}/day</div>
         </div>
-        <div className="text-sm text-blue-700">
-          {workSessions.length} entries logged
+        <div className="bg-green-50 rounded-lg p-4">
+          <div className="text-xs text-green-600 font-medium uppercase">Monthly BF Ripped</div>
+          <div className="text-2xl font-bold text-green-900">{totalMonthlyBF.toLocaleString()}</div>
+          <div className="text-xs text-green-600">Avg: {avgDailyBFMonthly.toFixed(0)}/day</div>
+        </div>
+        <div className="bg-purple-50 rounded-lg p-4">
+          <div className="text-xs text-purple-600 font-medium uppercase">Monthly BF/Hour</div>
+          <div className="text-2xl font-bold text-purple-900">{monthlyBFPerHour.toFixed(0)}</div>
+          <div className="text-xs text-purple-600">{uniqueMonthlyDays} days worked</div>
+        </div>
+        <div className="bg-orange-50 rounded-lg p-4">
+          <div className="text-xs text-orange-600 font-medium uppercase">Yearly Hours</div>
+          <div className="text-2xl font-bold text-orange-900">{totalYearlyHours.toFixed(1)}</div>
+          <div className="text-xs text-orange-600">Avg: {avgDailyHoursYearly.toFixed(1)}/day</div>
+        </div>
+        <div className="bg-cyan-50 rounded-lg p-4">
+          <div className="text-xs text-cyan-600 font-medium uppercase">Yearly BF Ripped</div>
+          <div className="text-2xl font-bold text-cyan-900">{totalYearlyBF.toLocaleString()}</div>
+          <div className="text-xs text-cyan-600">Avg: {avgDailyBFYearly.toFixed(0)}/day</div>
+        </div>
+        <div className="bg-pink-50 rounded-lg p-4">
+          <div className="text-xs text-pink-600 font-medium uppercase">Yearly BF/Hour</div>
+          <div className="text-2xl font-bold text-pink-900">{yearlyBFPerHour.toFixed(0)}</div>
+          <div className="text-xs text-pink-600">{uniqueYearlyDays} days worked</div>
         </div>
       </div>
 
@@ -283,79 +347,90 @@ export default function DailyHoursPage() {
         ) : (
           <div className="divide-y">
             {Object.entries(sessionsByDate)
-              .sort(([a], [b]) => b.localeCompare(a))
-              .map(([date, sessions]) => (
-                <div key={date}>
-                  {/* Date Header */}
-                  <div className="bg-gray-100 px-4 py-2 flex items-center justify-between">
-                    <div className="font-semibold text-sm text-gray-700">
-                      {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([date, sessions]) => {
+                const dailyHours = sessions.reduce((sum, s) => sum + Number(s.total_hours || 0), 0)
+                const dailyBF = (packsByDate[date] || []).reduce((sum, p) => sum + Number(p.actual_board_feet || 0), 0)
+                const dailyBFPerHour = dailyHours > 0 ? dailyBF / dailyHours : 0
+
+                return (
+                  <div key={date}>
+                    {/* Date Header */}
+                    <div className="bg-gray-100 px-4 py-2 flex items-center justify-between">
+                      <div className="font-semibold text-sm text-gray-700">
+                        {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-gray-500">
+                          <span className="font-medium text-gray-700">{dailyHours.toFixed(1)}</span> hrs
+                        </span>
+                        <span className="text-gray-500">
+                          <span className="font-medium text-green-700">{dailyBF.toLocaleString()}</span> BF
+                        </span>
+                        <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
+                          {dailyBFPerHour.toFixed(0)} BF/hr
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {sessions.reduce((sum, s) => sum + Number(s.total_hours || 0), 0).toFixed(1)} hrs total
-                    </div>
-                  </div>
-                  
-                  {/* Sessions for this date */}
-                  {sessions.map(session => (
-                    <div 
-                      key={session.id} 
-                      className="px-4 py-3 flex items-center justify-between hover:bg-gray-50"
-                    >
-                      <div className="flex items-center gap-6">
-                        <div className="w-32">
-                          <div className="font-medium text-sm">{session.operator_name}</div>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-gray-500">Start:</span>
-                          <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">
-                            {session.start_time.substring(0, 5)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-gray-500">End:</span>
-                          <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">
-                            {session.end_time.substring(0, 5)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-gray-500">Total:</span>
-                          <span className="font-semibold text-blue-600">
-                            {Number(session.total_hours || 0).toFixed(1)} hrs
-                          </span>
-                        </div>
-                        {session.notes && (
-                          <div className="text-xs text-gray-500 italic max-w-[200px] truncate">
-                            {session.notes}
+                    
+                    {/* Sessions for this date */}
+                    {sessions.map(session => (
+                      <div 
+                        key={session.id} 
+                        className="px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+                      >
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-gray-500">Start:</span>
+                            <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">
+                              {session.start_time.substring(0, 5)}
+                            </span>
                           </div>
-                        )}
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-gray-500">End:</span>
+                            <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">
+                              {session.end_time.substring(0, 5)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-gray-500">Total:</span>
+                            <span className="font-semibold text-blue-600">
+                              {Number(session.total_hours || 0).toFixed(1)} hrs
+                            </span>
+                          </div>
+                          {session.notes && (
+                            <div className="text-xs text-gray-500 italic max-w-[200px] truncate">
+                              {session.notes}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => openEditDialog(session)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => handleDelete(session.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => openEditDialog(session)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          onClick={() => handleDelete(session.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+                    ))}
+                  </div>
+                )
+              })}
           </div>
         )}
       </div>
@@ -370,26 +445,6 @@ export default function DailyHoursPage() {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            <div>
-              <Label>Operator *</Label>
-              <Select 
-                value={formData.operator_id} 
-                onValueChange={(val) => setFormData({ ...formData, operator_id: val })}
-                disabled={!!editingSession}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select operator" />
-                </SelectTrigger>
-                <SelectContent>
-                  {operators.map(op => (
-                    <SelectItem key={op.id} value={op.id.toString()}>
-                      {op.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
             <div>
               <Label>Work Date *</Label>
               <Input

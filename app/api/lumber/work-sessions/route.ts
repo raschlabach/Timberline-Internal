@@ -14,32 +14,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const month = searchParams.get('month')
     const year = searchParams.get('year')
-    const operatorId = searchParams.get('operatorId')
 
     let whereClause = '1=1'
     const params: any[] = []
     let paramIndex = 1
 
     if (month && year) {
-      whereClause += ` AND EXTRACT(MONTH FROM ws.work_date) = $${paramIndex} AND EXTRACT(YEAR FROM ws.work_date) = $${paramIndex + 1}`
+      whereClause += ` AND EXTRACT(MONTH FROM work_date) = $${paramIndex} AND EXTRACT(YEAR FROM work_date) = $${paramIndex + 1}`
       params.push(parseInt(month), parseInt(year))
       paramIndex += 2
     }
 
-    if (operatorId) {
-      whereClause += ` AND ws.operator_id = $${paramIndex}`
-      params.push(parseInt(operatorId))
-      paramIndex++
-    }
-
     const result = await query(
-      `SELECT 
-        ws.*,
-        lo.name as operator_name
-       FROM lumber_work_sessions ws
-       LEFT JOIN lumber_operators lo ON ws.operator_id = lo.id
+      `SELECT * FROM lumber_work_sessions
        WHERE ${whereClause}
-       ORDER BY ws.work_date DESC, lo.name`,
+       ORDER BY work_date ASC`,
       params
     )
 
@@ -59,27 +48,27 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { operator_id, work_date, start_time, end_time, notes } = body
+    const { work_date, start_time, end_time, notes } = body
 
-    if (!operator_id || !work_date || !start_time || !end_time) {
+    if (!work_date || !start_time || !end_time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Check if a session already exists for this operator on this date
+    // Check if a session already exists for this date
     const existing = await query(
-      'SELECT id FROM lumber_work_sessions WHERE operator_id = $1 AND work_date = $2',
-      [operator_id, work_date]
+      'SELECT id FROM lumber_work_sessions WHERE work_date = $1',
+      [work_date]
     )
 
     if (existing.rows.length > 0) {
-      return NextResponse.json({ error: 'A work session already exists for this operator on this date' }, { status: 400 })
+      return NextResponse.json({ error: 'A work session already exists for this date' }, { status: 400 })
     }
 
     const result = await query(
-      `INSERT INTO lumber_work_sessions (operator_id, work_date, start_time, end_time, notes)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO lumber_work_sessions (work_date, start_time, end_time, notes)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [operator_id, work_date, start_time, end_time, notes || null]
+      [work_date, start_time, end_time, notes || null]
     )
 
     return NextResponse.json(result.rows[0])
