@@ -17,7 +17,7 @@ export async function DELETE(
 
     const { docId } = params
 
-    // Get the document first to get the filepath
+    // Get the document first to get the file_path
     const docResult = await query(
       'SELECT * FROM lumber_load_documents WHERE id = $1',
       [docId]
@@ -34,7 +34,7 @@ export async function DELETE(
 
     // Try to delete the physical file (don't fail if file doesn't exist)
     try {
-      const filepath = join(process.cwd(), 'public', doc.filepath)
+      const filepath = join(process.cwd(), 'public', doc.file_path)
       await unlink(filepath)
     } catch (fileError) {
       console.warn('Could not delete file:', fileError)
