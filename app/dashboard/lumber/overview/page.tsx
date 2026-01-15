@@ -86,13 +86,16 @@ export default function OverviewPage() {
         setInventoryGroups(Object.values(grouped))
       }
 
-      // Process incoming loads data
+      // Process incoming loads data - ONLY include items WITHOUT actual footage
       if (incomingRes.ok) {
         const incomingLoads = await incomingRes.json()
         const grouped: Record<string, any> = {}
         
         incomingLoads.forEach((load: any) => {
           load.items?.forEach((item: any) => {
+            // Only count items that don't have actual footage yet (truly incoming)
+            if (item.actual_footage) return
+            
             const key = `${item.species}|${item.grade}|${item.thickness}`
             
             if (!grouped[key]) {
