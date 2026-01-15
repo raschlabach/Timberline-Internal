@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -212,6 +212,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<Hammer size={16} />}
                   label="Rip Entry"
                   isActive={isActiveRoute('/dashboard/lumber/rip-entry')}
+                />
+                <SubNavItem
+                  href="/dashboard/lumber/daily-hours"
+                  icon={<Clock size={16} />}
+                  label="Daily Hours"
+                  isActive={isActiveRoute('/dashboard/lumber/daily-hours')}
                 />
                 <SubNavItem
                   href="/dashboard/lumber/ripped-packs"

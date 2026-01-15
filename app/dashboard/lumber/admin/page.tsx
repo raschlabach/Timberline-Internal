@@ -15,7 +15,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Edit2, Trash2, Building2, TreePine, Award, Users } from 'lucide-react'
+import { Plus, Edit2, Trash2, Building2, TreePine, Award, Users, DollarSign } from 'lucide-react'
 import { toast } from 'sonner'
 import { LumberSupplierWithLocations } from '@/types/lumber'
 
@@ -53,6 +53,14 @@ interface Operator {
   updated_at: string
 }
 
+interface BonusParameter {
+  id: number
+  bf_min: number
+  bf_max: number
+  bonus_amount: number
+  is_active: boolean
+}
+
 export default function LumberAdminPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -62,6 +70,7 @@ export default function LumberAdminPage() {
   const [grades, setGrades] = useState<Grade[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [loadIdRanges, setLoadIdRanges] = useState<LoadIdRange[]>([])
+  const [bonusParams, setBonusParams] = useState<BonusParameter[]>([])
   const [isLoading, setIsLoading] = useState(true)
   
   // Dialog states
@@ -71,6 +80,7 @@ export default function LumberAdminPage() {
   const [operatorDialogOpen, setOperatorDialogOpen] = useState(false)
   const [locationDialogOpen, setLocationDialogOpen] = useState(false)
   const [rangeDialogOpen, setRangeDialogOpen] = useState(false)
+  const [bonusDialogOpen, setBonusDialogOpen] = useState(false)
   
   // Edit states
   const [editingSupplier, setEditingSupplier] = useState<any>(null)
@@ -78,6 +88,7 @@ export default function LumberAdminPage() {
   const [editingGrade, setEditingGrade] = useState<any>(null)
   const [editingOperator, setEditingOperator] = useState<any>(null)
   const [editingRange, setEditingRange] = useState<any>(null)
+  const [editingBonus, setEditingBonus] = useState<BonusParameter | null>(null)
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null)
   
   // Form states
@@ -86,6 +97,7 @@ export default function LumberAdminPage() {
   const [gradeForm, setGradeForm] = useState({ name: '', display_order: 0 })
   const [operatorForm, setOperatorForm] = useState({ name: '', display_order: 0 })
   const [rangeForm, setRangeForm] = useState({ range_name: '', start_range: 1000, end_range: 9999 })
+  const [bonusForm, setBonusForm] = useState({ bf_min: 0, bf_max: 0, bonus_amount: 0 })
   const [locationForm, setLocationForm] = useState({
     location_name: '',
     address: '',
@@ -108,12 +120,13 @@ export default function LumberAdminPage() {
 
   async function fetchData() {
     try {
-      const [suppliersRes, speciesRes, gradesRes, operatorsRes, rangesRes] = await Promise.all([
+      const [suppliersRes, speciesRes, gradesRes, operatorsRes, rangesRes, bonusRes] = await Promise.all([
         fetch('/api/lumber/suppliers'),
         fetch('/api/lumber/species'),
         fetch('/api/lumber/grades'),
         fetch('/api/lumber/operators'),
-        fetch('/api/lumber/load-id-ranges')
+        fetch('/api/lumber/load-id-ranges'),
+        fetch('/api/lumber/bonus-parameters')
       ])
 
       if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
@@ -121,6 +134,7 @@ export default function LumberAdminPage() {
       if (operatorsRes.ok) setOperators(await operatorsRes.json())
       if (gradesRes.ok) setGrades(await gradesRes.json())
       if (rangesRes.ok) setLoadIdRanges(await rangesRes.json())
+      if (bonusRes.ok) setBonusParams(await bonusRes.json())
     } catch (error) {
       console.error('Error fetching admin data:', error)
     } finally {
@@ -415,6 +429,57 @@ export default function LumberAdminPage() {
     }
   }
 
+  // Bonus Parameter functions
+  async function handleSaveBonus() {
+    try {
+      if (bonusForm.bf_min >= bonusForm.bf_max) {
+        toast.error('BF Min must be less than BF Max')
+        return
+      }
+
+      const url = editingBonus 
+        ? `/api/lumber/bonus-parameters/${editingBonus.id}`
+        : '/api/lumber/bonus-parameters'
+      
+      const response = await fetch(url, {
+        method: editingBonus ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bonusForm)
+      })
+
+      if (response.ok) {
+        toast.success(`Bonus tier ${editingBonus ? 'updated' : 'created'} successfully`)
+        setBonusDialogOpen(false)
+        setEditingBonus(null)
+        setBonusForm({ bf_min: 0, bf_max: 0, bonus_amount: 0 })
+        fetchData()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to save bonus tier')
+      }
+    } catch (error) {
+      console.error('Error saving bonus tier:', error)
+      toast.error('Failed to save bonus tier')
+    }
+  }
+
+  async function handleDeleteBonus(id: number) {
+    if (!confirm('Are you sure you want to delete this bonus tier?')) return
+
+    try {
+      const response = await fetch(`/api/lumber/bonus-parameters/${id}`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('Bonus tier deleted')
+        fetchData()
+      } else {
+        toast.error('Failed to delete bonus tier')
+      }
+    } catch (error) {
+      console.error('Error deleting bonus tier:', error)
+      toast.error('Failed to delete bonus tier')
+    }
+  }
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -436,72 +501,157 @@ export default function LumberAdminPage() {
         </p>
       </div>
 
-      {/* Load ID Ranges Section */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-lg font-semibold">Load ID Ranges</h2>
-            <p className="text-sm text-gray-600">Manage automatic load ID assignment ranges</p>
+      {/* Top Sections Row */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* Load ID Ranges Section */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-lg font-semibold">Load ID Ranges</h2>
+              <p className="text-sm text-gray-600">Manage automatic load ID assignment ranges</p>
+            </div>
+            <Button size="sm" onClick={() => {
+              setEditingRange(null)
+              setRangeForm({ range_name: '', start_range: 1000, end_range: 9999 })
+              setRangeDialogOpen(true)
+            }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Range
+            </Button>
           </div>
-          <Button size="sm" onClick={() => {
-            setEditingRange(null)
-            setRangeForm({ range_name: '', start_range: 1000, end_range: 9999 })
-            setRangeDialogOpen(true)
-          }}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Range
-          </Button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {loadIdRanges.map(range => (
-            <div 
-              key={range.id} 
-              className={`p-3 rounded-lg border-2 ${
-                range.is_active 
-                  ? 'border-green-500 bg-green-50' 
-                  : 'border-gray-200 bg-gray-50'
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-sm">{range.range_name}</h3>
-                    {range.is_active && (
-                      <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">Active</span>
-                    )}
+          
+          <div className="grid grid-cols-1 gap-3">
+            {loadIdRanges.map(range => (
+              <div 
+                key={range.id} 
+                className={`p-3 rounded-lg border-2 ${
+                  range.is_active 
+                    ? 'border-green-500 bg-green-50' 
+                    : 'border-gray-200 bg-gray-50'
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-sm">{range.range_name}</h3>
+                      {range.is_active && (
+                        <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">Active</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Range: {range.start_range.toLocaleString()} - {range.end_range.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {(range.end_range - range.start_range + 1).toLocaleString()} IDs available
+                    </p>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Range: {range.start_range.toLocaleString()} - {range.end_range.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {(range.end_range - range.start_range + 1).toLocaleString()} IDs available
-                  </p>
-                </div>
-                <div className="flex gap-1">
-                  {!range.is_active && (
+                  <div className="flex gap-1">
+                    {!range.is_active && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleSetActiveRange(range.id)}
+                        title="Set as active"
+                      >
+                        <Award className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
                       className="h-8 w-8 p-0"
-                      onClick={() => handleSetActiveRange(range.id)}
-                      title="Set as active"
+                      onClick={() => handleDeleteRange(range.id)}
                     >
-                      <Award className="h-3 w-3" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0"
-                    onClick={() => handleDeleteRange(range.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Rip Bonus Parameters Section */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Rip Bonus Parameters
+              </h2>
+              <p className="text-sm text-gray-600">Configure bonus tiers based on BF/hour</p>
             </div>
-          ))}
+            <Button size="sm" onClick={() => {
+              setEditingBonus(null)
+              setBonusForm({ bf_min: 0, bf_max: 0, bonus_amount: 0 })
+              setBonusDialogOpen(true)
+            }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Tier
+            </Button>
+          </div>
+          
+          <div className="overflow-hidden rounded-lg border">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">BF/Hour Range</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bonus</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {bonusParams.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                      No bonus tiers configured
+                    </td>
+                  </tr>
+                ) : (
+                  bonusParams.map(param => (
+                    <tr key={param.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-sm">
+                        <span className="font-medium">{Number(param.bf_min).toLocaleString()}</span>
+                        <span className="text-gray-400 mx-2">-</span>
+                        <span className="font-medium">{Number(param.bf_max).toLocaleString()}</span>
+                        <span className="text-gray-500 text-xs ml-1">BF/hr</span>
+                      </td>
+                      <td className="px-4 py-2 text-sm text-right">
+                        <span className="font-semibold text-green-600">${Number(param.bonus_amount).toFixed(2)}</span>
+                      </td>
+                      <td className="px-4 py-2 text-sm text-right space-x-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            setEditingBonus(param)
+                            setBonusForm({
+                              bf_min: Number(param.bf_min),
+                              bf_max: Number(param.bf_max),
+                              bonus_amount: Number(param.bonus_amount)
+                            })
+                            setBonusDialogOpen(true)
+                          }}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleDeleteBonus(param.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1066,6 +1216,60 @@ export default function LumberAdminPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRangeDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveRange}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bonus Parameter Dialog */}
+      <Dialog open={bonusDialogOpen} onOpenChange={setBonusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingBonus ? 'Edit' : 'Add'} Bonus Tier</DialogTitle>
+            <DialogDescription>
+              {editingBonus ? 'Update bonus tier configuration' : 'Add a new bonus tier based on BF/hour performance'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="bf-min">BF/Hour Min *</Label>
+                <Input
+                  id="bf-min"
+                  type="number"
+                  value={bonusForm.bf_min || ''}
+                  onChange={(e) => setBonusForm({ ...bonusForm, bf_min: parseInt(e.target.value) || 0 })}
+                  placeholder="750"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bf-max">BF/Hour Max *</Label>
+                <Input
+                  id="bf-max"
+                  type="number"
+                  value={bonusForm.bf_max || ''}
+                  onChange={(e) => setBonusForm({ ...bonusForm, bf_max: parseInt(e.target.value) || 0 })}
+                  placeholder="900"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="bonus-amount">Bonus Amount ($) *</Label>
+              <Input
+                id="bonus-amount"
+                type="number"
+                step="0.01"
+                value={bonusForm.bonus_amount || ''}
+                onChange={(e) => setBonusForm({ ...bonusForm, bonus_amount: parseFloat(e.target.value) || 0 })}
+                placeholder="0.40"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Bonus per BF when performance is between {bonusForm.bf_min || 0} and {bonusForm.bf_max || 0} BF/hour
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBonusDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveBonus}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

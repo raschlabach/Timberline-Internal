@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { MonthlyRipReport, LumberBonusParameter } from '@/types/lumber'
+import { MonthlyRipReport, LumberBonusParameter, LumberPackWithDetails } from '@/types/lumber'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Calendar, Wrench } from 'lucide-react'
+import { Calendar, Wrench, Package } from 'lucide-react'
 
 export default function RipBonusPage() {
   const { data: session, status } = useSession()
@@ -21,6 +21,7 @@ export default function RipBonusPage() {
   
   const [report, setReport] = useState<MonthlyRipReport | null>(null)
   const [bonusParams, setBonusParams] = useState<LumberBonusParameter[]>([])
+  const [packs, setPacks] = useState<LumberPackWithDetails[]>([])
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [isLoading, setIsLoading] = useState(true)
@@ -33,9 +34,10 @@ export default function RipBonusPage() {
 
   async function fetchData() {
     try {
-      const [reportRes, paramsRes] = await Promise.all([
+      const [reportRes, paramsRes, packsRes] = await Promise.all([
         fetch(`/api/lumber/rip-bonus/report?month=${selectedMonth}&year=${selectedYear}`),
-        fetch('/api/lumber/bonus-parameters')
+        fetch('/api/lumber/bonus-parameters'),
+        fetch(`/api/lumber/packs/finished?month=${selectedMonth}&year=${selectedYear}`)
       ])
 
       if (reportRes.ok) {
@@ -58,6 +60,12 @@ export default function RipBonusPage() {
         const paramsData = await paramsRes.json()
         if (Array.isArray(paramsData)) {
           setBonusParams(paramsData)
+        }
+      }
+      if (packsRes.ok) {
+        const packsData = await packsRes.json()
+        if (Array.isArray(packsData)) {
+          setPacks(packsData)
         }
       }
     } catch (error) {
@@ -243,6 +251,97 @@ export default function RipBonusPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Ripped Packs List */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-4 py-3 bg-gray-800 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            <h2 className="font-semibold">Ripped Packs - {months[selectedMonth - 1]} {selectedYear}</h2>
+          </div>
+          <div className="text-sm">
+            {packs.length} packs · {packs.reduce((sum, p) => sum + (Number(p.actual_board_feet) || 0), 0).toLocaleString()} BF
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pack ID</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load ID</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Species</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grade</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Thickness</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Length</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tally BF</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actual BF</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Yield</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operator</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stackers</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Finished</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {packs.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
+                    No packs ripped in {months[selectedMonth - 1]} {selectedYear}
+                  </td>
+                </tr>
+              ) : (
+                packs.map((pack) => (
+                  <tr key={pack.id} className="hover:bg-gray-50 text-sm">
+                    <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                      {pack.pack_id || '-'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                      {pack.load_load_id}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                      {pack.species}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                      {pack.grade}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                      {pack.thickness}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                      {pack.length ? `${pack.length} ft` : '-'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-right">
+                      {Number(pack.tally_board_feet || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-blue-600 font-medium text-right">
+                      {Number(pack.actual_board_feet || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-right">
+                      {pack.rip_yield ? `${Number(pack.rip_yield).toFixed(1)}%` : '-'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
+                      {pack.operator_name || '-'}
+                    </td>
+                    <td className="px-3 py-2 text-gray-900 text-xs max-w-[150px] truncate">
+                      {[
+                        pack.stacker_1_name,
+                        pack.stacker_2_name,
+                        pack.stacker_3_name,
+                        pack.stacker_4_name
+                      ].filter(Boolean).join(', ') || '-'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      {pack.finished_at 
+                        ? new Date(pack.finished_at).toLocaleDateString()
+                        : '-'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
