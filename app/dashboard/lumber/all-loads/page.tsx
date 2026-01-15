@@ -255,7 +255,6 @@ export default function AllLoadsPage() {
             stacker_2_id: pack.stacker_2_id != null ? String(pack.stacker_2_id) : '',
             stacker_3_id: pack.stacker_3_id != null ? String(pack.stacker_3_id) : '',
             stacker_4_id: pack.stacker_4_id != null ? String(pack.stacker_4_id) : '',
-            load_quality: pack.load_quality || '',
             is_finished: pack.is_finished || false,
             finished_at: pack.finished_at ? pack.finished_at.split('T')[0] : ''
           }
@@ -300,7 +299,6 @@ export default function AllLoadsPage() {
           stacker_2_id: edit.stacker_2_id !== '' ? parseInt(edit.stacker_2_id) : null,
           stacker_3_id: edit.stacker_3_id !== '' ? parseInt(edit.stacker_3_id) : null,
           stacker_4_id: edit.stacker_4_id !== '' ? parseInt(edit.stacker_4_id) : null,
-          load_quality: edit.load_quality || null,
           is_finished: edit.is_finished,
           finished_at: edit.finished_at || null
         })
@@ -393,7 +391,6 @@ export default function AllLoadsPage() {
                 stacker_2_id: '',
                 stacker_3_id: '',
                 stacker_4_id: '',
-                load_quality: '',
                 is_finished: false,
                 finished_at: ''
               }

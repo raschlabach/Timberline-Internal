@@ -66,10 +66,7 @@ export async function PATCH(
       updates.push(`stacker_4_id = $${paramIndex++}`)
       values.push(body.stacker_4_id)
     }
-    if (body.load_quality !== undefined) {
-      updates.push(`load_quality = $${paramIndex++}`)
-      values.push(body.load_quality)
-    }
+    // Note: load_quality is stored at the load level, not pack level
     if (body.is_finished !== undefined) {
       updates.push(`is_finished = $${paramIndex++}`)
       values.push(body.is_finished)
