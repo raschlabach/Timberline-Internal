@@ -36,6 +36,7 @@ export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
+  const [tableSort, setTableSort] = useState<'species' | 'species-grade'>('species-grade')
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   
   // Rip Entry Dialog state
@@ -187,11 +188,20 @@ export default function InventoryPage() {
     }
   }
 
-  // Sort groups by species alphabetically so same species are together
+  // Sort groups based on tableSort setting
   const sortedInventoryGroups = [...inventoryGroups].sort((a, b) => {
     const speciesCompare = (a.species || '').localeCompare(b.species || '')
-    if (speciesCompare !== 0) return speciesCompare
-    return (a.grade || '').localeCompare(b.grade || '')
+    if (tableSort === 'species') {
+      // Sort by species only, then by current inventory descending within species
+      if (speciesCompare !== 0) return speciesCompare
+      return (Number(b.current_inventory) || 0) - (Number(a.current_inventory) || 0)
+    } else {
+      // Sort by species, then grade, then thickness
+      if (speciesCompare !== 0) return speciesCompare
+      const gradeCompare = (a.grade || '').localeCompare(b.grade || '')
+      if (gradeCompare !== 0) return gradeCompare
+      return (a.thickness || '').localeCompare(b.thickness || '')
+    }
   })
 
   return (
@@ -251,11 +261,35 @@ export default function InventoryPage() {
 
       {/* Compact Inventory Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-4 py-2 bg-gray-800 text-white">
-          <h2 className="text-sm font-semibold">Current Inventory Detail</h2>
-          <p className="text-[10px] text-gray-300 mt-0.5">
-            Inventory = Actual BF (arrived) - Finished BF (ripped). Excludes loads marked as completely finished.
-          </p>
+        <div className="px-4 py-2 bg-gray-800 text-white flex justify-between items-center">
+          <div>
+            <h2 className="text-sm font-semibold">Current Inventory Detail</h2>
+            <p className="text-[10px] text-gray-300 mt-0.5">
+              Inventory = Actual BF (arrived) - Finished BF (ripped). Excludes loads marked as completely finished.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTableSort('species')}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                tableSort === 'species'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+              }`}
+            >
+              By Species
+            </button>
+            <button
+              onClick={() => setTableSort('species-grade')}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                tableSort === 'species-grade'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+              }`}
+            >
+              By Species & Grade
+            </button>
+          </div>
         </div>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-100">
