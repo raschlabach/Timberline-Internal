@@ -15,6 +15,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
+    console.log('Updating pack', params.packId, 'with body:', JSON.stringify(body))
 
     // Build dynamic update query based on provided fields
     const updates: string[] = []
@@ -75,7 +76,9 @@ export async function PATCH(
     }
     if (body.finished_at !== undefined) {
       updates.push(`finished_at = $${paramIndex++}`)
-      values.push(body.finished_at || null)
+      // Convert empty string to null, and ensure proper date format
+      const finishedAtValue = body.finished_at && body.finished_at !== '' ? body.finished_at : null
+      values.push(finishedAtValue)
     }
 
     if (updates.length === 0) {
@@ -85,17 +88,20 @@ export async function PATCH(
     updates.push(`updated_at = CURRENT_TIMESTAMP`)
     values.push(params.packId)
 
-    const result = await query(
-      `UPDATE lumber_packs
-       SET ${updates.join(', ')}
-       WHERE id = $${paramIndex}
-       RETURNING *`,
-      values
-    )
+    const sqlQuery = `UPDATE lumber_packs SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`
+    console.log('SQL Query:', sqlQuery)
+    console.log('Values:', values)
+
+    const result = await query(sqlQuery, values)
 
     return NextResponse.json(result.rows[0])
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating pack rip data:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Error message:', error?.message)
+    console.error('Error stack:', error?.stack)
+    return NextResponse.json({ 
+      error: 'Internal server error', 
+      details: error?.message || 'Unknown error'
+    }, { status: 500 })
   }
 }
