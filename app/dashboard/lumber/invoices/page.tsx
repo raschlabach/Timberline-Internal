@@ -550,7 +550,7 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="text-xs font-medium text-gray-900">
-                        {load.invoice_total ? `$${Number(load.invoice_total).toFixed(2)}` : '-'}
+                        {load.invoice_total ? `$${Number(load.invoice_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
@@ -630,7 +630,7 @@ export default function InvoicesPage() {
                   <div>
                     <Label className="text-xs text-gray-500">Invoice Total</Label>
                     <div className="font-medium">
-                      {selectedLoad.invoice_total ? `$${Number(selectedLoad.invoice_total).toFixed(2)}` : '-'}
+                      {selectedLoad.invoice_total ? `$${Number(selectedLoad.invoice_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                     </div>
                   </div>
                   <div>
