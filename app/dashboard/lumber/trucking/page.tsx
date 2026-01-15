@@ -451,70 +451,71 @@ export default function TruckingPage() {
 
           {/* Vendor Info / Locations */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold">Vendor Locations</h2>
               <Button onClick={handleAddLocation} size="sm" className="h-7 px-2 text-xs">
                 <Plus className="h-3 w-3 mr-1" />
                 Add
               </Button>
             </div>
-            <div className="bg-white rounded-lg shadow p-3">
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {locations.length === 0 ? (
-                  <p className="text-xs text-gray-500 text-center py-4">No vendor locations yet</p>
-                ) : (
-                  locations.map((location) => (
-                    <div key={location.id} className="border rounded p-2 relative group bg-gray-50 hover:bg-gray-100">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                            <span className="text-xs font-medium text-gray-900 truncate">
-                              {location.supplier_name}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-700 mt-0.5">{location.location_name}</div>
-                          {location.address && (
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              {location.address}
-                              {location.city && `, ${location.city}`}
-                              {location.state && `, ${location.state}`}
-                              {location.zip_code && ` ${location.zip_code}`}
+            <div className="bg-white rounded-lg shadow">
+              <div className="overflow-y-auto" style={{ maxHeight: '500px' }}>
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-800 text-white sticky top-0">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium">Vendor</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Location</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Phone #</th>
+                      <th className="px-2 py-1.5 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {locations.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-2 py-4 text-center text-gray-500">
+                          No vendor locations yet
+                        </td>
+                      </tr>
+                    ) : (
+                      locations.map((location, idx) => (
+                        <tr 
+                          key={location.id} 
+                          className={`hover:bg-blue-50 group ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                        >
+                          <td className="px-2 py-1 font-medium text-gray-900">
+                            {location.supplier_name}
+                          </td>
+                          <td className="px-2 py-1 text-gray-700">
+                            {location.location_name}
+                          </td>
+                          <td className="px-2 py-1 text-gray-600">
+                            {location.phone_number_1 || '-'}
+                          </td>
+                          <td className="px-2 py-1">
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0"
+                                onClick={() => handleEditLocation(location)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 text-red-600 hover:text-red-700"
+                                onClick={() => handleDeleteLocation(location.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
                             </div>
-                          )}
-                          {(location.phone_number_1 || location.phone_number_2) && (
-                            <div className="text-[10px] text-gray-500">
-                              {location.phone_number_1}
-                              {location.phone_number_1 && location.phone_number_2 && ' | '}
-                              {location.phone_number_2}
-                            </div>
-                          )}
-                          {location.notes && (
-                            <div className="text-[10px] text-gray-400 italic mt-0.5">{location.notes}</div>
-                          )}
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 w-5 p-0"
-                            onClick={() => handleEditLocation(location)}
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 w-5 p-0 text-red-600 hover:text-red-700"
-                            onClick={() => handleDeleteLocation(location.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
