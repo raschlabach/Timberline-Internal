@@ -300,7 +300,24 @@ export default function TruckingPage() {
       <div className="grid grid-cols-3 gap-6">
         {/* Loads for Pickup */}
         <div className="col-span-2">
-          <h2 className="text-xl font-semibold mb-4">Loads Needing Pickup ({loads.length})</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Loads Needing Pickup ({loads.length})</h2>
+            {/* Color Legend */}
+            <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-white border border-gray-300"></div>
+                <span className="text-gray-600">Waiting</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></div>
+                <span className="text-gray-600">Ready (has Pickup #)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-green-100 border border-green-300"></div>
+                <span className="text-gray-600">Assigned (Driver + Date)</span>
+              </div>
+            </div>
+          </div>
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -349,11 +366,21 @@ export default function TruckingPage() {
                       </td>
                     </tr>
                   ) : (
-                    loads.map((load) => (
-                      <tr key={load.id} className="hover:bg-gray-50">
-                        <td className="px-2 py-2 text-xs font-medium text-gray-900">
-                          {load.load_id}
-                        </td>
+                    loads.map((load) => {
+                      // Determine row color based on status
+                      const isAssigned = load.driver_id && load.assigned_pickup_date
+                      const isReady = load.pickup_number && !isAssigned
+                      const rowColor = isAssigned 
+                        ? 'bg-green-50 hover:bg-green-100' 
+                        : isReady 
+                          ? 'bg-yellow-50 hover:bg-yellow-100' 
+                          : 'bg-white hover:bg-gray-50'
+                      
+                      return (
+                        <tr key={load.id} className={rowColor}>
+                          <td className="px-2 py-2 text-xs font-medium text-gray-900">
+                            {load.load_id}
+                          </td>
                         <td className="px-2 py-2 text-xs text-gray-900">
                           <div className="font-medium">{load.supplier_name}</div>
                           {load.location_name && (
@@ -400,7 +427,8 @@ export default function TruckingPage() {
                           </Button>
                         </td>
                       </tr>
-                    ))
+                      )
+                    })
                   )}
                 </tbody>
               </table>
