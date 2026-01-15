@@ -41,7 +41,15 @@ export default function InvoicesPage() {
       const response = await fetch('/api/lumber/loads/for-invoice')
       if (response.ok) {
         const data = await response.json()
-        setLoads(data)
+        // Ensure each load has documents array
+        const loadsWithDocs = data.map((load: any) => ({
+          ...load,
+          documents: load.documents || [],
+          items: load.items || []
+        }))
+        setLoads(loadsWithDocs)
+      } else {
+        console.error('Failed to fetch invoice loads:', await response.text())
       }
     } catch (error) {
       console.error('Error fetching invoice loads:', error)
@@ -58,8 +66,8 @@ export default function InvoicesPage() {
 
   function handleOpenInvoiceDialog(load: LumberLoadWithDetails) {
     setSelectedLoad(load)
-    setEnteredInQuickbooks(load.entered_in_quickbooks)
-    setIsPaid(load.is_paid)
+    setEnteredInQuickbooks(load.entered_in_quickbooks || false)
+    setIsPaid(load.is_paid || false)
     setIsDialogOpen(true)
   }
 
@@ -196,7 +204,7 @@ export default function InvoicesPage() {
                       <FileText className="h-4 w-4 mr-1" />
                       Manage
                     </Button>
-                    {load.documents.length > 0 && (
+                    {load.documents && load.documents.length > 0 && (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -256,7 +264,7 @@ export default function InvoicesPage() {
               </div>
 
               {/* Paperwork */}
-              {selectedLoad.documents.length > 0 && (
+              {selectedLoad.documents && selectedLoad.documents.length > 0 && (
                 <div>
                   <Label>Attached Documents</Label>
                   <div className="mt-2 space-y-2">

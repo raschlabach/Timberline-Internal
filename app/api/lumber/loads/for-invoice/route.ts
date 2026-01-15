@@ -11,8 +11,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Query directly instead of using view for reliability
     const result = await query(`
-      SELECT * FROM lumber_loads_for_invoice
+      SELECT 
+        l.*,
+        s.name as supplier_name
+      FROM lumber_loads l
+      JOIN lumber_suppliers s ON l.supplier_id = s.id
+      WHERE l.actual_arrival_date IS NOT NULL 
+        AND COALESCE(l.is_paid, FALSE) = FALSE
+      ORDER BY l.actual_arrival_date DESC
     `)
 
     // Fetch items and documents for each load
@@ -25,13 +33,13 @@ export async function GET(request: NextRequest) {
         'SELECT * FROM lumber_load_documents WHERE load_id = $1 ORDER BY created_at DESC',
         [load.id]
       )
-      load.items = items.rows
-      load.documents = docs.rows
+      load.items = items.rows || []
+      load.documents = docs.rows || []
     }
 
     return NextResponse.json(result.rows)
   } catch (error) {
     console.error('Error fetching invoice loads:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' }, { status: 500 })
   }
 }
