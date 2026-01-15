@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { LumberLoadWithDetails } from '@/types/lumber'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Plus, Info, X } from 'lucide-react'
+import { Search, Plus, Info, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -28,6 +28,10 @@ export default function IncomingLoadsPage() {
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all')
   const [selectedGrade, setSelectedGrade] = useState<string>('all')
   const [selectedThickness, setSelectedThickness] = useState<string>('all')
+  
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string>('load_id')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   
   // Unique values for filters
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -131,8 +135,44 @@ export default function IncomingLoadsPage() {
       )
     }
 
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (sortColumn) {
+        case 'load_id':
+          // Parse as number for proper numeric sorting
+          aVal = parseInt(a.load_id) || 0
+          bVal = parseInt(b.load_id) || 0
+          break
+        case 'supplier':
+          aVal = a.supplier_name?.toLowerCase() || ''
+          bVal = b.supplier_name?.toLowerCase() || ''
+          break
+        case 'species':
+          aVal = a.items?.[0]?.species?.toLowerCase() || ''
+          bVal = b.items?.[0]?.species?.toLowerCase() || ''
+          break
+        case 'price':
+          aVal = a.items?.[0]?.price || 0
+          bVal = b.items?.[0]?.price || 0
+          break
+        case 'eta':
+          aVal = a.estimated_delivery_date ? new Date(a.estimated_delivery_date).getTime() : 0
+          bVal = b.estimated_delivery_date ? new Date(b.estimated_delivery_date).getTime() : 0
+          break
+        default:
+          return 0
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+
     setFilteredLoads(filtered)
-  }, [searchTerm, selectedSupplier, selectedSpecies, selectedGrade, selectedThickness, loads])
+  }, [searchTerm, selectedSupplier, selectedSpecies, selectedGrade, selectedThickness, loads, sortColumn, sortDirection])
 
   function clearAllFilters() {
     setSearchTerm('')
@@ -140,6 +180,24 @@ export default function IncomingLoadsPage() {
     setSelectedSpecies('all')
     setSelectedGrade('all')
     setSelectedThickness('all')
+  }
+
+  function handleSort(column: string) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  function getSortIcon(column: string) {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />
   }
 
   const hasActiveFilters = searchTerm !== '' || selectedSupplier !== 'all' || selectedSpecies !== 'all' || selectedGrade !== 'all' || selectedThickness !== 'all'
@@ -328,13 +386,53 @@ export default function IncomingLoadsPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-800 text-white sticky top-0">
             <tr>
-              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Load ID</th>
-              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Supplier</th>
-              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Items</th>
+              <th 
+                className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                onClick={() => handleSort('load_id')}
+              >
+                <div className="flex items-center">
+                  Load ID
+                  {getSortIcon('load_id')}
+                </div>
+              </th>
+              <th 
+                className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                onClick={() => handleSort('supplier')}
+              >
+                <div className="flex items-center">
+                  Supplier
+                  {getSortIcon('supplier')}
+                </div>
+              </th>
+              <th 
+                className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                onClick={() => handleSort('species')}
+              >
+                <div className="flex items-center">
+                  Items
+                  {getSortIcon('species')}
+                </div>
+              </th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Est. BF</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Act. BF</th>
-              <th className="px-2 py-1 text-left text-xs font-medium uppercase">Price</th>
-              <th className="px-2 py-1 text-left text-xs font-medium uppercase">ETA</th>
+              <th 
+                className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                onClick={() => handleSort('price')}
+              >
+                <div className="flex items-center">
+                  Price
+                  {getSortIcon('price')}
+                </div>
+              </th>
+              <th 
+                className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                onClick={() => handleSort('eta')}
+              >
+                <div className="flex items-center">
+                  ETA
+                  {getSortIcon('eta')}
+                </div>
+              </th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Type</th>
               <th className="px-2 py-1 text-left text-xs font-medium uppercase">Actions</th>
             </tr>
