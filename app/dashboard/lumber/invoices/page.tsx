@@ -169,7 +169,7 @@ export default function InvoicesPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {load.invoice_total ? `$${load.invoice_total.toFixed(2)}` : '-'}
+                      {load.invoice_total ? `$${Number(load.invoice_total).toFixed(2)}` : '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -242,7 +242,7 @@ export default function InvoicesPage() {
                 <div>
                   <Label className="text-xs text-gray-500">Invoice Total</Label>
                   <div className="font-medium">
-                    {selectedLoad.invoice_total ? `$${selectedLoad.invoice_total.toFixed(2)}` : '-'}
+                    {selectedLoad.invoice_total ? `$${Number(selectedLoad.invoice_total).toFixed(2)}` : '-'}
                   </div>
                 </div>
                 <div>
