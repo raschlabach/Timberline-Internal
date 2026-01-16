@@ -117,3 +117,61 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// DELETE /api/lumber/loads/[loadId] - Delete a load and all related data
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { loadId: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Check if load exists
+    const loadCheck = await query(
+      'SELECT id, load_id FROM lumber_loads WHERE id = $1',
+      [params.loadId]
+    )
+
+    if (loadCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Load not found' }, { status: 404 })
+    }
+
+    // Delete related records first (due to foreign key constraints)
+    // The CASCADE on foreign keys should handle this, but let's be explicit
+    
+    // Delete packs (associated with load items, which are associated with load)
+    await query(
+      'DELETE FROM lumber_packs WHERE load_id = $1',
+      [params.loadId]
+    )
+
+    // Delete documents
+    await query(
+      'DELETE FROM lumber_load_documents WHERE load_id = $1',
+      [params.loadId]
+    )
+
+    // Delete load items
+    await query(
+      'DELETE FROM lumber_load_items WHERE load_id = $1',
+      [params.loadId]
+    )
+
+    // Finally delete the load itself
+    await query(
+      'DELETE FROM lumber_loads WHERE id = $1',
+      [params.loadId]
+    )
+
+    return NextResponse.json({ 
+      success: true, 
+      message: `Load ${loadCheck.rows[0].load_id} deleted successfully` 
+    })
+  } catch (error) {
+    console.error('Error deleting load:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

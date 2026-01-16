@@ -56,6 +56,7 @@ export default function LoadInfoPage() {
   const [invoiceDate, setInvoiceDate] = useState('')
   const [allPacksFinished, setAllPacksFinished] = useState(false)
   const [poGenerated, setPoGenerated] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   // Reference data
   const [suppliers, setSuppliers] = useState<any[]>([])
@@ -191,6 +192,32 @@ export default function LoadInfoPage() {
     setItems(newItems)
   }
 
+  async function handleDelete() {
+    if (!confirm(`Are you sure you want to delete load ${loadIdField}?\n\nThis will permanently delete:\n- All load items\n- All packs/tallies\n- All attached documents\n\nThis action cannot be undone.`)) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/lumber/loads/${loadId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        toast.success(`Load ${loadIdField} deleted successfully`)
+        router.push('/dashboard/lumber/all-loads')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete load')
+      }
+    } catch (error) {
+      console.error('Error deleting load:', error)
+      toast.error('Failed to delete load')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -242,10 +269,21 @@ export default function LoadInfoPage() {
           </Button>
           <h1 className="text-2xl font-bold text-gray-900">Edit Load Information</h1>
         </div>
-        <Button onClick={handleSave} disabled={isSaving}>
-          <Save className="h-4 w-4 mr-2" />
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleDelete} 
+            disabled={isDeleting}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            {isDeleting ? 'Deleting...' : 'Delete Load'}
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow divide-y">
