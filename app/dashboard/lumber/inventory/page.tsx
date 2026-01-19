@@ -20,7 +20,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight, Eye, GripVertical } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, GripVertical, Printer } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   DndContext,
   closestCenter,
@@ -778,6 +779,47 @@ export default function InventoryPage() {
     localStorage.setItem('inventory-species-order-by-thickness', JSON.stringify(updatedOrder))
   }
 
+  // Print/Export PDF function
+  function handlePrint() {
+    // Expand all thicknesses and species for printing
+    const allThicknesses = thicknessWithSpecies.map(t => t.thickness)
+    const allSpeciesKeys: string[] = []
+    
+    thicknessWithSpecies.forEach(thicknessData => {
+      thicknessData.species.forEach(speciesData => {
+        allSpeciesKeys.push(`${thicknessData.thickness}-${speciesData.species}`)
+      })
+    })
+    
+    // Temporarily expand everything
+    const prevExpandedThicknesses = new Set(expandedThicknesses)
+    const prevExpandedSpecies = new Set(expandedSpecies)
+    
+    setExpandedThicknesses(new Set(allThicknesses))
+    setExpandedSpecies(new Set(allSpeciesKeys))
+    
+    // Wait for state update, then print
+    setTimeout(() => {
+      window.print()
+      
+      // Restore previous expansion state after print dialog closes
+      const restoreState = () => {
+        setExpandedThicknesses(prevExpandedThicknesses)
+        setExpandedSpecies(prevExpandedSpecies)
+      }
+      
+      // Try to detect when print dialog closes (this is approximate)
+      setTimeout(restoreState, 500)
+      
+      // Also restore on window focus (user might cancel print)
+      const handleFocus = () => {
+        restoreState()
+        window.removeEventListener('focus', handleFocus)
+      }
+      window.addEventListener('focus', handleFocus)
+    }, 200)
+  }
+
   async function handleViewRipEntry(load: InventoryLoadDetail) {
     setSelectedLoadForRip(load)
     setRipEntryDialogOpen(true)
@@ -855,21 +897,70 @@ export default function InventoryPage() {
   )
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
-        <p className="text-gray-600 mt-1">Current inventory levels and tracking</p>
-      </div>
+    <>
+      <style jsx>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .print-container, .print-container * {
+            visibility: visible;
+          }
+          .print-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-container table {
+            width: 100%;
+            max-width: 100% !important;
+          }
+          .print-container th,
+          .print-container td {
+            padding: 4px 6px;
+            font-size: 10pt;
+          }
+          .print-container .bg-blue-50\\/20,
+          .print-container .bg-blue-50\\/40 {
+            background-color: #f0f9ff !important;
+          }
+          .print-container .bg-blue-50\\/60 {
+            background-color: #dbeafe !important;
+          }
+          @page {
+            size: landscape;
+            margin: 0.5in;
+          }
+        }
+      `}</style>
+      <div className="space-y-4 print-container">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
+          <p className="text-gray-600 mt-1">Current inventory levels and tracking</p>
+        </div>
 
       {/* Detailed Inventory Table - Species → Grades */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-4 py-3 bg-gray-800 text-white">
+        <div className="px-4 py-3 bg-gray-800 text-white flex justify-between items-center">
           <div>
             <h2 className="text-sm font-semibold">Detailed Inventory Breakdown</h2>
             <p className="text-[10px] text-gray-300 mt-0.5">
               Click thickness to expand species. Click species to expand grades. Click grade to view loads and tallies.
             </p>
           </div>
+          <Button
+            onClick={handlePrint}
+            variant="outline"
+            size="sm"
+            className="bg-white text-gray-800 hover:bg-gray-100 no-print"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print/Export PDF
+          </Button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full divide-y divide-gray-200" style={{ maxWidth: '1400px', margin: '0 auto' }}>
@@ -1374,6 +1465,7 @@ export default function InventoryPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </>
   )
 }
