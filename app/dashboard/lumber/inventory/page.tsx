@@ -124,7 +124,7 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
         </div>
 
         {/* Grade Boxes */}
-        <div className="p-0.5 max-h-[450px] overflow-y-auto">
+        <div className="p-0.5">
           {grades.map((grade) => (
             <div
               key={grade.grade}
@@ -584,7 +584,7 @@ export default function InventoryPage() {
             items={sortedSpecies.map(s => s.species)}
             strategy={horizontalListSortingStrategy}
           >
-            <div className="flex gap-1.5 overflow-x-auto pb-1.5 flex-wrap">
+            <div className="flex gap-1.5 overflow-x-auto pb-1.5 flex-wrap items-start">
               {sortedSpecies.map((speciesData) => (
                 <SortableSpeciesColumn
                   key={speciesData.species}
