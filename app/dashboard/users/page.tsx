@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Edit, Trash2, Users, Shield, UserCheck, User } from 'lucide-react'
+import { Plus, Edit, Trash2, Users, Shield, UserCheck, User, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface User {
@@ -19,7 +19,7 @@ interface User {
   username: string
   full_name: string
   email: string | null
-  role: 'admin' | 'user' | 'driver'
+  role: 'admin' | 'user' | 'driver' | 'rip_operator'
   is_active: boolean
   created_at: string
   updated_at: string
@@ -32,7 +32,7 @@ interface UserFormData {
   password: string
   fullName: string
   email: string
-  role: 'admin' | 'user' | 'driver'
+  role: 'admin' | 'user' | 'driver' | 'rip_operator'
   isActive: boolean
   driverColor: string
   driverPhone: string
@@ -172,6 +172,8 @@ export default function UserManagementPage() {
         return <Shield className="h-4 w-4" />
       case 'driver':
         return <UserCheck className="h-4 w-4" />
+      case 'rip_operator':
+        return <Wrench className="h-4 w-4" />
       case 'user':
         return <User className="h-4 w-4" />
       default:
@@ -185,10 +187,21 @@ export default function UserManagementPage() {
         return 'default'
       case 'driver':
         return 'secondary'
+      case 'rip_operator':
+        return 'secondary'
       case 'user':
         return 'outline'
       default:
         return 'outline'
+    }
+  }
+  
+  function getRoleDisplayName(role: string) {
+    switch (role) {
+      case 'rip_operator':
+        return 'Rip Operator'
+      default:
+        return role
     }
   }
 
@@ -305,7 +318,7 @@ export default function UserManagementPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="role">Role *</Label>
-                  <Select value={formData.role} onValueChange={(value: 'admin' | 'user' | 'driver') => setFormData({ ...formData, role: value })}>
+                  <Select value={formData.role} onValueChange={(value: 'admin' | 'user' | 'driver' | 'rip_operator') => setFormData({ ...formData, role: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -313,8 +326,14 @@ export default function UserManagementPage() {
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="user">User</SelectItem>
                       <SelectItem value="driver">Driver</SelectItem>
+                      <SelectItem value="rip_operator">Rip Operator</SelectItem>
                     </SelectContent>
                   </Select>
+                  {formData.role === 'rip_operator' && (
+                    <p className="text-xs text-gray-500">
+                      Can only access: Overview, Rip Entry, Daily Hours, Ripped Packs
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -368,7 +387,7 @@ export default function UserManagementPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -408,6 +427,16 @@ export default function UserManagementPage() {
             <div className="text-2xl font-bold">{users.filter(u => u.role === 'driver').length}</div>
           </CardContent>
         </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Rip Operators</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{users.filter(u => u.role === 'rip_operator').length}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Users Table */}
@@ -440,9 +469,9 @@ export default function UserManagementPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getRoleBadgeVariant(user.role)} className="flex items-center gap-1 w-fit">
+                    <Badge variant={getRoleBadgeVariant(user.role)} className="flex items-center gap-1 w-fit capitalize">
                       {getRoleIcon(user.role)}
-                      {user.role}
+                      {getRoleDisplayName(user.role)}
                     </Badge>
                   </TableCell>
                   <TableCell>
