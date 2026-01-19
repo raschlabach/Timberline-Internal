@@ -56,6 +56,7 @@ interface SpeciesColumnProps {
     incoming_footage: number
     incoming_load_count: number
     incoming_with_driver: number
+    groups: InventoryGroup[]
   }>
   total_actual: number
   total_finished: number
@@ -63,9 +64,10 @@ interface SpeciesColumnProps {
   load_count: number
   average_price: number | null
   color: string
+  onGradeClick: (species: string, grade: string, loads: InventoryLoadDetail[]) => void
 }
 
-function SortableSpeciesColumn({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color }: SpeciesColumnProps) {
+function SortableSpeciesColumn({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color, onGradeClick }: SpeciesColumnProps) {
   const {
     attributes,
     listeners,
@@ -134,7 +136,16 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
           {grades.map((grade) => (
             <div key={grade.grade} className="flex gap-1 mb-0.5">
               {/* Grade Box */}
-              <div className="flex-1 border rounded p-1 bg-white hover:bg-gray-50 transition-colors">
+              <div 
+                className="flex-1 border rounded p-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => {
+                  // Get all loads with inventory for this grade
+                  const loadsWithInventory = grade.groups.flatMap(g => 
+                    g.loads.filter(load => load.load_inventory > 0)
+                  )
+                  onGradeClick(species, grade.grade, loadsWithInventory)
+                }}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
                 </div>
@@ -179,21 +190,15 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
                 </div>
                 <div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-blue-700">BF:</span>
-                    <span className="text-xs font-bold text-blue-900">
-                      {grade.incoming_footage.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
                     <span className="text-xs text-blue-700">Loads:</span>
                     <span className="text-xs font-semibold text-blue-900">
                       {grade.incoming_load_count}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-blue-700">Driver:</span>
-                    <span className="text-xs font-semibold text-blue-900">
-                      {grade.incoming_load_count > 0 ? `${grade.incoming_with_driver}/${grade.incoming_load_count}` : '0'}
+                    <span className="text-xs text-blue-700">BF:</span>
+                    <span className="text-xs font-bold text-blue-900">
+                      {grade.incoming_footage.toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -228,6 +233,14 @@ export default function InventoryPage() {
   const [selectedLoadForRip, setSelectedLoadForRip] = useState<any>(null)
   const [ripEntryPacks, setRipEntryPacks] = useState<LumberPackWithDetails[]>([])
   const [isLoadingPacks, setIsLoadingPacks] = useState(false)
+  
+  // Grade Loads Dialog state
+  const [gradeLoadsDialogOpen, setGradeLoadsDialogOpen] = useState(false)
+  const [selectedGradeLoads, setSelectedGradeLoads] = useState<{
+    species: string
+    grade: string
+    loads: InventoryLoadDetail[]
+  } | null>(null)
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -710,6 +723,10 @@ export default function InventoryPage() {
                   load_count={speciesData.load_count}
                   average_price={speciesData.average_price}
                   color={speciesColors[speciesData.species] || '#6B7280'}
+                  onGradeClick={(species, grade, loads) => {
+                    setSelectedGradeLoads({ species, grade, loads })
+                    setGradeLoadsDialogOpen(true)
+                  }}
                 />
               ))}
             </div>
@@ -1169,6 +1186,82 @@ export default function InventoryPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Grade Loads Dialog */}
+      <Dialog open={gradeLoadsDialogOpen} onOpenChange={setGradeLoadsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Loads in Inventory - {selectedGradeLoads?.species} {selectedGradeLoads?.grade}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedGradeLoads && selectedGradeLoads.loads.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No loads with inventory for this grade
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="text-sm text-gray-600 mb-3">
+                {selectedGradeLoads?.loads.length} load{selectedGradeLoads?.loads.length !== 1 ? 's' : ''} with inventory
+              </div>
+              <div className="border rounded">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Load ID</th>
+                      <th className="px-3 py-2 text-left">Thickness</th>
+                      <th className="px-3 py-2 text-right">Inventory BF</th>
+                      <th className="px-3 py-2 text-right">Total BF</th>
+                      <th className="px-3 py-2 text-right">Finished BF</th>
+                      <th className="px-3 py-2 text-center">Packs</th>
+                      <th className="px-3 py-2 text-right">Price</th>
+                      <th className="px-3 py-2 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedGradeLoads?.loads.map((load, idx) => (
+                      <tr 
+                        key={load.load_id} 
+                        className={`hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                      >
+                        <td className="px-3 py-2 font-medium">{load.load_id}</td>
+                        <td className="px-3 py-2 text-gray-600">{load.thickness}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-blue-600">
+                          {Number(load.load_inventory || 0).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 text-right text-gray-700">
+                          {Number(load.actual_footage || 0).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 text-right text-gray-600">
+                          {Number(load.finished_footage || 0).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-600">
+                          {load.finished_pack_count}/{load.pack_count}
+                        </td>
+                        <td className="px-3 py-2 text-right text-green-600">
+                          {load.price ? `$${Number(load.price).toFixed(3)}` : '-'}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => {
+                              handleViewRipEntry(load)
+                              setGradeLoadsDialogOpen(false)
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            View Tallies
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </DialogContent>
