@@ -195,6 +195,10 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
                       {grade.incoming_load_count}
                     </span>
                   </div>
+                  <div className="flex justify-between items-center opacity-0 pointer-events-none">
+                    <span className="text-xs">Packs:</span>
+                    <span className="text-xs">-</span>
+                  </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-blue-700">BF:</span>
                     <span className="text-xs font-bold text-blue-900">
