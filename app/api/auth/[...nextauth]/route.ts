@@ -69,12 +69,12 @@ const handler = NextAuth({
         console.log("JWT callback - user found:", user.username)
         token.id = user.id
         token.username = user.username
-        token.role = ((user as any).role as string) as 'admin' | 'user' | 'driver'
+        token.role = ((user as any).role as string) as 'admin' | 'user' | 'driver' | 'rip_operator'
       }
       return token
     },
     async session({ session, token }) {
-      const allowed = ['admin', 'user', 'driver'] as const
+      const allowed = ['admin', 'user', 'driver', 'rip_operator'] as const
       type Role = typeof allowed[number]
 
       const incoming = String((token as any).role ?? '')

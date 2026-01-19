@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
+// Pages that rip_operator role CAN access
+const RIP_OPERATOR_ALLOWED_PATHS = [
+  '/dashboard/lumber/overview',
+  '/dashboard/lumber/rip-entry',
+  '/dashboard/lumber/daily-hours',
+  '/dashboard/lumber/ripped-packs',
+]
+
 /**
  * Middleware that runs on specific routes to protect them from unauthorized access
  */
@@ -63,6 +71,24 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from login page
   if (isAuthenticated && isPublicPath) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  
+  // Role-based access control for rip_operator
+  if (isAuthenticated && token?.role === 'rip_operator') {
+    // Check if trying to access a restricted page
+    const isDashboardPath = path.startsWith('/dashboard')
+    
+    if (isDashboardPath) {
+      // Check if the path is allowed for rip_operator
+      const isAllowed = RIP_OPERATOR_ALLOWED_PATHS.some(allowedPath => 
+        path === allowedPath || path.startsWith(allowedPath + '/')
+      )
+      
+      // If not allowed, redirect to overview (their main page)
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL('/dashboard/lumber/overview', request.url));
+      }
+    }
   }
   
   return NextResponse.next();

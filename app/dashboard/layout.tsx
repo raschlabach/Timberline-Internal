@@ -16,8 +16,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: session } = useSession()
   const pathname = usePathname()
   
-  // Check if user is admin
+  // Check user roles
   const isAdmin = session?.user?.role === 'admin'
+  const isRipOperator = session?.user?.role === 'rip_operator'
+  
+  // Rip operators only see specific lumber pages
+  const canSeeAllPages = !isRipOperator
   
   // Collapsible sections state
   const [isTimberlineExpanded, setIsTimberlineExpanded] = useState(true)
@@ -65,79 +69,83 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         
         <nav className="flex-1 py-4 overflow-y-auto">
           <ul className="space-y-1 px-3">
-            {/* Timberline Database Section */}
-            <div className="pt-2 pb-2 px-4">
-              <button 
-                onClick={toggleTimberline}
-                className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors w-full"
-              >
-                {isTimberlineExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                Timberline Database
-              </button>
-            </div>
-            
-            {isTimberlineExpanded && (
+            {/* Timberline Database Section - Hidden for rip_operator */}
+            {canSeeAllPages && (
               <>
-                <NavItem
-                  href="/dashboard/orders"
-                  icon={<Package size={20} />}
-                  label="Order Entry"
-                  isActive={isActiveSubRoute('/dashboard/orders')}
-                  isPrimary
-                />
-                <SubNavItem
-                  href="/dashboard/customers"
-                  icon={<Users size={16} />}
-                  label="Customers"
-                  isActive={isActiveSubRoute('/dashboard/customers')}
-                />
+                <div className="pt-2 pb-2 px-4">
+                  <button 
+                    onClick={toggleTimberline}
+                    className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors w-full"
+                  >
+                    {isTimberlineExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    Timberline Database
+                  </button>
+                </div>
+                
+                {isTimberlineExpanded && (
+                  <>
+                    <NavItem
+                      href="/dashboard/orders"
+                      icon={<Package size={20} />}
+                      label="Order Entry"
+                      isActive={isActiveSubRoute('/dashboard/orders')}
+                      isPrimary
+                    />
+                    <SubNavItem
+                      href="/dashboard/customers"
+                      icon={<Users size={16} />}
+                      label="Customers"
+                      isActive={isActiveSubRoute('/dashboard/customers')}
+                    />
 
-                <NavItem
-                  href="/dashboard/load-board"
-                  icon={<List size={20} />}
-                  label="Load Board"
-                  isActive={
-                    isActiveSubRoute('/dashboard/load-board') ||
-                    isActiveSubRoute('/dashboard/backhaul-planner')
-                  }
-                />
-                <SubNavItem
-                  href="/dashboard/load-board/map"
-                  icon={<Map size={16} />}
-                  label="Load Board Map"
-                  isActive={isActiveRoute('/dashboard/load-board/map')}
-                />
-                <SubNavItem
-                  href="/dashboard/backhaul-planner"
-                  icon={<ArrowLeftRight size={16} />}
-                  label="Backhaul Planner"
-                  isActive={isActiveRoute('/dashboard/backhaul-planner')}
-                />
+                    <NavItem
+                      href="/dashboard/load-board"
+                      icon={<List size={20} />}
+                      label="Load Board"
+                      isActive={
+                        isActiveSubRoute('/dashboard/load-board') ||
+                        isActiveSubRoute('/dashboard/backhaul-planner')
+                      }
+                    />
+                    <SubNavItem
+                      href="/dashboard/load-board/map"
+                      icon={<Map size={16} />}
+                      label="Load Board Map"
+                      isActive={isActiveRoute('/dashboard/load-board/map')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/backhaul-planner"
+                      icon={<ArrowLeftRight size={16} />}
+                      label="Backhaul Planner"
+                      isActive={isActiveRoute('/dashboard/backhaul-planner')}
+                    />
 
-                <NavItem
-                  href="/dashboard/truckload-manager"
-                  icon={<ClipboardList size={20} />}
-                  label="Truckload Manager"
-                  isActive={isActiveSubRoute('/dashboard/truckload-manager')}
-                />
-                <NavItem
-                  href="/dashboard/invoices"
-                  icon={<FileText size={20} />}
-                  label="Invoice Page"
-                  isActive={isActiveSubRoute('/dashboard/invoices')}
-                />
-                <SubNavItem
-                  href="/dashboard/driver-pay"
-                  icon={<DollarSign size={16} />}
-                  label="Driver Pay"
-                  isActive={isActiveSubRoute('/dashboard/driver-pay')}
-                />
-                <NavItem
-                  href="/dashboard/pricing-notes"
-                  icon={<Calculator size={20} />}
-                  label="Pricing Notes"
-                  isActive={isActiveSubRoute('/dashboard/pricing-notes')}
-                />
+                    <NavItem
+                      href="/dashboard/truckload-manager"
+                      icon={<ClipboardList size={20} />}
+                      label="Truckload Manager"
+                      isActive={isActiveSubRoute('/dashboard/truckload-manager')}
+                    />
+                    <NavItem
+                      href="/dashboard/invoices"
+                      icon={<FileText size={20} />}
+                      label="Invoice Page"
+                      isActive={isActiveSubRoute('/dashboard/invoices')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/driver-pay"
+                      icon={<DollarSign size={16} />}
+                      label="Driver Pay"
+                      isActive={isActiveSubRoute('/dashboard/driver-pay')}
+                    />
+                    <NavItem
+                      href="/dashboard/pricing-notes"
+                      icon={<Calculator size={20} />}
+                      label="Pricing Notes"
+                      isActive={isActiveSubRoute('/dashboard/pricing-notes')}
+                    />
+                  </>
+                )}
               </>
             )}
             
@@ -154,91 +162,110 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             
             {isLumberExpanded && (
               <>
-                {/* Create Load Section */}
-                <NavItem
-                  href="/dashboard/lumber/create"
-                  icon={<Package size={20} />}
-                  label="Create Load"
-                  isActive={isActiveRoute('/dashboard/lumber/create')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/po"
-                  icon={<FileBox size={16} />}
-                  label="PO Page"
-                  isActive={isActiveRoute('/dashboard/lumber/po')}
-                />
+                {/* Create Load Section - Hidden for rip_operator */}
+                {canSeeAllPages && (
+                  <>
+                    <NavItem
+                      href="/dashboard/lumber/create"
+                      icon={<Package size={20} />}
+                      label="Create Load"
+                      isActive={isActiveRoute('/dashboard/lumber/create')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/po"
+                      icon={<FileBox size={16} />}
+                      label="PO Page"
+                      isActive={isActiveRoute('/dashboard/lumber/po')}
+                    />
+                  </>
+                )}
                 
-                {/* Overview Section */}
+                {/* Overview Section - Always visible */}
                 <NavItem
                   href="/dashboard/lumber/overview"
                   icon={<Trees size={20} />}
                   label="Overview"
                   isActive={isActiveRoute('/dashboard/lumber/overview')}
                 />
-                <SubNavItem
-                  href="/dashboard/lumber/incoming"
-                  icon={<Package size={16} />}
-                  label="Incoming Loads"
-                  isActive={isActiveRoute('/dashboard/lumber/incoming')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/trucking"
-                  icon={<Truck size={16} />}
-                  label="Trucking"
-                  isActive={isActiveRoute('/dashboard/lumber/trucking')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/invoices"
-                  icon={<FileText size={16} />}
-                  label="Invoice Page"
-                  isActive={isActiveRoute('/dashboard/lumber/invoices')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/all-loads"
-                  icon={<List size={16} />}
-                  label="All Loads"
-                  isActive={isActiveRoute('/dashboard/lumber/all-loads')}
-                />
                 
-                {/* Tally Entry Section */}
-                <NavItem
-                  href="/dashboard/lumber/tally-entry"
-                  icon={<ClipboardList size={20} />}
-                  label="Tally Entry"
-                  isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
-                />
+                {/* Sub-items under Overview - Hidden for rip_operator */}
+                {canSeeAllPages && (
+                  <>
+                    <SubNavItem
+                      href="/dashboard/lumber/incoming"
+                      icon={<Package size={16} />}
+                      label="Incoming Loads"
+                      isActive={isActiveRoute('/dashboard/lumber/incoming')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/trucking"
+                      icon={<Truck size={16} />}
+                      label="Trucking"
+                      isActive={isActiveRoute('/dashboard/lumber/trucking')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/invoices"
+                      icon={<FileText size={16} />}
+                      label="Invoice Page"
+                      isActive={isActiveRoute('/dashboard/lumber/invoices')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/all-loads"
+                      icon={<List size={16} />}
+                      label="All Loads"
+                      isActive={isActiveRoute('/dashboard/lumber/all-loads')}
+                    />
+                    
+                    {/* Tally Entry - Hidden for rip_operator */}
+                    <NavItem
+                      href="/dashboard/lumber/tally-entry"
+                      icon={<ClipboardList size={20} />}
+                      label="Tally Entry"
+                      isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
+                    />
+                  </>
+                )}
+                
+                {/* Rip Entry Section - Always visible (main pages for rip_operator) */}
                 <SubNavItem
                   href="/dashboard/lumber/rip-entry"
                   icon={<Hammer size={16} />}
                   label="Rip Entry"
                   isActive={isActiveRoute('/dashboard/lumber/rip-entry')}
+                  className={isRipOperator ? '' : 'ml-6'}
                 />
                 <SubNavItem
                   href="/dashboard/lumber/daily-hours"
                   icon={<Clock size={16} />}
                   label="Daily Hours"
                   isActive={isActiveRoute('/dashboard/lumber/daily-hours')}
+                  className={isRipOperator ? '' : 'ml-6'}
                 />
                 <SubNavItem
                   href="/dashboard/lumber/ripped-packs"
                   icon={<PackageCheck size={16} />}
                   label="Ripped Packs"
                   isActive={isActiveRoute('/dashboard/lumber/ripped-packs')}
+                  className={isRipOperator ? '' : 'ml-6'}
                 />
                 
-                {/* Inventory Section */}
-                <NavItem
-                  href="/dashboard/lumber/inventory"
-                  icon={<PackageCheck size={20} />}
-                  label="Inventory"
-                  isActive={isActiveRoute('/dashboard/lumber/inventory')}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/rip-bonus"
-                  icon={<TrendingUp size={16} />}
-                  label="Rip Bonus"
-                  isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
-                />
+                {/* Inventory Section - Hidden for rip_operator */}
+                {canSeeAllPages && (
+                  <>
+                    <NavItem
+                      href="/dashboard/lumber/inventory"
+                      icon={<PackageCheck size={20} />}
+                      label="Inventory"
+                      isActive={isActiveRoute('/dashboard/lumber/inventory')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/rip-bonus"
+                      icon={<TrendingUp size={16} />}
+                      label="Rip Bonus"
+                      isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
+                    />
+                  </>
+                )}
                 
                 {isAdmin && (
                   <SubNavItem
