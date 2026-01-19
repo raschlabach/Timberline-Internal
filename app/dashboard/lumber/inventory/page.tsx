@@ -35,7 +35,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
-  horizontalListSortingStrategy,
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
@@ -67,7 +67,7 @@ interface SpeciesColumnProps {
   onGradeClick: (species: string, grade: string, loads: InventoryLoadDetail[]) => void
 }
 
-function SortableSpeciesColumn({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color, onGradeClick }: SpeciesColumnProps) {
+function SortableSpeciesRow({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color, onGradeClick }: SpeciesColumnProps) {
   const {
     attributes,
     listeners,
@@ -86,129 +86,128 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className="flex-shrink-0 w-56"
+      style={{ ...style, borderLeftColor: color, borderLeftWidth: '3px' }}
+      className="border rounded bg-white shadow-sm hover:shadow transition-shadow"
     >
-      <div
-        className="border rounded bg-white shadow-sm hover:shadow transition-shadow"
-        style={{ borderTopColor: color, borderTopWidth: '3px' }}
-      >
-        {/* Species Header */}
-        <div
-          {...attributes}
-          {...listeners}
-          className="px-1.5 py-1 bg-gray-50 border-b cursor-move flex items-center gap-1 hover:bg-gray-100 transition-colors"
-        >
-          <GripVertical className="h-3 w-3 text-gray-400 flex-shrink-0" />
-          <div className="flex items-center gap-1 flex-1 min-w-0">
-            <span
-              className="w-2 h-2 rounded flex-shrink-0"
-              style={{ backgroundColor: color }}
-            />
-            <span className="text-[11px] font-semibold text-gray-900 truncate">{species}</span>
-          </div>
-        </div>
-
-        {/* Species Totals */}
-        <div className="px-1.5 py-0.5 border-b bg-gray-50">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-600">Inv:</span>
-            <span className="text-sm font-bold text-blue-600">
-              {current_inventory.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-600">Total:</span>
-            <span className="text-xs font-semibold text-gray-700">
-              {total_actual.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-600">Price:</span>
-            <span className="text-xs font-semibold text-green-600">
-              {average_price ? `$${average_price.toFixed(3)}` : '-'}
-            </span>
-          </div>
-        </div>
-
-        {/* Grade Boxes */}
-        <div className="p-0.5">
-          {grades.map((grade) => (
-            <div key={grade.grade} className="flex gap-1 mb-0.5">
-              {/* Grade Box */}
-              <div 
-                className="flex-1 border rounded p-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => {
-                  // Get all loads with inventory for this grade
-                  const loadsWithInventory = grade.groups.flatMap(g => 
-                    g.loads.filter(load => load.load_inventory > 0)
-                  )
-                  onGradeClick(species, grade.grade, loadsWithInventory)
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">Loads:</span>
-                    <span className="text-xs font-semibold text-gray-700">
-                      {grade.loads_with_inventory}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">Packs:</span>
-                    <span className="text-xs font-semibold text-gray-700">
-                      {grade.pack_count}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">BF:</span>
-                    <span className="text-xs font-bold text-blue-600">
-                      {grade.current_inventory.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">$/BF:</span>
-                    <span className="text-xs font-semibold text-green-600">
-                      {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">Value:</span>
-                    <span className="text-xs font-bold text-purple-600">
-                      {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Incoming Box */}
-              <div className="flex-1 border rounded p-1 bg-blue-50 border-blue-300">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] font-semibold text-blue-900">Incoming</span>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-blue-700">Loads:</span>
-                    <span className="text-xs font-semibold text-blue-900">
-                      {grade.incoming_load_count}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center opacity-0 pointer-events-none">
-                    <span className="text-xs">Packs:</span>
-                    <span className="text-xs">-</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-blue-700">BF:</span>
-                    <span className="text-xs font-bold text-blue-900">
-                      {grade.incoming_footage.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+      <div className="flex">
+        {/* Species Header & Totals - Left Side */}
+        <div className="flex-shrink-0 border-r bg-gray-50">
+          <div
+            {...attributes}
+            {...listeners}
+            className="px-2 py-1.5 cursor-move flex items-center gap-1.5 hover:bg-gray-100 transition-colors border-b"
+          >
+            <GripVertical className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <span
+                className="w-2.5 h-2.5 rounded flex-shrink-0"
+                style={{ backgroundColor: color }}
+              />
+              <span className="text-xs font-semibold text-gray-900">{species}</span>
             </div>
-          ))}
+          </div>
+          <div className="px-2 py-1.5 space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">Inv:</span>
+              <span className="text-sm font-bold text-blue-600">
+                {current_inventory.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">Total:</span>
+              <span className="text-xs font-semibold text-gray-700">
+                {total_actual.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">Price:</span>
+              <span className="text-xs font-semibold text-green-600">
+                {average_price ? `$${average_price.toFixed(3)}` : '-'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Grade Boxes - Horizontal Scroll */}
+        <div className="flex-1 overflow-x-auto">
+          <div className="flex gap-1 p-1">
+            {grades.map((grade) => (
+              <div key={grade.grade} className="flex gap-1 flex-shrink-0">
+                {/* Grade Box */}
+                <div 
+                  className="w-44 border rounded p-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => {
+                    // Get all loads with inventory for this grade
+                    const loadsWithInventory = grade.groups.flatMap(g => 
+                      g.loads.filter(load => load.load_inventory > 0)
+                    )
+                    onGradeClick(species, grade.grade, loadsWithInventory)
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Loads:</span>
+                      <span className="text-xs font-semibold text-gray-700">
+                        {grade.loads_with_inventory}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Packs:</span>
+                      <span className="text-xs font-semibold text-gray-700">
+                        {grade.pack_count}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">BF:</span>
+                      <span className="text-xs font-bold text-blue-600">
+                        {grade.current_inventory.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">$/BF:</span>
+                      <span className="text-xs font-semibold text-green-600">
+                        {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Value:</span>
+                      <span className="text-xs font-bold text-purple-600">
+                        {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Incoming Box */}
+                <div className="w-44 border rounded p-1 bg-blue-50 border-blue-300 flex-shrink-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-semibold text-blue-900">Incoming</span>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-blue-700">Loads:</span>
+                      <span className="text-xs font-semibold text-blue-900">
+                        {grade.incoming_load_count}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center opacity-0 pointer-events-none">
+                      <span className="text-xs">Packs:</span>
+                      <span className="text-xs">-</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-blue-700">BF:</span>
+                      <span className="text-xs font-bold text-blue-900">
+                        {grade.incoming_footage.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -713,11 +712,11 @@ export default function InventoryPage() {
         >
           <SortableContext
             items={sortedSpecies.map(s => s.species)}
-            strategy={horizontalListSortingStrategy}
+            strategy={verticalListSortingStrategy}
           >
-            <div className="flex gap-1.5 overflow-x-auto pb-1.5 flex-wrap items-start">
+            <div className="flex flex-col gap-2">
               {sortedSpecies.map((speciesData) => (
-                <SortableSpeciesColumn
+                <SortableSpeciesRow
                   key={speciesData.species}
                   species={speciesData.species}
                   grades={speciesData.grades}
