@@ -36,10 +36,121 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   horizontalListSortingStrategy,
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#d084d0', '#a4de6c']
+
+// Sortable Species Row Component
+function SortableSpeciesRow({ 
+  id, 
+  speciesData, 
+  thickness,
+  speciesColors,
+  isExpanded,
+  onToggle,
+  onGradeClick,
+  children 
+}: {
+  id: string
+  speciesData: any
+  thickness: string
+  speciesColors: Record<string, string>
+  isExpanded: boolean
+  onToggle: () => void
+  onGradeClick: (grade: any, loadsWithInventory: any[]) => void
+  children?: React.ReactNode
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <>
+      <tr
+        ref={setNodeRef}
+        style={style}
+        className="bg-blue-50/20 hover:bg-blue-50/40 transition-colors cursor-pointer"
+        onClick={onToggle}
+      >
+        <td className="px-1 py-1">
+          <div className="flex items-center gap-1">
+            <button
+              {...attributes}
+              {...listeners}
+              onClick={(e) => { e.stopPropagation(); }}
+              className="text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+              title="Drag to reorder"
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggle(); }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+          </div>
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap">
+          <div className="flex items-center gap-1 pl-2">
+            <span className="text-gray-400 text-sm">└</span>
+          </div>
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap">
+          <div className="flex items-center gap-1.5">
+            <span 
+              className="w-3 h-3 rounded flex-shrink-0" 
+              style={{ backgroundColor: speciesColors[speciesData.species] || '#6B7280' }}
+            />
+            <span className="text-sm font-semibold text-gray-900">{speciesData.species}</span>
+          </div>
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-gray-500 italic">
+          All Grades
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-gray-700">
+          {speciesData.loads_with_inventory}
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-gray-700">
+          {speciesData.pack_count}
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
+          <span className="font-medium text-green-600">
+            {speciesData.average_price ? `$${speciesData.average_price.toFixed(3)}` : '-'}
+          </span>
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm font-semibold text-blue-600 text-right">
+          {speciesData.current_inventory.toLocaleString()}
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
+          <span className="font-semibold text-purple-600">
+            {speciesData.total_value > 0 ? `$${speciesData.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+          </span>
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-blue-700">
+          {speciesData.incoming_load_count}
+        </td>
+        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-blue-700">
+          {speciesData.incoming_footage.toLocaleString()}
+        </td>
+      </tr>
+      {isExpanded && children}
+    </>
+  )
+}
 
 interface SpeciesColumnProps {
   species: string
@@ -230,6 +341,7 @@ export default function InventoryPage() {
   const [expandedSpecies, setExpandedSpecies] = useState<Set<string>>(new Set())
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   const [speciesColumnOrder, setSpeciesColumnOrder] = useState<string[]>([])
+  const [speciesOrderByThickness, setSpeciesOrderByThickness] = useState<Record<string, string[]>>({})
   const [incomingLoads, setIncomingLoads] = useState<any[]>([])
   
   // Rip Entry Dialog state
@@ -259,6 +371,18 @@ export default function InventoryPage() {
       router.push('/auth/login?callbackUrl=/dashboard/lumber/inventory')
     }
   }, [status, router])
+
+  // Load species order from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('inventory-species-order-by-thickness')
+      if (saved) {
+        setSpeciesOrderByThickness(JSON.parse(saved))
+      }
+    } catch (error) {
+      console.error('Error loading species order:', error)
+    }
+  }, [])
 
   async function fetchInventoryData() {
     try {
@@ -563,9 +687,26 @@ export default function InventoryPage() {
       ? thicknessTotal.total_price_weighted / thicknessTotal.total_footage_with_price
       : null
 
+    // Apply saved order for this thickness, or default to alphabetical
+    const savedOrder = speciesOrderByThickness[thickness] || []
+    const sortedSpecies = [...speciesList].sort((a, b) => {
+      const aIndex = savedOrder.indexOf(a.species)
+      const bIndex = savedOrder.indexOf(b.species)
+      
+      // If both are in saved order, use saved order
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex
+      }
+      // If only one is in saved order, it comes first
+      if (aIndex !== -1) return -1
+      if (bIndex !== -1) return 1
+      // If neither is in saved order, sort alphabetically
+      return (a.species || '').localeCompare(b.species || '')
+    })
+
     return {
       thickness,
-      species: speciesList.sort((a, b) => (a.species || '').localeCompare(b.species || '')),
+      species: sortedSpecies,
       ...thicknessTotal,
       average_price: thicknessAveragePrice,
     }
@@ -616,6 +757,25 @@ export default function InventoryPage() {
       newExpanded.add(key)
     }
     setExpandedSpecies(newExpanded)
+  }
+
+  // Handle drag end for species rows within a thickness
+  function handleSpeciesDragEnd(thickness: string, currentSpeciesList: any[], event: DragEndEvent) {
+    const { active, over } = event
+    
+    if (!over || active.id === over.id) return
+
+    const currentOrder = speciesOrderByThickness[thickness] || currentSpeciesList.map(s => s.species)
+
+    const oldIndex = currentOrder.indexOf(active.id as string)
+    const newIndex = currentOrder.indexOf(over.id as string)
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const newOrder = arrayMove(currentOrder, oldIndex, newIndex)
+    const updatedOrder = { ...speciesOrderByThickness, [thickness]: newOrder }
+    setSpeciesOrderByThickness(updatedOrder)
+    localStorage.setItem('inventory-species-order-by-thickness', JSON.stringify(updatedOrder))
   }
 
   async function handleViewRipEntry(load: InventoryLoadDetail) {
@@ -715,23 +875,23 @@ export default function InventoryPage() {
           <table className="w-full divide-y divide-gray-200" style={{ maxWidth: '1400px', margin: '0 auto' }}>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-1.5 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase w-6"></th>
-                <th className="px-1.5 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase w-14">Thick</th>
-                <th className="px-1.5 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase w-28">Species</th>
-                <th className="px-1.5 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase w-20">Grade</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-20">Inv Loads</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-20">Inv Packs</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-24">Avg Price</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-24">Inv BF</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-28">Total Value</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-20">Inc Loads</th>
-                <th className="px-1.5 py-1.5 text-right text-xs font-semibold text-gray-700 uppercase w-24">Inc BF</th>
+                <th className="px-1 py-1 text-left text-sm font-semibold text-gray-700 uppercase w-6"></th>
+                <th className="px-1 py-1 text-left text-sm font-semibold text-gray-700 uppercase w-14">Thick</th>
+                <th className="px-1 py-1 text-left text-sm font-semibold text-gray-700 uppercase w-28">Species</th>
+                <th className="px-1 py-1 text-left text-sm font-semibold text-gray-700 uppercase w-20">Grade</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-20">Inv Loads</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-20">Inv Packs</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-24">Avg Price</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-24">Inv BF</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-28">Total Value</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-20">Inc Loads</th>
+                <th className="px-1 py-1 text-right text-sm font-semibold text-gray-700 uppercase w-24">Inc BF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {thicknessWithSpecies.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-1.5 py-6 text-center text-sm text-gray-500">
+                  <td colSpan={11} className="px-1 py-4 text-center text-sm text-gray-500">
                     No inventory data available
                   </td>
                 </tr>
@@ -750,126 +910,75 @@ export default function InventoryPage() {
                         `}
                         onClick={() => toggleThickness(thicknessData.thickness)}
                       >
-                        <td className="px-1.5 py-1.5">
+                        <td className="px-1 py-1">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleThickness(thicknessData.thickness); }}
                             className="text-gray-500 hover:text-gray-700"
                           >
-                            {isThicknessExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            {isThicknessExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </button>
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap">
-                          <span className="text-xs font-bold text-gray-900">{thicknessData.thickness}</span>
+                        <td className="px-1 py-1 whitespace-nowrap">
+                          <span className="text-sm font-bold text-gray-900">{thicknessData.thickness}</span>
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-gray-500 italic">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-gray-500 italic">
                           All Species
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-gray-500 italic">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-gray-500 italic">
                           All Grades
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-gray-700">
                           {thicknessData.loads_with_inventory}
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-gray-700">
                           {thicknessData.pack_count}
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
                           <span className="font-medium text-green-600">
                             {thicknessData.average_price ? `$${thicknessData.average_price.toFixed(3)}` : '-'}
                           </span>
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm font-semibold text-blue-600 text-right">
                           {thicknessData.current_inventory.toLocaleString()}
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
                           <span className="font-semibold text-purple-600">
                             {thicknessData.total_value > 0 ? `$${thicknessData.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
                           </span>
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-blue-700">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-blue-700">
                           {thicknessData.incoming_load_count}
                         </td>
-                        <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-blue-700">
+                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-blue-700">
                           {thicknessData.incoming_footage.toLocaleString()}
                         </td>
                       </tr>
                       
                       {/* Species Rows (when thickness expanded) */}
-                      {isThicknessExpanded && thicknessData.species.map((speciesData, speciesIdx) => {
-                        const speciesKey = `${thicknessData.thickness}-${speciesData.species}`
-                        const isSpeciesExpanded = expandedSpecies.has(speciesKey)
-                        
-                        return (
-                          <>
-                            <tr
-                              key={`species-${thicknessData.thickness}-${speciesData.species}`}
-                              className="bg-blue-50/20 hover:bg-blue-50/40 transition-colors cursor-pointer"
-                              onClick={() => toggleSpecies(thicknessData.thickness, speciesData.species)}
-                            >
-                              <td className="px-1.5 py-1.5">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleSpecies(thicknessData.thickness, speciesData.species); }}
-                                  className="text-gray-500 hover:text-gray-700"
-                                >
-                                  {isSpeciesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                </button>
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap">
-                                <div className="flex items-center gap-1 pl-2">
-                                  <span className="text-gray-400 text-xs">└</span>
-                                </div>
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5">
-                                  <span 
-                                    className="w-2.5 h-2.5 rounded flex-shrink-0" 
-                                    style={{ backgroundColor: speciesColors[speciesData.species] || '#6B7280' }}
-                                  />
-                                  <span className="text-xs font-semibold text-gray-900">{speciesData.species}</span>
-                                </div>
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-gray-500 italic">
-                                All Grades
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
-                                {speciesData.loads_with_inventory}
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
-                                {speciesData.pack_count}
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right">
-                                <span className="font-medium text-green-600">
-                                  {speciesData.average_price ? `$${speciesData.average_price.toFixed(3)}` : '-'}
-                                </span>
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
-                                {speciesData.current_inventory.toLocaleString()}
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right">
-                                <span className="font-semibold text-purple-600">
-                                  {speciesData.total_value > 0 ? `$${speciesData.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
-                                </span>
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-blue-700">
-                                {speciesData.incoming_load_count}
-                              </td>
-                              <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-blue-700">
-                                {speciesData.incoming_footage.toLocaleString()}
-                              </td>
-                            </tr>
-                            
-                            {/* Grade Rows (when species expanded) */}
-                            {isSpeciesExpanded && speciesData.grades.map((grade) => {
-                              // Get all loads with inventory for this grade
-                              const loadsWithInventory = grade.groups.flatMap(g => 
-                                g.loads.filter(load => load.load_inventory > 0)
-                              )
+                      {isThicknessExpanded && (
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={(e) => handleSpeciesDragEnd(thicknessData.thickness, thicknessData.species, e)}
+                        >
+                          <SortableContext
+                            items={thicknessData.species.map(s => s.species)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {thicknessData.species.map((speciesData, speciesIdx) => {
+                              const speciesKey = `${thicknessData.thickness}-${speciesData.species}`
+                              const isSpeciesExpanded = expandedSpecies.has(speciesKey)
                               
                               return (
-                                <tr
-                                  key={`grade-${thicknessData.thickness}-${speciesData.species}-${grade.grade}`}
-                                  className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors cursor-pointer"
-                                  onClick={() => {
+                                <SortableSpeciesRow
+                                  key={`species-${thicknessData.thickness}-${speciesData.species}`}
+                                  id={speciesData.species}
+                                  speciesData={speciesData}
+                                  thickness={thicknessData.thickness}
+                                  speciesColors={speciesColors}
+                                  isExpanded={isSpeciesExpanded}
+                                  onToggle={() => toggleSpecies(thicknessData.thickness, speciesData.species)}
+                                  onGradeClick={(grade, loadsWithInventory) => {
                                     setSelectedGradeLoads({
                                       species: speciesData.species,
                                       grade: grade.grade,
@@ -878,55 +987,78 @@ export default function InventoryPage() {
                                     setGradeLoadsDialogOpen(true)
                                   }}
                                 >
-                                  <td className="px-1.5 py-1.5"></td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap">
-                                    <div className="flex items-center gap-1 pl-4">
-                                      <span className="text-gray-400 text-xs">└</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap">
-                                    <div className="flex items-center gap-1 pl-2">
-                                      <span className="text-gray-400 text-xs">└</span>
-                                      <span 
-                                        className="w-2 h-2 rounded flex-shrink-0" 
-                                        style={{ backgroundColor: speciesColors[speciesData.species] || '#6B7280' }}
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs font-medium text-gray-900">
-                                    {grade.grade}
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
-                                    {grade.loads_with_inventory}
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
-                                    {grade.pack_count}
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right">
-                                    <span className="font-medium text-green-600">
-                                      {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
-                                    </span>
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
-                                    {grade.current_inventory.toLocaleString()}
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right">
-                                    <span className="font-semibold text-purple-600">
-                                      {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
-                                    </span>
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-blue-700">
-                                    {grade.incoming_load_count}
-                                  </td>
-                                  <td className="px-1.5 py-1.5 whitespace-nowrap text-xs text-right text-blue-700">
-                                    {grade.incoming_footage.toLocaleString()}
-                                  </td>
-                                </tr>
+                                  {/* Grade Rows (when species expanded) */}
+                                  {isSpeciesExpanded && speciesData.grades.map((grade) => {
+                                    // Get all loads with inventory for this grade
+                                    const loadsWithInventory = grade.groups.flatMap(g => 
+                                      g.loads.filter(load => load.load_inventory > 0)
+                                    )
+                                    
+                                    return (
+                                      <tr
+                                        key={`grade-${thicknessData.thickness}-${speciesData.species}-${grade.grade}`}
+                                        className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors cursor-pointer"
+                                        onClick={() => {
+                                          setSelectedGradeLoads({
+                                            species: speciesData.species,
+                                            grade: grade.grade,
+                                            loads: loadsWithInventory
+                                          })
+                                          setGradeLoadsDialogOpen(true)
+                                        }}
+                                      >
+                                        <td className="px-1 py-1"></td>
+                                        <td className="px-1 py-1 whitespace-nowrap">
+                                          <div className="flex items-center gap-1 pl-4">
+                                            <span className="text-gray-400 text-sm">└</span>
+                                          </div>
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap">
+                                          <div className="flex items-center gap-1 pl-2">
+                                            <span className="text-gray-400 text-sm">└</span>
+                                            <span 
+                                              className="w-2.5 h-2.5 rounded flex-shrink-0" 
+                                              style={{ backgroundColor: speciesColors[speciesData.species] || '#6B7280' }}
+                                            />
+                                          </div>
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm font-medium text-gray-900">
+                                          {grade.grade}
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-gray-700">
+                                          {grade.loads_with_inventory}
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-gray-700">
+                                          {grade.pack_count}
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
+                                          <span className="font-medium text-green-600">
+                                            {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
+                                          </span>
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm font-semibold text-blue-600 text-right">
+                                          {grade.current_inventory.toLocaleString()}
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
+                                          <span className="font-semibold text-purple-600">
+                                            {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                                          </span>
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-blue-700">
+                                          {grade.incoming_load_count}
+                                        </td>
+                                        <td className="px-1 py-1 whitespace-nowrap text-sm text-right text-blue-700">
+                                          {grade.incoming_footage.toLocaleString()}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </SortableSpeciesRow>
                               )
                             })}
-                          </>
-                        )
-                      })}
+                          </SortableContext>
+                        </DndContext>
+                      )}
                     </>
                   )
                 })
