@@ -50,6 +50,12 @@ interface SpeciesColumnProps {
     current_inventory: number
     load_count: number
     average_price: number | null
+    pack_count: number
+    loads_with_inventory: number
+    total_value: number
+    incoming_footage: number
+    incoming_load_count: number
+    incoming_with_driver: number
   }>
   total_actual: number
   total_finished: number
@@ -79,7 +85,7 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
     <div
       ref={setNodeRef}
       style={style}
-      className="flex-shrink-0 w-44"
+      className="flex-shrink-0 w-56"
     >
       <div
         className="border rounded bg-white shadow-sm hover:shadow transition-shadow"
@@ -126,32 +132,70 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
         {/* Grade Boxes */}
         <div className="p-0.5">
           {grades.map((grade) => (
-            <div
-              key={grade.grade}
-              className="border rounded p-1 bg-white hover:bg-gray-50 transition-colors mb-0.5"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
-                <span className="text-[10px] text-gray-500">{grade.load_count}</span>
+            <div key={grade.grade} className="flex gap-1 mb-0.5">
+              {/* Grade Box */}
+              <div className="flex-1 border rounded p-1 bg-white hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Loads:</span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {grade.loads_with_inventory}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Packs:</span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {grade.pack_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">BF:</span>
+                    <span className="text-xs font-bold text-blue-600">
+                      {grade.current_inventory.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">$/BF:</span>
+                    <span className="text-xs font-semibold text-green-600">
+                      {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Value:</span>
+                    <span className="text-xs font-bold text-purple-600">
+                      {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-600">Inv:</span>
-                  <span className="text-xs font-bold text-blue-600">
-                    {grade.current_inventory.toLocaleString()}
-                  </span>
+              
+              {/* Incoming Box */}
+              <div className="flex-1 border rounded p-1 bg-blue-50 border-blue-300">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-semibold text-blue-900">Incoming</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-600">Total:</span>
-                  <span className="text-xs font-semibold text-gray-700">
-                    {grade.total_actual.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-600">$:</span>
-                  <span className="text-xs font-semibold text-green-600">
-                    {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
-                  </span>
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-blue-700">BF:</span>
+                    <span className="text-xs font-bold text-blue-900">
+                      {grade.incoming_footage.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-blue-700">Loads:</span>
+                    <span className="text-xs font-semibold text-blue-900">
+                      {grade.incoming_load_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-blue-700">Driver:</span>
+                    <span className="text-xs font-semibold text-blue-900">
+                      {grade.incoming_load_count > 0 ? `${grade.incoming_with_driver}/${grade.incoming_load_count}` : '0'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -177,6 +221,7 @@ export default function InventoryPage() {
   const [tableSort, setTableSort] = useState<'species' | 'species-grade'>('species-grade')
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   const [speciesColumnOrder, setSpeciesColumnOrder] = useState<string[]>([])
+  const [incomingLoads, setIncomingLoads] = useState<any[]>([])
   
   // Rip Entry Dialog state
   const [ripEntryDialogOpen, setRipEntryDialogOpen] = useState(false)
@@ -200,11 +245,12 @@ export default function InventoryPage() {
 
   async function fetchInventoryData() {
     try {
-      const [inventoryRes, packsRes, monthlyRes, speciesRes] = await Promise.all([
+      const [inventoryRes, packsRes, monthlyRes, speciesRes, incomingRes] = await Promise.all([
         fetch('/api/lumber/inventory'),
         fetch('/api/lumber/packs/recent?limit=50'),
         fetch(`/api/lumber/inventory/monthly?month=${selectedMonth}&year=${selectedYear}`),
-        fetch('/api/lumber/species')
+        fetch('/api/lumber/species'),
+        fetch('/api/lumber/loads/incoming')
       ])
 
       if (inventoryRes.ok) {
@@ -269,6 +315,10 @@ export default function InventoryPage() {
         })
         setSpeciesColors(colorMap)
       }
+      
+      if (incomingRes.ok) {
+        setIncomingLoads(await incomingRes.json())
+      }
     } catch (error) {
       console.error('Error fetching inventory:', error)
     } finally {
@@ -293,6 +343,40 @@ export default function InventoryPage() {
       }
     }
   }, [])
+
+  // Process incoming loads and group by species/grade
+  const incomingBySpeciesGrade = incomingLoads.reduce((acc: Record<string, Record<string, {
+    footage: number
+    load_count: number
+    with_driver: number
+  }>>, load: any) => {
+    if (!load.items) return acc
+    load.items.forEach((item: any) => {
+      // Only count items that don't have actual footage yet (truly incoming)
+      if (item.actual_footage) return
+      
+      const species = item.species
+      const grade = item.grade
+      
+      if (!acc[species]) {
+        acc[species] = {}
+      }
+      if (!acc[species][grade]) {
+        acc[species][grade] = {
+          footage: 0,
+          load_count: 0,
+          with_driver: 0
+        }
+      }
+      
+      acc[species][grade].footage += Number(item.estimated_footage) || 0
+      acc[species][grade].load_count += 1
+      if (load.driver_id) {
+        acc[species][grade].with_driver += 1
+      }
+    })
+    return acc
+  }, {})
 
   // Group inventory by species, then by grade
   const speciesGradeGroups = inventoryGroups.reduce((acc: Record<string, Record<string, InventoryGroup[]>>, group) => {
@@ -329,11 +413,41 @@ export default function InventoryPage() {
         ? total.total_price_weighted / total.total_footage_with_price
         : null
 
+      // Calculate pack count and loads with inventory
+      let pack_count = 0
+      let loads_with_inventory = 0
+      groups.forEach(g => {
+        g.loads.forEach(load => {
+          if (load.load_inventory > 0) {
+            loads_with_inventory += 1
+            pack_count += Number(load.pack_count) || 0
+          }
+        })
+      })
+
+      // Calculate total value
+      const total_value = average_price && total.current_inventory > 0
+        ? total.current_inventory * average_price
+        : 0
+
+      // Get incoming data for this species/grade
+      const incoming = incomingBySpeciesGrade[species]?.[grade] || {
+        footage: 0,
+        load_count: 0,
+        with_driver: 0
+      }
+
       return {
         grade,
         ...total,
         average_price,
         groups,
+        pack_count,
+        loads_with_inventory,
+        total_value,
+        incoming_footage: incoming.footage,
+        incoming_load_count: incoming.load_count,
+        incoming_with_driver: incoming.with_driver,
       }
     })
 
