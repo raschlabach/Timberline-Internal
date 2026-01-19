@@ -820,6 +820,27 @@ export default function InventoryPage() {
     }, 200)
   }
 
+  // Get formatted date for filename
+  function getPrintDateString() {
+    const now = new Date()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const year = now.getFullYear()
+    return `${month}/${day}/${year}`
+  }
+
+  // Get formatted date/time for print header
+  function getPrintDateTimeString() {
+    const now = new Date()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const year = now.getFullYear()
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const seconds = String(now.getSeconds()).padStart(2, '0')
+    return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`
+  }
+
   async function handleViewRipEntry(load: InventoryLoadDetail) {
     setSelectedLoadForRip(load)
     setRipEntryDialogOpen(true)
@@ -915,6 +936,22 @@ export default function InventoryPage() {
           .no-print {
             display: none !important;
           }
+          .print-header {
+            display: block !important;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #000;
+          }
+          .print-header h1 {
+            margin: 0;
+            font-size: 24pt;
+            font-weight: bold;
+          }
+          .print-header .print-meta {
+            margin-top: 8px;
+            font-size: 10pt;
+            color: #333;
+          }
           .print-container table {
             width: 100%;
             max-width: 100% !important;
@@ -936,9 +973,22 @@ export default function InventoryPage() {
             margin: 0.5in;
           }
         }
+        .print-header {
+          display: none;
+        }
       `}</style>
       <div className="space-y-4 print-container">
-        <div>
+        {/* Print Header - only visible when printing */}
+        <div className="print-header">
+          <h1>RNR Lumber Inventory</h1>
+          <div className="print-meta">
+            <div>Printed: {getPrintDateTimeString()}</div>
+            <div>Filename: RNR Lumber inventory {getPrintDateString()}.pdf</div>
+          </div>
+        </div>
+
+        {/* Screen Header - hidden when printing */}
+        <div className="no-print">
           <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
           <p className="text-gray-600 mt-1">Current inventory levels and tracking</p>
         </div>
@@ -1160,7 +1210,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Compact Recent Packs */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden no-print">
         <div className="px-4 py-2 bg-gray-800 text-white flex justify-between items-center">
           <h2 className="text-sm font-semibold">50 Most Recent Ripped Packs</h2>
           <div className="flex gap-2 items-center">
