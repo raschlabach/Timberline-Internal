@@ -226,7 +226,7 @@ export default function InventoryPage() {
   const [monthlyRipped, setMonthlyRipped] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [expandedThicknesses, setExpandedThicknesses] = useState<Set<string>>(new Set())
+  const [expandedThicknesses, setExpandedThicknesses] = useState<Set<string>>(new Set(['4/4']))
   const [expandedSpecies, setExpandedSpecies] = useState<Set<string>>(new Set())
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   const [speciesColumnOrder, setSpeciesColumnOrder] = useState<string[]>([])
