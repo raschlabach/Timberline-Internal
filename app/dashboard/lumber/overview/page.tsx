@@ -72,15 +72,34 @@ export default function OverviewPage() {
               total_finished_footage: 0,
               current_inventory: 0,
               load_count: 0,
-              loads: []
+              loads: [],
+              average_price: null,
+              total_price_weighted: 0,
+              total_footage_with_price: 0
             }
           }
           
-          grouped[key].total_actual_footage += Number(load.actual_footage) || 0
+          const actualFootage = Number(load.actual_footage) || 0
+          const price = load.price ? Number(load.price) : null
+          
+          grouped[key].total_actual_footage += actualFootage
           grouped[key].total_finished_footage += Number(load.finished_footage) || 0
           grouped[key].current_inventory += Number(load.load_inventory) || 0
           grouped[key].load_count += 1
           grouped[key].loads.push(load)
+          
+          // Calculate weighted average price
+          if (price !== null && actualFootage > 0) {
+            grouped[key].total_price_weighted += price * actualFootage
+            grouped[key].total_footage_with_price += actualFootage
+          }
+        })
+        
+        // Calculate average prices for each group
+        Object.values(grouped).forEach(group => {
+          if (group.total_footage_with_price > 0) {
+            group.average_price = group.total_price_weighted / group.total_footage_with_price
+          }
         })
         
         setInventoryGroups(Object.values(grouped))

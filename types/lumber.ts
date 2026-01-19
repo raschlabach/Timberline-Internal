@@ -339,6 +339,7 @@ export interface InventoryLoadDetail {
   load_inventory: number
   pack_count: number
   finished_pack_count: number
+  price: number | null
 }
 
 export interface InventoryGroup {
@@ -350,6 +351,9 @@ export interface InventoryGroup {
   current_inventory: number
   load_count: number
   loads: InventoryLoadDetail[]
+  average_price: number | null
+  total_price_weighted: number
+  total_footage_with_price: number
 }
 
 export interface InventoryLoad {
