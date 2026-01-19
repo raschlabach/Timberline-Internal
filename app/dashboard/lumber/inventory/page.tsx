@@ -20,9 +20,147 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, GripVertical } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#d084d0', '#a4de6c']
+
+interface SpeciesColumnProps {
+  species: string
+  grades: Array<{
+    grade: string
+    total_actual: number
+    total_finished: number
+    current_inventory: number
+    load_count: number
+    average_price: number | null
+  }>
+  total_actual: number
+  total_finished: number
+  current_inventory: number
+  load_count: number
+  average_price: number | null
+  color: string
+}
+
+function SortableSpeciesColumn({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color }: SpeciesColumnProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: species })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex-shrink-0 w-44"
+    >
+      <div
+        className="border rounded bg-white shadow-sm hover:shadow transition-shadow"
+        style={{ borderTopColor: color, borderTopWidth: '3px' }}
+      >
+        {/* Species Header */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="px-1.5 py-1 bg-gray-50 border-b cursor-move flex items-center gap-1 hover:bg-gray-100 transition-colors"
+        >
+          <GripVertical className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <span
+              className="w-2 h-2 rounded flex-shrink-0"
+              style={{ backgroundColor: color }}
+            />
+            <span className="text-[11px] font-semibold text-gray-900 truncate">{species}</span>
+          </div>
+        </div>
+
+        {/* Species Totals */}
+        <div className="px-1.5 py-1 border-b bg-gray-50 space-y-0.5">
+          <div className="flex justify-between items-center">
+            <span className="text-[9px] text-gray-500">Inv:</span>
+            <span className="text-[11px] font-bold text-blue-600">
+              {current_inventory.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[9px] text-gray-500">Total:</span>
+            <span className="text-[10px] text-gray-700">
+              {total_actual.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[9px] text-gray-500">Price:</span>
+            <span className="text-[10px] font-medium text-green-600">
+              {average_price ? `$${average_price.toFixed(3)}` : '-'}
+            </span>
+          </div>
+        </div>
+
+        {/* Grade Boxes */}
+        <div className="p-1 space-y-0.5 max-h-[450px] overflow-y-auto">
+          {grades.map((grade) => (
+            <div
+              key={grade.grade}
+              className="border rounded p-1 bg-white hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[10px] font-semibold text-gray-900">{grade.grade}</span>
+                <span className="text-[8px] text-gray-500">{grade.load_count}</span>
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[8px] text-gray-500">Inv:</span>
+                  <span className="text-[9px] font-semibold text-blue-600">
+                    {grade.current_inventory.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[8px] text-gray-500">Total:</span>
+                  <span className="text-[9px] text-gray-600">
+                    {grade.total_actual.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[8px] text-gray-500">$:</span>
+                  <span className="text-[9px] font-medium text-green-600">
+                    {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function InventoryPage() {
   const { data: session, status } = useSession()
@@ -38,12 +176,21 @@ export default function InventoryPage() {
   const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
   const [tableSort, setTableSort] = useState<'species' | 'species-grade'>('species-grade')
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
+  const [speciesColumnOrder, setSpeciesColumnOrder] = useState<string[]>([])
   
   // Rip Entry Dialog state
   const [ripEntryDialogOpen, setRipEntryDialogOpen] = useState(false)
   const [selectedLoadForRip, setSelectedLoadForRip] = useState<any>(null)
   const [ripEntryPacks, setRipEntryPacks] = useState<LumberPackWithDetails[]>([])
   const [isLoadingPacks, setIsLoadingPacks] = useState(false)
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -134,6 +281,117 @@ export default function InventoryPage() {
       fetchInventoryData()
     }
   }, [status, selectedMonth, selectedYear])
+
+  // Load species column order from localStorage
+  useEffect(() => {
+    const savedOrder = localStorage.getItem('inventory-species-column-order')
+    if (savedOrder) {
+      try {
+        setSpeciesColumnOrder(JSON.parse(savedOrder))
+      } catch (e) {
+        console.error('Failed to parse saved species order:', e)
+      }
+    }
+  }, [])
+
+  // Group inventory by species, then by grade
+  const speciesGradeGroups = inventoryGroups.reduce((acc: Record<string, Record<string, InventoryGroup[]>>, group) => {
+    if (!acc[group.species]) {
+      acc[group.species] = {}
+    }
+    if (!acc[group.species][group.grade]) {
+      acc[group.species][group.grade] = []
+    }
+    acc[group.species][group.grade].push(group)
+    return acc
+  }, {})
+
+  // Calculate species totals with grades
+  const speciesWithGrades = Object.entries(speciesGradeGroups).map(([species, gradeGroups]) => {
+    const grades = Object.entries(gradeGroups).map(([grade, groups]) => {
+      const total = groups.reduce((sum, g) => ({
+        total_actual: sum.total_actual + (Number(g.total_actual_footage) || 0),
+        total_finished: sum.total_finished + (Number(g.total_finished_footage) || 0),
+        current_inventory: sum.current_inventory + (Number(g.current_inventory) || 0),
+        load_count: sum.load_count + g.load_count,
+        total_price_weighted: sum.total_price_weighted + (g.total_price_weighted || 0),
+        total_footage_with_price: sum.total_footage_with_price + (g.total_footage_with_price || 0),
+      }), {
+        total_actual: 0,
+        total_finished: 0,
+        current_inventory: 0,
+        load_count: 0,
+        total_price_weighted: 0,
+        total_footage_with_price: 0,
+      })
+
+      const average_price = total.total_footage_with_price > 0
+        ? total.total_price_weighted / total.total_footage_with_price
+        : null
+
+      return {
+        grade,
+        ...total,
+        average_price,
+        groups,
+      }
+    })
+
+    const speciesTotal = grades.reduce((sum, g) => ({
+      total_actual: sum.total_actual + g.total_actual,
+      total_finished: sum.total_finished + g.total_finished,
+      current_inventory: sum.current_inventory + g.current_inventory,
+      load_count: sum.load_count + g.load_count,
+      total_price_weighted: sum.total_price_weighted + g.total_price_weighted,
+      total_footage_with_price: sum.total_footage_with_price + g.total_footage_with_price,
+    }), {
+      total_actual: 0,
+      total_finished: 0,
+      current_inventory: 0,
+      load_count: 0,
+      total_price_weighted: 0,
+      total_footage_with_price: 0,
+    })
+
+    const speciesAveragePrice = speciesTotal.total_footage_with_price > 0
+      ? speciesTotal.total_price_weighted / speciesTotal.total_footage_with_price
+      : null
+
+    return {
+      species,
+      grades,
+      ...speciesTotal,
+      average_price: speciesAveragePrice,
+    }
+  })
+
+  // Sort species by saved order, then by inventory
+  const sortedSpecies = [...speciesWithGrades].sort((a, b) => {
+    if (speciesColumnOrder.length > 0) {
+      const aIndex = speciesColumnOrder.indexOf(a.species)
+      const bIndex = speciesColumnOrder.indexOf(b.species)
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex
+      if (aIndex !== -1) return -1
+      if (bIndex !== -1) return 1
+    }
+    return b.current_inventory - a.current_inventory
+  })
+
+  // Handle drag end for species columns
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    
+    if (!over || active.id === over.id) return
+
+    const oldIndex = sortedSpecies.findIndex(s => s.species === active.id)
+    const newIndex = sortedSpecies.findIndex(s => s.species === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const newOrder = arrayMove(sortedSpecies, oldIndex, newIndex).map(s => s.species)
+    setSpeciesColumnOrder(newOrder)
+    localStorage.setItem('inventory-species-column-order', JSON.stringify(newOrder))
+  }
 
   if (status === 'loading' || isLoading) {
     return (
@@ -314,63 +572,35 @@ export default function InventoryPage() {
         <p className="text-gray-600 mt-1">Current inventory levels and tracking</p>
       </div>
 
-      {/* Species Summary Cards - Quick Overview */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="text-sm font-semibold mb-3 text-gray-700">Species Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {speciesTotalsArray.map((species) => (
-            <div
-              key={species.species}
-              className="border rounded-lg p-3 hover:shadow-md transition-shadow"
-              style={{ borderLeftColor: speciesColors[species.species] || '#6B7280', borderLeftWidth: '4px' }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className="w-3 h-3 rounded flex-shrink-0"
-                  style={{ backgroundColor: speciesColors[species.species] || '#6B7280' }}
+      {/* Species Columns - Drag and Drop */}
+      <div className="bg-white rounded-lg shadow p-2">
+        <h3 className="text-xs font-semibold mb-1.5 text-gray-700">Species Inventory (Drag columns to reorder)</h3>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={sortedSpecies.map(s => s.species)}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="flex gap-1.5 overflow-x-auto pb-1.5 flex-wrap">
+              {sortedSpecies.map((speciesData) => (
+                <SortableSpeciesColumn
+                  key={speciesData.species}
+                  species={speciesData.species}
+                  grades={speciesData.grades}
+                  total_actual={speciesData.total_actual}
+                  total_finished={speciesData.total_finished}
+                  current_inventory={speciesData.current_inventory}
+                  load_count={speciesData.load_count}
+                  average_price={speciesData.average_price}
+                  color={speciesColors[speciesData.species] || '#6B7280'}
                 />
-                <span className="text-xs font-semibold text-gray-900">{species.species}</span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-gray-500">Inventory:</span>
-                  <span className="text-xs font-bold text-blue-600">
-                    {species.current_inventory.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-gray-500">Total BF:</span>
-                  <span className="text-xs text-gray-700">
-                    {species.total_actual.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-gray-500">Finished:</span>
-                  <span className="text-xs text-gray-600">
-                    {species.total_finished.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-gray-500">Avg Price:</span>
-                  <span className="text-xs font-medium text-green-600">
-                    {species.average_price ? `$${species.average_price.toFixed(3)}` : '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pt-1 border-t border-gray-100">
-                  <span className="text-[10px] text-gray-500">Loads:</span>
-                  <span className="text-xs font-medium text-gray-700">
-                    {species.load_count}
-                  </span>
-                  <span className="text-[10px] text-gray-400">•</span>
-                  <span className="text-[10px] text-gray-500">Grades:</span>
-                  <span className="text-xs font-medium text-gray-700">
-                    {species.grade_count}
-                  </span>
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Chart Section */}
