@@ -58,12 +58,21 @@ export default function RippedPacksPage() {
     } else {
       const filtered = packs.filter(pack => {
         const search = searchTerm.toLowerCase()
+        // Get all stacker names for searching
+        const stackerNames = [
+          pack.stacker_1_name,
+          pack.stacker_2_name,
+          pack.stacker_3_name,
+          pack.stacker_4_name
+        ].filter(Boolean).join(' ').toLowerCase()
+        
         return (
           pack.pack_id.toString().includes(search) ||
           pack.load_load_id.toLowerCase().includes(search) ||
           pack.species.toLowerCase().includes(search) ||
           pack.grade.toLowerCase().includes(search) ||
-          pack.operator_name?.toLowerCase().includes(search)
+          pack.operator_name?.toLowerCase().includes(search) ||
+          stackerNames.includes(search)
         )
       })
       setFilteredPacks(filtered)
@@ -79,10 +88,13 @@ export default function RippedPacksPage() {
   }
 
   const totalPacks = filteredPacks.length
-  const totalTallyBF = filteredPacks.reduce((sum, p) => sum + p.tally_board_feet, 0)
-  const totalActualBF = filteredPacks.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
-  const avgYield = filteredPacks.length > 0 
-    ? filteredPacks.reduce((sum, p) => sum + (p.rip_yield || 0), 0) / filteredPacks.filter(p => p.rip_yield).length
+  // Convert DECIMAL strings from PostgreSQL to numbers before summing
+  const totalTallyBF = filteredPacks.reduce((sum, p) => sum + (Number(p.tally_board_feet) || 0), 0)
+  const totalActualBF = filteredPacks.reduce((sum, p) => sum + (Number(p.actual_board_feet) || 0), 0)
+  // Calculate average yield only from packs that have a yield value
+  const packsWithYield = filteredPacks.filter(p => p.rip_yield !== null && p.rip_yield !== undefined)
+  const avgYield = packsWithYield.length > 0 
+    ? packsWithYield.reduce((sum, p) => sum + (Number(p.rip_yield) || 0), 0) / packsWithYield.length
     : 0
 
   return (
@@ -102,7 +114,7 @@ export default function RippedPacksPage() {
             <Search className="absolute left-3 top-9 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
               type="text"
-              placeholder="Search by Pack ID, Load ID, Species, Operator..."
+              placeholder="Search by Pack ID, Load ID, Species, Operator, Stacker..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -217,13 +229,13 @@ export default function RippedPacksPage() {
                       {pack.length} ft
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-900 text-right">
-                      {pack.tally_board_feet.toLocaleString()}
+                      {Number(pack.tally_board_feet).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-900 text-right">
-                      {pack.actual_board_feet?.toLocaleString() || '-'}
+                      {pack.actual_board_feet ? Number(pack.actual_board_feet).toLocaleString() : '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-900 text-right">
-                      {pack.rip_yield ? `${pack.rip_yield}%` : '-'}
+                      {pack.rip_yield ? `${Number(pack.rip_yield).toFixed(2)}%` : '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-900 text-xs">
                       {pack.operator_name || '-'}

@@ -23,6 +23,9 @@ export default function IncomingLoadsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   
+  // Check if user is rip_operator (read-only mode)
+  const isRipOperator = session?.user?.role === 'rip_operator'
+  
   // Filter states
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all')
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all')
@@ -217,12 +220,15 @@ export default function IncomingLoadsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Incoming Loads</h1>
           <p className="text-gray-600 mt-1">
             Loads that have been created but have not arrived yet
+            {isRipOperator && <span className="text-orange-600 ml-2">(View Only)</span>}
           </p>
         </div>
-        <Button onClick={() => router.push('/dashboard/lumber/create')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create New Load
-        </Button>
+        {!isRipOperator && (
+          <Button onClick={() => router.push('/dashboard/lumber/create')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create New Load
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -530,22 +536,26 @@ export default function IncomingLoadsPage() {
                     </td>
                     <td className="px-2 py-1">
                       <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 text-[10px] px-1.5"
-                          onClick={() => router.push(`/dashboard/lumber/data-entry/${load.id}`)}
-                        >
-                          Entry
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
-                        >
-                          <Info className="h-3 w-3" />
-                        </Button>
+                        {!isRipOperator && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-1.5"
+                            onClick={() => router.push(`/dashboard/lumber/data-entry/${load.id}`)}
+                          >
+                            Entry
+                          </Button>
+                        )}
+                        {!isRipOperator && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
+                          >
+                            <Info className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

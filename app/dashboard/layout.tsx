@@ -188,15 +188,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveRoute('/dashboard/lumber/overview')}
                 />
                 
-                {/* Sub-items under Overview - Hidden for rip_operator */}
+                {/* Incoming Loads and All Loads - Visible for rip_operator (read-only) */}
+                <SubNavItem
+                  href="/dashboard/lumber/incoming"
+                  icon={<Package size={16} />}
+                  label={isRipOperator ? "Incoming Loads (View)" : "Incoming Loads"}
+                  isActive={isActiveRoute('/dashboard/lumber/incoming')}
+                />
+                
+                {/* Trucking and Invoice - Hidden for rip_operator */}
                 {canSeeAllPages && (
                   <>
-                    <SubNavItem
-                      href="/dashboard/lumber/incoming"
-                      icon={<Package size={16} />}
-                      label="Incoming Loads"
-                      isActive={isActiveRoute('/dashboard/lumber/incoming')}
-                    />
                     <SubNavItem
                       href="/dashboard/lumber/trucking"
                       icon={<Truck size={16} />}
@@ -209,21 +211,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       label="Invoice Page"
                       isActive={isActiveRoute('/dashboard/lumber/invoices')}
                     />
-                    <SubNavItem
-                      href="/dashboard/lumber/all-loads"
-                      icon={<List size={16} />}
-                      label="All Loads"
-                      isActive={isActiveRoute('/dashboard/lumber/all-loads')}
-                    />
-                    
-                    {/* Tally Entry - Hidden for rip_operator */}
-                    <NavItem
-                      href="/dashboard/lumber/tally-entry"
-                      icon={<ClipboardList size={20} />}
-                      label="Tally Entry"
-                      isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
-                    />
                   </>
+                )}
+                
+                {/* All Loads - Visible for rip_operator (read-only) */}
+                <SubNavItem
+                  href="/dashboard/lumber/all-loads"
+                  icon={<List size={16} />}
+                  label={isRipOperator ? "All Loads (View)" : "All Loads"}
+                  isActive={isActiveRoute('/dashboard/lumber/all-loads')}
+                />
+                
+                {/* Tally Entry - Hidden for rip_operator */}
+                {canSeeAllPages && (
+                  <NavItem
+                    href="/dashboard/lumber/tally-entry"
+                    icon={<ClipboardList size={20} />}
+                    label="Tally Entry"
+                    isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
+                  />
                 )}
                 
                 {/* Rip Entry Section - Always visible (main pages for rip_operator) */}

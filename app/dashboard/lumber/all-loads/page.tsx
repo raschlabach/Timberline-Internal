@@ -42,6 +42,9 @@ export default function AllLoadsPage() {
   const [selectedLoads, setSelectedLoads] = useState<Set<number>>(new Set())
   const [isUpdating, setIsUpdating] = useState(false)
   
+  // Check if user is rip_operator (read-only mode)
+  const isRipOperator = session?.user?.role === 'rip_operator'
+  
   // Filter states
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all')
   const [selectedSpecies, setSelectedSpecies] = useState<string>('all')
@@ -418,7 +421,10 @@ export default function AllLoadsPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">All Loads</h1>
-        <p className="text-sm text-gray-600 mt-1">Complete history of all lumber loads ({filteredLoads.length} {filteredLoads.length === 1 ? 'load' : 'loads'})</p>
+        <p className="text-sm text-gray-600 mt-1">
+          Complete history of all lumber loads ({filteredLoads.length} {filteredLoads.length === 1 ? 'load' : 'loads'})
+          {isRipOperator && <span className="text-orange-600 ml-2">(View Only)</span>}
+        </p>
       </div>
 
       {/* Filters */}
@@ -561,8 +567,8 @@ export default function AllLoadsPage() {
           </div>
         )}
         
-        {/* Bulk Action Buttons - Show when items are selected */}
-        {isSomeSelected && (
+        {/* Bulk Action Buttons - Show when items are selected (hidden for rip_operator) */}
+        {!isRipOperator && isSomeSelected && (
           <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
             <span className="text-sm font-medium text-blue-800">
               {selectedLoads.size} selected
@@ -605,13 +611,15 @@ export default function AllLoadsPage() {
           <table className="min-w-full">
             <thead className="bg-gray-800 text-white sticky top-0 z-10">
               <tr>
-                <th className="px-2 py-2 text-center w-10">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={handleSelectAll}
-                    className="border-white data-[state=checked]:bg-white data-[state=checked]:text-gray-800"
-                  />
-                </th>
+                {!isRipOperator && (
+                  <th className="px-2 py-2 text-center w-10">
+                    <Checkbox
+                      checked={isAllSelected}
+                      onCheckedChange={handleSelectAll}
+                      className="border-white data-[state=checked]:bg-white data-[state=checked]:text-gray-800"
+                    />
+                  </th>
+                )}
                 <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
                   Load ID
                 </th>
@@ -651,12 +659,14 @@ export default function AllLoadsPage() {
                   key={load.id} 
                   className={`hover:bg-gray-100 ${selectedLoads.has(load.id) ? 'bg-blue-50' : loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                 >
-                  <td className="px-2 py-1.5 text-center">
-                    <Checkbox
-                      checked={selectedLoads.has(load.id)}
-                      onCheckedChange={(checked) => handleSelectLoad(load.id, checked as boolean)}
-                    />
-                  </td>
+                  {!isRipOperator && (
+                    <td className="px-2 py-1.5 text-center">
+                      <Checkbox
+                        checked={selectedLoads.has(load.id)}
+                        onCheckedChange={(checked) => handleSelectLoad(load.id, checked as boolean)}
+                      />
+                    </td>
+                  )}
                   <td className="px-2 py-1.5">
                     <div className="text-xs font-semibold text-gray-900">{load.load_id}</div>
                     <div className="text-[10px] text-gray-500">
@@ -727,24 +737,28 @@ export default function AllLoadsPage() {
                   </td>
                   <td className="px-2 py-1.5">
                     <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2"
-                        onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
-                        title="Load Info"
-                      >
-                        <Info className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2"
-                        onClick={() => openPackDialog(load)}
-                        title="Edit Packs"
-                      >
-                        <Package className="h-3 w-3" />
-                      </Button>
+                      {!isRipOperator && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2"
+                            onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
+                            title="Load Info"
+                          >
+                            <Info className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2"
+                            onClick={() => openPackDialog(load)}
+                            title="Edit Packs"
+                          >
+                            <Package className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

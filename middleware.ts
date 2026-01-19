@@ -8,6 +8,8 @@ const RIP_OPERATOR_ALLOWED_PATHS = [
   '/dashboard/lumber/rip-entry',
   '/dashboard/lumber/daily-hours',
   '/dashboard/lumber/ripped-packs',
+  '/dashboard/lumber/incoming',
+  '/dashboard/lumber/all-loads',
 ]
 
 /**
