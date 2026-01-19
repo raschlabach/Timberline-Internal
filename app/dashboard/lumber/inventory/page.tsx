@@ -1252,23 +1252,23 @@ export default function InventoryPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Pack ID</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Load</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species/Grade</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Len</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Tally</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Actual</th>
-              <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Yield</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Operator</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Stackers</th>
-              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Finished</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Pack ID</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Load</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Species/Grade</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Thick</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Len</th>
+              <th className="px-1 py-1 text-right text-sm font-medium text-gray-600 uppercase">Tally</th>
+              <th className="px-1 py-1 text-right text-sm font-medium text-gray-600 uppercase">Actual</th>
+              <th className="px-1 py-1 text-right text-sm font-medium text-gray-600 uppercase">Yield</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Operator</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Stackers</th>
+              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Finished</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {recentPacks.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-8 text-center text-sm text-gray-500">
+                <td colSpan={11} className="px-1 py-4 text-center text-sm text-gray-500">
                   No ripped packs for this month
                 </td>
               </tr>
@@ -1284,32 +1284,32 @@ export default function InventoryPage() {
                 
                 return (
                   <tr key={pack.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs font-semibold">{pack.pack_id}</td>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.load_load_id}</td>
-                    <td className="px-2 py-1 text-xs">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm font-semibold">{pack.pack_id}</td>
+                    <td className="px-1 py-1 whitespace-nowrap text-sm">{pack.load_load_id}</td>
+                    <td className="px-1 py-1 text-sm">
                       <div className="flex items-center gap-1">
                         <span className="font-medium">{pack.species}</span>
                         <span className="text-gray-500">{pack.grade}</span>
                       </div>
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.thickness}</td>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.length}ft</td>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm">{pack.thickness}</td>
+                    <td className="px-1 py-1 whitespace-nowrap text-sm">{pack.length}ft</td>
+                    <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
                       {pack.tally_board_feet.toLocaleString()}
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
                       {pack.actual_board_feet?.toLocaleString() || '-'}
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
                       {pack.rip_yield || '-'}
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap text-[10px] truncate max-w-[80px]">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm truncate max-w-[100px]">
                       {pack.operator_name || '-'}
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap text-[10px] truncate max-w-[120px]">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm truncate max-w-[150px]">
                       {stackers}
                     </td>
-                    <td className="px-2 py-1 whitespace-nowrap text-[10px]">
+                    <td className="px-1 py-1 whitespace-nowrap text-sm">
                       {pack.finished_at 
                         ? new Date(pack.finished_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                         : '-'}
