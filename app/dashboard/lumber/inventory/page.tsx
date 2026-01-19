@@ -102,54 +102,54 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
         </div>
 
         {/* Species Totals */}
-        <div className="px-1.5 py-1 border-b bg-gray-50 space-y-0.5">
+        <div className="px-1.5 py-0.5 border-b bg-gray-50">
           <div className="flex justify-between items-center">
-            <span className="text-[9px] text-gray-500">Inv:</span>
-            <span className="text-[11px] font-bold text-blue-600">
+            <span className="text-xs text-gray-600">Inv:</span>
+            <span className="text-sm font-bold text-blue-600">
               {current_inventory.toLocaleString()}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-[9px] text-gray-500">Total:</span>
-            <span className="text-[10px] text-gray-700">
+            <span className="text-xs text-gray-600">Total:</span>
+            <span className="text-xs font-semibold text-gray-700">
               {total_actual.toLocaleString()}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-[9px] text-gray-500">Price:</span>
-            <span className="text-[10px] font-medium text-green-600">
+            <span className="text-xs text-gray-600">Price:</span>
+            <span className="text-xs font-semibold text-green-600">
               {average_price ? `$${average_price.toFixed(3)}` : '-'}
             </span>
           </div>
         </div>
 
         {/* Grade Boxes */}
-        <div className="p-1 space-y-0.5 max-h-[450px] overflow-y-auto">
+        <div className="p-0.5 max-h-[450px] overflow-y-auto">
           {grades.map((grade) => (
             <div
               key={grade.grade}
-              className="border rounded p-1 bg-white hover:bg-gray-50 transition-colors"
+              className="border rounded p-1 bg-white hover:bg-gray-50 transition-colors mb-0.5"
             >
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[10px] font-semibold text-gray-900">{grade.grade}</span>
-                <span className="text-[8px] text-gray-500">{grade.load_count}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
+                <span className="text-[10px] text-gray-500">{grade.load_count}</span>
               </div>
-              <div className="space-y-0.5">
+              <div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[8px] text-gray-500">Inv:</span>
-                  <span className="text-[9px] font-semibold text-blue-600">
+                  <span className="text-xs text-gray-600">Inv:</span>
+                  <span className="text-xs font-bold text-blue-600">
                     {grade.current_inventory.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[8px] text-gray-500">Total:</span>
-                  <span className="text-[9px] text-gray-600">
+                  <span className="text-xs text-gray-600">Total:</span>
+                  <span className="text-xs font-semibold text-gray-700">
                     {grade.total_actual.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[8px] text-gray-500">$:</span>
-                  <span className="text-[9px] font-medium text-green-600">
+                  <span className="text-xs text-gray-600">$:</span>
+                  <span className="text-xs font-semibold text-green-600">
                     {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
                   </span>
                 </div>
