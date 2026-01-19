@@ -35,7 +35,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  horizontalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
@@ -67,7 +67,7 @@ interface SpeciesColumnProps {
   onGradeClick: (species: string, grade: string, loads: InventoryLoadDetail[]) => void
 }
 
-function SortableSpeciesRow({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color, onGradeClick }: SpeciesColumnProps) {
+function SortableSpeciesColumn({ species, grades, total_actual, total_finished, current_inventory, load_count, average_price, color, onGradeClick }: SpeciesColumnProps) {
   const {
     attributes,
     listeners,
@@ -86,128 +86,129 @@ function SortableSpeciesRow({ species, grades, total_actual, total_finished, cur
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, borderLeftColor: color, borderLeftWidth: '3px' }}
-      className="border rounded bg-white shadow-sm hover:shadow transition-shadow"
+      style={style}
+      className="flex-shrink-0 w-56"
     >
-      <div className="flex">
-        {/* Species Header & Totals - Left Side */}
-        <div className="flex-shrink-0 border-r bg-gray-50">
-          <div
-            {...attributes}
-            {...listeners}
-            className="px-2 py-1.5 cursor-move flex items-center gap-1.5 hover:bg-gray-100 transition-colors border-b"
-          >
-            <GripVertical className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-            <div className="flex items-center gap-1.5">
-              <span
-                className="w-2.5 h-2.5 rounded flex-shrink-0"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-xs font-semibold text-gray-900">{species}</span>
-            </div>
-          </div>
-          <div className="px-2 py-1.5 space-y-1">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Inv:</span>
-              <span className="text-sm font-bold text-blue-600">
-                {current_inventory.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Total:</span>
-              <span className="text-xs font-semibold text-gray-700">
-                {total_actual.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Price:</span>
-              <span className="text-xs font-semibold text-green-600">
-                {average_price ? `$${average_price.toFixed(3)}` : '-'}
-              </span>
-            </div>
+      <div
+        className="border rounded bg-white shadow-sm hover:shadow transition-shadow"
+        style={{ borderTopColor: color, borderTopWidth: '3px' }}
+      >
+        {/* Species Header */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="px-1.5 py-1 bg-gray-50 border-b cursor-move flex items-center gap-1 hover:bg-gray-100 transition-colors"
+        >
+          <GripVertical className="h-3 w-3 text-gray-400 flex-shrink-0" />
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <span
+              className="w-2 h-2 rounded flex-shrink-0"
+              style={{ backgroundColor: color }}
+            />
+            <span className="text-[11px] font-semibold text-gray-900 truncate">{species}</span>
           </div>
         </div>
 
-        {/* Grade Boxes - Horizontal Scroll */}
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex gap-1 p-1">
-            {grades.map((grade) => (
-              <div key={grade.grade} className="flex gap-1 flex-shrink-0">
-                {/* Grade Box */}
-                <div 
-                  className="w-44 border rounded p-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => {
-                    // Get all loads with inventory for this grade
-                    const loadsWithInventory = grade.groups.flatMap(g => 
-                      g.loads.filter(load => load.load_inventory > 0)
-                    )
-                    onGradeClick(species, grade.grade, loadsWithInventory)
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
-                  </div>
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">Loads:</span>
-                      <span className="text-xs font-semibold text-gray-700">
-                        {grade.loads_with_inventory}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">Packs:</span>
-                      <span className="text-xs font-semibold text-gray-700">
-                        {grade.pack_count}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">BF:</span>
-                      <span className="text-xs font-bold text-blue-600">
-                        {grade.current_inventory.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">$/BF:</span>
-                      <span className="text-xs font-semibold text-green-600">
-                        {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">Value:</span>
-                      <span className="text-xs font-bold text-purple-600">
-                        {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
-                      </span>
-                    </div>
-                  </div>
+        {/* Species Totals */}
+        <div className="px-1.5 py-0.5 border-b bg-gray-50">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-600">Inv:</span>
+            <span className="text-sm font-bold text-blue-600">
+              {current_inventory.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-600">Total:</span>
+            <span className="text-xs font-semibold text-gray-700">
+              {total_actual.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-600">Price:</span>
+            <span className="text-xs font-semibold text-green-600">
+              {average_price ? `$${average_price.toFixed(3)}` : '-'}
+            </span>
+          </div>
+        </div>
+
+        {/* Grade Boxes */}
+        <div className="p-0.5">
+          {grades.map((grade) => (
+            <div key={grade.grade} className="flex gap-1 mb-0.5">
+              {/* Grade Box */}
+              <div 
+                className="flex-1 border rounded p-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => {
+                  // Get all loads with inventory for this grade
+                  const loadsWithInventory = grade.groups.flatMap(g => 
+                    g.loads.filter(load => load.load_inventory > 0)
+                  )
+                  onGradeClick(species, grade.grade, loadsWithInventory)
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-900">{grade.grade}</span>
                 </div>
-                
-                {/* Incoming Box */}
-                <div className="w-44 border rounded p-1 bg-blue-50 border-blue-300 flex-shrink-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[10px] font-semibold text-blue-900">Incoming</span>
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Loads:</span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {grade.loads_with_inventory}
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-blue-700">Loads:</span>
-                      <span className="text-xs font-semibold text-blue-900">
-                        {grade.incoming_load_count}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center opacity-0 pointer-events-none">
-                      <span className="text-xs">Packs:</span>
-                      <span className="text-xs">-</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-blue-700">BF:</span>
-                      <span className="text-xs font-bold text-blue-900">
-                        {grade.incoming_footage.toLocaleString()}
-                      </span>
-                    </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Packs:</span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {grade.pack_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">BF:</span>
+                    <span className="text-xs font-bold text-blue-600">
+                      {grade.current_inventory.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">$/BF:</span>
+                    <span className="text-xs font-semibold text-green-600">
+                      {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Value:</span>
+                    <span className="text-xs font-bold text-purple-600">
+                      {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+              
+              {/* Incoming Box */}
+              <div className="flex-1 border rounded p-1 bg-blue-50 border-blue-300">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-semibold text-blue-900">Incoming</span>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-blue-700">Loads:</span>
+                    <span className="text-xs font-semibold text-blue-900">
+                      {grade.incoming_load_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center opacity-0 pointer-events-none">
+                    <span className="text-xs">Packs:</span>
+                    <span className="text-xs">-</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-blue-700">BF:</span>
+                    <span className="text-xs font-bold text-blue-900">
+                      {grade.incoming_footage.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -225,8 +226,8 @@ export default function InventoryPage() {
   const [monthlyRipped, setMonthlyRipped] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [expandedSpecies, setExpandedSpecies] = useState<Set<string>>(new Set())
   const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
-  const [tableSort, setTableSort] = useState<'species' | 'species-grade'>('species-grade')
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   const [speciesColumnOrder, setSpeciesColumnOrder] = useState<string[]>([])
   const [incomingLoads, setIncomingLoads] = useState<any[]>([])
@@ -487,11 +488,29 @@ export default function InventoryPage() {
       ? speciesTotal.total_price_weighted / speciesTotal.total_footage_with_price
       : null
 
+    // Calculate species totals for incoming data
+    const speciesIncoming = grades.reduce((sum, g) => ({
+      load_count: sum.load_count + g.incoming_load_count,
+      footage: sum.footage + g.incoming_footage,
+    }), { load_count: 0, footage: 0 })
+
+    // Calculate species totals for packs and loads with inventory
+    const speciesInventoryDetails = grades.reduce((sum, g) => ({
+      loads_with_inventory: sum.loads_with_inventory + g.loads_with_inventory,
+      pack_count: sum.pack_count + g.pack_count,
+      total_value: sum.total_value + g.total_value,
+    }), { loads_with_inventory: 0, pack_count: 0, total_value: 0 })
+
     return {
       species,
       grades,
       ...speciesTotal,
       average_price: speciesAveragePrice,
+      incoming_load_count: speciesIncoming.load_count,
+      incoming_footage: speciesIncoming.footage,
+      loads_with_inventory: speciesInventoryDetails.loads_with_inventory,
+      pack_count: speciesInventoryDetails.pack_count,
+      total_value: speciesInventoryDetails.total_value,
     }
   })
 
@@ -567,6 +586,16 @@ export default function InventoryPage() {
       newExpanded.add(key)
     }
     setExpandedRows(newExpanded)
+  }
+
+  function toggleSpecies(species: string) {
+    const newExpanded = new Set(expandedSpecies)
+    if (newExpanded.has(species)) {
+      newExpanded.delete(species)
+    } else {
+      newExpanded.add(species)
+    }
+    setExpandedSpecies(newExpanded)
   }
 
   async function handleViewRipEntry(load: InventoryLoadDetail) {
@@ -645,56 +674,6 @@ export default function InventoryPage() {
     b.current_inventory - a.current_inventory
   )
 
-  // Process groups based on tableSort setting
-  const displayGroups = tableSort === 'species'
-    ? // Aggregate by species only - combine all grades/thicknesses
-      Object.values(
-        inventoryGroups.reduce((acc: Record<string, InventoryGroup>, group) => {
-          const key = group.species
-          if (!acc[key]) {
-            acc[key] = {
-              species: group.species,
-              grade: 'All Grades', // Placeholder to show it's aggregated
-              thickness: '4/4' as any, // Placeholder - not displayed in species view
-              total_actual_footage: 0,
-              total_finished_footage: 0,
-              current_inventory: 0,
-              load_count: 0,
-              loads: [],
-              average_price: null,
-              total_price_weighted: 0,
-              total_footage_with_price: 0
-            }
-          }
-          acc[key].total_actual_footage += Number(group.total_actual_footage) || 0
-          acc[key].total_finished_footage += Number(group.total_finished_footage) || 0
-          acc[key].current_inventory += Number(group.current_inventory) || 0
-          acc[key].load_count += group.load_count
-          acc[key].loads = [...acc[key].loads, ...group.loads]
-          
-          // Aggregate price data
-          if (group.total_footage_with_price > 0) {
-            acc[key].total_price_weighted += group.total_price_weighted || 0
-            acc[key].total_footage_with_price += group.total_footage_with_price || 0
-          }
-          return acc
-        }, {})
-      ).map(group => {
-        // Calculate average price for aggregated species groups
-        if (group.total_footage_with_price > 0) {
-          group.average_price = group.total_price_weighted / group.total_footage_with_price
-        }
-        return group
-      }).sort((a, b) => (a.species || '').localeCompare(b.species || ''))
-    : // Sort by species, grade, thickness (original behavior)
-      [...inventoryGroups].sort((a, b) => {
-        const speciesCompare = (a.species || '').localeCompare(b.species || '')
-        if (speciesCompare !== 0) return speciesCompare
-        const gradeCompare = (a.grade || '').localeCompare(b.grade || '')
-        if (gradeCompare !== 0) return gradeCompare
-        return (a.thickness || '').localeCompare(b.thickness || '')
-      })
-
   return (
     <div className="space-y-4">
       <div>
@@ -712,11 +691,11 @@ export default function InventoryPage() {
         >
           <SortableContext
             items={sortedSpecies.map(s => s.species)}
-            strategy={verticalListSortingStrategy}
+            strategy={horizontalListSortingStrategy}
           >
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-1.5 flex-wrap items-start">
               {sortedSpecies.map((speciesData) => (
-                <SortableSpeciesRow
+                <SortableSpeciesColumn
                   key={speciesData.species}
                   species={speciesData.species}
                   grades={speciesData.grades}
@@ -785,36 +764,14 @@ export default function InventoryPage() {
         </ResponsiveContainer>
       </div>
 
-      {/* Detailed Inventory Table - Improved Layout */}
+      {/* Detailed Inventory Table - Species → Grades */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-4 py-3 bg-gray-800 text-white flex justify-between items-center">
+        <div className="px-4 py-3 bg-gray-800 text-white">
           <div>
             <h2 className="text-sm font-semibold">Detailed Inventory Breakdown</h2>
             <p className="text-[10px] text-gray-300 mt-0.5">
-              Click rows to expand load details. Inventory = Actual BF - Finished BF
+              Click species to expand grades. Click grade to view loads and tallies.
             </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setTableSort('species')}
-              className={`px-3 py-1.5 text-xs rounded transition-colors ${
-                tableSort === 'species'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
-              }`}
-            >
-              By Species
-            </button>
-            <button
-              onClick={() => setTableSort('species-grade')}
-              className={`px-3 py-1.5 text-xs rounded transition-colors ${
-                tableSort === 'species-grade'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
-              }`}
-            >
-              By Species & Grade
-            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -823,143 +780,159 @@ export default function InventoryPage() {
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase w-8"></th>
                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase min-w-[120px]">Species</th>
-                {tableSort === 'species-grade' && (
-                  <>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase min-w-[80px]">Grade</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase min-w-[60px]">Thick</th>
-                  </>
-                )}
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[100px]">Total BF</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[100px]">Finished</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[100px]">Inventory</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase min-w-[80px]">Grade</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase min-w-[60px]">Thick</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[80px]">Inv Loads</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[80px]">Inv Packs</th>
                 <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[90px]">Avg Price</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700 uppercase min-w-[80px]">Loads</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[100px]">Inv BF</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[100px]">Total Value</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[80px]">Inc Loads</th>
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase min-w-[100px]">Inc BF</th>
               </tr>
             </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
-            {displayGroups.length === 0 ? (
-              <tr>
-                <td colSpan={tableSort === 'species-grade' ? 9 : 7} className="px-3 py-8 text-center text-sm text-gray-500">
-                  No inventory data available
-                </td>
-              </tr>
-            ) : (
-              displayGroups.map((group, idx) => {
-                const rowKey = tableSort === 'species' 
-                  ? group.species 
-                  : `${group.species}-${group.grade}-${group.thickness}`
-                const isExpanded = expandedRows.has(rowKey)
-                const prevGroup = idx > 0 ? displayGroups[idx - 1] : null
-                const isNewSpecies = tableSort === 'species-grade' && (!prevGroup || prevGroup.species !== group.species)
-                
-                return (
-                  <>
-                    <tr 
-                      key={idx} 
-                      className={`
-                        ${isNewSpecies && idx > 0 ? 'border-t-2 border-gray-400' : ''} 
-                        hover:bg-gray-50 transition-colors cursor-pointer
-                        ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                      `}
-                      onClick={() => toggleRow(rowKey)}
-                    >
-                      <td className="px-3 py-2.5">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleRow(rowKey); }}
-                          className="text-gray-500 hover:text-gray-700"
-                        >
-                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-3 h-3 rounded flex-shrink-0" 
-                            style={{ backgroundColor: speciesColors[group.species] || '#6B7280' }}
-                          />
-                          <span className="text-sm font-medium text-gray-900">{group.species}</span>
-                        </div>
-                      </td>
-                      {tableSort === 'species-grade' && (
-                        <>
-                          <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700">{group.grade}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-600">{group.thickness}</td>
-                        </>
-                      )}
-                      <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right text-gray-700">
-                        {Number(group.total_actual_footage || 0).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right text-gray-600">
-                        {Number(group.total_finished_footage || 0).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-sm font-semibold text-blue-600 text-right">
-                        {Number(group.current_inventory || 0).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right">
-                        <span className="font-medium text-green-600">
-                          {group.average_price ? `$${group.average_price.toFixed(3)}` : '-'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-center">
-                        <span className="bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full text-xs font-semibold">
-                          {group.load_count}
-                        </span>
-                      </td>
-                    </tr>
-                    {isExpanded && group.loads && group.loads.map((load, loadIdx) => (
-                      <tr key={`${idx}-${loadIdx}`} className="bg-blue-50/50 border-t border-blue-200/50">
-                        <td className="px-3 py-2"></td>
-                        <td className="px-3 py-2 whitespace-nowrap">
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {sortedSpecies.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="px-3 py-8 text-center text-sm text-gray-500">
+                    No inventory data available
+                  </td>
+                </tr>
+              ) : (
+                sortedSpecies.map((speciesData, speciesIdx) => {
+                  const isSpeciesExpanded = expandedSpecies.has(speciesData.species)
+                  
+                  return (
+                    <>
+                      {/* Species Row */}
+                      <tr 
+                        key={`species-${speciesData.species}`}
+                        className={`
+                          hover:bg-gray-50 transition-colors cursor-pointer
+                          ${speciesIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                        `}
+                        onClick={() => toggleSpecies(speciesData.species)}
+                      >
+                        <td className="px-3 py-2.5">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleSpecies(speciesData.species); }}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            {isSpeciesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <span className="text-blue-700 font-semibold text-sm">└ {load.load_id}</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
-                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition-colors"
-                              title="View Rip Entry"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </button>
+                            <span 
+                              className="w-3 h-3 rounded flex-shrink-0" 
+                              style={{ backgroundColor: speciesColors[speciesData.species] || '#6B7280' }}
+                            />
+                            <span className="text-sm font-semibold text-gray-900">{speciesData.species}</span>
                           </div>
                         </td>
-                        {tableSort === 'species-grade' ? (
-                          <>
-                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">{load.grade}</td>
-                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{load.thickness}</td>
-                          </>
-                        ) : (
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600" colSpan={1}>
-                            <span className="text-gray-600">{load.grade}</span>
-                            <span className="mx-1.5 text-gray-400">•</span>
-                            <span className="text-gray-600">{load.thickness}</span>
-                          </td>
-                        )}
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-700">
-                          {Number(load.actual_footage || 0).toLocaleString()}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-500 italic">
+                          All Grades
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-600">
-                          {Number(load.finished_footage || 0).toLocaleString()}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-500">
+                          -
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right font-semibold text-blue-700">
-                          {Number(load.load_inventory || 0).toLocaleString()}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right text-gray-700">
+                          {speciesData.loads_with_inventory}
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right">
-                          <span className="text-gray-600">
-                            {load.price ? `$${Number(load.price).toFixed(3)}` : '-'}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right text-gray-700">
+                          {speciesData.pack_count}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right">
+                          <span className="font-medium text-green-600">
+                            {speciesData.average_price ? `$${speciesData.average_price.toFixed(3)}` : '-'}
                           </span>
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-center">
-                          <span className="text-gray-600">
-                            {load.finished_pack_count}/{load.pack_count}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm font-semibold text-blue-600 text-right">
+                          {speciesData.current_inventory.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right">
+                          <span className="font-semibold text-purple-600">
+                            {speciesData.total_value > 0 ? `$${speciesData.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
                           </span>
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right text-blue-700">
+                          {speciesData.incoming_load_count}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap text-sm text-right text-blue-700">
+                          {speciesData.incoming_footage.toLocaleString()}
                         </td>
                       </tr>
-                    ))}
-                  </>
+                      
+                      {/* Grade Rows (when species expanded) */}
+                      {isSpeciesExpanded && speciesData.grades.map((grade, gradeIdx) => {
+                        // Get all loads with inventory for this grade
+                        const loadsWithInventory = grade.groups.flatMap(g => 
+                          g.loads.filter(load => load.load_inventory > 0)
+                        )
+                        
+                        return (
+                          <tr
+                            key={`grade-${speciesData.species}-${grade.grade}`}
+                            className="bg-blue-50/30 hover:bg-blue-50/50 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setSelectedGradeLoads({
+                                species: speciesData.species,
+                                grade: grade.grade,
+                                loads: loadsWithInventory
+                              })
+                              setGradeLoadsDialogOpen(true)
+                            }}
+                          >
+                            <td className="px-3 py-2"></td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <div className="flex items-center gap-2 pl-4">
+                                <span className="text-gray-400 text-sm">└</span>
+                                <span 
+                                  className="w-2 h-2 rounded flex-shrink-0" 
+                                  style={{ backgroundColor: speciesColors[speciesData.species] || '#6B7280' }}
+                                />
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {grade.grade}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                              -
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-700">
+                              {grade.loads_with_inventory}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-700">
+                              {grade.pack_count}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-right">
+                              <span className="font-medium text-green-600">
+                                {grade.average_price ? `$${grade.average_price.toFixed(3)}` : '-'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm font-semibold text-blue-600 text-right">
+                              {grade.current_inventory.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-right">
+                              <span className="font-semibold text-purple-600">
+                                {grade.total_value > 0 ? `$${grade.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-blue-700">
+                              {grade.incoming_load_count}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-blue-700">
+                              {grade.incoming_footage.toLocaleString()}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </>
                   )
                 })
               )}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
         </div>
       </div>
 
