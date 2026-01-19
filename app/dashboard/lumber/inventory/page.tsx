@@ -389,7 +389,7 @@ export default function InventoryPage() {
     try {
       const [inventoryRes, packsRes, monthlyRes, speciesRes, incomingRes] = await Promise.all([
         fetch('/api/lumber/inventory'),
-        fetch('/api/lumber/packs/recent?limit=50'),
+        fetch(`/api/lumber/packs/finished?month=${selectedMonth}&year=${selectedYear}`),
         fetch(`/api/lumber/inventory/monthly?month=${selectedMonth}&year=${selectedYear}`),
         fetch('/api/lumber/species'),
         fetch('/api/lumber/loads/incoming')
@@ -446,7 +446,11 @@ export default function InventoryPage() {
         setInventoryGroups(Object.values(grouped))
       }
       
-      if (packsRes.ok) setRecentPacks(await packsRes.json())
+      if (packsRes.ok) {
+        const packsData = await packsRes.json()
+        console.log('Fetched packs data:', packsData.slice(0, 3)) // Log first 3 packs for debugging
+        setRecentPacks(packsData)
+      }
       if (monthlyRes.ok) setMonthlyRipped(await monthlyRes.json())
       
       if (speciesRes.ok) {
@@ -1209,10 +1213,10 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Compact Recent Packs */}
+      {/* Monthly Packs */}
       <div className="bg-white rounded-lg shadow overflow-hidden no-print">
         <div className="px-4 py-2 bg-gray-800 text-white flex justify-between items-center">
-          <h2 className="text-sm font-semibold">50 Most Recent Ripped Packs</h2>
+          <h2 className="text-sm font-semibold">Monthly Ripped Packs</h2>
           <div className="flex gap-2 items-center">
             <Label className="text-xs text-gray-300">Month:</Label>
             <Select 
@@ -1257,48 +1261,62 @@ export default function InventoryPage() {
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Actual</th>
               <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Yield</th>
               <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Operator</th>
+              <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Stackers</th>
               <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Finished</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {recentPacks.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-sm text-gray-500">
-                  No ripped packs yet
+                <td colSpan={11} className="px-3 py-8 text-center text-sm text-gray-500">
+                  No ripped packs for this month
                 </td>
               </tr>
             ) : (
-              recentPacks.map((pack, idx) => (
-                <tr key={pack.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs font-semibold">{pack.pack_id}</td>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.load_load_id}</td>
-                  <td className="px-2 py-1 text-xs">
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium">{pack.species}</span>
-                      <span className="text-gray-500">{pack.grade}</span>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.thickness}</td>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.length}ft</td>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
-                    {pack.tally_board_feet.toLocaleString()}
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
-                    {pack.actual_board_feet?.toLocaleString() || '-'}
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
-                    {pack.rip_yield || '-'}
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-[10px] truncate max-w-[80px]">
-                    {pack.operator_name || '-'}
-                  </td>
-                  <td className="px-2 py-1 whitespace-nowrap text-[10px]">
-                    {pack.finished_at 
-                      ? new Date(pack.finished_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                      : '-'}
-                  </td>
-                </tr>
-              ))
+              recentPacks.map((pack, idx) => {
+                // Collect all stacker names
+                const stackers = [
+                  pack.stacker_1_name,
+                  pack.stacker_2_name,
+                  pack.stacker_3_name,
+                  pack.stacker_4_name
+                ].filter(name => name).join(', ') || '-'
+                
+                return (
+                  <tr key={pack.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs font-semibold">{pack.pack_id}</td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.load_load_id}</td>
+                    <td className="px-2 py-1 text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">{pack.species}</span>
+                        <span className="text-gray-500">{pack.grade}</span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.thickness}</td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs">{pack.length}ft</td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
+                      {pack.tally_board_feet.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
+                      {pack.actual_board_feet?.toLocaleString() || '-'}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-right">
+                      {pack.rip_yield || '-'}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-[10px] truncate max-w-[80px]">
+                      {pack.operator_name || '-'}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-[10px] truncate max-w-[120px]">
+                      {stackers}
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-[10px]">
+                      {pack.finished_at 
+                        ? new Date(pack.finished_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        : '-'}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
