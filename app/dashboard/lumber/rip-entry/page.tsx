@@ -15,7 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Operator {
@@ -68,6 +75,25 @@ export default function RipEntryPage() {
     { pack_id: 0, length: 0, tally_board_feet: 0 }
   ])
   const [selectedItemIdForTally, setSelectedItemIdForTally] = useState<number | null>(null)
+  
+  // Edit pack dialog state
+  const [editPackDialogOpen, setEditPackDialogOpen] = useState(false)
+  const [editingPack, setEditingPack] = useState<LumberPackWithDetails | null>(null)
+  const [editPackData, setEditPackData] = useState({
+    pack_id: '',
+    length: '',
+    tally_board_feet: '',
+    actual_board_feet: '',
+    rip_yield: '',
+    rip_comments: '',
+    operator_id: '',
+    stacker_1_id: '',
+    stacker_2_id: '',
+    stacker_3_id: '',
+    stacker_4_id: '',
+    is_finished: false,
+    finished_at: ''
+  })
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -261,6 +287,67 @@ export default function RipEntryPage() {
       }
     } catch (error) {
       console.error('Error saving load quality:', error)
+    }
+  }
+
+  function handleOpenEditPack(pack: LumberPackWithDetails) {
+    setEditingPack(pack)
+    setEditPackData({
+      pack_id: pack.pack_id != null ? String(pack.pack_id) : '',
+      length: pack.length != null ? String(pack.length) : '',
+      tally_board_feet: pack.tally_board_feet != null ? String(pack.tally_board_feet) : '',
+      actual_board_feet: pack.actual_board_feet != null ? String(pack.actual_board_feet) : '',
+      rip_yield: pack.rip_yield != null ? String(pack.rip_yield) : '',
+      rip_comments: pack.rip_comments || '',
+      operator_id: pack.operator_id != null ? String(pack.operator_id) : '',
+      stacker_1_id: pack.stacker_1_id != null ? String(pack.stacker_1_id) : '',
+      stacker_2_id: pack.stacker_2_id != null ? String(pack.stacker_2_id) : '',
+      stacker_3_id: pack.stacker_3_id != null ? String(pack.stacker_3_id) : '',
+      stacker_4_id: pack.stacker_4_id != null ? String(pack.stacker_4_id) : '',
+      is_finished: pack.is_finished,
+      finished_at: pack.finished_at ? pack.finished_at.split('T')[0] : ''
+    })
+    setEditPackDialogOpen(true)
+  }
+
+  async function handleSaveEditPack() {
+    if (!editingPack) return
+
+    try {
+      const response = await fetch(`/api/lumber/packs/${editingPack.id}/rip-data`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pack_id: editPackData.pack_id || null,
+          length: editPackData.length !== '' ? parseInt(editPackData.length) : null,
+          tally_board_feet: editPackData.tally_board_feet !== '' ? parseInt(editPackData.tally_board_feet) : null,
+          actual_board_feet: editPackData.actual_board_feet !== '' ? parseInt(editPackData.actual_board_feet) : null,
+          rip_yield: editPackData.rip_yield !== '' ? parseFloat(editPackData.rip_yield) : null,
+          rip_comments: editPackData.rip_comments || null,
+          operator_id: editPackData.operator_id !== '' ? parseInt(editPackData.operator_id) : null,
+          stacker_1_id: editPackData.stacker_1_id !== '' ? parseInt(editPackData.stacker_1_id) : null,
+          stacker_2_id: editPackData.stacker_2_id !== '' ? parseInt(editPackData.stacker_2_id) : null,
+          stacker_3_id: editPackData.stacker_3_id !== '' ? parseInt(editPackData.stacker_3_id) : null,
+          stacker_4_id: editPackData.stacker_4_id !== '' ? parseInt(editPackData.stacker_4_id) : null,
+          is_finished: editPackData.is_finished,
+          finished_at: editPackData.finished_at || null
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Pack updated')
+        setEditPackDialogOpen(false)
+        setEditingPack(null)
+        // Refresh packs
+        if (selectedLoad) {
+          handleSelectLoad(selectedLoad.id)
+        }
+      } else {
+        toast.error('Failed to update pack')
+      }
+    } catch (error) {
+      console.error('Error updating pack:', error)
+      toast.error('Failed to update pack')
     }
   }
 
@@ -1011,7 +1098,7 @@ export default function RipEntryPage() {
                                 />
                               </td>
                               <td className="px-1 py-1 border-t">
-                                {!pack.is_finished && (
+                                {!pack.is_finished ? (
                                   <Button
                                     size="sm"
                                     onClick={() => handleFinishPack(pack.id)}
@@ -1019,6 +1106,16 @@ export default function RipEntryPage() {
                                     disabled={!packEdits[pack.id]?.actual_board_feet || !packEdits[pack.id]?.rip_yield}
                                   >
                                     <RefreshCcw className="h-3 w-3" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOpenEditPack(pack)}
+                                    className="h-6 px-2 text-xs"
+                                    title="Edit finished pack"
+                                  >
+                                    <Pencil className="h-3 w-3" />
                                   </Button>
                                 )}
                               </td>
@@ -1058,6 +1155,200 @@ export default function RipEntryPage() {
           )}
         </div>
       )}
+
+      {/* Edit Pack Dialog */}
+      <Dialog open={editPackDialogOpen} onOpenChange={setEditPackDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Pack</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            {/* Tally Information */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Pack Information (Tally)</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Pack ID</Label>
+                  <Input
+                    value={editPackData.pack_id}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, pack_id: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Length (ft)</Label>
+                  <Input
+                    type="number"
+                    value={editPackData.length}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, length: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Tally BF</Label>
+                  <Input
+                    type="number"
+                    value={editPackData.tally_board_feet}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, tally_board_feet: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Rip Information */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Rip Information</h3>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-xs">Actual BF</Label>
+                  <Input
+                    type="number"
+                    value={editPackData.actual_board_feet}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, actual_board_feet: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Rip Yield %</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={editPackData.rip_yield}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, rip_yield: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Finish Date</Label>
+                  <Input
+                    type="date"
+                    value={editPackData.finished_at}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, finished_at: e.target.value }))}
+                  />
+                </div>
+                <div className="flex items-end pb-1">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={editPackData.is_finished}
+                      onCheckedChange={(checked) => setEditPackData(prev => ({ ...prev, is_finished: checked as boolean }))}
+                    />
+                    <Label className="text-xs">Finished</Label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Operator & Stackers */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Operator & Stackers</h3>
+              <div className="grid grid-cols-5 gap-3">
+                <div>
+                  <Label className="text-xs">Operator</Label>
+                  <Select 
+                    value={editPackData.operator_id || 'none'} 
+                    onValueChange={(val) => setEditPackData(prev => ({ ...prev, operator_id: val === 'none' ? '' : val }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-</SelectItem>
+                      {operators.map(op => (
+                        <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Stacker 1</Label>
+                  <Select 
+                    value={editPackData.stacker_1_id || 'none'} 
+                    onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_1_id: val === 'none' ? '' : val }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-</SelectItem>
+                      {operators.map(op => (
+                        <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Stacker 2</Label>
+                  <Select 
+                    value={editPackData.stacker_2_id || 'none'} 
+                    onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_2_id: val === 'none' ? '' : val }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-</SelectItem>
+                      {operators.map(op => (
+                        <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Stacker 3</Label>
+                  <Select 
+                    value={editPackData.stacker_3_id || 'none'} 
+                    onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_3_id: val === 'none' ? '' : val }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-</SelectItem>
+                      {operators.map(op => (
+                        <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Stacker 4</Label>
+                  <Select 
+                    value={editPackData.stacker_4_id || 'none'} 
+                    onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_4_id: val === 'none' ? '' : val }))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-</SelectItem>
+                      {operators.map(op => (
+                        <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Comments */}
+            <div>
+              <Label className="text-xs">Comments</Label>
+              <Textarea
+                value={editPackData.rip_comments}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, rip_comments: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setEditPackDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditPack}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

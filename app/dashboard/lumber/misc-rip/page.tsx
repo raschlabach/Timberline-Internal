@@ -968,6 +968,167 @@ export default function MiscRipPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Pack Dialog */}
+      <Dialog open={editPackDialogOpen} onOpenChange={setEditPackDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Pack</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            <div className="grid grid-cols-4 gap-3">
+              <div>
+                <Label className="text-xs">Pack ID</Label>
+                <Input
+                  value={editPackData.pack_id}
+                  onChange={(e) => setEditPackData(prev => ({ ...prev, pack_id: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Actual BF</Label>
+                <Input
+                  type="number"
+                  value={editPackData.actual_board_feet}
+                  onChange={(e) => setEditPackData(prev => ({ ...prev, actual_board_feet: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Rip Yield %</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={editPackData.rip_yield}
+                  onChange={(e) => setEditPackData(prev => ({ ...prev, rip_yield: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Finish Date</Label>
+                <Input
+                  type="date"
+                  value={editPackData.finished_at}
+                  onChange={(e) => setEditPackData(prev => ({ ...prev, finished_at: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-5 gap-3">
+              <div>
+                <Label className="text-xs">Operator</Label>
+                <Select 
+                  value={editPackData.operator_id || 'none'} 
+                  onValueChange={(val) => setEditPackData(prev => ({ ...prev, operator_id: val === 'none' ? '' : val }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="-" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-</SelectItem>
+                    {operators.map(op => (
+                      <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Stacker 1</Label>
+                <Select 
+                  value={editPackData.stacker_1_id || 'none'} 
+                  onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_1_id: val === 'none' ? '' : val }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="-" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-</SelectItem>
+                    {operators.map(op => (
+                      <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Stacker 2</Label>
+                <Select 
+                  value={editPackData.stacker_2_id || 'none'} 
+                  onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_2_id: val === 'none' ? '' : val }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="-" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-</SelectItem>
+                    {operators.map(op => (
+                      <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Stacker 3</Label>
+                <Select 
+                  value={editPackData.stacker_3_id || 'none'} 
+                  onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_3_id: val === 'none' ? '' : val }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="-" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-</SelectItem>
+                    {operators.map(op => (
+                      <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Stacker 4</Label>
+                <Select 
+                  value={editPackData.stacker_4_id || 'none'} 
+                  onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_4_id: val === 'none' ? '' : val }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="-" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-</SelectItem>
+                    {operators.map(op => (
+                      <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Comments</Label>
+              <Textarea
+                value={editPackData.rip_comments}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, rip_comments: e.target.value }))}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={editPackData.is_finished}
+                onCheckedChange={(checked) => setEditPackData(prev => ({ ...prev, is_finished: checked as boolean }))}
+              />
+              <Label className="text-sm">Pack is finished</Label>
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setEditPackDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditPack}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
