@@ -828,6 +828,18 @@ export default function MiscRipPage() {
                                   Finish
                                 </Button>
                               )}
+                              {isFinished && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => handleOpenEditPack(pack)}
+                                  title="Edit Pack"
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  Edit
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
