@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Plus, ArrowLeft, Save, Trash2, CheckCircle, Package } from 'lucide-react'
+import { Plus, ArrowLeft, Trash2, CheckCircle, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Operator {
@@ -279,9 +279,18 @@ export default function MiscRipPage() {
     }))
   }
 
-  async function handleSavePack(packId: number) {
+  async function handleFinishPack(packId: number) {
     const edit = packEdits[packId]
     if (!edit) return
+
+    // Validate required fields
+    if (!edit.actual_board_feet || edit.actual_board_feet === '') {
+      toast.error('Actual BF is required to finish pack')
+      return
+    }
+
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0]
 
     try {
       const response = await fetch(`/api/lumber/misc-packs/${packId}`, {
@@ -289,27 +298,31 @@ export default function MiscRipPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pack_id: edit.pack_id || null,
-          actual_board_feet: edit.actual_board_feet !== '' ? parseInt(edit.actual_board_feet) : null,
+          actual_board_feet: parseInt(edit.actual_board_feet),
           rip_yield: edit.rip_yield !== '' ? parseFloat(edit.rip_yield) : null,
           rip_comments: edit.rip_comments || null,
-          operator_id: edit.operator_id !== '' ? parseInt(edit.operator_id) : null,
-          stacker_1_id: edit.stacker_1_id !== '' ? parseInt(edit.stacker_1_id) : null,
-          stacker_2_id: edit.stacker_2_id !== '' ? parseInt(edit.stacker_2_id) : null,
-          stacker_3_id: edit.stacker_3_id !== '' ? parseInt(edit.stacker_3_id) : null,
-          stacker_4_id: edit.stacker_4_id !== '' ? parseInt(edit.stacker_4_id) : null,
-          is_finished: edit.is_finished,
-          finished_at: edit.finished_at || null
+          operator_id: operatorId !== '' ? parseInt(operatorId) : null,
+          stacker_1_id: stacker1Id !== '' ? parseInt(stacker1Id) : null,
+          stacker_2_id: stacker2Id !== '' ? parseInt(stacker2Id) : null,
+          stacker_3_id: stacker3Id !== '' ? parseInt(stacker3Id) : null,
+          stacker_4_id: stacker4Id !== '' ? parseInt(stacker4Id) : null,
+          is_finished: true,
+          finished_at: today
         })
       })
 
       if (response.ok) {
-        toast.success('Pack saved')
+        toast.success('Pack finished!')
+        // Refresh the packs to show updated status
+        if (selectedOrder) {
+          handleSelectOrder(selectedOrder)
+        }
       } else {
-        toast.error('Failed to save pack')
+        toast.error('Failed to finish pack')
       }
     } catch (error) {
-      console.error('Error saving pack:', error)
-      toast.error('Failed to save pack')
+      console.error('Error finishing pack:', error)
+      toast.error('Failed to finish pack')
     }
   }
 
@@ -380,25 +393,6 @@ export default function MiscRipPage() {
       console.error('Error deleting order:', error)
       toast.error('Failed to delete order')
     }
-  }
-
-  // Apply operator/stacker to all unfinished packs
-  function applyOperatorToAll() {
-    const updatedEdits = { ...packEdits }
-    packs.forEach(pack => {
-      if (!pack.is_finished && updatedEdits[pack.id]) {
-        updatedEdits[pack.id] = {
-          ...updatedEdits[pack.id],
-          operator_id: operatorId,
-          stacker_1_id: stacker1Id,
-          stacker_2_id: stacker2Id,
-          stacker_3_id: stacker3Id,
-          stacker_4_id: stacker4Id
-        }
-      }
-    })
-    setPackEdits(updatedEdits)
-    toast.success('Applied to all unfinished packs')
   }
 
   if (status === 'loading' || isLoading) {
@@ -570,12 +564,7 @@ export default function MiscRipPage() {
 
           {/* Operator/Stacker Assignment */}
           <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm">Operator & Stackers</h3>
-              <Button size="sm" variant="outline" onClick={applyOperatorToAll}>
-                Apply to All Unfinished
-              </Button>
-            </div>
+            <h3 className="font-semibold text-sm mb-3">Operator & Stackers (used when finishing packs)</h3>
             <div className="grid grid-cols-5 gap-3">
               <div>
                 <Label className="text-xs">Operator</Label>
@@ -669,175 +658,116 @@ export default function MiscRipPage() {
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-800 text-white">
                     <tr>
-                      <th className="px-2 py-2 text-left" style={{width: '80px'}}>Pack ID</th>
-                      <th className="px-2 py-2 text-left" style={{width: '90px'}}>Actual BF</th>
-                      <th className="px-2 py-2 text-left" style={{width: '70px'}}>Yield %</th>
-                      <th className="px-2 py-2 text-left" style={{width: '110px'}}>Operator</th>
-                      <th className="px-2 py-2 text-left" style={{width: '100px'}}>Stacker 1</th>
-                      <th className="px-2 py-2 text-left" style={{width: '100px'}}>Stacker 2</th>
-                      <th className="px-2 py-2 text-left" style={{width: '100px'}}>Stacker 3</th>
-                      <th className="px-2 py-2 text-left" style={{width: '100px'}}>Stacker 4</th>
-                      <th className="px-2 py-2 text-center" style={{width: '50px'}}>Done</th>
-                      <th className="px-2 py-2 text-left" style={{width: '115px'}}>Finish Date</th>
-                      <th className="px-2 py-2 text-left" style={{width: '120px'}}>Comments</th>
-                      <th className="px-2 py-2 text-center" style={{width: '70px'}}>Actions</th>
+                      <th className="px-3 py-2 text-left">Pack ID</th>
+                      <th className="px-3 py-2 text-left">Actual BF</th>
+                      <th className="px-3 py-2 text-left">Yield %</th>
+                      <th className="px-3 py-2 text-left">Comments</th>
+                      <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {packs.map((pack, idx) => (
-                      <tr 
-                        key={pack.id}
-                        className={`border-t ${packEdits[pack.id]?.is_finished ? 'bg-green-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                      >
-                        <td className="px-2 py-1">
-                          <Input
-                            className="h-7 text-xs"
-                            value={packEdits[pack.id]?.pack_id ?? ''}
-                            onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <Input
-                            type="number"
-                            className="h-7 text-xs"
-                            value={packEdits[pack.id]?.actual_board_feet ?? ''}
-                            onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <Input
-                            type="number"
-                            step="0.1"
-                            className="h-7 text-xs"
-                            value={packEdits[pack.id]?.rip_yield ?? ''}
-                            onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <Select
-                            value={packEdits[pack.id]?.operator_id || 'none'}
-                            onValueChange={(val) => updatePackEdit(pack.id, 'operator_id', val === 'none' ? '' : val)}
-                          >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {operators.map(op => (
-                                <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-2 py-1">
-                          <Select
-                            value={packEdits[pack.id]?.stacker_1_id || 'none'}
-                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_1_id', val === 'none' ? '' : val)}
-                          >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {operators.map(op => (
-                                <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-2 py-1">
-                          <Select
-                            value={packEdits[pack.id]?.stacker_2_id || 'none'}
-                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_2_id', val === 'none' ? '' : val)}
-                          >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {operators.map(op => (
-                                <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-2 py-1">
-                          <Select
-                            value={packEdits[pack.id]?.stacker_3_id || 'none'}
-                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_3_id', val === 'none' ? '' : val)}
-                          >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {operators.map(op => (
-                                <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-2 py-1">
-                          <Select
-                            value={packEdits[pack.id]?.stacker_4_id || 'none'}
-                            onValueChange={(val) => updatePackEdit(pack.id, 'stacker_4_id', val === 'none' ? '' : val)}
-                          >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {operators.map(op => (
-                                <SelectItem key={op.id} value={op.id.toString()}>{op.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          <Checkbox
-                            checked={packEdits[pack.id]?.is_finished || false}
-                            onCheckedChange={(checked) => updatePackEdit(pack.id, 'is_finished', checked)}
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <Input
-                            type="date"
-                            className="h-7 text-xs"
-                            value={packEdits[pack.id]?.finished_at ?? ''}
-                            onChange={(e) => updatePackEdit(pack.id, 'finished_at', e.target.value)}
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <Input
-                            className="h-7 text-xs"
-                            value={packEdits[pack.id]?.rip_comments ?? ''}
-                            onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
-                          />
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          <div className="flex gap-1 justify-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleSavePack(pack.id)}
-                              title="Save"
-                            >
-                              <Save className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleDeletePack(pack.id)}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {packs.map((pack, idx) => {
+                      const isFinished = packEdits[pack.id]?.is_finished || pack.is_finished
+                      return (
+                        <tr 
+                          key={pack.id}
+                          className={`border-t ${isFinished ? 'bg-green-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                        >
+                          <td className="px-3 py-2">
+                            {isFinished ? (
+                              <span className="font-medium">{pack.pack_id || '-'}</span>
+                            ) : (
+                              <Input
+                                className="h-7 text-xs w-24"
+                                value={packEdits[pack.id]?.pack_id ?? ''}
+                                onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isFinished ? (
+                              <span className="font-medium text-blue-600">{Number(pack.actual_board_feet || 0).toLocaleString()}</span>
+                            ) : (
+                              <Input
+                                type="number"
+                                className="h-7 text-xs w-24"
+                                value={packEdits[pack.id]?.actual_board_feet ?? ''}
+                                onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isFinished ? (
+                              <span>{pack.rip_yield ? `${Number(pack.rip_yield).toFixed(1)}%` : '-'}</span>
+                            ) : (
+                              <Input
+                                type="number"
+                                step="0.1"
+                                className="h-7 text-xs w-20"
+                                value={packEdits[pack.id]?.rip_yield ?? ''}
+                                onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isFinished ? (
+                              <span className="text-gray-600">{pack.rip_comments || '-'}</span>
+                            ) : (
+                              <Input
+                                className="h-7 text-xs w-40"
+                                placeholder="Optional..."
+                                value={packEdits[pack.id]?.rip_comments ?? ''}
+                                onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isFinished ? (
+                              <div className="text-xs">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  Finished
+                                </span>
+                                <div className="text-gray-500 mt-1">
+                                  {pack.finished_at ? new Date(pack.finished_at).toLocaleDateString('en-US', { timeZone: 'UTC' }) : ''}
+                                </div>
+                                <div className="text-gray-500">
+                                  {pack.operator_name || ''}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Pending
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <div className="flex gap-1 justify-center">
+                              {!isFinished && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700"
+                                  onClick={() => handleFinishPack(pack.id)}
+                                  title="Finish Pack"
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Finish
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleDeletePack(pack.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
