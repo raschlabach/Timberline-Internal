@@ -6,6 +6,7 @@ import { getToken } from 'next-auth/jwt'
 const RIP_OPERATOR_ALLOWED_PATHS = [
   '/dashboard/lumber/overview',
   '/dashboard/lumber/rip-entry',
+  '/dashboard/lumber/misc-rip',
   '/dashboard/lumber/daily-hours',
   '/dashboard/lumber/ripped-packs',
   '/dashboard/lumber/incoming',

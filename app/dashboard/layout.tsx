@@ -241,6 +241,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   className={isRipOperator ? '' : 'ml-6'}
                 />
                 <SubNavItem
+                  href="/dashboard/lumber/misc-rip"
+                  icon={<Package size={16} />}
+                  label="Misc Rip"
+                  isActive={isActiveRoute('/dashboard/lumber/misc-rip')}
+                  className={isRipOperator ? '' : 'ml-6'}
+                />
+                <SubNavItem
                   href="/dashboard/lumber/daily-hours"
                   icon={<Clock size={16} />}
                   label="Daily Hours"

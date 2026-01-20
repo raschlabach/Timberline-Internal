@@ -52,27 +52,28 @@ export async function GET(request: NextRequest) {
       [startDate, endDate]
     )
 
-    // Get all finished packs for the month with operator/stacker info
+    // Get all finished regular packs for the month with operator/stacker info
     const packsResult = await query(
       `SELECT 
          p.*,
-         u_op.id as operator_user_id,
-         u_op.full_name as operator_name,
-         u_s1.id as stacker_1_user_id,
-         u_s1.full_name as stacker_1_name,
-         u_s2.id as stacker_2_user_id,
-         u_s2.full_name as stacker_2_name,
-         u_s3.id as stacker_3_user_id,
-         u_s3.full_name as stacker_3_name,
-         u_s4.id as stacker_4_user_id,
-         u_s4.full_name as stacker_4_name,
-         DATE(p.finished_at) as finished_date
+         lo_op.id as operator_user_id,
+         lo_op.name as operator_name,
+         lo_s1.id as stacker_1_user_id,
+         lo_s1.name as stacker_1_name,
+         lo_s2.id as stacker_2_user_id,
+         lo_s2.name as stacker_2_name,
+         lo_s3.id as stacker_3_user_id,
+         lo_s3.name as stacker_3_name,
+         lo_s4.id as stacker_4_user_id,
+         lo_s4.name as stacker_4_name,
+         DATE(p.finished_at) as finished_date,
+         'rnr' as pack_type
        FROM lumber_packs p
-       LEFT JOIN users u_op ON p.operator_id = u_op.id
-       LEFT JOIN users u_s1 ON p.stacker_1_id = u_s1.id
-       LEFT JOIN users u_s2 ON p.stacker_2_id = u_s2.id
-       LEFT JOIN users u_s3 ON p.stacker_3_id = u_s3.id
-       LEFT JOIN users u_s4 ON p.stacker_4_id = u_s4.id
+       LEFT JOIN lumber_operators lo_op ON p.operator_id = lo_op.id
+       LEFT JOIN lumber_operators lo_s1 ON p.stacker_1_id = lo_s1.id
+       LEFT JOIN lumber_operators lo_s2 ON p.stacker_2_id = lo_s2.id
+       LEFT JOIN lumber_operators lo_s3 ON p.stacker_3_id = lo_s3.id
+       LEFT JOIN lumber_operators lo_s4 ON p.stacker_4_id = lo_s4.id
        WHERE p.is_finished = TRUE
          AND p.finished_at >= $1
          AND p.finished_at < $2
@@ -80,9 +81,41 @@ export async function GET(request: NextRequest) {
       [startDate, endDate]
     )
 
-    // Group packs by date
+    // Get all finished misc packs for the month
+    const miscPacksResult = await query(
+      `SELECT 
+         mp.*,
+         lo_op.id as operator_user_id,
+         lo_op.name as operator_name,
+         lo_s1.id as stacker_1_user_id,
+         lo_s1.name as stacker_1_name,
+         lo_s2.id as stacker_2_user_id,
+         lo_s2.name as stacker_2_name,
+         lo_s3.id as stacker_3_user_id,
+         lo_s3.name as stacker_3_name,
+         lo_s4.id as stacker_4_user_id,
+         lo_s4.name as stacker_4_name,
+         DATE(mp.finished_at) as finished_date,
+         'misc' as pack_type
+       FROM misc_rip_packs mp
+       LEFT JOIN lumber_operators lo_op ON mp.operator_id = lo_op.id
+       LEFT JOIN lumber_operators lo_s1 ON mp.stacker_1_id = lo_s1.id
+       LEFT JOIN lumber_operators lo_s2 ON mp.stacker_2_id = lo_s2.id
+       LEFT JOIN lumber_operators lo_s3 ON mp.stacker_3_id = lo_s3.id
+       LEFT JOIN lumber_operators lo_s4 ON mp.stacker_4_id = lo_s4.id
+       WHERE mp.is_finished = TRUE
+         AND mp.finished_at >= $1
+         AND mp.finished_at < $2
+       ORDER BY mp.finished_at`,
+      [startDate, endDate]
+    )
+
+    // Combine regular and misc packs
+    const allPacks = [...packsResult.rows, ...miscPacksResult.rows]
+
+    // Group packs by date (both regular and misc)
     const packsByDate: { [date: string]: any[] } = {}
-    for (const pack of packsResult.rows) {
+    for (const pack of allPacks) {
       const date = pack.finished_date
       if (!packsByDate[date]) {
         packsByDate[date] = []
@@ -182,7 +215,9 @@ export async function GET(request: NextRequest) {
 
     // Calculate overall totals
     const totalHours = workSessions.rows.reduce((sum, s) => sum + parseFloat(s.total_hours), 0)
-    const totalBF = packsResult.rows.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
+    const totalRnr = packsResult.rows.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
+    const totalMisc = miscPacksResult.rows.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
+    const totalBF = totalRnr + totalMisc
     const totalBonus = dailySummaries.reduce((sum, d) => sum + d.bonus_total, 0)
 
     const report: MonthlyRipReport = {
@@ -190,8 +225,8 @@ export async function GET(request: NextRequest) {
       year,
       daily_summaries: dailySummaries,
       total_hours: totalHours,
-      total_rnr: 0, // Can be calculated if you track RNR separately
-      total_misc: 0, // Can be calculated if you track misc separately
+      total_rnr: totalRnr,
+      total_misc: totalMisc,
       total_bf: totalBF,
       total_bonus: totalBonus,
       operator_totals: operatorTotals
