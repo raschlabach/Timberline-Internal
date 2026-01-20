@@ -253,7 +253,7 @@ export default function RippedPacksPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-900">
                       {pack.finished_at 
-                        ? new Date(pack.finished_at).toLocaleDateString()
+                        ? new Date(pack.finished_at).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
                     </td>
                   </tr>

@@ -1311,7 +1311,7 @@ export default function InventoryPage() {
                     </td>
                     <td className="px-1 py-1 whitespace-nowrap text-sm">
                       {pack.finished_at 
-                        ? new Date(pack.finished_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        ? new Date(pack.finished_at).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                         : '-'}
                     </td>
                   </tr>

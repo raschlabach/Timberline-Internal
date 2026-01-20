@@ -334,7 +334,7 @@ export default function RipBonusPage() {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                       {pack.finished_at 
-                        ? new Date(pack.finished_at).toLocaleDateString()
+                        ? new Date(pack.finished_at).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
                     </td>
                   </tr>
