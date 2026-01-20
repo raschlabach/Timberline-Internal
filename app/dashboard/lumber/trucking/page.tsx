@@ -398,7 +398,7 @@ export default function TruckingPage() {
                         </td>
                         <td className="px-2 py-2 text-xs text-gray-900">
                           {load.estimated_delivery_date 
-                            ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                             : '-'}
                         </td>
                         <td className="px-2 py-2 text-xs text-gray-900">
@@ -412,7 +412,7 @@ export default function TruckingPage() {
                         </td>
                         <td className="px-2 py-2 text-xs text-gray-900">
                           {load.assigned_pickup_date 
-                            ? new Date(load.assigned_pickup_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            ? new Date(load.assigned_pickup_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                             : '-'}
                         </td>
                         <td className="px-2 py-2 text-xs">
@@ -461,7 +461,7 @@ export default function TruckingPage() {
                   <div key={note.id} className="border rounded p-2 relative group bg-gray-50">
                     <p className="text-xs text-gray-900 pr-6">{note.note_text}</p>
                     <div className="text-[10px] text-gray-500 mt-1">
-                      {new Date(note.created_at).toLocaleString()}
+                      {new Date(note.created_at).toLocaleString('en-US', { timeZone: 'UTC' })}
                     </div>
                     <Button
                       size="sm"

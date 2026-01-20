@@ -414,6 +414,7 @@ export default function DataEntryPage() {
                         </a>
                         <p className="text-xs text-gray-500">
                           {new Date(doc.uploaded_at).toLocaleDateString('en-US', { 
+                            timeZone: 'UTC',
                             month: 'short', 
                             day: 'numeric', 
                             year: 'numeric',

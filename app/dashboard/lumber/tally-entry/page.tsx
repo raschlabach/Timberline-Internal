@@ -269,7 +269,7 @@ export default function TallyEntryPage() {
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
                       {load.actual_arrival_date 
-                        ? new Date(load.actual_arrival_date).toLocaleDateString()
+                        ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
                     </div>
                   </td>

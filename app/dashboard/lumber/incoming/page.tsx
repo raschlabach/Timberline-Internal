@@ -465,7 +465,7 @@ export default function IncomingLoadsPage() {
                     }`}
                   >
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString()}`}>
+                      <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}`}>
                         {load.load_id}
                       </span>
                     </td>
@@ -522,7 +522,7 @@ export default function IncomingLoadsPage() {
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="text-xs">
-                        {load.estimated_delivery_date ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                        {load.estimated_delivery_date ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }) : '-'}
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">

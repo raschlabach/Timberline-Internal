@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const poNumber = `R-${load.load_id}`
     const currentDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
     const deliveryMonth = load.estimated_delivery_date 
-      ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' })
       : 'TBD'
 
     const pageWidth = 612

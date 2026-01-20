@@ -670,7 +670,7 @@ export default function AllLoadsPage() {
                   <td className="px-2 py-1.5">
                     <div className="text-xs font-semibold text-gray-900">{load.load_id}</div>
                     <div className="text-[10px] text-gray-500">
-                      {new Date(load.created_at).toLocaleDateString()}
+                      {new Date(load.created_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                     </div>
                   </td>
                   <td className="px-2 py-1.5">
@@ -701,7 +701,7 @@ export default function AllLoadsPage() {
                   <td className="px-2 py-1.5">
                     <div className="text-xs text-gray-900">
                       {load.actual_arrival_date 
-                        ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                         : '-'}
                     </div>
                   </td>

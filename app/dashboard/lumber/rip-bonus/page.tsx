@@ -140,7 +140,7 @@ export default function RipBonusPage() {
                     <div key={idx} className="border rounded-lg overflow-hidden">
                       {/* Day Header */}
                       <div className="bg-gray-100 px-4 py-2 grid grid-cols-7 gap-4 text-sm font-semibold">
-                        <div>{new Date(day.work_date).toLocaleDateString()}</div>
+                        <div>{new Date(day.work_date).toLocaleDateString('en-US', { timeZone: 'UTC' })}</div>
                         <div className="text-right">{Number(day.total_hours || 0).toFixed(1)} hrs</div>
                         <div className="text-right">{Number(day.total_bf || 0).toLocaleString()} BF</div>
                         <div className="text-right">{Number(day.bf_per_hour || 0).toFixed(0)} BF/hr</div>

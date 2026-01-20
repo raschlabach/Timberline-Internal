@@ -481,7 +481,7 @@ export default function UserManagementPage() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      {new Date(user.created_at).toLocaleDateString()}
+                      {new Date(user.created_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">

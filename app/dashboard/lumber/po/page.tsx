@@ -194,7 +194,7 @@ export default function POPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {new Date(load.created_at).toLocaleDateString()}
+                        {new Date(load.created_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

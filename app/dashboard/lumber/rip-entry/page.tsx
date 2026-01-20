@@ -699,7 +699,7 @@ export default function RipEntryPage() {
                       </td>
                       <td className="px-2 py-1">
                         {load.actual_arrival_date 
-                          ? new Date(load.actual_arrival_date).toLocaleDateString()
+                          ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
                           : '-'}
                       </td>
                     </tr>
@@ -747,7 +747,7 @@ export default function RipEntryPage() {
                       <div>
                         <span className="text-gray-500">Arrival:</span>
                         <span className="ml-2 font-medium">
-                          {new Date(selectedLoad.actual_arrival_date).toLocaleDateString()}
+                          {new Date(selectedLoad.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                         </span>
                       </div>
                     )}

@@ -556,14 +556,14 @@ export default function InvoicesPage() {
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="text-xs">
                         {load.actual_arrival_date 
-                          ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                           : '-'}
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="text-xs">
                         {load.invoice_date 
-                          ? new Date(load.invoice_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          ? new Date(load.invoice_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                           : '-'}
                       </span>
                     </td>
@@ -637,7 +637,7 @@ export default function InvoicesPage() {
                     <Label className="text-xs text-gray-500">Invoice Date</Label>
                     <div className="font-medium">
                       {selectedLoad.invoice_date 
-                        ? new Date(selectedLoad.invoice_date).toLocaleDateString()
+                        ? new Date(selectedLoad.invoice_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
                     </div>
                   </div>
@@ -645,7 +645,7 @@ export default function InvoicesPage() {
                     <Label className="text-xs text-gray-500">Arrival Date</Label>
                     <div className="font-medium">
                       {selectedLoad.actual_arrival_date 
-                        ? new Date(selectedLoad.actual_arrival_date).toLocaleDateString()
+                        ? new Date(selectedLoad.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
                     </div>
                   </div>

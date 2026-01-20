@@ -403,7 +403,7 @@ export default function PricingNotesPage() {
                       )}
                     </div>
                     <div>
-                      {new Date(note.updated_at).toLocaleDateString()}
+                      {new Date(note.updated_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                     </div>
                   </div>
                 </CardContent>
