@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Plus, ArrowLeft, Trash2, CheckCircle, Package } from 'lucide-react'
+import { Plus, ArrowLeft, Trash2, CheckCircle, Package, Pencil, Save } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Operator {
@@ -115,6 +115,23 @@ export default function MiscRipPage() {
   const [stacker4Id, setStacker4Id] = useState<string>('')
   
   const [showCompleted, setShowCompleted] = useState(false)
+  
+  // Edit pack dialog state
+  const [editPackDialogOpen, setEditPackDialogOpen] = useState(false)
+  const [editingPack, setEditingPack] = useState<MiscPack | null>(null)
+  const [editPackData, setEditPackData] = useState({
+    pack_id: '',
+    actual_board_feet: '',
+    rip_yield: '',
+    rip_comments: '',
+    operator_id: '',
+    stacker_1_id: '',
+    stacker_2_id: '',
+    stacker_3_id: '',
+    stacker_4_id: '',
+    is_finished: false,
+    finished_at: ''
+  })
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -346,6 +363,63 @@ export default function MiscRipPage() {
     } catch (error) {
       console.error('Error deleting pack:', error)
       toast.error('Failed to delete pack')
+    }
+  }
+
+  function handleOpenEditPack(pack: MiscPack) {
+    setEditingPack(pack)
+    setEditPackData({
+      pack_id: pack.pack_id || '',
+      actual_board_feet: pack.actual_board_feet != null ? String(pack.actual_board_feet) : '',
+      rip_yield: pack.rip_yield != null ? String(pack.rip_yield) : '',
+      rip_comments: pack.rip_comments || '',
+      operator_id: pack.operator_id != null ? String(pack.operator_id) : '',
+      stacker_1_id: pack.stacker_1_id != null ? String(pack.stacker_1_id) : '',
+      stacker_2_id: pack.stacker_2_id != null ? String(pack.stacker_2_id) : '',
+      stacker_3_id: pack.stacker_3_id != null ? String(pack.stacker_3_id) : '',
+      stacker_4_id: pack.stacker_4_id != null ? String(pack.stacker_4_id) : '',
+      is_finished: pack.is_finished,
+      finished_at: pack.finished_at ? pack.finished_at.split('T')[0] : ''
+    })
+    setEditPackDialogOpen(true)
+  }
+
+  async function handleSaveEditPack() {
+    if (!editingPack) return
+
+    try {
+      const response = await fetch(`/api/lumber/misc-packs/${editingPack.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pack_id: editPackData.pack_id || null,
+          actual_board_feet: editPackData.actual_board_feet !== '' ? parseInt(editPackData.actual_board_feet) : null,
+          rip_yield: editPackData.rip_yield !== '' ? parseFloat(editPackData.rip_yield) : null,
+          rip_comments: editPackData.rip_comments || null,
+          operator_id: editPackData.operator_id !== '' ? parseInt(editPackData.operator_id) : null,
+          stacker_1_id: editPackData.stacker_1_id !== '' ? parseInt(editPackData.stacker_1_id) : null,
+          stacker_2_id: editPackData.stacker_2_id !== '' ? parseInt(editPackData.stacker_2_id) : null,
+          stacker_3_id: editPackData.stacker_3_id !== '' ? parseInt(editPackData.stacker_3_id) : null,
+          stacker_4_id: editPackData.stacker_4_id !== '' ? parseInt(editPackData.stacker_4_id) : null,
+          is_finished: editPackData.is_finished,
+          finished_at: editPackData.finished_at || null
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Pack updated')
+        setEditPackDialogOpen(false)
+        setEditingPack(null)
+        // Refresh packs
+        if (selectedOrder) {
+          handleSelectOrder(selectedOrder)
+        }
+      } else {
+        toast.error('Failed to update pack')
+      }
+    } catch (error) {
+      console.error('Error updating pack:', error)
+      toast.error('Failed to update pack')
     }
   }
 
