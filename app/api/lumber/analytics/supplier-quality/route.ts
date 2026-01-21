@@ -11,6 +11,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Check if dismissed_quality_warnings table exists
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'dismissed_quality_warnings'
+      ) as table_exists
+    `)
+    const dismissedTableExists = tableCheck.rows[0]?.table_exists
+
     // Get supplier quality data for each species/grade combination
     const result = await query(`
       WITH supplier_species_grade AS (
@@ -58,10 +67,6 @@ export async function GET(request: NextRequest) {
         ) ranked
         WHERE rn <= 3
         GROUP BY supplier_id, species, grade
-      ),
-      dismissed AS (
-        SELECT supplier_id, species, grade
-        FROM dismissed_quality_warnings
       )
       SELECT 
         ssg.supplier_id,
@@ -71,7 +76,7 @@ export async function GET(request: NextRequest) {
         ROUND(oa.overall_avg_quality::numeric, 1) as overall_avg_quality,
         oa.total_loads,
         ROUND(r3.recent_avg_quality::numeric, 1) as recent_3_avg_quality,
-        CASE WHEN d.supplier_id IS NOT NULL THEN true ELSE false END as is_dismissed,
+        false as is_dismissed,
         CASE 
           WHEN oa.overall_avg_quality < 50 OR r3.recent_avg_quality < 50 
           THEN true 
@@ -84,11 +89,23 @@ export async function GET(request: NextRequest) {
       LEFT JOIN recent_3_avg r3 ON ssg.supplier_id = r3.supplier_id 
         AND ssg.species = r3.species 
         AND ssg.grade = r3.grade
-      LEFT JOIN dismissed d ON ssg.supplier_id = d.supplier_id 
-        AND ssg.species = d.species 
-        AND ssg.grade = d.grade
       ORDER BY ssg.species, ssg.grade, ssg.supplier_name
     `)
+
+    // If dismissed table exists, check for dismissed entries and update results
+    if (dismissedTableExists) {
+      const dismissedResult = await query(`
+        SELECT supplier_id, species, grade FROM dismissed_quality_warnings
+      `)
+      const dismissedSet = new Set(
+        dismissedResult.rows.map(d => `${d.supplier_id}|${d.species}|${d.grade}`)
+      )
+      
+      result.rows.forEach(row => {
+        const key = `${row.supplier_id}|${row.species}|${row.grade}`
+        row.is_dismissed = dismissedSet.has(key)
+      })
+    }
 
     return NextResponse.json(result.rows)
   } catch (error) {

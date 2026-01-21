@@ -18,6 +18,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'supplier_id, species, and grade are required' }, { status: 400 })
     }
 
+    // Check if table exists first
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'dismissed_quality_warnings'
+      ) as table_exists
+    `)
+    
+    if (!tableCheck.rows[0]?.table_exists) {
+      return NextResponse.json({ 
+        error: 'Migration not applied. Please run the dismissed warnings migration first.' 
+      }, { status: 400 })
+    }
+
     // Insert or ignore if already exists
     await query(`
       INSERT INTO dismissed_quality_warnings (supplier_id, species, grade, dismissed_by)
@@ -47,6 +61,18 @@ export async function DELETE(request: NextRequest) {
 
     if (!supplier_id || !species || !grade) {
       return NextResponse.json({ error: 'supplier_id, species, and grade are required' }, { status: 400 })
+    }
+
+    // Check if table exists first
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'dismissed_quality_warnings'
+      ) as table_exists
+    `)
+    
+    if (!tableCheck.rows[0]?.table_exists) {
+      return NextResponse.json({ success: true }) // Nothing to delete if table doesn't exist
     }
 
     await query(`
