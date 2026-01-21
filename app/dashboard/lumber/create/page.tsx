@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -18,6 +19,7 @@ import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness } from '@/t
 import { Plus, Trash2, Copy, ArrowLeft, TrendingUp, AlertTriangle, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const THICKNESSES: Thickness[] = ['4/4', '5/4', '6/4', '7/4', '8/4']
 const LUMBER_TYPES = ['dried', 'green']
@@ -60,7 +62,7 @@ export default function CreateLoadPage() {
   // Analytics data
   const [priceTrends, setPriceTrends] = useState<PriceTrend[]>([])
   const [supplierQuality, setSupplierQuality] = useState<SupplierQuality[]>([])
-  const [expandedPriceTrends, setExpandedPriceTrends] = useState<Set<string>>(new Set())
+  const [selectedPriceTrends, setSelectedPriceTrends] = useState<Set<string>>(new Set())
   const [expandedQuality, setExpandedQuality] = useState<Set<string>>(new Set())
   
   // Form state
@@ -234,8 +236,8 @@ export default function CreateLoadPage() {
     }
   }
 
-  function togglePriceTrendExpand(key: string) {
-    setExpandedPriceTrends(prev => {
+  function togglePriceTrendSelection(key: string) {
+    setSelectedPriceTrends(prev => {
       const next = new Set(prev)
       if (next.has(key)) {
         next.delete(key)
@@ -327,7 +329,43 @@ export default function CreateLoadPage() {
     )
   }
 
-  // Group price trends by species
+  // Colors for chart lines
+  const CHART_COLORS = [
+    '#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', 
+    '#0891b2', '#be185d', '#4f46e5', '#ea580c', '#65a30d'
+  ]
+
+  // Create a map of species/grade to color
+  const trendColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    priceTrends.forEach((trend, idx) => {
+      const key = `${trend.species}|${trend.grade}`
+      map[key] = CHART_COLORS[idx % CHART_COLORS.length]
+    })
+    return map
+  }, [priceTrends])
+
+  // Prepare chart data from selected trends
+  const chartData = useMemo(() => {
+    if (selectedPriceTrends.size === 0 || priceTrends.length === 0) return []
+    
+    // Get all months from the first trend (they should all have the same months)
+    const selectedTrends = priceTrends.filter(t => selectedPriceTrends.has(`${t.species}|${t.grade}`))
+    if (selectedTrends.length === 0) return []
+    
+    const months = selectedTrends[0].monthly_data.map(m => m.month_display)
+    
+    return months.map((month, idx) => {
+      const dataPoint: Record<string, any> = { month }
+      selectedTrends.forEach(trend => {
+        const key = `${trend.species} ${trend.grade}`
+        dataPoint[key] = trend.monthly_data[idx]?.avg_price || null
+      })
+      return dataPoint
+    })
+  }, [priceTrends, selectedPriceTrends])
+
+  // Group price trends by species for the selection list
   const groupedPriceTrends = priceTrends.reduce((acc, trend) => {
     if (!acc[trend.species]) acc[trend.species] = []
     acc[trend.species].push(trend)
@@ -666,51 +704,89 @@ export default function CreateLoadPage() {
               6-Month Price Trends
             </h2>
             
-            <div className="space-y-2">
-              {Object.entries(groupedPriceTrends).map(([speciesName, trends]) => (
-                <div key={speciesName} className="border rounded">
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left font-medium text-sm bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
-                    onClick={() => togglePriceTrendExpand(speciesName)}
-                  >
-                    <span>{speciesName}</span>
-                    {expandedPriceTrends.has(speciesName) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </button>
-                  {expandedPriceTrends.has(speciesName) && (
-                    <div className="p-2 space-y-2">
-                      {trends.map((trend, idx) => (
-                        <div key={idx} className="border-l-2 border-blue-300 pl-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-medium text-gray-700">{trend.grade}</span>
-                            <span className="text-xs text-gray-500">
-                              Avg: ${trend.overall_avg_price?.toFixed(3) || '-'}
-                            </span>
-                          </div>
-                          <div className="flex gap-1 mt-1 flex-wrap">
-                            {trend.monthly_data.map((month, midx) => (
-                              <div 
-                                key={midx} 
-                                className="text-xs bg-gray-100 px-1.5 py-0.5 rounded"
-                                title={`${month.month_display}: ${month.load_count} loads`}
-                              >
-                                <span className="text-gray-500">{month.month.split('-')[1]}/</span>
-                                <span className="font-medium">
-                                  {month.avg_price ? `$${month.avg_price.toFixed(3)}` : '-'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+            {/* Chart */}
+            {selectedPriceTrends.size > 0 && chartData.length > 0 ? (
+              <div className="h-64 mb-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fontSize: 10 }} 
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 10 }} 
+                      tickLine={false}
+                      tickFormatter={(value) => `$${value.toFixed(2)}`}
+                      domain={['auto', 'auto']}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => value ? `$${value.toFixed(3)}` : 'N/A'}
+                      labelStyle={{ fontWeight: 'bold' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    {priceTrends
+                      .filter(t => selectedPriceTrends.has(`${t.species}|${t.grade}`))
+                      .map((trend) => {
+                        const key = `${trend.species}|${trend.grade}`
+                        const displayKey = `${trend.species} ${trend.grade}`
+                        return (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={displayKey}
+                            stroke={trendColorMap[key]}
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                            connectNulls
+                          />
+                        )
+                      })}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-32 flex items-center justify-center bg-gray-50 rounded mb-4 text-sm text-gray-500">
+                Select species/grade combos below to view price trends
+              </div>
+            )}
+            
+            {/* Selection List */}
+            <div className="border-t pt-3">
+              <p className="text-xs text-gray-500 mb-2">Select combos to display on chart:</p>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {Object.entries(groupedPriceTrends).map(([speciesName, trends]) => (
+                  <div key={speciesName} className="space-y-1">
+                    <div className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                      {speciesName}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {trends.map((trend) => {
+                      const key = `${trend.species}|${trend.grade}`
+                      const isSelected = selectedPriceTrends.has(key)
+                      return (
+                        <label 
+                          key={key}
+                          className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer rounded text-xs"
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => togglePriceTrendSelection(key)}
+                          />
+                          <span 
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: trendColorMap[key] }}
+                          />
+                          <span className="flex-1">{trend.grade}</span>
+                          <span className="text-gray-400">
+                            ${trend.overall_avg_price?.toFixed(3) || '-'}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
               
               {priceTrends.length === 0 && (
                 <p className="text-sm text-gray-500 text-center py-4">
