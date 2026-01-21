@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown, Pencil } from 'lucide-react'
+import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown, Pencil, Scissors } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Operator {
@@ -267,6 +267,64 @@ export default function RipEntryPage() {
     } catch (error) {
       console.error('Error finishing pack:', error)
       toast.success('Error')
+    }
+  }
+
+  async function handlePartialFinish(packId: number) {
+    const packEdit = packEdits[packId]
+    const pack = packs.find(p => p.id === packId)
+    
+    if (!pack) {
+      toast.error('Pack not found')
+      return
+    }
+
+    if (!operatorId) {
+      toast.error('Please select an operator')
+      return
+    }
+
+    const actualBF = packEdit?.actual_board_feet
+    if (!actualBF) {
+      toast.error('Please enter Actual Board Feet first')
+      return
+    }
+
+    const tallyBF = pack.tally_board_feet || 0
+    if (actualBF >= tallyBF) {
+      toast.error('Actual BF must be less than Tally BF for partial finish. Use regular finish instead.')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/lumber/packs/${packId}/partial-finish`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actual_board_feet: actualBF,
+          operator_id: parseInt(operatorId),
+          stacker_1_id: stacker1Id ? parseInt(stacker1Id) : null,
+          stacker_2_id: stacker2Id ? parseInt(stacker2Id) : null,
+          stacker_3_id: stacker3Id ? parseInt(stacker3Id) : null,
+          stacker_4_id: stacker4Id ? parseInt(stacker4Id) : null
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`Pack split! New pack "${data.newPack.pack_id}" created with ${data.newPack.tally_board_feet} BF remaining`)
+        
+        // Refresh
+        if (selectedLoad) {
+          handleSelectLoad(selectedLoad.id)
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to partial finish pack')
+      }
+    } catch (error) {
+      console.error('Error partial finishing pack:', error)
+      toast.error('Error partial finishing pack')
     }
   }
 
@@ -1099,14 +1157,27 @@ export default function RipEntryPage() {
                               </td>
                               <td className="px-1 py-1 border-t">
                                 {!pack.is_finished ? (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleFinishPack(pack.id)}
-                                    className="h-6 px-2 text-xs"
-                                    disabled={!packEdits[pack.id]?.actual_board_feet || !packEdits[pack.id]?.rip_yield}
-                                  >
-                                    <RefreshCcw className="h-3 w-3" />
-                                  </Button>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleFinishPack(pack.id)}
+                                      className="h-6 px-2 text-xs"
+                                      disabled={!packEdits[pack.id]?.actual_board_feet || !packEdits[pack.id]?.rip_yield}
+                                      title="Finish pack"
+                                    >
+                                      <RefreshCcw className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handlePartialFinish(pack.id)}
+                                      className="h-6 px-2 text-xs"
+                                      disabled={!packEdits[pack.id]?.actual_board_feet}
+                                      title="Partial finish - split pack"
+                                    >
+                                      <Scissors className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 ) : (
                                   <Button
                                     size="sm"
