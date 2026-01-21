@@ -722,7 +722,7 @@ export default function CreateLoadPage() {
                       domain={['auto', 'auto']}
                     />
                     <Tooltip 
-                      formatter={(value: number) => value ? `$${value.toFixed(3)}` : 'N/A'}
+                      formatter={(value) => value != null ? `$${Number(value).toFixed(3)}` : 'N/A'}
                       labelStyle={{ fontWeight: 'bold' }}
                     />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
