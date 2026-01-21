@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN (
         SELECT 
           load_item_id,
-          SUM(tally_board_feet) as finished_footage
+          SUM(COALESCE(tally_board_feet, actual_board_feet)) as finished_footage
         FROM lumber_packs
         WHERE is_finished = TRUE
         GROUP BY load_item_id

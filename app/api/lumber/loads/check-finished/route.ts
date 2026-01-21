@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         COUNT(p.id) as total_packs,
         COUNT(CASE WHEN p.is_finished = TRUE THEN 1 END) as finished_packs,
         SUM(li.actual_footage) as total_actual_footage,
-        SUM(p.tally_board_feet) FILTER (WHERE p.is_finished = TRUE) as finished_footage
+        SUM(COALESCE(p.tally_board_feet, p.actual_board_feet)) FILTER (WHERE p.is_finished = TRUE) as finished_footage
       FROM lumber_loads l
       JOIN lumber_load_items li ON li.load_id = l.id
       LEFT JOIN lumber_packs p ON p.load_item_id = li.id

@@ -14,22 +14,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness, LumberLoadPreset } from '@/types/lumber'
-import { Plus, Trash2, Copy, ArrowLeft, BookmarkIcon, Star, Save } from 'lucide-react'
+import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness } from '@/types/lumber'
+import { Plus, Trash2, Copy, ArrowLeft, TrendingUp, AlertTriangle, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
 
 const THICKNESSES: Thickness[] = ['4/4', '5/4', '6/4', '7/4', '8/4']
 const LUMBER_TYPES = ['dried', 'green']
 const PICKUP_OR_DELIVERY_OPTIONS = ['pickup', 'delivery']
+
+interface PriceTrend {
+  species: string
+  grade: string
+  monthly_data: {
+    month: string
+    month_display: string
+    avg_price: number | null
+    load_count: number
+  }[]
+  overall_avg_price: number | null
+}
+
+interface SupplierQuality {
+  supplier_id: number
+  supplier_name: string
+  species: string
+  grade: string
+  overall_avg_quality: number
+  total_loads: number
+  recent_3_avg_quality: number
+  is_dismissed: boolean
+  is_warning: boolean
+}
 
 export default function CreateLoadPage() {
   const { data: session, status } = useSession()
@@ -39,10 +55,13 @@ export default function CreateLoadPage() {
   const [suppliers, setSuppliers] = useState<LumberSupplierWithLocations[]>([])
   const [species, setSpecies] = useState<any[]>([])
   const [grades, setGrades] = useState<any[]>([])
-  const [presets, setPresets] = useState<LumberLoadPreset[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false)
-  const [presetName, setPresetName] = useState('')
+  
+  // Analytics data
+  const [priceTrends, setPriceTrends] = useState<PriceTrend[]>([])
+  const [supplierQuality, setSupplierQuality] = useState<SupplierQuality[]>([])
+  const [expandedPriceTrends, setExpandedPriceTrends] = useState<Set<string>>(new Set())
+  const [expandedQuality, setExpandedQuality] = useState<Set<string>>(new Set())
   
   // Form state
   const [supplierId, setSupplierId] = useState<number | null>(null)
@@ -66,17 +85,19 @@ export default function CreateLoadPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [suppliersRes, speciesRes, gradesRes, presetsRes] = await Promise.all([
+        const [suppliersRes, speciesRes, gradesRes, priceTrendsRes, qualityRes] = await Promise.all([
           fetch('/api/lumber/suppliers'),
           fetch('/api/lumber/species'),
           fetch('/api/lumber/grades'),
-          fetch('/api/lumber/presets')
+          fetch('/api/lumber/analytics/price-trends'),
+          fetch('/api/lumber/analytics/supplier-quality')
         ])
         
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
         if (speciesRes.ok) setSpecies(await speciesRes.json())
         if (gradesRes.ok) setGrades(await gradesRes.json())
-        if (presetsRes.ok) setPresets(await presetsRes.json())
+        if (priceTrendsRes.ok) setPriceTrends(await priceTrendsRes.json())
+        if (qualityRes.ok) setSupplierQuality(await qualityRes.json())
 
         // Fetch the first available load ID for initial item
         try {
@@ -190,127 +211,51 @@ export default function CreateLoadPage() {
     setItems(newItems)
   }
 
-  async function loadPreset(preset: LumberLoadPreset) {
-    // Fill shared fields
-    setSupplierId(preset.supplier_id)
-    setSupplierLocationId(preset.supplier_location_id)
-    setLumberType(preset.lumber_type || 'dried')
-    setPickupOrDelivery(preset.pickup_or_delivery || '')
-    setComments(preset.comments || '')
-
-    // Parse items if they come as a string (PostgreSQL JSON column)
-    let presetItems = preset.items
-    if (typeof preset.items === 'string') {
-      try {
-        presetItems = JSON.parse(preset.items)
-      } catch (e) {
-        console.error('Error parsing preset items:', e)
-        toast.error('Failed to parse preset items')
-        return
-      }
-    }
-
-    // Ensure items is an array
-    if (!Array.isArray(presetItems) || presetItems.length === 0) {
-      toast.error('This preset has no items')
-      return
-    }
-
-    // Fetch load IDs for all items
+  async function dismissWarning(supplierId: number, species: string, grade: string) {
     try {
-      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=${presetItems.length}`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.loadIds && data.loadIds.length >= presetItems.length) {
-          // Map preset items to form items with load IDs
-          const newItems = presetItems.map((presetItem: any, index: number) => ({
-            load_id: data.loadIds[index],
-            species: presetItem.species,
-            grade: presetItem.grade,
-            thickness: presetItem.thickness,
-            estimated_footage: presetItem.estimated_footage,
-            price: presetItem.price
-          }))
-          setItems(newItems)
-          toast.success(`Loaded preset: ${preset.preset_name} (${presetItems.length} items)`)
-        } else {
-          toast.error('Not enough available load IDs for this preset')
-        }
-      } else {
-        const errorData = await response.json()
-        if (response.status === 404) {
-          toast.error('No Load ID range configured. Please set one up in Lumber Admin.')
-        } else {
-          toast.error(errorData.error || 'Failed to get load IDs')
-        }
-        console.error('Load ID API error:', errorData)
-      }
-    } catch (error) {
-      console.error('Error loading preset:', error)
-      toast.error('Failed to load preset. Check console for details.')
-    }
-  }
-
-  async function togglePresetFavorite(presetId: number) {
-    try {
-      const response = await fetch(`/api/lumber/presets/${presetId}/toggle-favorite`, {
-        method: 'POST'
-      })
-      if (response.ok) {
-        // Refresh presets
-        const presetsRes = await fetch('/api/lumber/presets')
-        if (presetsRes.ok) setPresets(await presetsRes.json())
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error)
-    }
-  }
-
-  async function saveAsPreset() {
-    if (!presetName.trim()) {
-      toast.error('Please enter a preset name')
-      return
-    }
-
-    if (!supplierId) {
-      toast.error('Please select a supplier before saving preset')
-      return
-    }
-
-    if (items.length === 0 || !items.every(item => item.species && item.grade && item.thickness && item.price)) {
-      toast.error('Please complete all item details (including price) before saving preset')
-      return
-    }
-
-    try {
-      const response = await fetch('/api/lumber/presets', {
+      const response = await fetch('/api/lumber/analytics/dismissed-warnings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          preset_name: presetName,
-          supplier_id: supplierId,
-          supplier_location_id: supplierLocationId,
-          lumber_type: lumberType,
-          pickup_or_delivery: pickupOrDelivery,
-          comments: comments,
-          items: items.map(({ load_id, ...rest }) => rest) // Remove load_id from items
-        })
+        body: JSON.stringify({ supplier_id: supplierId, species, grade })
       })
-
+      
       if (response.ok) {
-        toast.success('Preset saved successfully')
-        setSavePresetDialogOpen(false)
-        setPresetName('')
-        // Refresh presets
-        const presetsRes = await fetch('/api/lumber/presets')
-        if (presetsRes.ok) setPresets(await presetsRes.json())
-      } else {
-        toast.error('Failed to save preset')
+        // Update local state
+        setSupplierQuality(prev => prev.map(sq => 
+          sq.supplier_id === supplierId && sq.species === species && sq.grade === grade
+            ? { ...sq, is_dismissed: true }
+            : sq
+        ))
+        toast.success('Warning dismissed')
       }
     } catch (error) {
-      console.error('Error saving preset:', error)
-      toast.error('Failed to save preset')
+      console.error('Error dismissing warning:', error)
+      toast.error('Failed to dismiss warning')
     }
+  }
+
+  function togglePriceTrendExpand(key: string) {
+    setExpandedPriceTrends(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  function toggleQualityExpand(key: string) {
+    setExpandedQuality(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -382,13 +327,23 @@ export default function CreateLoadPage() {
     )
   }
 
-  const favoritePresets = presets.filter(p => p.is_favorite)
-  const groupedPresets = presets.reduce((acc, preset) => {
-    const key = preset.supplier_name || 'Unknown'
-    if (!acc[key]) acc[key] = []
-    acc[key].push(preset)
+  // Group price trends by species
+  const groupedPriceTrends = priceTrends.reduce((acc, trend) => {
+    if (!acc[trend.species]) acc[trend.species] = []
+    acc[trend.species].push(trend)
     return acc
-  }, {} as Record<string, LumberLoadPreset[]>)
+  }, {} as Record<string, PriceTrend[]>)
+
+  // Group supplier quality by species/grade
+  const groupedQuality = supplierQuality.reduce((acc, sq) => {
+    const key = `${sq.species}|${sq.grade}`
+    if (!acc[key]) acc[key] = []
+    acc[key].push(sq)
+    return acc
+  }, {} as Record<string, SupplierQuality[]>)
+
+  // Get active warnings (not dismissed, is_warning)
+  const activeWarnings = supplierQuality.filter(sq => sq.is_warning && !sq.is_dismissed)
 
   return (
     <div className="space-y-6">
@@ -407,14 +362,6 @@ export default function CreateLoadPage() {
             <p className="text-gray-600 mt-1">Enter load details and estimated information</p>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setSavePresetDialogOpen(true)}
-        >
-          <Save className="h-4 w-4 mr-2" />
-          Save as Preset
-        </Button>
       </div>
 
       {/* Two Column Layout: Form on left, Presets on right */}
@@ -667,125 +614,176 @@ export default function CreateLoadPage() {
       </form>
         </div>
 
-        {/* Presets Sidebar - Takes up 1 column */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-4 sticky top-6 max-h-[calc(100vh-100px)] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-4">Load Presets</h2>
-            
-            <div className="space-y-6">
-              {/* Favorites Section */}
-              {favoritePresets.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2 text-gray-700">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    Favorites
-                  </h3>
-                  <div className="space-y-2">
-                    {favoritePresets.map(preset => (
-                      <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors border-yellow-200">
-                        <CardContent className="p-3">
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1 min-w-0" onClick={() => loadPreset(preset)}>
-                              <h4 className="font-medium text-sm truncate">{preset.preset_name}</h4>
-                              <p className="text-xs text-gray-600 truncate">{preset.supplier_name}</p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {preset.items.length} item(s)
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                togglePresetFavorite(preset.id)
-                              }}
-                            >
-                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+        {/* Analytics Sidebar - Takes up 1 column */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Quality Warnings Section */}
+          {activeWarnings.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-red-800">
+                <AlertTriangle className="h-5 w-5" />
+                Quality Warnings
+              </h2>
+              <p className="text-xs text-red-600 mb-3">
+                Suppliers with average quality under 50
+              </p>
+              <div className="space-y-2">
+                {activeWarnings.map((warning, idx) => (
+                  <div key={idx} className="bg-white rounded p-3 border border-red-200">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm text-gray-900">{warning.supplier_name}</div>
+                        <div className="text-xs text-gray-600">{warning.species} - {warning.grade}</div>
+                        <div className="flex gap-4 mt-1 text-xs">
+                          <span className={warning.overall_avg_quality < 50 ? 'text-red-600 font-medium' : 'text-gray-600'}>
+                            Avg: {warning.overall_avg_quality}
+                          </span>
+                          <span className={warning.recent_3_avg_quality < 50 ? 'text-red-600 font-medium' : 'text-gray-600'}>
+                            Recent 3: {warning.recent_3_avg_quality}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                        onClick={() => dismissWarning(warning.supplier_id, warning.species, warning.grade)}
+                        title="Dismiss warning"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            </div>
+          )}
 
-              {/* Grouped by Supplier */}
-              {Object.entries(groupedPresets).map(([supplierName, supplierPresets]) => (
-                <div key={supplierName}>
-                  <h3 className="text-sm font-semibold mb-2 text-gray-700">{supplierName}</h3>
-                  <div className="space-y-2">
-                    {supplierPresets.map(preset => (
-                      <Card key={preset.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
-                        <CardContent className="p-3">
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1 min-w-0" onClick={() => loadPreset(preset)}>
-                              <h4 className="font-medium text-sm truncate">{preset.preset_name}</h4>
-                              {preset.supplier_location_name && (
-                                <p className="text-xs text-gray-500 truncate">{preset.supplier_location_name}</p>
-                              )}
-                              <p className="text-xs text-gray-500 mt-1">
-                                {preset.items.length} item(s) - {preset.lumber_type || 'N/A'}
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                togglePresetFavorite(preset.id)
-                              }}
-                            >
-                              <Star className={`h-3 w-3 ${preset.is_favorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                            </Button>
+          {/* Price Trends Section */}
+          <div className="bg-white rounded-lg shadow p-4 sticky top-6 max-h-[calc(100vh-100px)] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              6-Month Price Trends
+            </h2>
+            
+            <div className="space-y-2">
+              {Object.entries(groupedPriceTrends).map(([speciesName, trends]) => (
+                <div key={speciesName} className="border rounded">
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left font-medium text-sm bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
+                    onClick={() => togglePriceTrendExpand(speciesName)}
+                  >
+                    <span>{speciesName}</span>
+                    {expandedPriceTrends.has(speciesName) ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
+                  {expandedPriceTrends.has(speciesName) && (
+                    <div className="p-2 space-y-2">
+                      {trends.map((trend, idx) => (
+                        <div key={idx} className="border-l-2 border-blue-300 pl-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-medium text-gray-700">{trend.grade}</span>
+                            <span className="text-xs text-gray-500">
+                              Avg: ${trend.overall_avg_price?.toFixed(3) || '-'}
+                            </span>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {trend.monthly_data.map((month, midx) => (
+                              <div 
+                                key={midx} 
+                                className="text-xs bg-gray-100 px-1.5 py-0.5 rounded"
+                                title={`${month.month_display}: ${month.load_count} loads`}
+                              >
+                                <span className="text-gray-500">{month.month.split('-')[1]}/</span>
+                                <span className="font-medium">
+                                  {month.avg_price ? `$${month.avg_price.toFixed(3)}` : '-'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
-
-              {presets.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-8">
-                  No presets saved yet. Create a load and save it as a preset.
+              
+              {priceTrends.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No price data available yet.
                 </p>
               )}
+            </div>
+
+            {/* Supplier Quality Section */}
+            <div className="mt-6 pt-4 border-t">
+              <h2 className="text-lg font-semibold mb-3">Supplier Quality by Grade</h2>
+              <div className="space-y-2">
+                {Object.entries(groupedQuality).map(([key, suppliers]) => {
+                  const [speciesName, gradeName] = key.split('|')
+                  return (
+                    <div key={key} className="border rounded">
+                      <button
+                        type="button"
+                        className="w-full px-3 py-2 text-left font-medium text-sm bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
+                        onClick={() => toggleQualityExpand(key)}
+                      >
+                        <span>{speciesName} - {gradeName}</span>
+                        {expandedQuality.has(key) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
+                      {expandedQuality.has(key) && (
+                        <div className="p-2">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-500">
+                                <th className="text-left py-1">Supplier</th>
+                                <th className="text-right py-1">Avg</th>
+                                <th className="text-right py-1">Recent 3</th>
+                                <th className="text-right py-1">Loads</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {suppliers.filter(s => !s.is_dismissed || !s.is_warning).map((sq, idx) => (
+                                <tr 
+                                  key={idx} 
+                                  className={sq.is_warning && !sq.is_dismissed ? 'bg-red-50' : ''}
+                                >
+                                  <td className="py-1 font-medium">{sq.supplier_name}</td>
+                                  <td className={`text-right py-1 ${sq.overall_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
+                                    {sq.overall_avg_quality}
+                                  </td>
+                                  <td className={`text-right py-1 ${sq.recent_3_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
+                                    {sq.recent_3_avg_quality || '-'}
+                                  </td>
+                                  <td className="text-right py-1 text-gray-500">{sq.total_loads}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                
+                {Object.keys(groupedQuality).length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No quality data available yet.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Save Preset Dialog */}
-      <Dialog open={savePresetDialogOpen} onOpenChange={setSavePresetDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save as Preset</DialogTitle>
-            <DialogDescription>
-              Save the current form configuration as a preset for quick access later
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="preset-name">Preset Name *</Label>
-              <Input
-                id="preset-name"
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-                placeholder="e.g., Cherry 4/4 & 5/4 Mix"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSavePresetDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveAsPreset}>Save Preset</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
