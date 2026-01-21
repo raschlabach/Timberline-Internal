@@ -663,7 +663,7 @@ export default function RipEntryPage() {
   const totalPacks = packs.length
   const finishedPacks = packs.filter(p => p.is_finished).length
   const totalBF = packs.reduce((sum, p) => sum + Number(p.tally_board_feet || 0), 0)
-  const finishedBF = packs.filter(p => p.is_finished).reduce((sum, p) => sum + Number(p.actual_board_feet || 0), 0)
+  const finishedBF = packs.filter(p => p.is_finished).reduce((sum, p) => sum + Number(p.tally_board_feet || 0), 0)
   const remainingBF = totalBF - finishedBF
   const avgLength = packs.length > 0 ? packs.reduce((sum, p) => sum + Number(p.length || 0), 0) / packs.length : 0
 

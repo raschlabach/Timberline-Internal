@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         ) as items,
         COALESCE(SUM(li.actual_footage), 0) as total_footage,
         COALESCE((
-          SELECT SUM(p.actual_board_feet)
+          SELECT SUM(p.tally_board_feet)
           FROM lumber_packs p
           WHERE p.load_id = l.id AND p.is_finished = TRUE
         ), 0) as finished_footage
