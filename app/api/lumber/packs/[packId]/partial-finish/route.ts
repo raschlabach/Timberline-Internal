@@ -100,9 +100,9 @@ export async function PATCH(
         RETURNING *`,
         [
           originalPack.load_id,
-          originalPack.item_id,
+          originalPack.item_id || null,
           newPackId,
-          lengthToUse,
+          lengthToUse || null,
           remainingBF
         ]
       )
@@ -116,7 +116,7 @@ export async function PATCH(
            length = $2,
            tally_board_feet = $3,
            actual_board_feet = $3,
-           rip_yield = CASE WHEN $3 > 0 THEN ROUND(($3::DECIMAL / $3) * 100, 2) ELSE NULL END,
+           rip_yield = 100,
            is_finished = TRUE,
            finished_at = CURRENT_DATE,
            operator_id = $4,
@@ -127,8 +127,8 @@ export async function PATCH(
            updated_at = CURRENT_TIMESTAMP
          WHERE id = $9`,
         [
-          packIdToUse,
-          lengthToUse,
+          packIdToUse || null,
+          lengthToUse || null,
           actualBF,
           operator_id || null,
           stacker_1_id || null,
@@ -150,8 +150,11 @@ export async function PATCH(
       await query('ROLLBACK')
       throw error
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error partial finishing pack:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error', 
+      details: error?.message || String(error)
+    }, { status: 500 })
   }
 }
