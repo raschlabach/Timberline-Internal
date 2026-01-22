@@ -3,7 +3,16 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
 
-// GET /api/lumber/analytics/price-trends - Get 6-month price trends by species/grade
+// Time range configurations
+const TIME_RANGES: Record<string, { months: number; label: string }> = {
+  '3m': { months: 3, label: '3 Months' },
+  '6m': { months: 6, label: '6 Months' },
+  '1y': { months: 12, label: '1 Year' },
+  '2y': { months: 24, label: '2 Years' },
+  '5y': { months: 60, label: '5 Years' }
+}
+
+// GET /api/lumber/analytics/price-trends - Get price trends by species/grade with configurable time range
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -11,11 +20,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get monthly average prices for the last 6 months, grouped by species/grade
+    const { searchParams } = new URL(request.url)
+    const range = searchParams.get('range') || '1y'
+    const config = TIME_RANGES[range] || TIME_RANGES['1y']
+    const monthsBack = config.months - 1 // -1 because we include the current month
+
+    // Get monthly average prices for the specified time range, grouped by species/grade
     const result = await query(`
       WITH months AS (
         SELECT generate_series(
-          date_trunc('month', CURRENT_DATE - INTERVAL '5 months'),
+          date_trunc('month', CURRENT_DATE - INTERVAL '${monthsBack} months'),
           date_trunc('month', CURRENT_DATE),
           '1 month'::interval
         ) as month
@@ -35,7 +49,7 @@ export async function GET(request: NextRequest) {
         FROM lumber_load_items li
         JOIN lumber_loads l ON li.load_id = l.id
         WHERE li.price IS NOT NULL
-          AND l.created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '5 months')
+          AND l.created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '${monthsBack} months')
         GROUP BY li.species, li.grade, date_trunc('month', l.created_at)
       )
       SELECT 
@@ -44,7 +58,10 @@ export async function GET(request: NextRequest) {
         json_agg(
           json_build_object(
             'month', to_char(m.month, 'YYYY-MM'),
-            'month_display', to_char(m.month, 'Mon YYYY'),
+            'month_display', CASE 
+              WHEN ${config.months} <= 12 THEN to_char(m.month, 'Mon YYYY')
+              ELSE to_char(m.month, 'Mon ''YY')
+            END,
             'avg_price', COALESCE(mp.avg_price, NULL),
             'load_count', COALESCE(mp.load_count, 0)
           ) ORDER BY m.month

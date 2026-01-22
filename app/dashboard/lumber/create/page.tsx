@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 const THICKNESSES: Thickness[] = ['4/4', '5/4', '6/4', '7/4', '8/4']
 const LUMBER_TYPES = ['dried', 'green']
 const PICKUP_OR_DELIVERY_OPTIONS = ['pickup', 'delivery']
+
+const TIME_RANGE_OPTIONS = [
+  { value: '3m', label: '3 Months' },
+  { value: '6m', label: '6 Months' },
+  { value: '1y', label: '1 Year' },
+  { value: '2y', label: '2 Years' },
+  { value: '5y', label: '5 Years' }
+]
 
 interface PriceTrend {
   species: string
@@ -64,6 +72,8 @@ export default function CreateLoadPage() {
   const [supplierQuality, setSupplierQuality] = useState<SupplierQuality[]>([])
   const [selectedPriceTrends, setSelectedPriceTrends] = useState<Set<string>>(new Set())
   const [expandedQuality, setExpandedQuality] = useState<Set<string>>(new Set())
+  const [timeRange, setTimeRange] = useState('1y')
+  const [isSavingSelections, setIsSavingSelections] = useState(false)
   
   // Form state
   const [supplierId, setSupplierId] = useState<number | null>(null)
@@ -84,22 +94,45 @@ export default function CreateLoadPage() {
     }
   }, [status, router])
 
+  // Fetch price trends when time range changes
+  const fetchPriceTrends = useCallback(async (range: string) => {
+    try {
+      const response = await fetch(`/api/lumber/analytics/price-trends?range=${range}`)
+      if (response.ok) {
+        setPriceTrends(await response.json())
+      }
+    } catch (error) {
+      console.error('Error fetching price trends:', error)
+    }
+  }, [])
+
   useEffect(() => {
     async function fetchData() {
       try {
-        const [suppliersRes, speciesRes, gradesRes, priceTrendsRes, qualityRes] = await Promise.all([
+        const [suppliersRes, speciesRes, gradesRes, qualityRes, savedSelectionsRes] = await Promise.all([
           fetch('/api/lumber/suppliers'),
           fetch('/api/lumber/species'),
           fetch('/api/lumber/grades'),
-          fetch('/api/lumber/analytics/price-trends'),
-          fetch('/api/lumber/analytics/supplier-quality')
+          fetch('/api/lumber/analytics/supplier-quality'),
+          fetch('/api/lumber/analytics/user-trend-selections')
         ])
         
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
         if (speciesRes.ok) setSpecies(await speciesRes.json())
         if (gradesRes.ok) setGrades(await gradesRes.json())
-        if (priceTrendsRes.ok) setPriceTrends(await priceTrendsRes.json())
         if (qualityRes.ok) setSupplierQuality(await qualityRes.json())
+        
+        // Load saved selections
+        if (savedSelectionsRes.ok) {
+          const savedSelections = await savedSelectionsRes.json()
+          const selectionSet = new Set<string>(
+            savedSelections.map((s: { species: string; grade: string }) => `${s.species}|${s.grade}`)
+          )
+          setSelectedPriceTrends(selectionSet)
+        }
+
+        // Fetch price trends with default time range
+        await fetchPriceTrends(timeRange)
 
         // Fetch the first available load ID for initial item
         try {
@@ -135,7 +168,14 @@ export default function CreateLoadPage() {
     if (status === 'authenticated') {
       fetchData()
     }
-  }, [status])
+  }, [status, fetchPriceTrends])
+
+  // Refetch price trends when time range changes
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchPriceTrends(timeRange)
+    }
+  }, [timeRange, status, fetchPriceTrends])
 
   async function handleAddItem() {
     const newIndex = items.length
@@ -236,16 +276,32 @@ export default function CreateLoadPage() {
     }
   }
 
-  function togglePriceTrendSelection(key: string) {
-    setSelectedPriceTrends(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
+  async function togglePriceTrendSelection(key: string) {
+    const next = new Set(selectedPriceTrends)
+    if (next.has(key)) {
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+    setSelectedPriceTrends(next)
+    
+    // Save to database
+    setIsSavingSelections(true)
+    try {
+      const selections = Array.from(next).map(k => {
+        const [species, grade] = k.split('|')
+        return { species, grade }
+      })
+      await fetch('/api/lumber/analytics/user-trend-selections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selections })
+      })
+    } catch (error) {
+      console.error('Error saving selections:', error)
+    } finally {
+      setIsSavingSelections(false)
+    }
   }
 
   function toggleQualityExpand(key: string) {
@@ -402,7 +458,7 @@ export default function CreateLoadPage() {
         </div>
       </div>
 
-      {/* Two Column Layout: Form on left, Presets on right */}
+      {/* Two Column Layout: Form on left, Supplier Quality on right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form - Takes up 2 columns */}
         <div className="lg:col-span-2">
@@ -652,7 +708,7 @@ export default function CreateLoadPage() {
       </form>
         </div>
 
-        {/* Analytics Sidebar - Takes up 1 column */}
+        {/* Sidebar - Supplier Quality & Warnings */}
         <div className="lg:col-span-1 space-y-4">
           {/* Quality Warnings Section */}
           {activeWarnings.length > 0 && (
@@ -697,35 +753,125 @@ export default function CreateLoadPage() {
             </div>
           )}
 
-          {/* Price Trends Section */}
+          {/* Supplier Quality Section */}
           <div className="bg-white rounded-lg shadow p-4 sticky top-6 max-h-[calc(100vh-100px)] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-              6-Month Price Trends
-            </h2>
-            
-            {/* Chart */}
+            <h2 className="text-lg font-semibold mb-3">Supplier Quality by Grade</h2>
+            <div className="space-y-2">
+              {Object.entries(groupedQuality).map(([key, suppliers]) => {
+                const [speciesName, gradeName] = key.split('|')
+                return (
+                  <div key={key} className="border rounded">
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-left font-medium text-sm bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
+                      onClick={() => toggleQualityExpand(key)}
+                    >
+                      <span>{speciesName} - {gradeName}</span>
+                      {expandedQuality.has(key) ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </button>
+                    {expandedQuality.has(key) && (
+                      <div className="p-2">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-500">
+                              <th className="text-left py-1">Supplier</th>
+                              <th className="text-right py-1">Avg</th>
+                              <th className="text-right py-1">Recent 3</th>
+                              <th className="text-right py-1">Loads</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {suppliers.filter(s => !s.is_dismissed || !s.is_warning).map((sq, idx) => (
+                              <tr 
+                                key={idx} 
+                                className={sq.is_warning && !sq.is_dismissed ? 'bg-red-50' : ''}
+                              >
+                                <td className="py-1 font-medium">{sq.supplier_name}</td>
+                                <td className={`text-right py-1 ${sq.overall_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
+                                  {sq.overall_avg_quality}
+                                </td>
+                                <td className={`text-right py-1 ${sq.recent_3_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
+                                  {sq.recent_3_avg_quality || '-'}
+                                </td>
+                                <td className="text-right py-1 text-gray-500">{sq.total_loads}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              
+              {Object.keys(groupedQuality).length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No quality data available yet.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Price Trends Section - Full Width Below Form */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <TrendingUp className="h-6 w-6 text-blue-600" />
+            Price Trends
+          </h2>
+          <div className="flex items-center gap-2">
+            {isSavingSelections && (
+              <span className="text-xs text-gray-400">Saving...</span>
+            )}
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_RANGE_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Chart - Takes up 3 columns */}
+          <div className="lg:col-span-3">
             {selectedPriceTrends.size > 0 && chartData.length > 0 ? (
-              <div className="h-64 mb-4">
+              <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                  <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
                       dataKey="month" 
-                      tick={{ fontSize: 10 }} 
+                      tick={{ fontSize: 11 }} 
                       tickLine={false}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
                     />
                     <YAxis 
-                      tick={{ fontSize: 10 }} 
+                      tick={{ fontSize: 11 }} 
                       tickLine={false}
                       tickFormatter={(value) => value != null ? `$${Number(value).toFixed(2)}` : ''}
                       domain={['auto', 'auto']}
+                      width={60}
                     />
                     <Tooltip 
                       formatter={(value) => value != null ? `$${Number(value).toFixed(3)}` : 'N/A'}
                       labelStyle={{ fontWeight: 'bold' }}
                     />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                     {priceTrends
                       .filter(t => selectedPriceTrends.has(`${t.species}|${t.grade}`))
                       .map((trend) => {
@@ -747,18 +893,23 @@ export default function CreateLoadPage() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-32 flex items-center justify-center bg-gray-50 rounded mb-4 text-sm text-gray-500">
-                Select species/grade combos below to view price trends
+              <div className="h-96 flex items-center justify-center bg-gray-50 rounded text-gray-500">
+                <div className="text-center">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  <p>Select species/grade combinations to view price trends</p>
+                </div>
               </div>
             )}
-            
-            {/* Selection List */}
-            <div className="border-t pt-3">
-              <p className="text-xs text-gray-500 mb-2">Select combos to display on chart:</p>
-              <div className="max-h-48 overflow-y-auto space-y-1">
+          </div>
+
+          {/* Selection Panel - Takes up 1 column */}
+          <div className="lg:col-span-1">
+            <div className="border rounded-lg p-4 h-96 overflow-y-auto">
+              <p className="text-sm font-medium text-gray-700 mb-3">Select to display on chart:</p>
+              <div className="space-y-2">
                 {Object.entries(groupedPriceTrends).map(([speciesName, trends]) => (
                   <div key={speciesName} className="space-y-1">
-                    <div className="text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                    <div className="text-sm font-semibold text-gray-700 bg-gray-100 px-3 py-2 rounded">
                       {speciesName}
                     </div>
                     {trends.map((trend) => {
@@ -767,18 +918,18 @@ export default function CreateLoadPage() {
                       return (
                         <label 
                           key={key}
-                          className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer rounded text-xs"
+                          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded text-sm"
                         >
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() => togglePriceTrendSelection(key)}
                           />
                           <span 
-                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            className="w-4 h-4 rounded-full flex-shrink-0"
                             style={{ backgroundColor: trendColorMap[key] }}
                           />
-                          <span className="flex-1">{trend.grade}</span>
-                          <span className="text-gray-400">
+                          <span className="flex-1 font-medium">{trend.grade}</span>
+                          <span className="text-gray-500">
                             ${trend.overall_avg_price != null ? Number(trend.overall_avg_price).toFixed(3) : '-'}
                           </span>
                         </label>
@@ -789,73 +940,10 @@ export default function CreateLoadPage() {
               </div>
               
               {priceTrends.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-4">
+                <p className="text-sm text-gray-500 text-center py-8">
                   No price data available yet.
                 </p>
               )}
-            </div>
-
-            {/* Supplier Quality Section */}
-            <div className="mt-6 pt-4 border-t">
-              <h2 className="text-lg font-semibold mb-3">Supplier Quality by Grade</h2>
-              <div className="space-y-2">
-                {Object.entries(groupedQuality).map(([key, suppliers]) => {
-                  const [speciesName, gradeName] = key.split('|')
-                  return (
-                    <div key={key} className="border rounded">
-                      <button
-                        type="button"
-                        className="w-full px-3 py-2 text-left font-medium text-sm bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
-                        onClick={() => toggleQualityExpand(key)}
-                      >
-                        <span>{speciesName} - {gradeName}</span>
-                        {expandedQuality.has(key) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                      {expandedQuality.has(key) && (
-                        <div className="p-2">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="text-gray-500">
-                                <th className="text-left py-1">Supplier</th>
-                                <th className="text-right py-1">Avg</th>
-                                <th className="text-right py-1">Recent 3</th>
-                                <th className="text-right py-1">Loads</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {suppliers.filter(s => !s.is_dismissed || !s.is_warning).map((sq, idx) => (
-                                <tr 
-                                  key={idx} 
-                                  className={sq.is_warning && !sq.is_dismissed ? 'bg-red-50' : ''}
-                                >
-                                  <td className="py-1 font-medium">{sq.supplier_name}</td>
-                                  <td className={`text-right py-1 ${sq.overall_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
-                                    {sq.overall_avg_quality}
-                                  </td>
-                                  <td className={`text-right py-1 ${sq.recent_3_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
-                                    {sq.recent_3_avg_quality || '-'}
-                                  </td>
-                                  <td className="text-right py-1 text-gray-500">{sq.total_loads}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                
-                {Object.keys(groupedQuality).length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    No quality data available yet.
-                  </p>
-                )}
-              </div>
             </div>
           </div>
         </div>
