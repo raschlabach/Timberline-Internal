@@ -340,6 +340,7 @@ export interface InventoryLoadDetail {
   pack_count: number
   finished_pack_count: number
   price: number | null
+  invoice_total: number | null
 }
 
 export interface InventoryGroup {

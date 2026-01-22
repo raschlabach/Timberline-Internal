@@ -428,7 +428,16 @@ export default function InventoryPage() {
           }
           
           const actualFootage = Number(load.actual_footage) || 0
-          const price = load.price ? Number(load.price) : null
+          let price = load.price ? Number(load.price) : null
+          
+          // If price is blank or less than $0.30/BF, calculate from invoice_total / actual_footage
+          if ((price === null || price < 0.30) && load.invoice_total && actualFootage > 0) {
+            const calculatedPrice = Number(load.invoice_total) / actualFootage
+            // Only use calculated price if it's reasonable (>= $0.30/BF)
+            if (calculatedPrice >= 0.30) {
+              price = calculatedPrice
+            }
+          }
           
           grouped[key].total_actual_footage += actualFootage
           grouped[key].total_finished_footage += Number(load.finished_footage) || 0
@@ -437,8 +446,8 @@ export default function InventoryPage() {
           grouped[key].loads.push(load)
           
           // Calculate weighted average price
-          // Only include prices >= $0.20 per BF (exclude blank or unrealistic low prices)
-          if (price !== null && price >= 0.20 && actualFootage > 0) {
+          // Only include prices >= $0.30 per BF (exclude blank or unrealistic low prices)
+          if (price !== null && price >= 0.30 && actualFootage > 0) {
             grouped[key].total_price_weighted += price * actualFootage
             grouped[key].total_footage_with_price += actualFootage
           }

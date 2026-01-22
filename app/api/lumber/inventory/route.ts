@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         l.id as load_db_id,
         li.actual_footage,
         li.price,
+        l.invoice_total,
         COALESCE(finished_packs.finished_footage, 0) as finished_footage,
         li.actual_footage - COALESCE(finished_packs.finished_footage, 0) as load_inventory,
         COALESCE(pack_counts.total_packs, 0) as pack_count,
