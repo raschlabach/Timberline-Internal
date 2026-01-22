@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     const monthsBack = config.months - 1 // -1 because we include the current month
 
     // Get monthly average prices for the specified time range, grouped by species/grade
+    // Only include prices >= $0.20 per BF (exclude blank or unrealistic low prices)
     const result = await query(`
       WITH months AS (
         SELECT generate_series(
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
       species_grades AS (
         SELECT DISTINCT species, grade
         FROM lumber_load_items
-        WHERE price IS NOT NULL
+        WHERE price IS NOT NULL AND price >= 0.20
       ),
       monthly_prices AS (
         SELECT 
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
         FROM lumber_load_items li
         JOIN lumber_loads l ON li.load_id = l.id
         WHERE li.price IS NOT NULL
+          AND li.price >= 0.20
           AND l.created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '${monthsBack} months')
         GROUP BY li.species, li.grade, date_trunc('month', l.created_at)
       )
@@ -72,6 +74,7 @@ export async function GET(request: NextRequest) {
           WHERE li2.species = sg.species 
             AND li2.grade = sg.grade 
             AND li2.price IS NOT NULL
+            AND li2.price >= 0.20
         ) as overall_avg_price
       FROM species_grades sg
       CROSS JOIN months m

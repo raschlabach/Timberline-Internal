@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { InventoryGroup, InventoryLoadDetail, LumberPackWithDetails } from '@/types/lumber'
@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight, Eye, GripVertical, Printer } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, GripVertical, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DndContext,
@@ -359,6 +359,16 @@ export default function InventoryPage() {
     loads: InventoryLoadDetail[]
   } | null>(null)
 
+  // Inventory Loads List state
+  const [allInventoryLoads, setAllInventoryLoads] = useState<InventoryLoadDetail[]>([])
+  const [inventoryLoadsSearch, setInventoryLoadsSearch] = useState('')
+  const [inventoryLoadsSupplier, setInventoryLoadsSupplier] = useState('all')
+  const [inventoryLoadsSpecies, setInventoryLoadsSpecies] = useState('all')
+  const [inventoryLoadsGrade, setInventoryLoadsGrade] = useState('all')
+  const [inventoryLoadsThickness, setInventoryLoadsThickness] = useState('all')
+  const [inventoryLoadsSortColumn, setInventoryLoadsSortColumn] = useState<string>('load_id')
+  const [inventoryLoadsSortDirection, setInventoryLoadsSortDirection] = useState<'asc' | 'desc'>('asc')
+
   // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -398,6 +408,9 @@ export default function InventoryPage() {
       if (inventoryRes.ok) {
         const loadDetails: InventoryLoadDetail[] = await inventoryRes.json()
         
+        // Store raw loads for the Inventory Loads list
+        setAllInventoryLoads(loadDetails)
+        
         // Group by species, grade, thickness
         const grouped: Record<string, InventoryGroup> = {}
         
@@ -430,7 +443,8 @@ export default function InventoryPage() {
           grouped[key].loads.push(load)
           
           // Calculate weighted average price
-          if (price !== null && actualFootage > 0) {
+          // Only include prices >= $0.20 per BF (exclude blank or unrealistic low prices)
+          if (price !== null && price >= 0.20 && actualFootage > 0) {
             grouped[key].total_price_weighted += price * actualFootage
             grouped[key].total_footage_with_price += actualFootage
           }
@@ -717,6 +731,123 @@ export default function InventoryPage() {
     }
   })
 
+  // Get unique values for inventory loads filters
+  const inventoryLoadsFilterOptions = useMemo(() => {
+    const suppliers = Array.from(new Set(allInventoryLoads.map(l => l.species))).sort() // Note: We don't have supplier in this data
+    const species = Array.from(new Set(allInventoryLoads.map(l => l.species))).sort()
+    const grades = Array.from(new Set(allInventoryLoads.map(l => l.grade))).sort()
+    const thicknesses = Array.from(new Set(allInventoryLoads.map(l => l.thickness))).sort()
+    return { species, grades, thicknesses }
+  }, [allInventoryLoads])
+
+  // Filter and sort inventory loads
+  const filteredInventoryLoads = useMemo(() => {
+    let filtered = [...allInventoryLoads]
+
+    // Apply search filter
+    if (inventoryLoadsSearch) {
+      const search = inventoryLoadsSearch.toLowerCase()
+      filtered = filtered.filter(load =>
+        load.load_id?.toLowerCase().includes(search) ||
+        load.species?.toLowerCase().includes(search) ||
+        load.grade?.toLowerCase().includes(search) ||
+        load.thickness?.toLowerCase().includes(search)
+      )
+    }
+
+    // Apply species filter
+    if (inventoryLoadsSpecies !== 'all') {
+      filtered = filtered.filter(load => load.species === inventoryLoadsSpecies)
+    }
+
+    // Apply grade filter
+    if (inventoryLoadsGrade !== 'all') {
+      filtered = filtered.filter(load => load.grade === inventoryLoadsGrade)
+    }
+
+    // Apply thickness filter
+    if (inventoryLoadsThickness !== 'all') {
+      filtered = filtered.filter(load => load.thickness === inventoryLoadsThickness)
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (inventoryLoadsSortColumn) {
+        case 'load_id':
+          aVal = parseInt(a.load_id) || 0
+          bVal = parseInt(b.load_id) || 0
+          break
+        case 'species':
+          aVal = a.species || ''
+          bVal = b.species || ''
+          break
+        case 'grade':
+          aVal = a.grade || ''
+          bVal = b.grade || ''
+          break
+        case 'thickness':
+          aVal = a.thickness || ''
+          bVal = b.thickness || ''
+          break
+        case 'actual_footage':
+          aVal = Number(a.actual_footage) || 0
+          bVal = Number(b.actual_footage) || 0
+          break
+        case 'load_inventory':
+          aVal = Number(a.load_inventory) || 0
+          bVal = Number(b.load_inventory) || 0
+          break
+        case 'price':
+          aVal = Number(a.price) || 0
+          bVal = Number(b.price) || 0
+          break
+        default:
+          aVal = a.load_id
+          bVal = b.load_id
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return inventoryLoadsSortDirection === 'asc'
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal)
+      }
+
+      return inventoryLoadsSortDirection === 'asc' ? aVal - bVal : bVal - aVal
+    })
+
+    return filtered
+  }, [allInventoryLoads, inventoryLoadsSearch, inventoryLoadsSpecies, inventoryLoadsGrade, inventoryLoadsThickness, inventoryLoadsSortColumn, inventoryLoadsSortDirection])
+
+  // Inventory loads helper functions
+  function handleInventoryLoadsSort(column: string) {
+    if (inventoryLoadsSortColumn === column) {
+      setInventoryLoadsSortDirection(inventoryLoadsSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setInventoryLoadsSortColumn(column)
+      setInventoryLoadsSortDirection('asc')
+    }
+  }
+
+  function getInventoryLoadsSortIcon(column: string) {
+    if (inventoryLoadsSortColumn !== column) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
+    }
+    return inventoryLoadsSortDirection === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />
+  }
+
+  function clearInventoryLoadsFilters() {
+    setInventoryLoadsSearch('')
+    setInventoryLoadsSpecies('all')
+    setInventoryLoadsGrade('all')
+    setInventoryLoadsThickness('all')
+  }
+
+  const hasInventoryLoadsFilters = inventoryLoadsSearch || inventoryLoadsSpecies !== 'all' || inventoryLoadsGrade !== 'all' || inventoryLoadsThickness !== 'all'
 
   if (status === 'loading' || isLoading) {
     return (
@@ -1320,6 +1451,265 @@ export default function InventoryPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Inventory Loads Section */}
+      <div className="bg-white rounded-lg shadow mt-6 print:hidden">
+        <div className="p-4 border-b">
+          <h2 className="text-lg font-semibold">Inventory Loads</h2>
+          <p className="text-sm text-gray-500">All loads currently contributing to inventory</p>
+        </div>
+        
+        {/* Filters */}
+        <div className="p-4 border-b bg-gray-50 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
+            {hasInventoryLoadsFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearInventoryLoadsFilters}
+                className="h-7 text-xs"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear All
+              </Button>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-4 gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Search loads..."
+                value={inventoryLoadsSearch}
+                onChange={(e) => setInventoryLoadsSearch(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+
+            {/* Species Filter */}
+            <Select value={inventoryLoadsSpecies} onValueChange={setInventoryLoadsSpecies}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="All Species" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Species</SelectItem>
+                {inventoryLoadsFilterOptions.species.map(sp => (
+                  <SelectItem key={sp} value={sp}>{sp}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Grade Filter */}
+            <Select value={inventoryLoadsGrade} onValueChange={setInventoryLoadsGrade}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Grades</SelectItem>
+                {inventoryLoadsFilterOptions.grades.map(grade => (
+                  <SelectItem key={grade} value={grade}>{grade}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Thickness Filter */}
+            <Select value={inventoryLoadsThickness} onValueChange={setInventoryLoadsThickness}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="All Thicknesses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Thicknesses</SelectItem>
+                {inventoryLoadsFilterOptions.thicknesses.map(thickness => (
+                  <SelectItem key={thickness} value={thickness}>{thickness}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Active Filters Display */}
+          {hasInventoryLoadsFilters && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t">
+              {inventoryLoadsSearch && (
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                  Search: {inventoryLoadsSearch}
+                  <button onClick={() => setInventoryLoadsSearch('')} className="hover:text-blue-900">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {inventoryLoadsSpecies !== 'all' && (
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                  Species: {inventoryLoadsSpecies}
+                  <button onClick={() => setInventoryLoadsSpecies('all')} className="hover:text-purple-900">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {inventoryLoadsGrade !== 'all' && (
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
+                  Grade: {inventoryLoadsGrade}
+                  <button onClick={() => setInventoryLoadsGrade('all')} className="hover:text-orange-900">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {inventoryLoadsThickness !== 'all' && (
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-100 text-cyan-800 text-xs rounded">
+                  Thickness: {inventoryLoadsThickness}
+                  <button onClick={() => setInventoryLoadsThickness('all')} className="hover:text-cyan-900">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              <div className="text-xs text-gray-500 self-center ml-auto">
+                Showing {filteredInventoryLoads.length} of {allInventoryLoads.length} loads
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Loads Table */}
+        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-800 text-white sticky top-0">
+              <tr>
+                <th 
+                  className="px-3 py-2 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('load_id')}
+                >
+                  <div className="flex items-center">
+                    Load ID {getInventoryLoadsSortIcon('load_id')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('species')}
+                >
+                  <div className="flex items-center">
+                    Species {getInventoryLoadsSortIcon('species')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('grade')}
+                >
+                  <div className="flex items-center">
+                    Grade {getInventoryLoadsSortIcon('grade')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('thickness')}
+                >
+                  <div className="flex items-center">
+                    Thickness {getInventoryLoadsSortIcon('thickness')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 text-right text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('actual_footage')}
+                >
+                  <div className="flex items-center justify-end">
+                    Total BF {getInventoryLoadsSortIcon('actual_footage')}
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 text-right text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('load_inventory')}
+                >
+                  <div className="flex items-center justify-end">
+                    Inventory BF {getInventoryLoadsSortIcon('load_inventory')}
+                  </div>
+                </th>
+                <th className="px-3 py-2 text-center text-xs font-medium uppercase">
+                  Packs
+                </th>
+                <th 
+                  className="px-3 py-2 text-right text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleInventoryLoadsSort('price')}
+                >
+                  <div className="flex items-center justify-end">
+                    Price {getInventoryLoadsSortIcon('price')}
+                  </div>
+                </th>
+                <th className="px-3 py-2 text-center text-xs font-medium uppercase">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredInventoryLoads.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-gray-500">
+                    No loads found
+                  </td>
+                </tr>
+              ) : (
+                filteredInventoryLoads.map((load, idx) => (
+                  <tr 
+                    key={`${load.load_id}-${idx}`}
+                    className={`hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                  >
+                    <td className="px-3 py-2 whitespace-nowrap text-sm font-medium">
+                      {load.load_id}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm">
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: speciesColors[load.species] || '#6B7280' }}
+                        />
+                        {load.species}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm">{load.grade}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm">{load.thickness}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-right">
+                      {Number(load.actual_footage || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-right font-semibold text-blue-600">
+                      {Number(load.load_inventory || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-600">
+                      {load.finished_pack_count}/{load.pack_count}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-green-600">
+                      {load.price ? `$${Number(load.price).toFixed(3)}` : '-'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-center">
+                      <button
+                        onClick={() => handleViewRipEntry(load)}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        View Tallies
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {filteredInventoryLoads.length > 0 && (
+              <tfoot className="bg-gray-100 border-t-2 border-gray-300">
+                <tr>
+                  <td colSpan={4} className="px-3 py-2 text-sm font-semibold">
+                    Total ({filteredInventoryLoads.length} loads)
+                  </td>
+                  <td className="px-3 py-2 text-sm text-right font-semibold">
+                    {filteredInventoryLoads.reduce((sum, l) => sum + (Number(l.actual_footage) || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-right font-semibold text-blue-600">
+                    {filteredInventoryLoads.reduce((sum, l) => sum + (Number(l.load_inventory) || 0), 0).toLocaleString()}
+                  </td>
+                  <td colSpan={3}></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
       {/* Rip Entry View Dialog */}
