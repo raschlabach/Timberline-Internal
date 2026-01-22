@@ -718,7 +718,7 @@ export default function CreateLoadPage() {
                     <YAxis 
                       tick={{ fontSize: 10 }} 
                       tickLine={false}
-                      tickFormatter={(value) => `$${value.toFixed(2)}`}
+                      tickFormatter={(value) => value != null ? `$${Number(value).toFixed(2)}` : ''}
                       domain={['auto', 'auto']}
                     />
                     <Tooltip 
@@ -779,7 +779,7 @@ export default function CreateLoadPage() {
                           />
                           <span className="flex-1">{trend.grade}</span>
                           <span className="text-gray-400">
-                            ${trend.overall_avg_price?.toFixed(3) || '-'}
+                            ${trend.overall_avg_price != null ? Number(trend.overall_avg_price).toFixed(3) : '-'}
                           </span>
                         </label>
                       )
