@@ -290,7 +290,16 @@ export default function RipEntryPage() {
       return
     }
 
-    const tallyBF = pack.tally_board_feet || 0
+    // Use edited values if available, otherwise use saved pack values
+    const tallyBF = packEdit?.tally_board_feet ?? pack.tally_board_feet ?? 0
+    const packIdValue = packEdit?.pack_id ?? pack.pack_id
+    const lengthValue = packEdit?.length ?? pack.length
+
+    if (!tallyBF || tallyBF <= 0) {
+      toast.error('Please enter Tally Board Feet (Brd Ft) first')
+      return
+    }
+
     if (actualBF >= tallyBF) {
       toast.error('Actual BF must be less than Tally BF for partial finish. Use regular finish instead.')
       return
@@ -302,6 +311,9 @@ export default function RipEntryPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           actual_board_feet: actualBF,
+          tally_board_feet: tallyBF,
+          pack_id: packIdValue,
+          length: lengthValue,
           operator_id: parseInt(operatorId),
           stacker_1_id: stacker1Id ? parseInt(stacker1Id) : null,
           stacker_2_id: stacker2Id ? parseInt(stacker2Id) : null,
@@ -312,7 +324,7 @@ export default function RipEntryPage() {
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`Pack split! New pack "${data.newPack.pack_id}" created with ${data.newPack.tally_board_feet} BF remaining`)
+        toast.success(`Pack split! New pack "${data.newPack.pack_id}" created with ${Math.round(data.newPack.tally_board_feet)} BF remaining`)
         
         // Refresh
         if (selectedLoad) {

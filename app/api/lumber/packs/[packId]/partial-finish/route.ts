@@ -15,7 +15,17 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { actual_board_feet, operator_id, stacker_1_id, stacker_2_id, stacker_3_id, stacker_4_id } = body
+    const { 
+      actual_board_feet, 
+      tally_board_feet: bodyTallyBF,
+      pack_id: bodyPackId,
+      length: bodyLength,
+      operator_id, 
+      stacker_1_id, 
+      stacker_2_id, 
+      stacker_3_id, 
+      stacker_4_id 
+    } = body
 
     if (!actual_board_feet) {
       return NextResponse.json({ error: 'actual_board_feet is required' }, { status: 400 })
@@ -36,8 +46,18 @@ export async function PATCH(
       }
 
       const originalPack = packResult.rows[0]
-      const originalTallyBF = originalPack.tally_board_feet || 0
-      const remainingBF = originalTallyBF - actual_board_feet
+      
+      // Use tally_board_feet from body if provided (for unsaved packs), otherwise use DB value
+      const originalTallyBF = bodyTallyBF != null ? Number(bodyTallyBF) : (Number(originalPack.tally_board_feet) || 0)
+      const actualBF = Number(actual_board_feet)
+      const remainingBF = originalTallyBF - actualBF
+
+      if (originalTallyBF <= 0) {
+        await query('ROLLBACK')
+        return NextResponse.json({ 
+          error: 'Tally board feet must be greater than 0 for partial finish' 
+        }, { status: 400 })
+      }
 
       if (remainingBF <= 0) {
         await query('ROLLBACK')
@@ -45,9 +65,13 @@ export async function PATCH(
           error: 'Actual board feet must be less than tally board feet for partial finish' 
         }, { status: 400 })
       }
+      
+      // Use pack_id and length from body if provided (for unsaved packs)
+      const packIdToUse = bodyPackId || originalPack.pack_id
+      const lengthToUse = bodyLength != null ? bodyLength : originalPack.length
 
       // Create the new pack ID (original + "*2", or increment if already has suffix)
-      let newPackId = originalPack.pack_id
+      let newPackId = packIdToUse
       if (newPackId) {
         const suffixMatch = newPackId.match(/\*(\d+)$/)
         if (suffixMatch) {
@@ -76,30 +100,34 @@ export async function PATCH(
           originalPack.load_id,
           originalPack.item_id,
           newPackId,
-          originalPack.length,
+          lengthToUse,
           remainingBF
         ]
       )
 
       // Update the original pack's tally_board_feet to the actual ripped amount
-      // and mark it as finished
+      // and mark it as finished. Also update pack_id and length if provided.
       await query(
         `UPDATE lumber_packs
          SET 
-           tally_board_feet = $1,
-           actual_board_feet = $1,
-           rip_yield = CASE WHEN $1 > 0 THEN ROUND(($1::DECIMAL / $1) * 100, 2) ELSE NULL END,
+           pack_id = $1,
+           length = $2,
+           tally_board_feet = $3,
+           actual_board_feet = $3,
+           rip_yield = CASE WHEN $3 > 0 THEN ROUND(($3::DECIMAL / $3) * 100, 2) ELSE NULL END,
            is_finished = TRUE,
            finished_at = CURRENT_DATE,
-           operator_id = $2,
-           stacker_1_id = $3,
-           stacker_2_id = $4,
-           stacker_3_id = $5,
-           stacker_4_id = $6,
+           operator_id = $4,
+           stacker_1_id = $5,
+           stacker_2_id = $6,
+           stacker_3_id = $7,
+           stacker_4_id = $8,
            updated_at = CURRENT_TIMESTAMP
-         WHERE id = $7`,
+         WHERE id = $9`,
         [
-          actual_board_feet,
+          packIdToUse,
+          lengthToUse,
+          actualBF,
           operator_id || null,
           stacker_1_id || null,
           stacker_2_id || null,
