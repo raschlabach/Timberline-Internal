@@ -284,14 +284,17 @@ export default function RipEntryPage() {
       return
     }
 
-    const actualBF = packEdit?.actual_board_feet
-    if (!actualBF) {
+    const actualBFRaw = packEdit?.actual_board_feet
+    if (!actualBFRaw) {
       toast.error('Please enter Actual Board Feet first')
       return
     }
 
     // Use edited values if available, otherwise use saved pack values
-    const tallyBF = packEdit?.tally_board_feet ?? pack.tally_board_feet ?? 0
+    // IMPORTANT: Convert to numbers to avoid string comparison issues (DECIMAL comes as string from DB)
+    const actualBF = Number(actualBFRaw)
+    const tallyBFRaw = packEdit?.tally_board_feet ?? pack.tally_board_feet
+    const tallyBF = Number(tallyBFRaw) || 0
     const packIdValue = packEdit?.pack_id ?? pack.pack_id
     const lengthValue = packEdit?.length ?? pack.length
 
@@ -301,7 +304,7 @@ export default function RipEntryPage() {
     }
 
     if (actualBF >= tallyBF) {
-      toast.error('Actual BF must be less than Tally BF for partial finish. Use regular finish instead.')
+      toast.error(`Actual BF (${actualBF}) must be less than Tally BF (${tallyBF}) for partial finish. Use regular finish instead.`)
       return
     }
 
@@ -938,11 +941,14 @@ export default function RipEntryPage() {
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <Label className="text-xs mb-1">Operator</Label>
-                    <Select value={operatorId} onValueChange={setOperatorId}>
+                    <Select value={operatorId} onValueChange={(val) => setOperatorId(val === '__clear__' ? '' : val)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__clear__" className="text-gray-400 italic">
+                          Clear selection
+                        </SelectItem>
                         {operators.map(operator => (
                           <SelectItem key={operator.id} value={operator.id.toString()}>
                             {operator.name}
@@ -953,11 +959,14 @@ export default function RipEntryPage() {
                   </div>
                   <div>
                     <Label className="text-xs mb-1">Stacker 1</Label>
-                    <Select value={stacker1Id} onValueChange={setStacker1Id}>
+                    <Select value={stacker1Id} onValueChange={(val) => setStacker1Id(val === '__clear__' ? '' : val)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__clear__" className="text-gray-400 italic">
+                          Clear selection
+                        </SelectItem>
                         {operators.map(operator => (
                           <SelectItem key={operator.id} value={operator.id.toString()}>
                             {operator.name}
@@ -968,11 +977,14 @@ export default function RipEntryPage() {
                   </div>
                   <div>
                     <Label className="text-xs mb-1">Stacker 2</Label>
-                    <Select value={stacker2Id} onValueChange={setStacker2Id}>
+                    <Select value={stacker2Id} onValueChange={(val) => setStacker2Id(val === '__clear__' ? '' : val)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__clear__" className="text-gray-400 italic">
+                          Clear selection
+                        </SelectItem>
                         {operators.map(operator => (
                           <SelectItem key={operator.id} value={operator.id.toString()}>
                             {operator.name}
@@ -983,11 +995,14 @@ export default function RipEntryPage() {
                   </div>
                   <div>
                     <Label className="text-xs mb-1">Stacker 3</Label>
-                    <Select value={stacker3Id} onValueChange={setStacker3Id}>
+                    <Select value={stacker3Id} onValueChange={(val) => setStacker3Id(val === '__clear__' ? '' : val)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__clear__" className="text-gray-400 italic">
+                          Clear selection
+                        </SelectItem>
                         {operators.map(operator => (
                           <SelectItem key={operator.id} value={operator.id.toString()}>
                             {operator.name}
@@ -998,11 +1013,14 @@ export default function RipEntryPage() {
                   </div>
                   <div>
                     <Label className="text-xs mb-1">Stacker 4</Label>
-                    <Select value={stacker4Id} onValueChange={setStacker4Id}>
+                    <Select value={stacker4Id} onValueChange={(val) => setStacker4Id(val === '__clear__' ? '' : val)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__clear__" className="text-gray-400 italic">
+                          Clear selection
+                        </SelectItem>
                         {operators.map(operator => (
                           <SelectItem key={operator.id} value={operator.id.toString()}>
                             {operator.name}
@@ -1122,7 +1140,7 @@ export default function RipEntryPage() {
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-2 py-1 text-left w-24">Act Brd Ft</th>
+                          <th className="px-2 py-1 text-left w-24">Act Ft</th>
                           <th className="px-2 py-1 text-left w-24">Rip Yield</th>
                           <th className="px-2 py-1 text-left w-24">Comments</th>
                           <th className="px-2 py-1 w-12"></th>
