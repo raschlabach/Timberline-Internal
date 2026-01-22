@@ -89,16 +89,18 @@ export async function PATCH(
       // Create the new pack with remaining board feet
       const newPackResult = await query(
         `INSERT INTO lumber_packs (
-          load_id, 
+          load_id,
+          load_item_id,
           pack_id, 
           length, 
           tally_board_feet,
           is_finished
         )
-        VALUES ($1, $2, $3, $4, FALSE)
+        VALUES ($1, $2, $3, $4, $5, FALSE)
         RETURNING *`,
         [
           originalPack.load_id,
+          originalPack.load_item_id,
           newPackId,
           lengthToUse || null,
           remainingBF
