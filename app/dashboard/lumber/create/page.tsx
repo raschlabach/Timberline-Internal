@@ -71,6 +71,7 @@ export default function CreateLoadPage() {
   const [priceTrends, setPriceTrends] = useState<PriceTrend[]>([])
   const [supplierQuality, setSupplierQuality] = useState<SupplierQuality[]>([])
   const [selectedPriceTrends, setSelectedPriceTrends] = useState<Set<string>>(new Set())
+  const [expandedSpecies, setExpandedSpecies] = useState<Set<string>>(new Set())
   const [expandedQuality, setExpandedQuality] = useState<Set<string>>(new Set())
   const [timeRange, setTimeRange] = useState('1y')
   const [isSavingSelections, setIsSavingSelections] = useState(false)
@@ -304,6 +305,18 @@ export default function CreateLoadPage() {
     }
   }
 
+  function toggleSpeciesExpand(species: string) {
+    setExpandedSpecies(prev => {
+      const next = new Set(prev)
+      if (next.has(species)) {
+        next.delete(species)
+      } else {
+        next.add(species)
+      }
+      return next
+    })
+  }
+
   function toggleQualityExpand(key: string) {
     setExpandedQuality(prev => {
       const next = new Set(prev)
@@ -422,14 +435,36 @@ export default function CreateLoadPage() {
     }, {} as Record<string, PriceTrend[]>)
   }, [priceTrends])
 
-  // Group supplier quality by species/grade - MUST be before any conditional returns
-  const groupedQuality = useMemo(() => {
-    return supplierQuality.reduce((acc, sq) => {
-      const key = `${sq.species}|${sq.grade}`
-      if (!acc[key]) acc[key] = []
-      acc[key].push(sq)
-      return acc
-    }, {} as Record<string, SupplierQuality[]>)
+  // Species colors for visual distinction
+  const SPECIES_COLORS: Record<string, string> = {
+    'Red Oak': '#dc2626',
+    'White Oak': '#ca8a04', 
+    'Poplar': '#16a34a',
+    'Hard Maple': '#9333ea',
+    'Soft Maple': '#be185d',
+    'Cherry': '#ea580c',
+    'Walnut': '#78350f',
+    'Ash': '#0891b2',
+    'Hickory': '#65a30d',
+    'Beech': '#f59e0b'
+  }
+  const DEFAULT_SPECIES_COLOR = '#6b7280'
+
+  // Group supplier quality by species -> grade -> suppliers - MUST be before any conditional returns
+  const groupedQualityBySpecies = useMemo(() => {
+    const bySpecies: Record<string, Record<string, SupplierQuality[]>> = {}
+    
+    supplierQuality.forEach(sq => {
+      if (!bySpecies[sq.species]) {
+        bySpecies[sq.species] = {}
+      }
+      if (!bySpecies[sq.species][sq.grade]) {
+        bySpecies[sq.species][sq.grade] = []
+      }
+      bySpecies[sq.species][sq.grade].push(sq)
+    })
+    
+    return bySpecies
   }, [supplierQuality])
 
   // Get active warnings (not dismissed, is_warning) - MUST be before any conditional returns
@@ -764,58 +799,103 @@ export default function CreateLoadPage() {
           <div className="bg-white rounded-lg shadow p-4 sticky top-6 max-h-[calc(100vh-100px)] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-3">Supplier Quality by Grade</h2>
             <div className="space-y-2">
-              {Object.entries(groupedQuality).map(([key, suppliers]) => {
-                const [speciesName, gradeName] = key.split('|')
+              {Object.entries(groupedQualityBySpecies).map(([speciesName, grades]) => {
+                const speciesColor = SPECIES_COLORS[speciesName] || DEFAULT_SPECIES_COLOR
+                const gradeCount = Object.keys(grades).length
+                
                 return (
-                  <div key={key} className="border rounded">
+                  <div key={speciesName} className="border rounded overflow-hidden">
+                    {/* Species Header */}
                     <button
                       type="button"
-                      className="w-full px-3 py-2 text-left font-medium text-sm bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
-                      onClick={() => toggleQualityExpand(key)}
+                      className="w-full px-3 py-2 text-left font-semibold text-sm flex items-center justify-between"
+                      style={{ 
+                        backgroundColor: `${speciesColor}15`,
+                        borderLeft: `4px solid ${speciesColor}`
+                      }}
+                      onClick={() => toggleSpeciesExpand(speciesName)}
                     >
-                      <span>{speciesName} - {gradeName}</span>
-                      {expandedQuality.has(key) ? (
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: speciesColor }}
+                        />
+                        <span>{speciesName}</span>
+                        <span className="text-xs text-gray-500 font-normal">({gradeCount} grades)</span>
+                      </div>
+                      {expandedSpecies.has(speciesName) ? (
                         <ChevronDown className="h-4 w-4" />
                       ) : (
                         <ChevronRight className="h-4 w-4" />
                       )}
                     </button>
-                    {expandedQuality.has(key) && (
-                      <div className="p-2">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-gray-500">
-                              <th className="text-left py-1">Supplier</th>
-                              <th className="text-right py-1">Avg</th>
-                              <th className="text-right py-1">Recent 3</th>
-                              <th className="text-right py-1">Loads</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {suppliers.filter(s => !s.is_dismissed || !s.is_warning).map((sq, idx) => (
-                              <tr 
-                                key={idx} 
-                                className={sq.is_warning && !sq.is_dismissed ? 'bg-red-50' : ''}
+                    
+                    {/* Grades under this species */}
+                    {expandedSpecies.has(speciesName) && (
+                      <div className="bg-gray-50 pl-4">
+                        {Object.entries(grades).map(([gradeName, suppliers]) => {
+                          const gradeKey = `${speciesName}|${gradeName}`
+                          return (
+                            <div key={gradeName} className="border-t first:border-t-0">
+                              {/* Grade Header */}
+                              <button
+                                type="button"
+                                className="w-full px-3 py-2 text-left font-medium text-sm bg-white hover:bg-gray-50 flex items-center justify-between"
+                                onClick={() => toggleQualityExpand(gradeKey)}
                               >
-                                <td className="py-1 font-medium">{sq.supplier_name}</td>
-                                <td className={`text-right py-1 ${sq.overall_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
-                                  {sq.overall_avg_quality}
-                                </td>
-                                <td className={`text-right py-1 ${sq.recent_3_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
-                                  {sq.recent_3_avg_quality || '-'}
-                                </td>
-                                <td className="text-right py-1 text-gray-500">{sq.total_loads}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                <span>{gradeName}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400">{suppliers.length} suppliers</span>
+                                  {expandedQuality.has(gradeKey) ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </div>
+                              </button>
+                              
+                              {/* Suppliers table */}
+                              {expandedQuality.has(gradeKey) && (
+                                <div className="p-2 bg-white border-t">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="text-gray-500">
+                                        <th className="text-left py-1">Supplier</th>
+                                        <th className="text-right py-1">Avg</th>
+                                        <th className="text-right py-1">Recent 3</th>
+                                        <th className="text-right py-1">Loads</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {suppliers.filter(s => !s.is_dismissed || !s.is_warning).map((sq, idx) => (
+                                        <tr 
+                                          key={idx} 
+                                          className={sq.is_warning && !sq.is_dismissed ? 'bg-red-50' : ''}
+                                        >
+                                          <td className="py-1 font-medium">{sq.supplier_name}</td>
+                                          <td className={`text-right py-1 ${sq.overall_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
+                                            {sq.overall_avg_quality}
+                                          </td>
+                                          <td className={`text-right py-1 ${sq.recent_3_avg_quality < 50 ? 'text-red-600 font-medium' : ''}`}>
+                                            {sq.recent_3_avg_quality || '-'}
+                                          </td>
+                                          <td className="text-right py-1 text-gray-500">{sq.total_loads}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
                 )
               })}
               
-              {Object.keys(groupedQuality).length === 0 && (
+              {Object.keys(groupedQualityBySpecies).length === 0 && (
                 <p className="text-sm text-gray-500 text-center py-4">
                   No quality data available yet.
                 </p>
