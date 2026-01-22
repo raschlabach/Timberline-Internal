@@ -332,10 +332,6 @@ export default function InventoryPage() {
   const router = useRouter()
   
   const [inventoryGroups, setInventoryGroups] = useState<InventoryGroup[]>([])
-  const [recentPacks, setRecentPacks] = useState<LumberPackWithDetails[]>([])
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [monthlyRipped, setMonthlyRipped] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [expandedThicknesses, setExpandedThicknesses] = useState<Set<string>>(new Set(['4/4']))
@@ -397,10 +393,8 @@ export default function InventoryPage() {
 
   async function fetchInventoryData() {
     try {
-      const [inventoryRes, packsRes, monthlyRes, speciesRes, incomingRes] = await Promise.all([
+      const [inventoryRes, speciesRes, incomingRes] = await Promise.all([
         fetch('/api/lumber/inventory'),
-        fetch(`/api/lumber/packs/finished?month=${selectedMonth}&year=${selectedYear}`),
-        fetch(`/api/lumber/inventory/monthly?month=${selectedMonth}&year=${selectedYear}`),
         fetch('/api/lumber/species'),
         fetch('/api/lumber/loads/incoming')
       ])
@@ -460,13 +454,6 @@ export default function InventoryPage() {
         setInventoryGroups(Object.values(grouped))
       }
       
-      if (packsRes.ok) {
-        const packsData = await packsRes.json()
-        console.log('Fetched packs data:', packsData.slice(0, 3)) // Log first 3 packs for debugging
-        setRecentPacks(packsData)
-      }
-      if (monthlyRes.ok) setMonthlyRipped(await monthlyRes.json())
-      
       if (speciesRes.ok) {
         const speciesData = await speciesRes.json()
         const colorMap: Record<string, string> = {}
@@ -490,7 +477,7 @@ export default function InventoryPage() {
     if (status === 'authenticated') {
       fetchInventoryData()
     }
-  }, [status, selectedMonth, selectedYear])
+  }, [status])
 
   // Load species column order from localStorage
   useEffect(() => {
@@ -856,13 +843,6 @@ export default function InventoryPage() {
       </div>
     )
   }
-
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ]
-
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
   function toggleRow(key: string) {
     const newExpanded = new Set(expandedRows)
@@ -1344,117 +1324,8 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Monthly Packs */}
-      <div className="bg-white rounded-lg shadow overflow-hidden no-print">
-        <div className="px-4 py-2 bg-gray-800 text-white flex justify-between items-center">
-          <h2 className="text-sm font-semibold">Monthly Ripped Packs</h2>
-          <div className="flex gap-2 items-center">
-            <Label className="text-xs text-gray-300">Month:</Label>
-            <Select 
-              value={selectedMonth.toString()} 
-              onValueChange={(val) => setSelectedMonth(parseInt(val))}
-            >
-              <SelectTrigger className="h-7 text-xs w-24 bg-gray-700 border-gray-600 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map((month, idx) => (
-                  <SelectItem key={idx} value={(idx + 1).toString()}>{month}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Label className="text-xs text-gray-300">Year:</Label>
-            <Select 
-              value={selectedYear.toString()} 
-              onValueChange={(val) => setSelectedYear(parseInt(val))}
-            >
-              <SelectTrigger className="h-7 text-xs w-20 bg-gray-700 border-gray-600 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map(year => (
-                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Pack ID</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Load</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Species/Grade</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Thick</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Len</th>
-              <th className="px-1 py-1 text-right text-sm font-medium text-gray-600 uppercase">Tally</th>
-              <th className="px-1 py-1 text-right text-sm font-medium text-gray-600 uppercase">Actual</th>
-              <th className="px-1 py-1 text-right text-sm font-medium text-gray-600 uppercase">Yield</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Operator</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Stackers</th>
-              <th className="px-1 py-1 text-left text-sm font-medium text-gray-600 uppercase">Finished</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {recentPacks.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="px-1 py-4 text-center text-sm text-gray-500">
-                  No ripped packs for this month
-                </td>
-              </tr>
-            ) : (
-              recentPacks.map((pack, idx) => {
-                // Collect all stacker names
-                const stackers = [
-                  pack.stacker_1_name,
-                  pack.stacker_2_name,
-                  pack.stacker_3_name,
-                  pack.stacker_4_name
-                ].filter(name => name).join(', ') || '-'
-                
-                return (
-                  <tr key={pack.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm font-semibold">{pack.pack_id}</td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm">{pack.load_load_id}</td>
-                    <td className="px-1 py-1 text-sm">
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">{pack.species}</span>
-                        <span className="text-gray-500">{pack.grade}</span>
-                      </div>
-                    </td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm">{pack.thickness}</td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm">{pack.length}ft</td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
-                      {pack.tally_board_feet.toLocaleString()}
-                    </td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
-                      {pack.actual_board_feet?.toLocaleString() || '-'}
-                    </td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm text-right">
-                      {pack.rip_yield || '-'}
-                    </td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm truncate max-w-[100px]">
-                      {pack.operator_name || '-'}
-                    </td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm truncate max-w-[150px]">
-                      {stackers}
-                    </td>
-                    <td className="px-1 py-1 whitespace-nowrap text-sm">
-                      {pack.finished_at 
-                        ? new Date(pack.finished_at).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
-                        : '-'}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
       {/* Inventory Loads Section */}
-      <div className="bg-white rounded-lg shadow mt-6 print:hidden">
+      <div className="bg-white rounded-lg shadow print:hidden">
         <div className="p-4 border-b">
           <h2 className="text-lg font-semibold">Inventory Loads</h2>
           <p className="text-sm text-gray-500">All loads currently contributing to inventory</p>
@@ -1573,7 +1444,7 @@ export default function InventoryPage() {
         </div>
         
         {/* Loads Table */}
-        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-800 text-white sticky top-0">
               <tr>

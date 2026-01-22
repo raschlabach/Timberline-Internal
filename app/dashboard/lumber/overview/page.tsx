@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { InventoryGroup, InventoryLoadDetail, LumberLoadWithDetails, LumberPackWithDetails } from '@/types/lumber'
@@ -31,6 +31,8 @@ export default function OverviewPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [expandedInventoryRows, setExpandedInventoryRows] = useState<Set<string>>(new Set())
   const [expandedIncomingRows, setExpandedIncomingRows] = useState<Set<string>>(new Set())
+  const [expandedIncomingSpecies, setExpandedIncomingSpecies] = useState<Set<string>>(new Set())
+  const [expandedInventorySpecies, setExpandedInventorySpecies] = useState<Set<string>>(new Set())
   const [chartView, setChartView] = useState<'species' | 'species-grade'>('species')
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
   
@@ -272,21 +274,93 @@ export default function OverviewPage() {
     }
   }
 
-  // Sort groups by species alphabetically so same species are together
-  const sortedIncomingGroups = [...incomingGroups].sort((a, b) => {
-    const speciesCompare = (a.species || '').localeCompare(b.species || '')
-    if (speciesCompare !== 0) return speciesCompare
-    return (a.grade || '').localeCompare(b.grade || '')
-  })
+  // Types for grouped data
+  type IncomingSpeciesGroup = {
+    species: string
+    total_estimated_footage: number
+    load_count: number
+    grades: any[]
+  }
   
-  const sortedInventoryGroups = [...inventoryGroups].sort((a, b) => {
-    const speciesCompare = (a.species || '').localeCompare(b.species || '')
-    if (speciesCompare !== 0) return speciesCompare
-    return (a.grade || '').localeCompare(b.grade || '')
-  })
+  type InventorySpeciesGroup = {
+    species: string
+    current_inventory: number
+    load_count: number
+    grades: InventoryGroup[]
+  }
+
+  // Group incoming by species
+  const groupedIncomingBySpecies = incomingGroups.reduce((acc, group) => {
+    const species = group.species || 'Unknown'
+    if (!acc[species]) {
+      acc[species] = {
+        species,
+        total_estimated_footage: 0,
+        load_count: 0,
+        grades: []
+      }
+    }
+    acc[species].total_estimated_footage += Number(group.total_estimated_footage) || 0
+    acc[species].load_count += group.load_count || 0
+    acc[species].grades.push(group)
+    return acc
+  }, {} as Record<string, IncomingSpeciesGroup>)
+
+  // Sort species alphabetically and grades within each species
+  const sortedIncomingBySpecies = (Object.values(groupedIncomingBySpecies) as IncomingSpeciesGroup[])
+    .sort((a, b) => a.species.localeCompare(b.species))
+    .map((speciesGroup) => ({
+      ...speciesGroup,
+      grades: speciesGroup.grades.sort((a: any, b: any) => (a.grade || '').localeCompare(b.grade || ''))
+    }))
+
+  // Group inventory by species
+  const groupedInventoryBySpecies = inventoryGroups.reduce((acc, group) => {
+    const species = group.species || 'Unknown'
+    if (!acc[species]) {
+      acc[species] = {
+        species,
+        current_inventory: 0,
+        load_count: 0,
+        grades: []
+      }
+    }
+    acc[species].current_inventory += Number(group.current_inventory) || 0
+    acc[species].load_count += group.load_count || 0
+    acc[species].grades.push(group)
+    return acc
+  }, {} as Record<string, InventorySpeciesGroup>)
+
+  // Sort species alphabetically and grades within each species
+  const sortedInventoryBySpecies = (Object.values(groupedInventoryBySpecies) as InventorySpeciesGroup[])
+    .sort((a, b) => a.species.localeCompare(b.species))
+    .map((speciesGroup) => ({
+      ...speciesGroup,
+      grades: speciesGroup.grades.sort((a, b) => (a.grade || '').localeCompare(b.grade || ''))
+    }))
 
   const totalIncoming = incomingGroups.reduce((sum, g) => sum + (Number(g.total_estimated_footage) || 0), 0)
   const totalInventory = inventoryGroups.reduce((sum, g) => sum + (Number(g.current_inventory) || 0), 0)
+
+  function toggleIncomingSpecies(species: string) {
+    const newExpanded = new Set(expandedIncomingSpecies)
+    if (newExpanded.has(species)) {
+      newExpanded.delete(species)
+    } else {
+      newExpanded.add(species)
+    }
+    setExpandedIncomingSpecies(newExpanded)
+  }
+
+  function toggleInventorySpecies(species: string) {
+    const newExpanded = new Set(expandedInventorySpecies)
+    if (newExpanded.has(species)) {
+      newExpanded.delete(species)
+    } else {
+      newExpanded.add(species)
+    }
+    setExpandedInventorySpecies(newExpanded)
+  }
 
   return (
     <div className="space-y-4">
@@ -376,95 +450,129 @@ export default function OverviewPage() {
           <div className="px-4 py-2 bg-yellow-600 text-white">
             <h2 className="text-sm font-semibold">Incoming Footage (Estimated)</h2>
             <p className="text-[10px] text-yellow-100 mt-0.5">
-              Loads not yet arrived - grouped by species/grade/thickness
+              Loads not yet arrived - grouped by species
             </p>
           </div>
-          <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100 sticky top-0">
                 <tr>
                   <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase w-8"></th>
-                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species</th>
-                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Grade</th>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species / Grade</th>
                   <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
                   <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Est. BF</th>
                   <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-600 uppercase">Loads</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedIncomingGroups.length === 0 ? (
+                {sortedIncomingBySpecies.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
                       No incoming loads
                     </td>
                   </tr>
                 ) : (
-                  sortedIncomingGroups.map((group, idx) => {
-                    const rowKey = `incoming-${group.species}-${group.grade}-${group.thickness}`
-                    const isExpanded = expandedIncomingRows.has(rowKey)
-                    const prevGroup = idx > 0 ? sortedIncomingGroups[idx - 1] : null
-                    const isNewSpecies = !prevGroup || prevGroup.species !== group.species
+                  sortedIncomingBySpecies.map((speciesGroup, speciesIdx) => {
+                    const isSpeciesExpanded = expandedIncomingSpecies.has(speciesGroup.species)
                     
                     return (
-                      <>
-                        <tr key={idx} className={`${isNewSpecies && idx > 0 ? 'border-t-2 border-gray-300' : ''} ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                          <td className="px-2 py-1.5">
-                            <button
-                              onClick={() => toggleIncomingRow(rowKey)}
-                              className="text-gray-500 hover:text-gray-700"
-                            >
-                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <React.Fragment key={speciesGroup.species}>
+                        {/* Species Parent Row */}
+                        <tr 
+                          className="bg-yellow-50 hover:bg-yellow-100 cursor-pointer"
+                          onClick={() => toggleIncomingSpecies(speciesGroup.species)}
+                        >
+                          <td className="px-2 py-2">
+                            <button className="text-yellow-700 hover:text-yellow-900">
+                              {isSpeciesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs font-medium">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-semibold">
                             <div className="flex items-center gap-2">
                               <span 
                                 className="w-3 h-3 rounded flex-shrink-0" 
-                                style={{ backgroundColor: speciesColors[group.species] || '#6B7280' }}
+                                style={{ backgroundColor: speciesColors[speciesGroup.species] || '#6B7280' }}
                               />
-                              {group.species}
+                              {speciesGroup.species}
+                              <span className="text-gray-500 font-normal">({speciesGroup.grades.length} grades)</span>
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.thickness}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-yellow-600 text-right">
-                            {Number(group.total_estimated_footage || 0).toLocaleString()}
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500">-</td>
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-yellow-700 text-right">
+                            {Number(speciesGroup.total_estimated_footage || 0).toLocaleString()}
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
-                            <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                              {group.load_count}
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-center">
+                            <span className="bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                              {speciesGroup.load_count}
                             </span>
                           </td>
                         </tr>
-                        {isExpanded && group.loads && group.loads.map((load: any, loadIdx: number) => (
-                          <tr key={`${idx}-${loadIdx}`} className="bg-yellow-50 border-t border-yellow-200">
-                            <td className="px-2 py-1.5"></td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-yellow-700 font-semibold">└ {load.load_id}</span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
-                                  className="p-1 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100 rounded"
-                                  title="View Rip Entry"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600" colSpan={2}>
-                              {load.supplier_name}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
-                              {Number(load.estimated_footage || 0).toLocaleString()}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center text-gray-600">
-                              {load.estimated_delivery_date 
-                                ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
-                                : '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </>
+                        
+                        {/* Grade Child Rows */}
+                        {isSpeciesExpanded && speciesGroup.grades.map((gradeGroup: any, gradeIdx: number) => {
+                          const rowKey = `incoming-${gradeGroup.species}-${gradeGroup.grade}-${gradeGroup.thickness}`
+                          const isGradeExpanded = expandedIncomingRows.has(rowKey)
+                          
+                          return (
+                            <React.Fragment key={rowKey}>
+                              {/* Grade Row */}
+                              <tr className={`${gradeIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100`}>
+                                <td className="px-2 py-1.5 pl-6">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleIncomingRow(rowKey); }}
+                                    className="text-gray-500 hover:text-gray-700"
+                                  >
+                                    {isGradeExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                  </button>
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs">
+                                  <span className="text-gray-400 mr-1">└</span>
+                                  <span className="font-medium">{gradeGroup.grade}</span>
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs">{gradeGroup.thickness}</td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-yellow-600 text-right">
+                                  {Number(gradeGroup.total_estimated_footage || 0).toLocaleString()}
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
+                                  <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                                    {gradeGroup.load_count}
+                                  </span>
+                                </td>
+                              </tr>
+                              
+                              {/* Load Details */}
+                              {isGradeExpanded && gradeGroup.loads && gradeGroup.loads.map((load: any, loadIdx: number) => (
+                                <tr key={`${rowKey}-${loadIdx}`} className="bg-yellow-50/50 border-t border-yellow-100">
+                                  <td className="px-2 py-1.5"></td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs pl-8">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-yellow-700 font-semibold">└ {load.load_id}</span>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
+                                        className="p-1 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100 rounded"
+                                        title="View Rip Entry"
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">
+                                    {load.supplier_name}
+                                  </td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right text-gray-700">
+                                    {Number(load.estimated_footage || 0).toLocaleString()}
+                                  </td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center text-gray-600">
+                                    {load.estimated_delivery_date 
+                                      ? new Date(load.estimated_delivery_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+                                      : '-'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          )
+                        })}
+                      </React.Fragment>
                     )
                   })
                 )}
@@ -481,91 +589,126 @@ export default function OverviewPage() {
               Actual BF arrived - Finished BF ripped
             </p>
           </div>
-          <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100 sticky top-0">
                 <tr>
                   <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase w-8"></th>
-                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species</th>
-                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Grade</th>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species / Grade</th>
                   <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Thick</th>
                   <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Inventory</th>
                   <th className="px-2 py-1.5 text-center text-xs font-medium text-gray-600 uppercase">Loads</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedInventoryGroups.length === 0 ? (
+                {sortedInventoryBySpecies.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
                       No inventory data
                     </td>
                   </tr>
                 ) : (
-                  sortedInventoryGroups.map((group, idx) => {
-                    const rowKey = `inventory-${group.species}-${group.grade}-${group.thickness}`
-                    const isExpanded = expandedInventoryRows.has(rowKey)
-                    const prevGroup = idx > 0 ? sortedInventoryGroups[idx - 1] : null
-                    const isNewSpecies = !prevGroup || prevGroup.species !== group.species
+                  sortedInventoryBySpecies.map((speciesGroup, speciesIdx) => {
+                    const isSpeciesExpanded = expandedInventorySpecies.has(speciesGroup.species)
                     
                     return (
-                      <>
-                        <tr key={idx} className={`${isNewSpecies && idx > 0 ? 'border-t-2 border-gray-300' : ''} ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                          <td className="px-2 py-1.5">
-                            <button
-                              onClick={() => toggleInventoryRow(rowKey)}
-                              className="text-gray-500 hover:text-gray-700"
-                            >
-                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <React.Fragment key={speciesGroup.species}>
+                        {/* Species Parent Row */}
+                        <tr 
+                          className="bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                          onClick={() => toggleInventorySpecies(speciesGroup.species)}
+                        >
+                          <td className="px-2 py-2">
+                            <button className="text-blue-700 hover:text-blue-900">
+                              {isSpeciesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs font-medium">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-semibold">
                             <div className="flex items-center gap-2">
                               <span 
                                 className="w-3 h-3 rounded flex-shrink-0" 
-                                style={{ backgroundColor: speciesColors[group.species] || '#6B7280' }}
+                                style={{ backgroundColor: speciesColors[speciesGroup.species] || '#6B7280' }}
                               />
-                              {group.species}
+                              {speciesGroup.species}
+                              <span className="text-gray-500 font-normal">({speciesGroup.grades.length} grades)</span>
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.grade}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs">{group.thickness}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
-                            {Number(group.current_inventory || 0).toLocaleString()}
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500">-</td>
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-blue-700 text-right">
+                            {Number(speciesGroup.current_inventory || 0).toLocaleString()}
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
-                            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                              {group.load_count}
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-center">
+                            <span className="bg-blue-200 text-blue-900 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                              {speciesGroup.load_count}
                             </span>
                           </td>
                         </tr>
-                        {isExpanded && group.loads && group.loads.map((load, loadIdx) => (
-                          <tr key={`${idx}-${loadIdx}`} className="bg-blue-50 border-t border-blue-200">
-                            <td className="px-2 py-1.5"></td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-blue-700 font-semibold">└ {load.load_id}</span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
-                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded"
-                                  title="View Rip Entry"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.grade}</td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">{load.thickness}</td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right font-semibold text-blue-700">
-                              {Number(load.load_inventory || 0).toLocaleString()}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
-                              <span className="text-gray-600">
-                                {load.finished_pack_count}/{load.pack_count}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </>
+                        
+                        {/* Grade Child Rows */}
+                        {isSpeciesExpanded && speciesGroup.grades.map((gradeGroup: any, gradeIdx: number) => {
+                          const rowKey = `inventory-${gradeGroup.species}-${gradeGroup.grade}-${gradeGroup.thickness}`
+                          const isGradeExpanded = expandedInventoryRows.has(rowKey)
+                          
+                          return (
+                            <React.Fragment key={rowKey}>
+                              {/* Grade Row */}
+                              <tr className={`${gradeIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100`}>
+                                <td className="px-2 py-1.5 pl-6">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleInventoryRow(rowKey); }}
+                                    className="text-gray-500 hover:text-gray-700"
+                                  >
+                                    {isGradeExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                  </button>
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs">
+                                  <span className="text-gray-400 mr-1">└</span>
+                                  <span className="font-medium">{gradeGroup.grade}</span>
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs">{gradeGroup.thickness}</td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
+                                  {Number(gradeGroup.current_inventory || 0).toLocaleString()}
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
+                                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                                    {gradeGroup.load_count}
+                                  </span>
+                                </td>
+                              </tr>
+                              
+                              {/* Load Details */}
+                              {isGradeExpanded && gradeGroup.loads && gradeGroup.loads.map((load: any, loadIdx: number) => (
+                                <tr key={`${rowKey}-${loadIdx}`} className="bg-blue-50/50 border-t border-blue-100">
+                                  <td className="px-2 py-1.5"></td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs pl-8">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-blue-700 font-semibold">└ {load.load_id}</span>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
+                                        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded"
+                                        title="View Rip Entry"
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600">
+                                    {load.thickness}
+                                  </td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-right font-semibold text-blue-700">
+                                    {Number(load.load_inventory || 0).toLocaleString()}
+                                  </td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-center">
+                                    <span className="text-gray-600">
+                                      {load.finished_pack_count}/{load.pack_count}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          )
+                        })}
+                      </React.Fragment>
                     )
                   })
                 )}
