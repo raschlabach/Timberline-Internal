@@ -377,21 +377,13 @@ export default function CreateLoadPage() {
     }
   }
 
-  if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
-
   // Colors for chart lines
   const CHART_COLORS = [
     '#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', 
     '#0891b2', '#be185d', '#4f46e5', '#ea580c', '#65a30d'
   ]
 
-  // Create a map of species/grade to color
+  // Create a map of species/grade to color - MUST be before any conditional returns
   const trendColorMap = useMemo(() => {
     const map: Record<string, string> = {}
     priceTrends.forEach((trend, idx) => {
@@ -401,7 +393,7 @@ export default function CreateLoadPage() {
     return map
   }, [priceTrends])
 
-  // Prepare chart data from selected trends
+  // Prepare chart data from selected trends - MUST be before any conditional returns
   const chartData = useMemo(() => {
     if (selectedPriceTrends.size === 0 || priceTrends.length === 0) return []
     
@@ -421,23 +413,38 @@ export default function CreateLoadPage() {
     })
   }, [priceTrends, selectedPriceTrends])
 
-  // Group price trends by species for the selection list
-  const groupedPriceTrends = priceTrends.reduce((acc, trend) => {
-    if (!acc[trend.species]) acc[trend.species] = []
-    acc[trend.species].push(trend)
-    return acc
-  }, {} as Record<string, PriceTrend[]>)
+  // Group price trends by species for the selection list - MUST be before any conditional returns
+  const groupedPriceTrends = useMemo(() => {
+    return priceTrends.reduce((acc, trend) => {
+      if (!acc[trend.species]) acc[trend.species] = []
+      acc[trend.species].push(trend)
+      return acc
+    }, {} as Record<string, PriceTrend[]>)
+  }, [priceTrends])
 
-  // Group supplier quality by species/grade
-  const groupedQuality = supplierQuality.reduce((acc, sq) => {
-    const key = `${sq.species}|${sq.grade}`
-    if (!acc[key]) acc[key] = []
-    acc[key].push(sq)
-    return acc
-  }, {} as Record<string, SupplierQuality[]>)
+  // Group supplier quality by species/grade - MUST be before any conditional returns
+  const groupedQuality = useMemo(() => {
+    return supplierQuality.reduce((acc, sq) => {
+      const key = `${sq.species}|${sq.grade}`
+      if (!acc[key]) acc[key] = []
+      acc[key].push(sq)
+      return acc
+    }, {} as Record<string, SupplierQuality[]>)
+  }, [supplierQuality])
 
-  // Get active warnings (not dismissed, is_warning)
-  const activeWarnings = supplierQuality.filter(sq => sq.is_warning && !sq.is_dismissed)
+  // Get active warnings (not dismissed, is_warning) - MUST be before any conditional returns
+  const activeWarnings = useMemo(() => {
+    return supplierQuality.filter(sq => sq.is_warning && !sq.is_dismissed)
+  }, [supplierQuality])
+
+  // Loading state - AFTER all hooks
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
