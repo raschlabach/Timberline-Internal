@@ -67,11 +67,13 @@ export async function PATCH(
       }
       
       // Use pack_id and length from body if provided (for unsaved packs)
-      const packIdToUse = bodyPackId || originalPack.pack_id
+      // Convert pack_id to string since it could be a number
+      const packIdToUse = bodyPackId != null ? String(bodyPackId) : (originalPack.pack_id != null ? String(originalPack.pack_id) : null)
       const lengthToUse = bodyLength != null ? bodyLength : originalPack.length
 
       // Create the new pack ID (original + "*2", or increment if already has suffix)
-      let newPackId = packIdToUse
+      // Convert to string first since pack_id might be a number
+      let newPackId = packIdToUse != null ? String(packIdToUse) : null
       if (newPackId) {
         const suffixMatch = newPackId.match(/\*(\d+)$/)
         if (suffixMatch) {
