@@ -150,8 +150,10 @@ export async function GET(request: NextRequest) {
       const bonusRate = calculateBonusRate(bfPerHour)
 
       // Step 1: Calculate each person's BF contribution for the day
-      // BF is split equally among all contributors (operator + stackers) per pack
-      const operatorContributions: { [userId: number]: { user_name: string, bf: number } } = {}
+      // Track two values per person:
+      // - bf_touched: total BF of all packs they worked on (for qualification)
+      // - bf_split: their split share of BF (for bonus distribution)
+      const operatorContributions: { [userId: number]: { user_name: string, bf_touched: number, bf_split: number } } = {}
       
       for (const pack of packsForDay) {
         const contributors = []
@@ -161,42 +163,51 @@ export async function GET(request: NextRequest) {
         if (pack.stacker_3_user_id) contributors.push({ id: pack.stacker_3_user_id, name: pack.stacker_3_name })
         if (pack.stacker_4_user_id) contributors.push({ id: pack.stacker_4_user_id, name: pack.stacker_4_name })
         
-        const bfPerContributor = contributors.length > 0 ? (pack.actual_board_feet || 0) / contributors.length : 0
+        const packBF = pack.actual_board_feet || 0
+        const bfPerContributor = contributors.length > 0 ? packBF / contributors.length : 0
         
         for (const contributor of contributors) {
           if (!operatorContributions[contributor.id]) {
-            operatorContributions[contributor.id] = { user_name: contributor.name, bf: 0 }
+            operatorContributions[contributor.id] = { user_name: contributor.name, bf_touched: 0, bf_split: 0 }
           }
-          operatorContributions[contributor.id].bf += bfPerContributor
+          // bf_touched = total BF of packs they worked on (not split)
+          operatorContributions[contributor.id].bf_touched += packBF
+          // bf_split = their equal share of the BF
+          operatorContributions[contributor.id].bf_split += bfPerContributor
         }
       }
 
-      // Step 2: Count qualifying people (those who contributed ≥30% of the day's total BF)
+      // Step 2: Count qualifying people (those who touched ≥30% of the day's total BF)
+      // If someone works on every pack, they touched 100% of the daily BF
       const qualifyingPeopleCount = Object.values(operatorContributions).filter(
-        data => totalBF > 0 && (data.bf / totalBF) >= QUALIFYING_THRESHOLD
+        data => totalBF > 0 && (data.bf_touched / totalBF) >= QUALIFYING_THRESHOLD
       ).length
 
       // Step 3: Calculate daily bonus pool
       // Daily Pool = Bonus Rate × Hours Worked × Number of Qualifying People
       const dailyBonusPool = bonusRate * totalHours * qualifyingPeopleCount
 
-      // Step 4: Calculate total contributed BF (sum of all contributors' BF)
-      const totalContributedBF = Object.values(operatorContributions).reduce((sum, data) => sum + data.bf, 0)
+      // Step 4: Calculate total split BF (sum of all contributors' split shares)
+      const totalSplitBF = Object.values(operatorContributions).reduce((sum, data) => sum + data.bf_split, 0)
 
-      // Step 5: Calculate each person's share based on their percentage of contributed BF
+      // Step 5: Calculate each person's share based on their percentage of split BF
       const operatorBreakdowns: OperatorBreakdown[] = []
       
       for (const [operatorIdStr, data] of Object.entries(operatorContributions)) {
         const operatorId = parseInt(operatorIdStr)
-        const percentage = totalContributedBF > 0 ? (data.bf / totalContributedBF) * 100 : 0
-        const bonusAmount = totalContributedBF > 0 ? (data.bf / totalContributedBF) * dailyBonusPool : 0
+        // Percentage for bonus distribution is based on split share
+        const percentage = totalSplitBF > 0 ? (data.bf_split / totalSplitBF) * 100 : 0
+        const bonusAmount = totalSplitBF > 0 ? (data.bf_split / totalSplitBF) * dailyBonusPool : 0
+        // Qualification percentage is based on touched BF (for display purposes)
+        const touchedPercentage = totalBF > 0 ? (data.bf_touched / totalBF) * 100 : 0
         
         operatorBreakdowns.push({
           user_id: operatorId,
           user_name: data.user_name,
-          bf_contributed: data.bf,
+          bf_contributed: data.bf_split,
           percentage,
-          bonus_amount: bonusAmount
+          bonus_amount: bonusAmount,
+          touched_percentage: touchedPercentage
         })
 
         // Accumulate operator totals for monthly summary
@@ -207,7 +218,7 @@ export async function GET(request: NextRequest) {
             total_bonus: 0
           }
         }
-        operatorTotalsMap[operatorId].total_rip_ft += data.bf
+        operatorTotalsMap[operatorId].total_rip_ft += data.bf_split
         operatorTotalsMap[operatorId].total_bonus += bonusAmount
       }
 

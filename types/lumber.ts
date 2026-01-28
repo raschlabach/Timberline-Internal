@@ -292,6 +292,7 @@ export interface OperatorBreakdown {
   bf_contributed: number
   percentage: number
   bonus_amount: number
+  touched_percentage?: number  // Percentage of daily BF they touched (for qualification)
 }
 
 export interface MonthlyRipReport {

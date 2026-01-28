@@ -166,15 +166,17 @@ export default function RipBonusPage() {
                       <div className="divide-y">
                         <div className="px-4 py-1 grid grid-cols-8 gap-2 text-xs font-medium text-gray-500 bg-gray-50">
                           <div className="col-span-2 pl-4">Contributor</div>
-                          <div className="text-right">BF</div>
-                          <div className="text-right">%</div>
-                          <div className="text-right">Qualified</div>
+                          <div className="text-right">Split BF</div>
+                          <div className="text-right">Split %</div>
+                          <div className="text-right">Touched %</div>
                           <div></div>
                           <div className="text-right">Bonus</div>
                           <div></div>
                         </div>
                         {(day.operator_breakdowns || []).map((op, opIdx) => {
-                          const isQualified = Number(op.percentage || 0) >= 30
+                          // Qualification is based on touched percentage (packs they worked on)
+                          const touchedPct = Number(op.touched_percentage || 0)
+                          const isQualified = touchedPct >= 30
                           return (
                             <div key={opIdx} className="px-4 py-2 grid grid-cols-8 gap-2 text-sm hover:bg-gray-50">
                               <div className="col-span-2 pl-4 text-gray-700">{op.user_name || '-'}</div>
@@ -182,9 +184,9 @@ export default function RipBonusPage() {
                               <div className="text-right text-gray-700">{Number(op.percentage || 0).toFixed(1)}%</div>
                               <div className="text-right">
                                 {isQualified ? (
-                                  <span className="text-green-600 font-medium">Yes</span>
+                                  <span className="text-green-600 font-medium">{touchedPct.toFixed(0)}%</span>
                                 ) : (
-                                  <span className="text-gray-400">No</span>
+                                  <span className="text-gray-400">{touchedPct.toFixed(0)}%</span>
                                 )}
                               </div>
                               <div></div>
