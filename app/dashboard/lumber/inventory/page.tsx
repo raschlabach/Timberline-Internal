@@ -52,6 +52,7 @@ function SortableSpeciesRow({
   isExpanded,
   onToggle,
   onGradeClick,
+  rowIndex,
   children 
 }: {
   id: string
@@ -61,6 +62,7 @@ function SortableSpeciesRow({
   isExpanded: boolean
   onToggle: () => void
   onGradeClick: (grade: any, loadsWithInventory: any[]) => void
+  rowIndex: number
   children?: React.ReactNode
 }) {
   const {
@@ -78,12 +80,17 @@ function SortableSpeciesRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
+  // Alternating row colors for better readability
+  const rowBgClass = rowIndex % 2 === 0 
+    ? 'bg-white hover:bg-gray-50' 
+    : 'bg-gray-100 hover:bg-gray-150'
+
   return (
     <>
       <tr
         ref={setNodeRef}
         style={style}
-        className="bg-blue-50/20 hover:bg-blue-50/40 transition-colors cursor-pointer"
+        className={`${rowBgClass} transition-colors cursor-pointer border-b border-gray-200`}
         onClick={onToggle}
       >
         <td className="px-1 py-1">
@@ -1243,6 +1250,7 @@ export default function InventoryPage() {
                                   speciesColors={speciesColors}
                                   isExpanded={isSpeciesExpanded}
                                   onToggle={() => toggleSpecies(thicknessData.thickness, speciesData.species)}
+                                  rowIndex={speciesIdx}
                                   onGradeClick={(grade, loadsWithInventory) => {
                                     setSelectedGradeLoads({
                                       species: speciesData.species,
@@ -1751,6 +1759,7 @@ export default function InventoryPage() {
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="px-3 py-2 text-left">Load ID</th>
+                      <th className="px-3 py-2 text-left">Supplier</th>
                       <th className="px-3 py-2 text-left">Thickness</th>
                       <th className="px-3 py-2 text-right">Inventory BF</th>
                       <th className="px-3 py-2 text-right">Total BF</th>
@@ -1767,6 +1776,7 @@ export default function InventoryPage() {
                         className={`hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                       >
                         <td className="px-3 py-2 font-medium">{load.load_id}</td>
+                        <td className="px-3 py-2 text-gray-600">{load.supplier_name || '-'}</td>
                         <td className="px-3 py-2 text-gray-600">{load.thickness}</td>
                         <td className="px-3 py-2 text-right font-semibold text-blue-600">
                           {Number(load.load_inventory || 0).toLocaleString()}

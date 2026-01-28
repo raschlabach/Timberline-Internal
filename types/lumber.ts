@@ -341,6 +341,7 @@ export interface InventoryLoadDetail {
   finished_pack_count: number
   price: number | null
   invoice_total: number | null
+  supplier_name: string | null
 }
 
 export interface InventoryGroup {

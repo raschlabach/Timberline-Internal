@@ -23,12 +23,14 @@ export async function GET(request: NextRequest) {
         li.actual_footage,
         li.price,
         l.invoice_total,
+        s.name as supplier_name,
         COALESCE(finished_packs.finished_footage, 0) as finished_footage,
         li.actual_footage - COALESCE(finished_packs.finished_footage, 0) as load_inventory,
         COALESCE(pack_counts.total_packs, 0) as pack_count,
         COALESCE(pack_counts.finished_pack_count, 0) as finished_pack_count
       FROM lumber_load_items li
       JOIN lumber_loads l ON li.load_id = l.id
+      LEFT JOIN suppliers s ON l.supplier_id = s.id
       LEFT JOIN (
         SELECT 
           load_item_id,
