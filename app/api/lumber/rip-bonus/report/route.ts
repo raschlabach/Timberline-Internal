@@ -137,6 +137,9 @@ export async function GET(request: NextRequest) {
     const dailySummaries: DailyRipSummary[] = []
     const operatorTotalsMap: { [userId: number]: { user_name: string, total_rip_ft: number, total_bonus: number } } = {}
 
+    // Threshold for qualifying as a major contributor (30% of daily BF)
+    const QUALIFYING_THRESHOLD = 0.30
+
     for (const date of Object.keys(packsByDate).sort()) {
       const packsForDay = packsByDate[date]
       const sessionsForDay = sessionsByDate[date] || []
@@ -145,9 +148,9 @@ export async function GET(request: NextRequest) {
       const totalBF = packsForDay.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
       const bfPerHour = totalHours > 0 ? totalBF / totalHours : 0
       const bonusRate = calculateBonusRate(bfPerHour)
-      const bonusTotal = bonusRate * totalBF / 100 // Assuming bonus is per 100 BF
 
-      // Calculate operator breakdowns
+      // Step 1: Calculate each person's BF contribution for the day
+      // BF is split equally among all contributors (operator + stackers) per pack
       const operatorContributions: { [userId: number]: { user_name: string, bf: number } } = {}
       
       for (const pack of packsForDay) {
@@ -168,30 +171,44 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Step 2: Count qualifying people (those who contributed ≥30% of the day's total BF)
+      const qualifyingPeopleCount = Object.values(operatorContributions).filter(
+        data => totalBF > 0 && (data.bf / totalBF) >= QUALIFYING_THRESHOLD
+      ).length
+
+      // Step 3: Calculate daily bonus pool
+      // Daily Pool = Bonus Rate × Hours Worked × Number of Qualifying People
+      const dailyBonusPool = bonusRate * totalHours * qualifyingPeopleCount
+
+      // Step 4: Calculate total contributed BF (sum of all contributors' BF)
+      const totalContributedBF = Object.values(operatorContributions).reduce((sum, data) => sum + data.bf, 0)
+
+      // Step 5: Calculate each person's share based on their percentage of contributed BF
       const operatorBreakdowns: OperatorBreakdown[] = []
       
-      for (const [userId, data] of Object.entries(operatorContributions)) {
-        const percentage = totalBF > 0 ? (data.bf / totalBF) * 100 : 0
-        const bonusAmount = (bonusTotal * percentage) / 100
+      for (const [operatorIdStr, data] of Object.entries(operatorContributions)) {
+        const operatorId = parseInt(operatorIdStr)
+        const percentage = totalContributedBF > 0 ? (data.bf / totalContributedBF) * 100 : 0
+        const bonusAmount = totalContributedBF > 0 ? (data.bf / totalContributedBF) * dailyBonusPool : 0
         
         operatorBreakdowns.push({
-          user_id: parseInt(userId),
+          user_id: operatorId,
           user_name: data.user_name,
           bf_contributed: data.bf,
           percentage,
           bonus_amount: bonusAmount
         })
 
-        // Accumulate operator totals
-        if (!operatorTotalsMap[parseInt(userId)]) {
-          operatorTotalsMap[parseInt(userId)] = {
+        // Accumulate operator totals for monthly summary
+        if (!operatorTotalsMap[operatorId]) {
+          operatorTotalsMap[operatorId] = {
             user_name: data.user_name,
             total_rip_ft: 0,
             total_bonus: 0
           }
         }
-        operatorTotalsMap[parseInt(userId)].total_rip_ft += data.bf
-        operatorTotalsMap[parseInt(userId)].total_bonus += bonusAmount
+        operatorTotalsMap[operatorId].total_rip_ft += data.bf
+        operatorTotalsMap[operatorId].total_bonus += bonusAmount
       }
 
       dailySummaries.push({
@@ -200,7 +217,8 @@ export async function GET(request: NextRequest) {
         total_bf: totalBF,
         bf_per_hour: bfPerHour,
         bonus_rate: bonusRate,
-        bonus_total: bonusTotal,
+        bonus_total: dailyBonusPool,
+        qualifying_people: qualifyingPeopleCount,
         operator_breakdowns: operatorBreakdowns.sort((a, b) => b.bf_contributed - a.bf_contributed)
       })
     }

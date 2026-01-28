@@ -134,33 +134,65 @@ export default function RipBonusPage() {
             
             {report && report.daily_summaries && report.daily_summaries.length > 0 ? (
               <>
+                {/* Column Headers */}
+                <div className="bg-gray-200 px-4 py-2 grid grid-cols-8 gap-2 text-xs font-semibold text-gray-600 uppercase rounded-t-lg">
+                  <div>Date</div>
+                  <div className="text-right">Hours</div>
+                  <div className="text-right">Total BF</div>
+                  <div className="text-right">BF/Hr</div>
+                  <div className="text-right">Rate</div>
+                  <div className="text-right">Qual.</div>
+                  <div className="text-right">Pool</div>
+                  <div></div>
+                </div>
+
                 {/* Daily Breakdown */}
-                <div className="space-y-4">
+                <div className="space-y-4 mt-2">
                   {report.daily_summaries.map((day, idx) => (
                     <div key={idx} className="border rounded-lg overflow-hidden">
                       {/* Day Header */}
-                      <div className="bg-gray-100 px-4 py-2 grid grid-cols-7 gap-4 text-sm font-semibold">
+                      <div className="bg-gray-100 px-4 py-2 grid grid-cols-8 gap-2 text-sm font-semibold">
                         <div>{new Date(day.work_date).toLocaleDateString('en-US', { timeZone: 'UTC' })}</div>
-                        <div className="text-right">{Number(day.total_hours || 0).toFixed(1)} hrs</div>
-                        <div className="text-right">{Number(day.total_bf || 0).toLocaleString()} BF</div>
-                        <div className="text-right">{Number(day.bf_per_hour || 0).toFixed(0)} BF/hr</div>
+                        <div className="text-right">{Number(day.total_hours || 0).toFixed(1)}</div>
+                        <div className="text-right">{Number(day.total_bf || 0).toLocaleString()}</div>
+                        <div className="text-right">{Number(day.bf_per_hour || 0).toFixed(0)}</div>
                         <div className="text-right">${Number(day.bonus_rate || 0).toFixed(2)}</div>
-                        <div className="text-right text-green-600">${Number(day.bonus_total || 0).toFixed(2)}</div>
-                        <div className="text-right">{Number(day.total_bf || 0).toLocaleString()} BF</div>
+                        <div className="text-right">{day.qualifying_people || 0}</div>
+                        <div className="text-right text-green-600 font-bold">${Number(day.bonus_total || 0).toFixed(2)}</div>
+                        <div></div>
                       </div>
 
                       {/* Operator Breakdowns */}
                       <div className="divide-y">
-                        {(day.operator_breakdowns || []).map((op, opIdx) => (
-                          <div key={opIdx} className="px-4 py-2 grid grid-cols-7 gap-4 text-sm hover:bg-gray-50">
-                            <div className="col-span-2 pl-4 text-gray-700">{op.user_name || '-'}</div>
-                            <div className="text-right text-gray-700">{Number(op.bf_contributed || 0).toLocaleString()} BF</div>
-                            <div className="text-right text-gray-700">{Number(op.percentage || 0).toFixed(2)}%</div>
-                            <div></div>
-                            <div className="text-right text-green-600">${Number(op.bonus_amount || 0).toFixed(2)}</div>
-                            <div></div>
-                          </div>
-                        ))}
+                        <div className="px-4 py-1 grid grid-cols-8 gap-2 text-xs font-medium text-gray-500 bg-gray-50">
+                          <div className="col-span-2 pl-4">Contributor</div>
+                          <div className="text-right">BF</div>
+                          <div className="text-right">%</div>
+                          <div className="text-right">Qualified</div>
+                          <div></div>
+                          <div className="text-right">Bonus</div>
+                          <div></div>
+                        </div>
+                        {(day.operator_breakdowns || []).map((op, opIdx) => {
+                          const isQualified = Number(op.percentage || 0) >= 30
+                          return (
+                            <div key={opIdx} className="px-4 py-2 grid grid-cols-8 gap-2 text-sm hover:bg-gray-50">
+                              <div className="col-span-2 pl-4 text-gray-700">{op.user_name || '-'}</div>
+                              <div className="text-right text-gray-700">{Number(op.bf_contributed || 0).toLocaleString()}</div>
+                              <div className="text-right text-gray-700">{Number(op.percentage || 0).toFixed(1)}%</div>
+                              <div className="text-right">
+                                {isQualified ? (
+                                  <span className="text-green-600 font-medium">Yes</span>
+                                ) : (
+                                  <span className="text-gray-400">No</span>
+                                )}
+                              </div>
+                              <div></div>
+                              <div className="text-right text-green-600 font-medium">${Number(op.bonus_amount || 0).toFixed(2)}</div>
+                              <div></div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
@@ -168,14 +200,23 @@ export default function RipBonusPage() {
 
                 {/* Summary Footer */}
                 <div className="mt-6 pt-4 border-t">
-                  <div className="grid grid-cols-7 gap-4 text-sm font-bold">
-                    <div>Total Hours {Number(report.total_hours || 0)}</div>
-                    <div>Total RNR {Number(report.total_rnr || 0).toLocaleString()}</div>
-                    <div>Total Misc {Number(report.total_misc || 0).toLocaleString()}</div>
-                    <div>Total {Number(report.total_bf || 0).toLocaleString()}</div>
-                    <div></div>
-                    <div className="text-green-600">Total Bonus ${Number(report.total_bonus || 0).toFixed(2)}</div>
-                    <div></div>
+                  <div className="grid grid-cols-4 gap-4 text-sm">
+                    <div className="bg-gray-100 rounded p-3">
+                      <div className="text-gray-500 text-xs uppercase">Total Hours</div>
+                      <div className="font-bold text-lg">{Number(report.total_hours || 0).toFixed(1)}</div>
+                    </div>
+                    <div className="bg-gray-100 rounded p-3">
+                      <div className="text-gray-500 text-xs uppercase">RNR BF</div>
+                      <div className="font-bold text-lg">{Number(report.total_rnr || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-gray-100 rounded p-3">
+                      <div className="text-gray-500 text-xs uppercase">Misc BF</div>
+                      <div className="font-bold text-lg">{Number(report.total_misc || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-green-100 rounded p-3">
+                      <div className="text-green-700 text-xs uppercase">Total Bonus Pool</div>
+                      <div className="font-bold text-lg text-green-700">${Number(report.total_bonus || 0).toFixed(2)}</div>
+                    </div>
                   </div>
                 </div>
               </>

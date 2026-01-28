@@ -282,6 +282,7 @@ export interface DailyRipSummary {
   bf_per_hour: number
   bonus_rate: number
   bonus_total: number
+  qualifying_people: number
   operator_breakdowns: OperatorBreakdown[]
 }
 
