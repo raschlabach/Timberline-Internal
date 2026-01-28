@@ -406,8 +406,13 @@ export default function InventoryPage() {
         fetch('/api/lumber/loads/incoming')
       ])
 
+      if (!inventoryRes.ok) {
+        console.error('Inventory API error:', inventoryRes.status, await inventoryRes.text())
+      }
+      
       if (inventoryRes.ok) {
         const loadDetails: InventoryLoadDetail[] = await inventoryRes.json()
+        console.log('Inventory data loaded:', loadDetails.length, 'records')
         
         // Store raw loads for the Inventory Loads list
         setAllInventoryLoads(loadDetails)

@@ -47,6 +47,7 @@ export default function RipEntryPage() {
   const [supplierFilter, setSupplierFilter] = useState<string>('all')
   const [speciesFilter, setSpeciesFilter] = useState<string>('all')
   const [gradeFilter, setGradeFilter] = useState<string>('all')
+  const [thicknessFilter, setThicknessFilter] = useState<string>('all')
   
   // Sorting state
   const [sortColumn, setSortColumn] = useState<string>('load_id')
@@ -626,7 +627,11 @@ export default function RipEntryPage() {
       const matchesGrade = gradeFilter === 'all' || 
         load.items?.some(item => item.grade === gradeFilter)
       
-      return matchesSearch && matchesSupplier && matchesSpecies && matchesGrade
+      // Thickness filter
+      const matchesThickness = thicknessFilter === 'all' || 
+        load.items?.some(item => item.thickness === thicknessFilter)
+      
+      return matchesSearch && matchesSupplier && matchesSpecies && matchesGrade && matchesThickness
     })
     .sort((a, b) => {
       let aVal: any
@@ -713,6 +718,63 @@ export default function RipEntryPage() {
           <h2 className="font-semibold mb-2 text-sm">Inventory Loads</h2>
           <p className="text-xs text-gray-600 mb-2">Select a load from inventory to rip</p>
           
+          {/* Thickness Quick Filter Buttons */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-gray-600">Thickness:</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setThicknessFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  thicknessFilter === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setThicknessFilter('4/4')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  thicknessFilter === '4/4'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                4/4
+              </button>
+              <button
+                onClick={() => setThicknessFilter('5/4')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  thicknessFilter === '5/4'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                5/4
+              </button>
+              <button
+                onClick={() => setThicknessFilter('6/4')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  thicknessFilter === '6/4'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                6/4
+              </button>
+              <button
+                onClick={() => setThicknessFilter('8/4')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                  thicknessFilter === '8/4'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                8/4
+              </button>
+            </div>
+          </div>
+
           {/* Search and Filters */}
           <div className="grid grid-cols-4 gap-2 mb-3">
             <Input
