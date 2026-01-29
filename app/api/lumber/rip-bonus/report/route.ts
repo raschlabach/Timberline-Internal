@@ -40,15 +40,12 @@ export async function GET(request: NextRequest) {
       return 0
     }
 
-    // Get all work sessions for the month
+    // Get all work sessions for the month (team hours per day)
     const workSessions = await query(
-      `SELECT 
-         ws.*,
-         u.full_name as user_name
-       FROM lumber_work_sessions ws
-       JOIN users u ON ws.user_id = u.id
-       WHERE ws.work_date >= $1 AND ws.work_date < $2
-       ORDER BY ws.work_date, u.full_name`,
+      `SELECT *
+       FROM lumber_work_sessions
+       WHERE work_date >= $1 AND work_date < $2
+       ORDER BY work_date`,
       [startDate, endDate]
     )
 
