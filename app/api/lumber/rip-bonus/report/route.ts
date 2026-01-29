@@ -184,8 +184,8 @@ export async function GET(request: NextRequest) {
       // Skip days with no packs (no BF to calculate)
       if (packsForDay.length === 0) continue
       
-      const totalHours = sessionsForDay.reduce((sum, s) => sum + parseFloat(s.total_hours), 0)
-      const totalBF = packsForDay.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
+      const totalHours = sessionsForDay.reduce((sum, s) => sum + parseFloat(s.total_hours || '0'), 0)
+      const totalBF = packsForDay.reduce((sum, p) => sum + parseFloat(p.actual_board_feet || '0'), 0)
       const bfPerHour = totalHours > 0 ? totalBF / totalHours : 0
       const bonusRate = calculateBonusRate(bfPerHour)
 
@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
         if (pack.stacker_3_user_id) contributors.push({ id: pack.stacker_3_user_id, name: pack.stacker_3_name })
         if (pack.stacker_4_user_id) contributors.push({ id: pack.stacker_4_user_id, name: pack.stacker_4_name })
         
-        const packBF = pack.actual_board_feet || 0
+        const packBF = parseFloat(pack.actual_board_feet || '0')
         const bfPerContributor = contributors.length > 0 ? packBF / contributors.length : 0
         
         for (const contributor of contributors) {
@@ -283,9 +283,9 @@ export async function GET(request: NextRequest) {
     })).sort((a, b) => b.total_rip_ft - a.total_rip_ft)
 
     // Calculate overall totals
-    const totalHours = workSessions.rows.reduce((sum, s) => sum + parseFloat(s.total_hours), 0)
-    const totalRnr = packsResult.rows.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
-    const totalMisc = miscPacksResult.rows.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
+    const totalHours = workSessions.rows.reduce((sum, s) => sum + parseFloat(s.total_hours || '0'), 0)
+    const totalRnr = packsResult.rows.reduce((sum, p) => sum + parseFloat(p.actual_board_feet || '0'), 0)
+    const totalMisc = miscPacksResult.rows.reduce((sum, p) => sum + parseFloat(p.actual_board_feet || '0'), 0)
     const totalBF = totalRnr + totalMisc
     const totalBonus = dailySummaries.reduce((sum, d) => sum + d.bonus_total, 0)
 
