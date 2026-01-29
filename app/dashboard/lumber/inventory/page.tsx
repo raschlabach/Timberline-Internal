@@ -2124,394 +2124,344 @@ export default function InventoryPage() {
       
       {/* Edit Load Dialog */}
       <Dialog open={editLoadDialogOpen} onOpenChange={setEditLoadDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Load Info - {editingLoad?.load_id}</span>
-              {editingLoad && (
-                <div className="flex items-center gap-2">
-                  {editingLoad.all_packs_finished && (
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Complete</span>
-                  )}
-                  {editingLoad.is_paid && (
-                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Paid</span>
-                  )}
-                  {editingLoad.po_generated && (
-                    <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">PO Sent</span>
-                  )}
-                </div>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
           {isLoadingLoadDetails ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <div className="flex items-center justify-center h-48">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : editingLoad ? (
-            <div className="space-y-4">
-              {/* Quick Actions */}
-              <div className="flex flex-wrap gap-2 p-3 bg-gray-100 rounded-lg">
-                <Button
-                  size="sm"
-                  variant={editingLoad.all_packs_finished ? "default" : "outline"}
-                  onClick={handleToggleComplete}
-                  className={editingLoad.all_packs_finished ? "bg-green-600 hover:bg-green-700" : ""}
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  {editingLoad.all_packs_finished ? 'Mark Incomplete' : 'Mark Complete'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant={editingLoad.is_paid ? "default" : "outline"}
-                  onClick={handleTogglePaid}
-                  className={editingLoad.is_paid ? "bg-blue-600 hover:bg-blue-700" : ""}
-                >
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  {editingLoad.is_paid ? 'Mark Unpaid' : 'Mark Paid'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleMarkPoSent}
-                  disabled={editingLoad.po_generated}
-                >
-                  <Send className="h-4 w-4 mr-1" />
-                  {editingLoad.po_generated ? 'PO Sent' : 'Send PO'}
-                </Button>
-                <div className="flex-1" />
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleDeleteLoad}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Delete Load
-                </Button>
-              </div>
-
-              {/* Main Info Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Left Column - Load Details */}
-                <div className="space-y-4">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <h3 className="font-semibold mb-2 text-sm">Basic Information</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-gray-500">Load ID</Label>
-                        <Input
-                          value={editingLoad.load_id || ''}
-                          onChange={(e) => updateEditingLoad('load_id', e.target.value)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Supplier</Label>
-                        <Select 
-                          value={editingLoad.supplier_id ? String(editingLoad.supplier_id) : 'none'}
-                          onValueChange={(val) => updateEditingLoad('supplier_id', val === 'none' ? null : parseInt(val))}
-                        >
-                          <SelectTrigger className="mt-1 h-8">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-- None --</SelectItem>
-                            {suppliers.map(s => (
-                              <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Lumber Type</Label>
-                        <Select 
-                          value={editingLoad.lumber_type || 'green'}
-                          onValueChange={(val) => updateEditingLoad('lumber_type', val)}
-                        >
-                          <SelectTrigger className="mt-1 h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="green">Green</SelectItem>
-                            <SelectItem value="kiln_dried">Kiln Dried</SelectItem>
-                            <SelectItem value="air_dried">Air Dried</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">PU/Delivery</Label>
-                        <Select 
-                          value={editingLoad.pickup_or_delivery || 'pickup'}
-                          onValueChange={(val) => updateEditingLoad('pickup_or_delivery', val)}
-                        >
-                          <SelectTrigger className="mt-1 h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pickup">Pickup</SelectItem>
-                            <SelectItem value="delivery">Delivery</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Load Quality (%)</Label>
-                        <Input
-                          type="number"
-                          value={editingLoad.load_quality || ''}
-                          onChange={(e) => updateEditingLoad('load_quality', e.target.value ? parseInt(e.target.value) : null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Truck Driver</Label>
-                        <Select 
-                          value={editingLoad.driver_id ? String(editingLoad.driver_id) : 'none'}
-                          onValueChange={(val) => updateEditingLoad('driver_id', val === 'none' ? null : parseInt(val))}
-                        >
-                          <SelectTrigger className="mt-1 h-8">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-- None --</SelectItem>
-                            {drivers.map(d => (
-                              <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <h3 className="font-semibold mb-2 text-sm">Dates & Scheduling</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-gray-500">ETA (Est. Delivery)</Label>
-                        <Input
-                          type="date"
-                          value={editingLoad.estimated_delivery_date ? editingLoad.estimated_delivery_date.split('T')[0] : ''}
-                          onChange={(e) => updateEditingLoad('estimated_delivery_date', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Arrival Date</Label>
-                        <Input
-                          type="date"
-                          value={editingLoad.actual_arrival_date ? editingLoad.actual_arrival_date.split('T')[0] : ''}
-                          onChange={(e) => updateEditingLoad('actual_arrival_date', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Pickup Date</Label>
-                        <Input
-                          type="date"
-                          value={editingLoad.pickup_date ? editingLoad.pickup_date.split('T')[0] : ''}
-                          onChange={(e) => updateEditingLoad('pickup_date', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Pickup #</Label>
-                        <Input
-                          value={editingLoad.pickup_number || ''}
-                          onChange={(e) => updateEditingLoad('pickup_number', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs text-gray-500">Plant</Label>
-                        <Input
-                          value={editingLoad.plant || ''}
-                          onChange={(e) => updateEditingLoad('plant', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <h3 className="font-semibold mb-2 text-sm">Invoice Information</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-gray-500">Invoice #</Label>
-                        <Input
-                          value={editingLoad.invoice_number || ''}
-                          onChange={(e) => updateEditingLoad('invoice_number', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-gray-500">Invoice Total ($)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editingLoad.invoice_total || ''}
-                          onChange={(e) => updateEditingLoad('invoice_total', e.target.value ? parseFloat(e.target.value) : null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs text-gray-500">Invoice Date</Label>
-                        <Input
-                          type="date"
-                          value={editingLoad.invoice_date ? editingLoad.invoice_date.split('T')[0] : ''}
-                          onChange={(e) => updateEditingLoad('invoice_date', e.target.value || null)}
-                          className="mt-1 h-8"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Right Column - Items & Files */}
-                <div className="space-y-4">
-                  {/* Load Items */}
-                  <div className="bg-amber-50 p-3 rounded-lg">
-                    <h3 className="font-semibold mb-2 text-sm">Load Items ({editingLoad.items?.length || 0})</h3>
-                    {editingLoad.items && editingLoad.items.length > 0 ? (
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                        {editingLoad.items.map((item: any, idx: number) => (
-                          <div key={item.id} className="bg-white p-2 rounded border text-sm">
-                            <div className="grid grid-cols-5 gap-2">
-                              <div>
-                                <Label className="text-xs text-gray-400">Species</Label>
-                                <Input
-                                  value={item.species || ''}
-                                  onChange={(e) => updateEditingLoadItem(idx, 'species', e.target.value)}
-                                  className="h-7 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-gray-400">Grade</Label>
-                                <Input
-                                  value={item.grade || ''}
-                                  onChange={(e) => updateEditingLoadItem(idx, 'grade', e.target.value)}
-                                  className="h-7 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-gray-400">Thick</Label>
-                                <Select 
-                                  value={item.thickness || '4/4'}
-                                  onValueChange={(val) => updateEditingLoadItem(idx, 'thickness', val)}
-                                >
-                                  <SelectTrigger className="h-7 text-sm">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="4/4">4/4</SelectItem>
-                                    <SelectItem value="5/4">5/4</SelectItem>
-                                    <SelectItem value="6/4">6/4</SelectItem>
-                                    <SelectItem value="8/4">8/4</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Label className="text-xs text-gray-400">Act. BF</Label>
-                                <Input
-                                  type="number"
-                                  value={item.actual_footage || ''}
-                                  onChange={(e) => updateEditingLoadItem(idx, 'actual_footage', e.target.value ? parseInt(e.target.value) : null)}
-                                  className="h-7 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-gray-400">Price</Label>
-                                <Input
-                                  type="number"
-                                  step="0.001"
-                                  value={item.price || ''}
-                                  onChange={(e) => updateEditingLoadItem(idx, 'price', e.target.value ? parseFloat(e.target.value) : null)}
-                                  className="h-7 text-sm"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-sm">No items</p>
-                    )}
-                  </div>
-                  
-                  {/* Documents */}
-                  <div className="bg-purple-50 p-3 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-sm">Attached Files ({loadDocuments.length})</h3>
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={handleFileUpload}
-                          disabled={isUploadingFile}
-                        />
-                        <Button size="sm" variant="outline" disabled={isUploadingFile} asChild>
-                          <span>
-                            <Upload className="h-3 w-3 mr-1" />
-                            {isUploadingFile ? 'Uploading...' : 'Add File'}
-                          </span>
-                        </Button>
-                      </label>
-                    </div>
-                    {loadDocuments.length > 0 ? (
-                      <div className="space-y-1 max-h-[150px] overflow-y-auto">
-                        {loadDocuments.map((doc: any) => (
-                          <div key={doc.id} className="flex items-center justify-between bg-white p-2 rounded border text-sm">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{doc.filename}</span>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <a
-                                href={doc.filepath}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                              <button
-                                onClick={() => handleDeleteDocument(doc.id)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-sm">No files attached</p>
-                    )}
-                  </div>
-                  
-                  {/* Comments */}
+            <>
+              {/* Header */}
+              <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 rounded-t-lg">
+                <div className="flex items-center justify-between">
                   <div>
-                    <Label className="text-xs text-gray-500">Comments</Label>
-                    <Textarea
-                      value={editingLoad.comments || ''}
-                      onChange={(e) => updateEditingLoad('comments', e.target.value || null)}
-                      rows={3}
-                      className="mt-1 text-sm"
-                    />
+                    <h2 className="text-xl font-bold">Load {editingLoad.load_id}</h2>
+                    <p className="text-blue-100 text-sm">{editingLoad.supplier_name || 'No Supplier'}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editingLoad.all_packs_finished && (
+                      <span className="px-3 py-1 text-xs font-semibold bg-green-500 rounded-full">Complete</span>
+                    )}
+                    {editingLoad.is_paid && (
+                      <span className="px-3 py-1 text-xs font-semibold bg-emerald-500 rounded-full">Paid</span>
+                    )}
+                    {editingLoad.po_generated && (
+                      <span className="px-3 py-1 text-xs font-semibold bg-purple-500 rounded-full">PO Sent</span>
+                    )}
                   </div>
                 </div>
               </div>
               
-              {/* Footer Actions */}
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <Button variant="outline" onClick={() => setEditLoadDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSaveLoad} disabled={isSavingLoad}>
-                  {isSavingLoad ? 'Saving...' : 'Save Changes'}
-                </Button>
+              <div className="p-5 space-y-5">
+                {/* Quick Actions */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={editingLoad.all_packs_finished ? "default" : "outline"}
+                    onClick={handleToggleComplete}
+                    className={editingLoad.all_packs_finished ? "bg-green-600 hover:bg-green-700" : ""}
+                  >
+                    <Check className="h-4 w-4 mr-1.5" />
+                    {editingLoad.all_packs_finished ? 'Incomplete' : 'Complete'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={editingLoad.is_paid ? "default" : "outline"}
+                    onClick={handleTogglePaid}
+                    className={editingLoad.is_paid ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+                  >
+                    <DollarSign className="h-4 w-4 mr-1.5" />
+                    {editingLoad.is_paid ? 'Unpaid' : 'Paid'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={editingLoad.po_generated ? "default" : "outline"}
+                    onClick={handleMarkPoSent}
+                    className={editingLoad.po_generated ? "bg-purple-600 hover:bg-purple-700" : ""}
+                    disabled={editingLoad.po_generated}
+                  >
+                    <Send className="h-4 w-4 mr-1.5" />
+                    {editingLoad.po_generated ? 'PO Sent' : 'Send PO'}
+                  </Button>
+                  <div className="flex-1" />
+                  <Button size="sm" variant="destructive" onClick={handleDeleteLoad}>
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    Delete
+                  </Button>
+                </div>
+
+                {/* Load Items Summary - At top for quick reference */}
+                {editingLoad.items && editingLoad.items.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg overflow-hidden">
+                    <div className="bg-amber-100 px-4 py-2 border-b border-amber-200">
+                      <h3 className="font-semibold text-amber-900">Load Items</h3>
+                    </div>
+                    <div className="divide-y divide-amber-100">
+                      {editingLoad.items.map((item: any, idx: number) => (
+                        <div key={item.id} className="px-4 py-3 flex items-center gap-4 bg-white hover:bg-amber-50 transition-colors">
+                          <div className="flex-1 grid grid-cols-5 gap-3 items-center">
+                            <Input
+                              value={item.species || ''}
+                              onChange={(e) => updateEditingLoadItem(idx, 'species', e.target.value)}
+                              placeholder="Species"
+                              className="h-9"
+                            />
+                            <Input
+                              value={item.grade || ''}
+                              onChange={(e) => updateEditingLoadItem(idx, 'grade', e.target.value)}
+                              placeholder="Grade"
+                              className="h-9"
+                            />
+                            <Select value={item.thickness || '4/4'} onValueChange={(val) => updateEditingLoadItem(idx, 'thickness', val)}>
+                              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="4/4">4/4</SelectItem>
+                                <SelectItem value="5/4">5/4</SelectItem>
+                                <SelectItem value="6/4">6/4</SelectItem>
+                                <SelectItem value="8/4">8/4</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              value={item.actual_footage || ''}
+                              onChange={(e) => updateEditingLoadItem(idx, 'actual_footage', e.target.value ? parseInt(e.target.value) : null)}
+                              placeholder="BF"
+                              className="h-9"
+                            />
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                              <Input
+                                type="number"
+                                step="0.001"
+                                value={item.price || ''}
+                                onChange={(e) => updateEditingLoadItem(idx, 'price', e.target.value ? parseFloat(e.target.value) : null)}
+                                placeholder="Price"
+                                className="h-9 pl-7"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Form Grid */}
+                <div className="grid grid-cols-2 gap-5">
+                  {/* Left Column */}
+                  <div className="space-y-5">
+                    {/* Basic Info */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-700 border-b pb-2">Basic Information</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Load ID</Label>
+                          <Input value={editingLoad.load_id || ''} onChange={(e) => updateEditingLoad('load_id', e.target.value)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Supplier</Label>
+                          <Select value={editingLoad.supplier_id ? String(editingLoad.supplier_id) : 'none'} onValueChange={(val) => updateEditingLoad('supplier_id', val === 'none' ? null : parseInt(val))}>
+                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-- None --</SelectItem>
+                              {suppliers.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Type</Label>
+                          <Select value={editingLoad.lumber_type || 'green'} onValueChange={(val) => updateEditingLoad('lumber_type', val)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="green">Green</SelectItem>
+                              <SelectItem value="kiln_dried">Kiln Dried</SelectItem>
+                              <SelectItem value="air_dried">Air Dried</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">PU/Delivery</Label>
+                          <Select value={editingLoad.pickup_or_delivery || 'pickup'} onValueChange={(val) => updateEditingLoad('pickup_or_delivery', val)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pickup">Pickup</SelectItem>
+                              <SelectItem value="delivery">Delivery</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Driver</Label>
+                          <Select value={editingLoad.driver_id ? String(editingLoad.driver_id) : 'none'} onValueChange={(val) => updateEditingLoad('driver_id', val === 'none' ? null : parseInt(val))}>
+                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-- None --</SelectItem>
+                              {drivers.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Quality %</Label>
+                          <Input type="number" value={editingLoad.load_quality || ''} onChange={(e) => updateEditingLoad('load_quality', e.target.value ? parseInt(e.target.value) : null)} />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Dates */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-700 border-b pb-2">Dates & Scheduling</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">ETA</Label>
+                          <Input type="date" value={editingLoad.estimated_delivery_date?.split('T')[0] || ''} onChange={(e) => updateEditingLoad('estimated_delivery_date', e.target.value || null)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Arrival Date</Label>
+                          <Input type="date" value={editingLoad.actual_arrival_date?.split('T')[0] || ''} onChange={(e) => updateEditingLoad('actual_arrival_date', e.target.value || null)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Pickup Date</Label>
+                          <Input type="date" value={editingLoad.pickup_date?.split('T')[0] || ''} onChange={(e) => updateEditingLoad('pickup_date', e.target.value || null)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Pickup #</Label>
+                          <Input value={editingLoad.pickup_number || ''} onChange={(e) => updateEditingLoad('pickup_number', e.target.value || null)} />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-gray-500 mb-1 block">Plant</Label>
+                          <Input value={editingLoad.plant || ''} onChange={(e) => updateEditingLoad('plant', e.target.value || null)} />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Invoice */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-700 border-b pb-2">Invoice</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Invoice #</Label>
+                          <Input value={editingLoad.invoice_number || ''} onChange={(e) => updateEditingLoad('invoice_number', e.target.value || null)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Total ($)</Label>
+                          <Input type="number" step="0.01" value={editingLoad.invoice_total || ''} onChange={(e) => updateEditingLoad('invoice_total', e.target.value ? parseFloat(e.target.value) : null)} />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500 mb-1 block">Date</Label>
+                          <Input type="date" value={editingLoad.invoice_date?.split('T')[0] || ''} onChange={(e) => updateEditingLoad('invoice_date', e.target.value || null)} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Right Column - Documents & Comments */}
+                  <div className="space-y-5">
+                    {/* Documents with Previews */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <h3 className="font-semibold text-gray-700">Documents ({loadDocuments.length})</h3>
+                        <label className="cursor-pointer">
+                          <input type="file" className="hidden" onChange={handleFileUpload} disabled={isUploadingFile} />
+                          <Button size="sm" variant="outline" disabled={isUploadingFile} asChild>
+                            <span><Upload className="h-4 w-4 mr-1.5" />{isUploadingFile ? 'Uploading...' : 'Upload'}</span>
+                          </Button>
+                        </label>
+                      </div>
+                      
+                      {loadDocuments.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto">
+                          {loadDocuments.map((doc: any) => {
+                            const isImage = doc.file_type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.filename)
+                            const isPdf = doc.file_type === 'application/pdf' || /\.pdf$/i.test(doc.filename)
+                            
+                            return (
+                              <div key={doc.id} className="relative group bg-gray-50 rounded-lg border overflow-hidden">
+                                {/* Preview Area */}
+                                <a href={doc.filepath} target="_blank" rel="noopener noreferrer" className="block">
+                                  {isImage ? (
+                                    <div className="aspect-[4/3] bg-gray-100">
+                                      <img 
+                                        src={doc.filepath} 
+                                        alt={doc.filename}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                  ) : isPdf ? (
+                                    <div className="aspect-[4/3] bg-red-50 flex items-center justify-center">
+                                      <div className="text-center">
+                                        <FileText className="h-12 w-12 text-red-500 mx-auto mb-2" />
+                                        <span className="text-xs font-medium text-red-600">PDF</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center">
+                                      <div className="text-center">
+                                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                                        <span className="text-xs text-gray-500">Document</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </a>
+                                
+                                {/* File Info & Actions */}
+                                <div className="p-2 bg-white border-t">
+                                  <p className="text-xs text-gray-700 truncate font-medium" title={doc.filename}>
+                                    {doc.filename}
+                                  </p>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <a 
+                                      href={doc.filepath} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="h-3 w-3" /> Open
+                                    </a>
+                                    <button
+                                      onClick={() => handleDeleteDocument(doc.id)}
+                                      className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                                    >
+                                      <Trash2 className="h-3 w-3" /> Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                          <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                          <p className="text-sm text-gray-500">No documents attached</p>
+                          <p className="text-xs text-gray-400 mt-1">Upload files using the button above</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Comments */}
+                    <div className="space-y-2">
+                      <Label className="text-xs text-gray-500">Comments</Label>
+                      <Textarea
+                        value={editingLoad.comments || ''}
+                        onChange={(e) => updateEditingLoad('comments', e.target.value || null)}
+                        rows={4}
+                        placeholder="Add notes about this load..."
+                        className="resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setEditLoadDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleSaveLoad} disabled={isSavingLoad} className="bg-blue-600 hover:bg-blue-700">
+                    {isSavingLoad ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
               </div>
-            </div>
+            </>
           ) : (
-            <p className="text-gray-500 text-center py-8">No load data available</p>
+            <div className="p-8 text-center text-gray-500">No load data available</div>
           )}
         </DialogContent>
       </Dialog>
