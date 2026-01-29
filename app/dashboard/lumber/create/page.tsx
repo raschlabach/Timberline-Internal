@@ -15,8 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness } from '@/types/lumber'
-import { Plus, Trash2, Copy, ArrowLeft, TrendingUp, AlertTriangle, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { LumberSupplierWithLocations, CreateLoadItemInput, Thickness, LumberLoadPreset } from '@/types/lumber'
+import { Plus, Trash2, Copy, ArrowLeft, TrendingUp, AlertTriangle, X, ChevronDown, ChevronRight, Star, Save, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -67,6 +67,12 @@ export default function CreateLoadPage() {
   const [grades, setGrades] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   
+  // Presets
+  const [presets, setPresets] = useState<LumberLoadPreset[]>([])
+  const [showSavePresetDialog, setShowSavePresetDialog] = useState(false)
+  const [newPresetName, setNewPresetName] = useState('')
+  const [isSavingPreset, setIsSavingPreset] = useState(false)
+  
   // Analytics data
   const [priceTrends, setPriceTrends] = useState<PriceTrend[]>([])
   const [supplierQuality, setSupplierQuality] = useState<SupplierQuality[]>([])
@@ -110,18 +116,20 @@ export default function CreateLoadPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [suppliersRes, speciesRes, gradesRes, qualityRes, savedSelectionsRes] = await Promise.all([
+        const [suppliersRes, speciesRes, gradesRes, qualityRes, savedSelectionsRes, presetsRes] = await Promise.all([
           fetch('/api/lumber/suppliers'),
           fetch('/api/lumber/species'),
           fetch('/api/lumber/grades'),
           fetch('/api/lumber/analytics/supplier-quality'),
-          fetch('/api/lumber/analytics/user-trend-selections')
+          fetch('/api/lumber/analytics/user-trend-selections'),
+          fetch('/api/lumber/presets')
         ])
         
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
         if (speciesRes.ok) setSpecies(await speciesRes.json())
         if (gradesRes.ok) setGrades(await gradesRes.json())
         if (qualityRes.ok) setSupplierQuality(await qualityRes.json())
+        if (presetsRes.ok) setPresets(await presetsRes.json())
         
         // Load saved selections
         if (savedSelectionsRes.ok) {
@@ -329,6 +337,139 @@ export default function CreateLoadPage() {
     })
   }
 
+  async function loadPreset(preset: LumberLoadPreset) {
+    // Set shared fields from preset
+    setSupplierId(preset.supplier_id)
+    setSupplierLocationId(preset.supplier_location_id)
+    setLumberType(preset.lumber_type || 'dried')
+    setPickupOrDelivery(preset.pickup_or_delivery || '')
+    setComments(preset.comments || '')
+    
+    // Get load IDs for each item
+    const existingIds = items.map(item => item.load_id).filter(Boolean)
+    const numNeeded = preset.items?.length || 1
+    
+    try {
+      const excludeParam = existingIds.length > 0 ? `&exclude=${existingIds.join(',')}` : ''
+      const response = await fetch(`/api/lumber/load-id-ranges/next-available?count=${numNeeded}${excludeParam}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        const loadIds = data.loadIds || []
+        
+        // Create items from preset with load IDs
+        const newItems = (preset.items || []).map((item, idx) => ({
+          load_id: loadIds[idx] || '',
+          species: item.species,
+          grade: item.grade,
+          thickness: item.thickness,
+          estimated_footage: item.estimated_footage,
+          price: item.price
+        }))
+        
+        setItems(newItems.length > 0 ? newItems : [{ 
+          load_id: loadIds[0] || '', 
+          species: '', 
+          grade: '', 
+          thickness: '4/4', 
+          estimated_footage: null, 
+          price: null 
+        }])
+        
+        toast.success(`Loaded preset: ${preset.preset_name}`)
+      }
+    } catch (error) {
+      console.error('Error loading preset:', error)
+      toast.error('Failed to load preset')
+    }
+  }
+
+  async function saveAsPreset() {
+    if (!newPresetName.trim()) {
+      toast.error('Please enter a preset name')
+      return
+    }
+    
+    if (!supplierId) {
+      toast.error('Please select a supplier before saving as preset')
+      return
+    }
+    
+    setIsSavingPreset(true)
+    
+    try {
+      const response = await fetch('/api/lumber/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preset_name: newPresetName.trim(),
+          supplier_id: supplierId,
+          supplier_location_id: supplierLocationId,
+          lumber_type: lumberType,
+          pickup_or_delivery: pickupOrDelivery,
+          comments: comments,
+          is_favorite: false,
+          items: items.map(item => ({
+            species: item.species,
+            grade: item.grade,
+            thickness: item.thickness,
+            estimated_footage: item.estimated_footage,
+            price: item.price
+          }))
+        })
+      })
+      
+      if (response.ok) {
+        const newPreset = await response.json()
+        setPresets(prev => [...prev, newPreset])
+        setShowSavePresetDialog(false)
+        setNewPresetName('')
+        toast.success('Preset saved successfully')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to save preset')
+      }
+    } catch (error) {
+      console.error('Error saving preset:', error)
+      toast.error('Failed to save preset')
+    } finally {
+      setIsSavingPreset(false)
+    }
+  }
+
+  async function togglePresetFavorite(presetId: number) {
+    try {
+      const response = await fetch(`/api/lumber/presets/${presetId}/toggle-favorite`, {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        const updated = await response.json()
+        setPresets(prev => prev.map(p => p.id === presetId ? { ...p, is_favorite: updated.is_favorite } : p))
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+    }
+  }
+
+  async function deletePreset(presetId: number) {
+    if (!confirm('Are you sure you want to delete this preset?')) return
+    
+    try {
+      const response = await fetch(`/api/lumber/presets/${presetId}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        setPresets(prev => prev.filter(p => p.id !== presetId))
+        toast.success('Preset deleted')
+      }
+    } catch (error) {
+      console.error('Error deleting preset:', error)
+      toast.error('Failed to delete preset')
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     
@@ -499,6 +640,114 @@ export default function CreateLoadPage() {
           </div>
         </div>
       </div>
+
+      {/* Order Presets Section */}
+      {presets.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-gray-600" />
+              Order Presets
+            </h2>
+            <span className="text-sm text-gray-500">{presets.length} saved</span>
+          </div>
+          
+          {/* Favorites First */}
+          {presets.filter(p => p.is_favorite).length > 0 && (
+            <div className="mb-4">
+              <div className="text-xs uppercase text-yellow-600 font-semibold mb-2 flex items-center gap-1">
+                <Star className="h-3 w-3 fill-yellow-500" />
+                Favorites
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                {presets.filter(p => p.is_favorite).map(preset => (
+                  <div 
+                    key={preset.id}
+                    className="border border-yellow-200 bg-yellow-50 rounded-lg p-3 hover:bg-yellow-100 transition-colors group"
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <button
+                        type="button"
+                        onClick={() => loadPreset(preset)}
+                        className="text-left flex-1"
+                      >
+                        <div className="font-medium text-sm text-gray-900 truncate">{preset.preset_name}</div>
+                        <div className="text-xs text-gray-600 truncate">{preset.supplier_name}</div>
+                      </button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => togglePresetFavorite(preset.id)}
+                          className="text-yellow-500 hover:text-yellow-600"
+                          title="Remove from favorites"
+                        >
+                          <Star className="h-4 w-4 fill-current" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deletePreset(preset.id)}
+                          className="text-gray-400 hover:text-red-500"
+                          title="Delete preset"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {preset.items?.length || 0} item(s)
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* All Presets */}
+          <div>
+            <div className="text-xs uppercase text-gray-500 font-semibold mb-2">All Presets</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              {presets.filter(p => !p.is_favorite).map(preset => (
+                <div 
+                  key={preset.id}
+                  className="border rounded-lg p-3 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <button
+                      type="button"
+                      onClick={() => loadPreset(preset)}
+                      className="text-left flex-1"
+                    >
+                      <div className="font-medium text-sm text-gray-900 truncate">{preset.preset_name}</div>
+                      <div className="text-xs text-gray-600 truncate">{preset.supplier_name}</div>
+                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => togglePresetFavorite(preset.id)}
+                        className="text-gray-400 hover:text-yellow-500"
+                        title="Add to favorites"
+                      >
+                        <Star className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deletePreset(preset.id)}
+                        className="text-gray-400 hover:text-red-500"
+                        title="Delete preset"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {preset.items?.length || 0} item(s)
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Two Column Layout: Form on left, Supplier Quality on right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -735,19 +984,72 @@ export default function CreateLoadPage() {
         </div>
 
         {/* Submit */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
+        <div className="flex justify-between pt-4 border-t">
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.back()}
+            onClick={() => setShowSavePresetDialog(true)}
+            disabled={!supplierId}
           >
-            Cancel
+            <Save className="h-4 w-4 mr-2" />
+            Save as Preset
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Creating...' : 'Create Load'}
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.back()}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? 'Creating...' : 'Create Load'}
+            </Button>
+          </div>
         </div>
       </form>
+      
+      {/* Save Preset Dialog */}
+      {showSavePresetDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Save as Preset</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Save the current configuration as a preset for quick reuse.
+            </p>
+            <div className="mb-4">
+              <Label htmlFor="presetName">Preset Name *</Label>
+              <Input
+                id="presetName"
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+                placeholder="e.g., Standard Red Oak Order"
+                className="mt-1"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowSavePresetDialog(false)
+                  setNewPresetName('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={saveAsPreset}
+                disabled={isSavingPreset || !newPresetName.trim()}
+              >
+                {isSavingPreset ? 'Saving...' : 'Save Preset'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
 
         {/* Sidebar - Supplier Quality & Warnings */}
