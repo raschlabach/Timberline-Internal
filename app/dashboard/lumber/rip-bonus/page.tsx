@@ -309,20 +309,20 @@ export default function RipBonusPage() {
       {/* Ripped Packs List */}
       {(() => {
         // Get unique filter options from packs
-        const uniqueSpecies = ['all', ...Array.from(new Set(packs.map(p => p.species).filter(Boolean))).sort()]
-        const uniqueGrades = ['all', ...Array.from(new Set(packs.map(p => p.grade).filter(Boolean))).sort()]
-        const uniqueOperators = ['all', ...Array.from(new Set(packs.map(p => p.operator_name).filter(Boolean))).sort()]
-        const uniqueStackers = ['all', ...Array.from(new Set(packs.flatMap(p => [
+        const uniqueSpecies: string[] = ['all', ...Array.from(new Set(packs.map(p => p.species).filter((s): s is string => !!s))).sort()]
+        const uniqueGrades: string[] = ['all', ...Array.from(new Set(packs.map(p => p.grade).filter((g): g is string => !!g))).sort()]
+        const uniqueOperators: string[] = ['all', ...Array.from(new Set(packs.map(p => p.operator_name).filter((o): o is string => !!o))).sort()]
+        const uniqueStackers: string[] = ['all', ...Array.from(new Set(packs.flatMap(p => [
           p.stacker_1_name, p.stacker_2_name, p.stacker_3_name, p.stacker_4_name
-        ].filter(Boolean)))).sort()]
+        ].filter((s): s is string => !!s)))).sort()]
         
         // Filter packs
         const filteredPacks = packs.filter(pack => {
           // Search filter (pack ID or load ID)
           if (packsSearch) {
             const search = packsSearch.toLowerCase()
-            const matchesPackId = pack.pack_id?.toLowerCase().includes(search)
-            const matchesLoadId = pack.load_load_id?.toLowerCase().includes(search)
+            const matchesPackId = String(pack.pack_id || '').toLowerCase().includes(search)
+            const matchesLoadId = String(pack.load_load_id || '').toLowerCase().includes(search)
             if (!matchesPackId && !matchesLoadId) return false
           }
           
