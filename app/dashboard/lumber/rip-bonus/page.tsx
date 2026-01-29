@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { MonthlyRipReport, LumberBonusParameter, LumberPackWithDetails } from '@/types/lumber'
+
+interface Operator {
+  id: number
+  name: string
+  is_active: boolean
+}
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -14,7 +20,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { Calendar, Wrench, Package, Search, X } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Calendar, Wrench, Package, Search, X, Pencil } from 'lucide-react'
 
 export default function RipBonusPage() {
   const { data: session, status } = useSession()
@@ -34,6 +48,28 @@ export default function RipBonusPage() {
   const [packsOperator, setPacksOperator] = useState('all')
   const [packsStacker, setPacksStacker] = useState('all')
   const [packsType, setPacksType] = useState('all')
+  
+  // Operators for edit dialog
+  const [operators, setOperators] = useState<Operator[]>([])
+  
+  // Edit pack dialog state
+  const [editPackDialogOpen, setEditPackDialogOpen] = useState(false)
+  const [editingPack, setEditingPack] = useState<LumberPackWithDetails | null>(null)
+  const [editPackData, setEditPackData] = useState({
+    pack_id: '',
+    length: '',
+    tally_board_feet: '',
+    actual_board_feet: '',
+    rip_yield: '',
+    rip_comments: '',
+    operator_id: '',
+    stacker_1_id: '',
+    stacker_2_id: '',
+    stacker_3_id: '',
+    stacker_4_id: '',
+    is_finished: true,
+    finished_at: ''
+  })
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -89,6 +125,87 @@ export default function RipBonusPage() {
       fetchData()
     }
   }, [status, selectedMonth, selectedYear])
+  
+  // Fetch operators once on mount
+  useEffect(() => {
+    async function fetchOperators() {
+      try {
+        const res = await fetch('/api/lumber/operators')
+        if (res.ok) {
+          const data = await res.json()
+          setOperators(data)
+        }
+      } catch (error) {
+        console.error('Error fetching operators:', error)
+      }
+    }
+    fetchOperators()
+  }, [])
+  
+  // Edit pack functions
+  function handleOpenEditPack(pack: LumberPackWithDetails) {
+    setEditingPack(pack)
+    setEditPackData({
+      pack_id: String(pack.pack_id || ''),
+      length: pack.length != null ? String(pack.length) : '',
+      tally_board_feet: pack.tally_board_feet != null ? String(Math.round(Number(pack.tally_board_feet))) : '',
+      actual_board_feet: pack.actual_board_feet != null ? String(Math.round(Number(pack.actual_board_feet))) : '',
+      rip_yield: pack.rip_yield != null ? String(pack.rip_yield) : '',
+      rip_comments: pack.rip_comments || '',
+      operator_id: pack.operator_id != null ? String(pack.operator_id) : '',
+      stacker_1_id: pack.stacker_1_id != null ? String(pack.stacker_1_id) : '',
+      stacker_2_id: pack.stacker_2_id != null ? String(pack.stacker_2_id) : '',
+      stacker_3_id: pack.stacker_3_id != null ? String(pack.stacker_3_id) : '',
+      stacker_4_id: pack.stacker_4_id != null ? String(pack.stacker_4_id) : '',
+      is_finished: pack.is_finished || false,
+      finished_at: pack.finished_at ? new Date(pack.finished_at).toISOString().split('T')[0] : ''
+    })
+    setEditPackDialogOpen(true)
+  }
+  
+  async function handleSaveEditPack() {
+    if (!editingPack) return
+    
+    try {
+      // Determine if this is a misc pack or regular pack
+      const isMiscPack = editingPack.pack_type === 'misc'
+      const endpoint = isMiscPack 
+        ? `/api/lumber/misc-packs/${editingPack.id}`
+        : `/api/lumber/packs/${editingPack.id}/rip-data`
+      
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pack_id: editPackData.pack_id || null,
+          length: editPackData.length !== '' ? parseInt(editPackData.length) : null,
+          tally_board_feet: editPackData.tally_board_feet !== '' ? parseInt(editPackData.tally_board_feet) : null,
+          actual_board_feet: editPackData.actual_board_feet !== '' ? parseInt(editPackData.actual_board_feet) : null,
+          rip_yield: editPackData.rip_yield !== '' ? parseFloat(editPackData.rip_yield) : null,
+          rip_comments: editPackData.rip_comments || null,
+          operator_id: editPackData.operator_id !== '' ? parseInt(editPackData.operator_id) : null,
+          stacker_1_id: editPackData.stacker_1_id !== '' ? parseInt(editPackData.stacker_1_id) : null,
+          stacker_2_id: editPackData.stacker_2_id !== '' ? parseInt(editPackData.stacker_2_id) : null,
+          stacker_3_id: editPackData.stacker_3_id !== '' ? parseInt(editPackData.stacker_3_id) : null,
+          stacker_4_id: editPackData.stacker_4_id !== '' ? parseInt(editPackData.stacker_4_id) : null,
+          is_finished: editPackData.is_finished,
+          finished_at: editPackData.finished_at || null
+        })
+      })
+      
+      if (response.ok) {
+        setEditPackDialogOpen(false)
+        setEditingPack(null)
+        fetchData() // Refresh data
+      } else {
+        const error = await response.json()
+        alert(`Error saving pack: ${error.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error saving pack:', error)
+      alert('Error saving pack')
+    }
+  }
 
   if (status === 'loading' || isLoading) {
     return (
@@ -446,29 +563,30 @@ export default function RipBonusPage() {
           )}
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto" style={{ maxHeight: '600px' }}>
+          <table className="w-full divide-y divide-gray-200" style={{ minWidth: '1400px' }}>
+            <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pack ID</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load/Customer</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Species</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grade</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Thickness</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Length</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tally BF</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actual BF</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Yield</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operator</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stackers</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Finished</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pack ID</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load/Customer</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Species</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grade</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Thickness</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Length</th>
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tally BF</th>
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actual BF</th>
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Yield</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operator</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stackers</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Finished</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPacks.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={14} className="px-4 py-8 text-center text-gray-500">
                     {packs.length === 0 
                       ? `No packs ripped in ${months[selectedMonth - 1]} ${selectedYear}`
                       : 'No packs match the current filters'
@@ -478,46 +596,57 @@ export default function RipBonusPage() {
               ) : (
                 filteredPacks.map((pack) => (
                   <tr key={`${pack.pack_type || 'rnr'}-${pack.id}`} className={`hover:bg-gray-50 text-sm ${pack.pack_type === 'misc' ? 'bg-amber-50' : ''}`}>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenEditPack(pack)}
+                        className="h-7 w-7 p-0"
+                        title="Edit Pack"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
                       {pack.pack_type === 'misc' ? (
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800">MISC</span>
                       ) : (
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">RNR</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900">
                       {pack.pack_id || '-'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900">
                       {pack.pack_type === 'misc' ? (
                         <span className="text-amber-700">{pack.load_load_id?.replace('MISC: ', '')}</span>
                       ) : pack.load_load_id}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900">
                       {pack.species}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900">
                       {pack.grade}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900">
                       {pack.thickness}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900">
                       {pack.length ? `${pack.length} ft` : '-'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-right">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900 text-right">
                       {Number(pack.tally_board_feet || 0).toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-blue-600 font-medium text-right">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-blue-600 font-medium text-right">
                       {Number(pack.actual_board_feet || 0).toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-right">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900 text-right">
                       {pack.rip_yield ? `${Number(pack.rip_yield).toFixed(1)}%` : '-'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-900 text-xs">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-900 text-xs">
                       {pack.operator_name || '-'}
                     </td>
-                    <td className="px-3 py-2 text-gray-900 text-xs max-w-[150px] truncate">
+                    <td className="px-2 py-1.5 text-gray-900 text-xs">
                       {[
                         pack.stacker_1_name,
                         pack.stacker_2_name,
@@ -525,7 +654,7 @@ export default function RipBonusPage() {
                         pack.stacker_4_name
                       ].filter(Boolean).join(', ') || '-'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                    <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-900">
                       {pack.finished_at 
                         ? new Date(pack.finished_at).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
@@ -539,6 +668,177 @@ export default function RipBonusPage() {
       </div>
         )
       })()}
+      
+      {/* Edit Pack Dialog */}
+      <Dialog open={editPackDialogOpen} onOpenChange={setEditPackDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Pack {editingPack?.pack_type === 'misc' ? '(Misc)' : ''}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-4 py-4">
+            <div>
+              <Label>Pack ID</Label>
+              <Input
+                value={editPackData.pack_id}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, pack_id: e.target.value }))}
+              />
+            </div>
+            {editingPack?.pack_type !== 'misc' && (
+              <>
+                <div>
+                  <Label>Length (ft)</Label>
+                  <Input
+                    type="number"
+                    value={editPackData.length}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, length: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Tally BF</Label>
+                  <Input
+                    type="number"
+                    value={editPackData.tally_board_feet}
+                    onChange={(e) => setEditPackData(prev => ({ ...prev, tally_board_feet: e.target.value }))}
+                  />
+                </div>
+              </>
+            )}
+            <div>
+              <Label>Actual BF</Label>
+              <Input
+                type="number"
+                value={editPackData.actual_board_feet}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, actual_board_feet: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Rip Yield %</Label>
+              <Input
+                type="number"
+                value={editPackData.rip_yield}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, rip_yield: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Finished Date</Label>
+              <Input
+                type="date"
+                value={editPackData.finished_at}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, finished_at: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Operator</Label>
+              <Select 
+                value={editPackData.operator_id || 'none'} 
+                onValueChange={(val) => setEditPackData(prev => ({ ...prev, operator_id: val === 'none' ? '' : val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select operator" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- None --</SelectItem>
+                  {operators.map(op => (
+                    <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Stacker 1</Label>
+              <Select 
+                value={editPackData.stacker_1_id || 'none'} 
+                onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_1_id: val === 'none' ? '' : val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stacker" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- None --</SelectItem>
+                  {operators.map(op => (
+                    <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Stacker 2</Label>
+              <Select 
+                value={editPackData.stacker_2_id || 'none'} 
+                onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_2_id: val === 'none' ? '' : val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stacker" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- None --</SelectItem>
+                  {operators.map(op => (
+                    <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Stacker 3</Label>
+              <Select 
+                value={editPackData.stacker_3_id || 'none'} 
+                onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_3_id: val === 'none' ? '' : val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stacker" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- None --</SelectItem>
+                  {operators.map(op => (
+                    <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Stacker 4</Label>
+              <Select 
+                value={editPackData.stacker_4_id || 'none'} 
+                onValueChange={(val) => setEditPackData(prev => ({ ...prev, stacker_4_id: val === 'none' ? '' : val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stacker" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- None --</SelectItem>
+                  {operators.map(op => (
+                    <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-3">
+              <Label>Comments</Label>
+              <Textarea
+                value={editPackData.rip_comments}
+                onChange={(e) => setEditPackData(prev => ({ ...prev, rip_comments: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            <div className="col-span-3 flex items-center gap-2">
+              <Checkbox
+                id="is_finished"
+                checked={editPackData.is_finished}
+                onCheckedChange={(checked) => setEditPackData(prev => ({ ...prev, is_finished: checked as boolean }))}
+              />
+              <Label htmlFor="is_finished">Finished</Label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditPackDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEditPack}>
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
