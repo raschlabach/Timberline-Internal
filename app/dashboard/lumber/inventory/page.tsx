@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight, Eye, GripVertical, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, X, Info, Pencil } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, GripVertical, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, X, Info, Pencil, Trash2, Upload, FileText, Check, DollarSign, Send, ExternalLink } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import {
@@ -369,6 +369,9 @@ export default function InventoryPage() {
   const [isLoadingLoadDetails, setIsLoadingLoadDetails] = useState(false)
   const [isSavingLoad, setIsSavingLoad] = useState(false)
   const [suppliers, setSuppliers] = useState<{id: number, name: string}[]>([])
+  const [drivers, setDrivers] = useState<{id: number, name: string}[]>([])
+  const [loadDocuments, setLoadDocuments] = useState<any[]>([])
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
 
   // Inventory Loads List state
   const [allInventoryLoads, setAllInventoryLoads] = useState<InventoryLoadDetail[]>([])
@@ -406,20 +409,27 @@ export default function InventoryPage() {
     }
   }, [])
   
-  // Fetch suppliers for edit dialog
+  // Fetch suppliers and drivers for edit dialog
   useEffect(() => {
-    async function fetchSuppliers() {
+    async function fetchDropdownData() {
       try {
-        const res = await fetch('/api/lumber/suppliers')
-        if (res.ok) {
-          const data = await res.json()
+        const [suppliersRes, driversRes] = await Promise.all([
+          fetch('/api/lumber/suppliers'),
+          fetch('/api/lumber/drivers')
+        ])
+        if (suppliersRes.ok) {
+          const data = await suppliersRes.json()
           setSuppliers(data)
         }
+        if (driversRes.ok) {
+          const data = await driversRes.json()
+          setDrivers(data)
+        }
       } catch (error) {
-        console.error('Error fetching suppliers:', error)
+        console.error('Error fetching dropdown data:', error)
       }
     }
-    fetchSuppliers()
+    fetchDropdownData()
   }, [])
 
   async function fetchInventoryData() {
@@ -1031,16 +1041,27 @@ export default function InventoryPage() {
   async function handleEditLoad(load: InventoryLoadDetail) {
     setIsLoadingLoadDetails(true)
     setEditLoadDialogOpen(true)
+    setLoadDocuments([])
     
     try {
-      // Fetch full load details using the database ID
-      const res = await fetch(`/api/lumber/loads/${load.load_db_id}`)
-      if (res.ok) {
-        const loadData = await res.json()
+      // Fetch full load details and documents in parallel
+      const [loadRes, docsRes] = await Promise.all([
+        fetch(`/api/lumber/loads/${load.load_db_id}`),
+        fetch(`/api/lumber/documents/upload?loadId=${load.load_id}`)
+      ])
+      
+      if (loadRes.ok) {
+        const loadData = await loadRes.json()
         setEditingLoad(loadData)
       } else {
         alert('Failed to load details')
         setEditLoadDialogOpen(false)
+        return
+      }
+      
+      if (docsRes.ok) {
+        const docsData = await docsRes.json()
+        setLoadDocuments(docsData)
       }
     } catch (error) {
       console.error('Error fetching load details:', error)
@@ -1048,6 +1069,144 @@ export default function InventoryPage() {
       setEditLoadDialogOpen(false)
     } finally {
       setIsLoadingLoadDetails(false)
+    }
+  }
+  
+  // Upload file for load
+  async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    if (!editingLoad || !event.target.files || event.target.files.length === 0) return
+    
+    const file = event.target.files[0]
+    setIsUploadingFile(true)
+    
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('loadId', editingLoad.load_id)
+      
+      const res = await fetch('/api/lumber/documents/upload', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (res.ok) {
+        // Refresh documents list
+        const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${editingLoad.load_id}`)
+        if (docsRes.ok) {
+          const docsData = await docsRes.json()
+          setLoadDocuments(docsData)
+        }
+      } else {
+        alert('Failed to upload file')
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      alert('Error uploading file')
+    } finally {
+      setIsUploadingFile(false)
+      event.target.value = '' // Reset input
+    }
+  }
+  
+  // Delete document
+  async function handleDeleteDocument(docId: number) {
+    if (!confirm('Delete this document?')) return
+    
+    try {
+      const res = await fetch(`/api/lumber/documents/${docId}`, {
+        method: 'DELETE'
+      })
+      
+      if (res.ok) {
+        setLoadDocuments(prev => prev.filter(d => d.id !== docId))
+      } else {
+        alert('Failed to delete document')
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      alert('Error deleting document')
+    }
+  }
+  
+  // Mark PO as sent
+  async function handleMarkPoSent() {
+    if (!editingLoad) return
+    
+    try {
+      const res = await fetch(`/api/lumber/loads/${editingLoad.id}/mark-po-sent`, {
+        method: 'PATCH'
+      })
+      
+      if (res.ok) {
+        setEditingLoad((prev: any) => ({ ...prev, po_generated: true, po_generated_at: new Date().toISOString() }))
+      } else {
+        alert('Failed to mark PO as sent')
+      }
+    } catch (error) {
+      console.error('Error marking PO as sent:', error)
+    }
+  }
+  
+  // Delete load
+  async function handleDeleteLoad() {
+    if (!editingLoad) return
+    if (!confirm(`Are you sure you want to delete load ${editingLoad.load_id}? This cannot be undone.`)) return
+    
+    try {
+      const res = await fetch(`/api/lumber/loads/${editingLoad.id}`, {
+        method: 'DELETE'
+      })
+      
+      if (res.ok) {
+        setEditLoadDialogOpen(false)
+        setEditingLoad(null)
+        fetchInventoryData()
+      } else {
+        alert('Failed to delete load')
+      }
+    } catch (error) {
+      console.error('Error deleting load:', error)
+      alert('Error deleting load')
+    }
+  }
+  
+  // Toggle completion status
+  async function handleToggleComplete() {
+    if (!editingLoad) return
+    
+    const newValue = !editingLoad.all_packs_finished
+    try {
+      const res = await fetch(`/api/lumber/loads/${editingLoad.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all_packs_finished: newValue })
+      })
+      
+      if (res.ok) {
+        setEditingLoad((prev: any) => ({ ...prev, all_packs_finished: newValue }))
+      }
+    } catch (error) {
+      console.error('Error toggling complete:', error)
+    }
+  }
+  
+  // Toggle paid status
+  async function handleTogglePaid() {
+    if (!editingLoad) return
+    
+    const newValue = !editingLoad.is_paid
+    try {
+      const res = await fetch(`/api/lumber/loads/${editingLoad.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_paid: newValue })
+      })
+      
+      if (res.ok) {
+        setEditingLoad((prev: any) => ({ ...prev, is_paid: newValue }))
+      }
+    } catch (error) {
+      console.error('Error toggling paid:', error)
     }
   }
   
@@ -1064,14 +1223,19 @@ export default function InventoryPage() {
         body: JSON.stringify({
           load_id: editingLoad.load_id,
           supplier_id: editingLoad.supplier_id,
+          lumber_type: editingLoad.lumber_type,
+          pickup_or_delivery: editingLoad.pickup_or_delivery,
+          estimated_delivery_date: editingLoad.estimated_delivery_date,
+          actual_arrival_date: editingLoad.actual_arrival_date,
+          pickup_date: editingLoad.pickup_date,
+          pickup_number: editingLoad.pickup_number,
+          plant: editingLoad.plant,
+          driver_id: editingLoad.driver_id,
           invoice_number: editingLoad.invoice_number,
           invoice_total: editingLoad.invoice_total,
           invoice_date: editingLoad.invoice_date,
           load_quality: editingLoad.load_quality,
-          comments: editingLoad.comments,
-          actual_arrival_date: editingLoad.actual_arrival_date,
-          pickup_date: editingLoad.pickup_date,
-          pickup_number: editingLoad.pickup_number
+          comments: editingLoad.comments
         })
       })
       
@@ -1960,10 +2124,23 @@ export default function InventoryPage() {
       
       {/* Edit Load Dialog */}
       <Dialog open={editLoadDialogOpen} onOpenChange={setEditLoadDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              Edit Load - {editingLoad?.load_id}
+            <DialogTitle className="flex items-center justify-between">
+              <span>Load Info - {editingLoad?.load_id}</span>
+              {editingLoad && (
+                <div className="flex items-center gap-2">
+                  {editingLoad.all_packs_finished && (
+                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Complete</span>
+                  )}
+                  {editingLoad.is_paid && (
+                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Paid</span>
+                  )}
+                  {editingLoad.po_generated && (
+                    <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">PO Sent</span>
+                  )}
+                </div>
+              )}
             </DialogTitle>
           </DialogHeader>
           
@@ -1972,188 +2149,359 @@ export default function InventoryPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
           ) : editingLoad ? (
-            <div className="space-y-6">
-              {/* Load Info Section */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-3">Load Information</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-xs text-gray-500">Load ID</Label>
-                    <Input
-                      value={editingLoad.load_id || ''}
-                      onChange={(e) => updateEditingLoad('load_id', e.target.value)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Supplier</Label>
-                    <Select 
-                      value={editingLoad.supplier_id ? String(editingLoad.supplier_id) : 'none'}
-                      onValueChange={(val) => updateEditingLoad('supplier_id', val === 'none' ? null : parseInt(val))}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select supplier" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">-- None --</SelectItem>
-                        {suppliers.map(s => (
-                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Load Quality (%)</Label>
-                    <Input
-                      type="number"
-                      value={editingLoad.load_quality || ''}
-                      onChange={(e) => updateEditingLoad('load_quality', e.target.value ? parseInt(e.target.value) : null)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Arrival Date</Label>
-                    <Input
-                      type="date"
-                      value={editingLoad.actual_arrival_date ? editingLoad.actual_arrival_date.split('T')[0] : ''}
-                      onChange={(e) => updateEditingLoad('actual_arrival_date', e.target.value || null)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Pickup Date</Label>
-                    <Input
-                      type="date"
-                      value={editingLoad.pickup_date ? editingLoad.pickup_date.split('T')[0] : ''}
-                      onChange={(e) => updateEditingLoad('pickup_date', e.target.value || null)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Pickup Number</Label>
-                    <Input
-                      value={editingLoad.pickup_number || ''}
-                      onChange={(e) => updateEditingLoad('pickup_number', e.target.value || null)}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
+            <div className="space-y-4">
+              {/* Quick Actions */}
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-100 rounded-lg">
+                <Button
+                  size="sm"
+                  variant={editingLoad.all_packs_finished ? "default" : "outline"}
+                  onClick={handleToggleComplete}
+                  className={editingLoad.all_packs_finished ? "bg-green-600 hover:bg-green-700" : ""}
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  {editingLoad.all_packs_finished ? 'Mark Incomplete' : 'Mark Complete'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={editingLoad.is_paid ? "default" : "outline"}
+                  onClick={handleTogglePaid}
+                  className={editingLoad.is_paid ? "bg-blue-600 hover:bg-blue-700" : ""}
+                >
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  {editingLoad.is_paid ? 'Mark Unpaid' : 'Mark Paid'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleMarkPoSent}
+                  disabled={editingLoad.po_generated}
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  {editingLoad.po_generated ? 'PO Sent' : 'Send PO'}
+                </Button>
+                <div className="flex-1" />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleDeleteLoad}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete Load
+                </Button>
               </div>
-              
-              {/* Invoice Section */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-3">Invoice Information</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-xs text-gray-500">Invoice Number</Label>
-                    <Input
-                      value={editingLoad.invoice_number || ''}
-                      onChange={(e) => updateEditingLoad('invoice_number', e.target.value || null)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Invoice Total ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingLoad.invoice_total || ''}
-                      onChange={(e) => updateEditingLoad('invoice_total', e.target.value ? parseFloat(e.target.value) : null)}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Invoice Date</Label>
-                    <Input
-                      type="date"
-                      value={editingLoad.invoice_date ? editingLoad.invoice_date.split('T')[0] : ''}
-                      onChange={(e) => updateEditingLoad('invoice_date', e.target.value || null)}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              {/* Load Items Section */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-3">Load Items ({editingLoad.items?.length || 0})</h3>
-                {editingLoad.items && editingLoad.items.length > 0 ? (
-                  <div className="space-y-3">
-                    {editingLoad.items.map((item: any, idx: number) => (
-                      <div key={item.id} className="bg-white p-3 rounded border grid grid-cols-5 gap-3">
-                        <div>
-                          <Label className="text-xs text-gray-500">Species</Label>
-                          <Input
-                            value={item.species || ''}
-                            onChange={(e) => updateEditingLoadItem(idx, 'species', e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-500">Grade</Label>
-                          <Input
-                            value={item.grade || ''}
-                            onChange={(e) => updateEditingLoadItem(idx, 'grade', e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-500">Thickness</Label>
-                          <Select 
-                            value={item.thickness || '4/4'}
-                            onValueChange={(val) => updateEditingLoadItem(idx, 'thickness', val)}
-                          >
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="4/4">4/4</SelectItem>
-                              <SelectItem value="5/4">5/4</SelectItem>
-                              <SelectItem value="6/4">6/4</SelectItem>
-                              <SelectItem value="8/4">8/4</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-500">Actual Footage</Label>
-                          <Input
-                            type="number"
-                            value={item.actual_footage || ''}
-                            onChange={(e) => updateEditingLoadItem(idx, 'actual_footage', e.target.value ? parseInt(e.target.value) : null)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-500">Price ($/BF)</Label>
-                          <Input
-                            type="number"
-                            step="0.001"
-                            value={item.price || ''}
-                            onChange={(e) => updateEditingLoadItem(idx, 'price', e.target.value ? parseFloat(e.target.value) : null)}
-                            className="mt-1"
-                          />
-                        </div>
+
+              {/* Main Info Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Left Column - Load Details */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h3 className="font-semibold mb-2 text-sm">Basic Information</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-500">Load ID</Label>
+                        <Input
+                          value={editingLoad.load_id || ''}
+                          onChange={(e) => updateEditingLoad('load_id', e.target.value)}
+                          className="mt-1 h-8"
+                        />
                       </div>
-                    ))}
+                      <div>
+                        <Label className="text-xs text-gray-500">Supplier</Label>
+                        <Select 
+                          value={editingLoad.supplier_id ? String(editingLoad.supplier_id) : 'none'}
+                          onValueChange={(val) => updateEditingLoad('supplier_id', val === 'none' ? null : parseInt(val))}
+                        >
+                          <SelectTrigger className="mt-1 h-8">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-- None --</SelectItem>
+                            {suppliers.map(s => (
+                              <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Lumber Type</Label>
+                        <Select 
+                          value={editingLoad.lumber_type || 'green'}
+                          onValueChange={(val) => updateEditingLoad('lumber_type', val)}
+                        >
+                          <SelectTrigger className="mt-1 h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="green">Green</SelectItem>
+                            <SelectItem value="kiln_dried">Kiln Dried</SelectItem>
+                            <SelectItem value="air_dried">Air Dried</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">PU/Delivery</Label>
+                        <Select 
+                          value={editingLoad.pickup_or_delivery || 'pickup'}
+                          onValueChange={(val) => updateEditingLoad('pickup_or_delivery', val)}
+                        >
+                          <SelectTrigger className="mt-1 h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pickup">Pickup</SelectItem>
+                            <SelectItem value="delivery">Delivery</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Load Quality (%)</Label>
+                        <Input
+                          type="number"
+                          value={editingLoad.load_quality || ''}
+                          onChange={(e) => updateEditingLoad('load_quality', e.target.value ? parseInt(e.target.value) : null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Truck Driver</Label>
+                        <Select 
+                          value={editingLoad.driver_id ? String(editingLoad.driver_id) : 'none'}
+                          onValueChange={(val) => updateEditingLoad('driver_id', val === 'none' ? null : parseInt(val))}
+                        >
+                          <SelectTrigger className="mt-1 h-8">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">-- None --</SelectItem>
+                            {drivers.map(d => (
+                              <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-gray-500 text-sm">No items for this load</p>
-                )}
+                  
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <h3 className="font-semibold mb-2 text-sm">Dates & Scheduling</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-500">ETA (Est. Delivery)</Label>
+                        <Input
+                          type="date"
+                          value={editingLoad.estimated_delivery_date ? editingLoad.estimated_delivery_date.split('T')[0] : ''}
+                          onChange={(e) => updateEditingLoad('estimated_delivery_date', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Arrival Date</Label>
+                        <Input
+                          type="date"
+                          value={editingLoad.actual_arrival_date ? editingLoad.actual_arrival_date.split('T')[0] : ''}
+                          onChange={(e) => updateEditingLoad('actual_arrival_date', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Pickup Date</Label>
+                        <Input
+                          type="date"
+                          value={editingLoad.pickup_date ? editingLoad.pickup_date.split('T')[0] : ''}
+                          onChange={(e) => updateEditingLoad('pickup_date', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Pickup #</Label>
+                        <Input
+                          value={editingLoad.pickup_number || ''}
+                          onChange={(e) => updateEditingLoad('pickup_number', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs text-gray-500">Plant</Label>
+                        <Input
+                          value={editingLoad.plant || ''}
+                          onChange={(e) => updateEditingLoad('plant', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <h3 className="font-semibold mb-2 text-sm">Invoice Information</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-500">Invoice #</Label>
+                        <Input
+                          value={editingLoad.invoice_number || ''}
+                          onChange={(e) => updateEditingLoad('invoice_number', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Invoice Total ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editingLoad.invoice_total || ''}
+                          onChange={(e) => updateEditingLoad('invoice_total', e.target.value ? parseFloat(e.target.value) : null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs text-gray-500">Invoice Date</Label>
+                        <Input
+                          type="date"
+                          value={editingLoad.invoice_date ? editingLoad.invoice_date.split('T')[0] : ''}
+                          onChange={(e) => updateEditingLoad('invoice_date', e.target.value || null)}
+                          className="mt-1 h-8"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Right Column - Items & Files */}
+                <div className="space-y-4">
+                  {/* Load Items */}
+                  <div className="bg-amber-50 p-3 rounded-lg">
+                    <h3 className="font-semibold mb-2 text-sm">Load Items ({editingLoad.items?.length || 0})</h3>
+                    {editingLoad.items && editingLoad.items.length > 0 ? (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {editingLoad.items.map((item: any, idx: number) => (
+                          <div key={item.id} className="bg-white p-2 rounded border text-sm">
+                            <div className="grid grid-cols-5 gap-2">
+                              <div>
+                                <Label className="text-xs text-gray-400">Species</Label>
+                                <Input
+                                  value={item.species || ''}
+                                  onChange={(e) => updateEditingLoadItem(idx, 'species', e.target.value)}
+                                  className="h-7 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-400">Grade</Label>
+                                <Input
+                                  value={item.grade || ''}
+                                  onChange={(e) => updateEditingLoadItem(idx, 'grade', e.target.value)}
+                                  className="h-7 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-400">Thick</Label>
+                                <Select 
+                                  value={item.thickness || '4/4'}
+                                  onValueChange={(val) => updateEditingLoadItem(idx, 'thickness', val)}
+                                >
+                                  <SelectTrigger className="h-7 text-sm">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="4/4">4/4</SelectItem>
+                                    <SelectItem value="5/4">5/4</SelectItem>
+                                    <SelectItem value="6/4">6/4</SelectItem>
+                                    <SelectItem value="8/4">8/4</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-400">Act. BF</Label>
+                                <Input
+                                  type="number"
+                                  value={item.actual_footage || ''}
+                                  onChange={(e) => updateEditingLoadItem(idx, 'actual_footage', e.target.value ? parseInt(e.target.value) : null)}
+                                  className="h-7 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-400">Price</Label>
+                                <Input
+                                  type="number"
+                                  step="0.001"
+                                  value={item.price || ''}
+                                  onChange={(e) => updateEditingLoadItem(idx, 'price', e.target.value ? parseFloat(e.target.value) : null)}
+                                  className="h-7 text-sm"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No items</p>
+                    )}
+                  </div>
+                  
+                  {/* Documents */}
+                  <div className="bg-purple-50 p-3 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold text-sm">Attached Files ({loadDocuments.length})</h3>
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={handleFileUpload}
+                          disabled={isUploadingFile}
+                        />
+                        <Button size="sm" variant="outline" disabled={isUploadingFile} asChild>
+                          <span>
+                            <Upload className="h-3 w-3 mr-1" />
+                            {isUploadingFile ? 'Uploading...' : 'Add File'}
+                          </span>
+                        </Button>
+                      </label>
+                    </div>
+                    {loadDocuments.length > 0 ? (
+                      <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                        {loadDocuments.map((doc: any) => (
+                          <div key={doc.id} className="flex items-center justify-between bg-white p-2 rounded border text-sm">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{doc.filename}</span>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <a
+                                href={doc.filepath}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                              <button
+                                onClick={() => handleDeleteDocument(doc.id)}
+                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No files attached</p>
+                    )}
+                  </div>
+                  
+                  {/* Comments */}
+                  <div>
+                    <Label className="text-xs text-gray-500">Comments</Label>
+                    <Textarea
+                      value={editingLoad.comments || ''}
+                      onChange={(e) => updateEditingLoad('comments', e.target.value || null)}
+                      rows={3}
+                      className="mt-1 text-sm"
+                    />
+                  </div>
+                </div>
               </div>
               
-              {/* Comments Section */}
-              <div>
-                <Label className="text-xs text-gray-500">Comments</Label>
-                <Textarea
-                  value={editingLoad.comments || ''}
-                  onChange={(e) => updateEditingLoad('comments', e.target.value || null)}
-                  rows={3}
-                  className="mt-1"
-                />
-              </div>
-              
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-4 border-t">
+              {/* Footer Actions */}
+              <div className="flex justify-end gap-2 pt-3 border-t">
                 <Button variant="outline" onClick={() => setEditLoadDialogOpen(false)}>
                   Cancel
                 </Button>
