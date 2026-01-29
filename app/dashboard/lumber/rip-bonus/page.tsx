@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Calendar, Wrench, Package } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Calendar, Wrench, Package, Search, X } from 'lucide-react'
 
 export default function RipBonusPage() {
   const { data: session, status } = useSession()
@@ -25,6 +26,13 @@ export default function RipBonusPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [isLoading, setIsLoading] = useState(true)
+  
+  // Ripped packs filters
+  const [packsSearch, setPacksSearch] = useState('')
+  const [packsSpecies, setPacksSpecies] = useState('all')
+  const [packsGrade, setPacksGrade] = useState('all')
+  const [packsOperator, setPacksOperator] = useState('all')
+  const [packsStacker, setPacksStacker] = useState('all')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -298,6 +306,54 @@ export default function RipBonusPage() {
       </div>
 
       {/* Ripped Packs List */}
+      {(() => {
+        // Get unique filter options from packs
+        const uniqueSpecies = ['all', ...Array.from(new Set(packs.map(p => p.species).filter(Boolean))).sort()]
+        const uniqueGrades = ['all', ...Array.from(new Set(packs.map(p => p.grade).filter(Boolean))).sort()]
+        const uniqueOperators = ['all', ...Array.from(new Set(packs.map(p => p.operator_name).filter(Boolean))).sort()]
+        const uniqueStackers = ['all', ...Array.from(new Set(packs.flatMap(p => [
+          p.stacker_1_name, p.stacker_2_name, p.stacker_3_name, p.stacker_4_name
+        ].filter(Boolean)))).sort()]
+        
+        // Filter packs
+        const filteredPacks = packs.filter(pack => {
+          // Search filter (pack ID or load ID)
+          if (packsSearch) {
+            const search = packsSearch.toLowerCase()
+            const matchesPackId = pack.pack_id?.toLowerCase().includes(search)
+            const matchesLoadId = pack.load_load_id?.toLowerCase().includes(search)
+            if (!matchesPackId && !matchesLoadId) return false
+          }
+          
+          // Species filter
+          if (packsSpecies !== 'all' && pack.species !== packsSpecies) return false
+          
+          // Grade filter
+          if (packsGrade !== 'all' && pack.grade !== packsGrade) return false
+          
+          // Operator filter
+          if (packsOperator !== 'all' && pack.operator_name !== packsOperator) return false
+          
+          // Stacker filter
+          if (packsStacker !== 'all') {
+            const stackers = [pack.stacker_1_name, pack.stacker_2_name, pack.stacker_3_name, pack.stacker_4_name]
+            if (!stackers.includes(packsStacker)) return false
+          }
+          
+          return true
+        })
+        
+        const hasFilters = packsSearch || packsSpecies !== 'all' || packsGrade !== 'all' || packsOperator !== 'all' || packsStacker !== 'all'
+        
+        const clearFilters = () => {
+          setPacksSearch('')
+          setPacksSpecies('all')
+          setPacksGrade('all')
+          setPacksOperator('all')
+          setPacksStacker('all')
+        }
+        
+        return (
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-4 py-3 bg-gray-800 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -305,8 +361,73 @@ export default function RipBonusPage() {
             <h2 className="font-semibold">Ripped Packs - {months[selectedMonth - 1]} {selectedYear}</h2>
           </div>
           <div className="text-sm">
-            {packs.length} packs · {packs.reduce((sum, p) => sum + (Number(p.actual_board_feet) || 0), 0).toLocaleString()} BF
+            {filteredPacks.length} packs · {filteredPacks.reduce((sum, p) => sum + (Number(p.actual_board_feet) || 0), 0).toLocaleString()} BF
+            {hasFilters && ` (filtered from ${packs.length})`}
           </div>
+        </div>
+        
+        {/* Filters */}
+        <div className="p-3 bg-gray-50 border-b flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search Pack/Load ID..."
+              value={packsSearch}
+              onChange={(e) => setPacksSearch(e.target.value)}
+              className="pl-8 w-48 h-9"
+            />
+          </div>
+          
+          <Select value={packsSpecies} onValueChange={setPacksSpecies}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue placeholder="Species" />
+            </SelectTrigger>
+            <SelectContent>
+              {uniqueSpecies.map(s => (
+                <SelectItem key={s} value={s}>{s === 'all' ? 'All Species' : s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={packsGrade} onValueChange={setPacksGrade}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue placeholder="Grade" />
+            </SelectTrigger>
+            <SelectContent>
+              {uniqueGrades.map(g => (
+                <SelectItem key={g} value={g}>{g === 'all' ? 'All Grades' : g}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={packsOperator} onValueChange={setPacksOperator}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue placeholder="Operator" />
+            </SelectTrigger>
+            <SelectContent>
+              {uniqueOperators.map(o => (
+                <SelectItem key={o} value={o}>{o === 'all' ? 'All Operators' : o}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={packsStacker} onValueChange={setPacksStacker}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue placeholder="Stacker" />
+            </SelectTrigger>
+            <SelectContent>
+              {uniqueStackers.map(s => (
+                <SelectItem key={s} value={s}>{s === 'all' ? 'All Stackers' : s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
+              <X className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          )}
         </div>
         
         <div className="overflow-x-auto">
@@ -328,14 +449,17 @@ export default function RipBonusPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {packs.length === 0 ? (
+              {filteredPacks.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
-                    No packs ripped in {months[selectedMonth - 1]} {selectedYear}
+                    {packs.length === 0 
+                      ? `No packs ripped in ${months[selectedMonth - 1]} ${selectedYear}`
+                      : 'No packs match the current filters'
+                    }
                   </td>
                 </tr>
               ) : (
-                packs.map((pack) => (
+                filteredPacks.map((pack) => (
                   <tr key={pack.id} className="hover:bg-gray-50 text-sm">
                     <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
                       {pack.pack_id || '-'}
@@ -387,6 +511,8 @@ export default function RipBonusPage() {
           </table>
         </div>
       </div>
+        )
+      })()}
     </div>
   )
 }
