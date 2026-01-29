@@ -20,7 +20,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronRight, Eye, GripVertical, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, GripVertical, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, X, Info, Pencil } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import {
   DndContext,
@@ -361,6 +362,13 @@ export default function InventoryPage() {
     grade: string
     loads: InventoryLoadDetail[]
   } | null>(null)
+  
+  // Edit Load Dialog state
+  const [editLoadDialogOpen, setEditLoadDialogOpen] = useState(false)
+  const [editingLoad, setEditingLoad] = useState<any>(null)
+  const [isLoadingLoadDetails, setIsLoadingLoadDetails] = useState(false)
+  const [isSavingLoad, setIsSavingLoad] = useState(false)
+  const [suppliers, setSuppliers] = useState<{id: number, name: string}[]>([])
 
   // Inventory Loads List state
   const [allInventoryLoads, setAllInventoryLoads] = useState<InventoryLoadDetail[]>([])
@@ -1002,6 +1010,117 @@ export default function InventoryPage() {
       setIsLoadingPacks(false)
     }
   }
+  
+  // Fetch suppliers for edit dialog
+  useEffect(() => {
+    async function fetchSuppliers() {
+      try {
+        const res = await fetch('/api/lumber/suppliers')
+        if (res.ok) {
+          const data = await res.json()
+          setSuppliers(data)
+        }
+      } catch (error) {
+        console.error('Error fetching suppliers:', error)
+      }
+    }
+    fetchSuppliers()
+  }, [])
+  
+  // Open edit load dialog
+  async function handleEditLoad(load: InventoryLoadDetail) {
+    setIsLoadingLoadDetails(true)
+    setEditLoadDialogOpen(true)
+    
+    try {
+      // Fetch full load details using the database ID
+      const res = await fetch(`/api/lumber/loads/${load.load_db_id}`)
+      if (res.ok) {
+        const loadData = await res.json()
+        setEditingLoad(loadData)
+      } else {
+        alert('Failed to load details')
+        setEditLoadDialogOpen(false)
+      }
+    } catch (error) {
+      console.error('Error fetching load details:', error)
+      alert('Error loading details')
+      setEditLoadDialogOpen(false)
+    } finally {
+      setIsLoadingLoadDetails(false)
+    }
+  }
+  
+  // Save edited load
+  async function handleSaveLoad() {
+    if (!editingLoad) return
+    
+    setIsSavingLoad(true)
+    try {
+      // Update the main load
+      const loadRes = await fetch(`/api/lumber/loads/${editingLoad.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          load_id: editingLoad.load_id,
+          supplier_id: editingLoad.supplier_id,
+          invoice_number: editingLoad.invoice_number,
+          invoice_total: editingLoad.invoice_total,
+          invoice_date: editingLoad.invoice_date,
+          load_quality: editingLoad.load_quality,
+          comments: editingLoad.comments,
+          actual_arrival_date: editingLoad.actual_arrival_date,
+          pickup_date: editingLoad.pickup_date,
+          pickup_number: editingLoad.pickup_number
+        })
+      })
+      
+      if (!loadRes.ok) {
+        throw new Error('Failed to update load')
+      }
+      
+      // Update each load item
+      if (editingLoad.items && Array.isArray(editingLoad.items)) {
+        for (const item of editingLoad.items) {
+          await fetch(`/api/lumber/loads/items/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              species: item.species,
+              grade: item.grade,
+              thickness: item.thickness,
+              actual_footage: item.actual_footage,
+              price: item.price
+            })
+          })
+        }
+      }
+      
+      setEditLoadDialogOpen(false)
+      setEditingLoad(null)
+      // Refresh inventory data
+      fetchInventoryData()
+    } catch (error) {
+      console.error('Error saving load:', error)
+      alert('Error saving changes')
+    } finally {
+      setIsSavingLoad(false)
+    }
+  }
+  
+  // Update editing load field
+  function updateEditingLoad(field: string, value: any) {
+    setEditingLoad((prev: any) => ({ ...prev, [field]: value }))
+  }
+  
+  // Update editing load item field
+  function updateEditingLoadItem(itemIndex: number, field: string, value: any) {
+    setEditingLoad((prev: any) => {
+      const newItems = [...prev.items]
+      newItems[itemIndex] = { ...newItems[itemIndex], [field]: value }
+      return { ...prev, items: newItems }
+    })
+  }
 
   // Calculate species totals for summary cards
   const speciesTotals = inventoryGroups.reduce((acc: Record<string, {
@@ -1574,12 +1693,21 @@ export default function InventoryPage() {
                       {load.price ? `$${Number(load.price).toFixed(3)}` : '-'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-center">
-                      <button
-                        onClick={() => handleViewRipEntry(load)}
-                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      >
-                        View Tallies
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleEditLoad(load)}
+                          className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit Load Info"
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleViewRipEntry(load)}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        >
+                          Tallies
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1799,15 +1927,26 @@ export default function InventoryPage() {
                           {load.price ? `$${Number(load.price).toFixed(3)}` : '-'}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          <button
-                            onClick={() => {
-                              handleViewRipEntry(load)
-                              setGradeLoadsDialogOpen(false)
-                            }}
-                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            View Tallies
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => {
+                                handleEditLoad(load)
+                              }}
+                              className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Edit Load Info"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleViewRipEntry(load)
+                                setGradeLoadsDialogOpen(false)
+                              }}
+                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            >
+                              Tallies
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1815,6 +1954,216 @@ export default function InventoryPage() {
                 </table>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Load Dialog */}
+      <Dialog open={editLoadDialogOpen} onOpenChange={setEditLoadDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Edit Load - {editingLoad?.load_id}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {isLoadingLoadDetails ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          ) : editingLoad ? (
+            <div className="space-y-6">
+              {/* Load Info Section */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-3">Load Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-xs text-gray-500">Load ID</Label>
+                    <Input
+                      value={editingLoad.load_id || ''}
+                      onChange={(e) => updateEditingLoad('load_id', e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Supplier</Label>
+                    <Select 
+                      value={editingLoad.supplier_id ? String(editingLoad.supplier_id) : 'none'}
+                      onValueChange={(val) => updateEditingLoad('supplier_id', val === 'none' ? null : parseInt(val))}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">-- None --</SelectItem>
+                        {suppliers.map(s => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Load Quality (%)</Label>
+                    <Input
+                      type="number"
+                      value={editingLoad.load_quality || ''}
+                      onChange={(e) => updateEditingLoad('load_quality', e.target.value ? parseInt(e.target.value) : null)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Arrival Date</Label>
+                    <Input
+                      type="date"
+                      value={editingLoad.actual_arrival_date ? editingLoad.actual_arrival_date.split('T')[0] : ''}
+                      onChange={(e) => updateEditingLoad('actual_arrival_date', e.target.value || null)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Pickup Date</Label>
+                    <Input
+                      type="date"
+                      value={editingLoad.pickup_date ? editingLoad.pickup_date.split('T')[0] : ''}
+                      onChange={(e) => updateEditingLoad('pickup_date', e.target.value || null)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Pickup Number</Label>
+                    <Input
+                      value={editingLoad.pickup_number || ''}
+                      onChange={(e) => updateEditingLoad('pickup_number', e.target.value || null)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Invoice Section */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-3">Invoice Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Number</Label>
+                    <Input
+                      value={editingLoad.invoice_number || ''}
+                      onChange={(e) => updateEditingLoad('invoice_number', e.target.value || null)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Total ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingLoad.invoice_total || ''}
+                      onChange={(e) => updateEditingLoad('invoice_total', e.target.value ? parseFloat(e.target.value) : null)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Date</Label>
+                    <Input
+                      type="date"
+                      value={editingLoad.invoice_date ? editingLoad.invoice_date.split('T')[0] : ''}
+                      onChange={(e) => updateEditingLoad('invoice_date', e.target.value || null)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Load Items Section */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-3">Load Items ({editingLoad.items?.length || 0})</h3>
+                {editingLoad.items && editingLoad.items.length > 0 ? (
+                  <div className="space-y-3">
+                    {editingLoad.items.map((item: any, idx: number) => (
+                      <div key={item.id} className="bg-white p-3 rounded border grid grid-cols-5 gap-3">
+                        <div>
+                          <Label className="text-xs text-gray-500">Species</Label>
+                          <Input
+                            value={item.species || ''}
+                            onChange={(e) => updateEditingLoadItem(idx, 'species', e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500">Grade</Label>
+                          <Input
+                            value={item.grade || ''}
+                            onChange={(e) => updateEditingLoadItem(idx, 'grade', e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500">Thickness</Label>
+                          <Select 
+                            value={item.thickness || '4/4'}
+                            onValueChange={(val) => updateEditingLoadItem(idx, 'thickness', val)}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="4/4">4/4</SelectItem>
+                              <SelectItem value="5/4">5/4</SelectItem>
+                              <SelectItem value="6/4">6/4</SelectItem>
+                              <SelectItem value="8/4">8/4</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500">Actual Footage</Label>
+                          <Input
+                            type="number"
+                            value={item.actual_footage || ''}
+                            onChange={(e) => updateEditingLoadItem(idx, 'actual_footage', e.target.value ? parseInt(e.target.value) : null)}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-500">Price ($/BF)</Label>
+                          <Input
+                            type="number"
+                            step="0.001"
+                            value={item.price || ''}
+                            onChange={(e) => updateEditingLoadItem(idx, 'price', e.target.value ? parseFloat(e.target.value) : null)}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No items for this load</p>
+                )}
+              </div>
+              
+              {/* Comments Section */}
+              <div>
+                <Label className="text-xs text-gray-500">Comments</Label>
+                <Textarea
+                  value={editingLoad.comments || ''}
+                  onChange={(e) => updateEditingLoad('comments', e.target.value || null)}
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+              
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setEditLoadDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveLoad} disabled={isSavingLoad}>
+                  {isSavingLoad ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No load data available</p>
           )}
         </DialogContent>
       </Dialog>
