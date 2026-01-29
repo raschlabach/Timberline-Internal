@@ -222,7 +222,7 @@ export default function RipBonusPage() {
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
   return (
-    <div className="p-4 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Rip Bonus</h1>
@@ -563,24 +563,24 @@ export default function RipBonusPage() {
           )}
         </div>
         
-        <div className="overflow-x-auto" style={{ maxHeight: '600px' }}>
-          <table className="w-full divide-y divide-gray-200" style={{ minWidth: '1400px' }}>
-            <thead className="bg-gray-50 sticky top-0">
+        <div className="overflow-auto" style={{ maxHeight: '700px' }}>
+          <table className="w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pack ID</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load/Customer</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Species</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grade</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Thickness</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Length</th>
-                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tally BF</th>
-                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actual BF</th>
-                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Yield</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Operator</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stackers</th>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Finished</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '40px' }}></th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '60px' }}>Type</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '100px' }}>Pack ID</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '140px' }}>Load/Customer</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '100px' }}>Species</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '80px' }}>Grade</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '80px' }}>Thick</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '60px' }}>Len</th>
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '80px' }}>Tally</th>
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '80px' }}>Actual</th>
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '60px' }}>Yield</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '90px' }}>Operator</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Stackers</th>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap" style={{ width: '90px' }}>Finished</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
