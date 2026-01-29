@@ -33,6 +33,7 @@ export default function RipBonusPage() {
   const [packsGrade, setPacksGrade] = useState('all')
   const [packsOperator, setPacksOperator] = useState('all')
   const [packsStacker, setPacksStacker] = useState('all')
+  const [packsType, setPacksType] = useState('all')
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -340,10 +341,13 @@ export default function RipBonusPage() {
             if (!stackers.includes(packsStacker)) return false
           }
           
+          // Pack type filter
+          if (packsType !== 'all' && (pack.pack_type || 'rnr') !== packsType) return false
+          
           return true
         })
         
-        const hasFilters = packsSearch || packsSpecies !== 'all' || packsGrade !== 'all' || packsOperator !== 'all' || packsStacker !== 'all'
+        const hasFilters = packsSearch || packsSpecies !== 'all' || packsGrade !== 'all' || packsOperator !== 'all' || packsStacker !== 'all' || packsType !== 'all'
         
         const clearFilters = () => {
           setPacksSearch('')
@@ -351,6 +355,7 @@ export default function RipBonusPage() {
           setPacksGrade('all')
           setPacksOperator('all')
           setPacksStacker('all')
+          setPacksType('all')
         }
         
         return (
@@ -422,6 +427,17 @@ export default function RipBonusPage() {
             </SelectContent>
           </Select>
           
+          <Select value={packsType} onValueChange={setPacksType}>
+            <SelectTrigger className="w-28 h-9">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="rnr">RNR</SelectItem>
+              <SelectItem value="misc">Misc</SelectItem>
+            </SelectContent>
+          </Select>
+          
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
               <X className="h-4 w-4 mr-1" />
@@ -434,8 +450,9 @@ export default function RipBonusPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pack ID</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load ID</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load/Customer</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Species</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grade</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Thickness</th>
@@ -451,7 +468,7 @@ export default function RipBonusPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPacks.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={13} className="px-4 py-8 text-center text-gray-500">
                     {packs.length === 0 
                       ? `No packs ripped in ${months[selectedMonth - 1]} ${selectedYear}`
                       : 'No packs match the current filters'
@@ -460,12 +477,21 @@ export default function RipBonusPage() {
                 </tr>
               ) : (
                 filteredPacks.map((pack) => (
-                  <tr key={pack.id} className="hover:bg-gray-50 text-sm">
+                  <tr key={`${pack.pack_type || 'rnr'}-${pack.id}`} className={`hover:bg-gray-50 text-sm ${pack.pack_type === 'misc' ? 'bg-amber-50' : ''}`}>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {pack.pack_type === 'misc' ? (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800">MISC</span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">RNR</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
                       {pack.pack_id || '-'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-gray-900">
-                      {pack.load_load_id}
+                      {pack.pack_type === 'misc' ? (
+                        <span className="text-amber-700">{pack.load_load_id?.replace('MISC: ', '')}</span>
+                      ) : pack.load_load_id}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-gray-900">
                       {pack.species}

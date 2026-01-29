@@ -204,6 +204,7 @@ export interface LumberPackWithDetails extends LumberPack {
   stacker_2_name?: string | null
   stacker_3_name?: string | null
   stacker_4_name?: string | null
+  pack_type?: 'rnr' | 'misc'
 }
 
 export interface PackTallyInput {
