@@ -405,6 +405,22 @@ export default function InventoryPage() {
       console.error('Error loading species order:', error)
     }
   }, [])
+  
+  // Fetch suppliers for edit dialog
+  useEffect(() => {
+    async function fetchSuppliers() {
+      try {
+        const res = await fetch('/api/lumber/suppliers')
+        if (res.ok) {
+          const data = await res.json()
+          setSuppliers(data)
+        }
+      } catch (error) {
+        console.error('Error fetching suppliers:', error)
+      }
+    }
+    fetchSuppliers()
+  }, [])
 
   async function fetchInventoryData() {
     try {
@@ -1010,22 +1026,6 @@ export default function InventoryPage() {
       setIsLoadingPacks(false)
     }
   }
-  
-  // Fetch suppliers for edit dialog
-  useEffect(() => {
-    async function fetchSuppliers() {
-      try {
-        const res = await fetch('/api/lumber/suppliers')
-        if (res.ok) {
-          const data = await res.json()
-          setSuppliers(data)
-        }
-      } catch (error) {
-        console.error('Error fetching suppliers:', error)
-      }
-    }
-    fetchSuppliers()
-  }, [])
   
   // Open edit load dialog
   async function handleEditLoad(load: InventoryLoadDetail) {
