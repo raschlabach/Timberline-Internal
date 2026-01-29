@@ -121,19 +121,27 @@ export async function GET(request: NextRequest) {
       samplePack: packsResult.rows[0] || null
     })
 
+    // Helper function to convert any date format to YYYY-MM-DD string
+    const toDateString = (date: any): string => {
+      if (!date) return ''
+      // Try to create a Date object and format it
+      const d = new Date(date)
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0]
+      }
+      // Fallback: try to extract date from string
+      const str = String(date)
+      if (str.includes('T')) {
+        return str.split('T')[0]
+      }
+      return str
+    }
+
     // Group packs by date (both regular and misc)
-    // Convert date to consistent YYYY-MM-DD string format
     const packsByDate: { [date: string]: any[] } = {}
     for (const pack of allPacks) {
-      // finished_date is a DATE type from PostgreSQL, convert to YYYY-MM-DD string
-      let dateStr: string
-      if (pack.finished_date instanceof Date) {
-        dateStr = pack.finished_date.toISOString().split('T')[0]
-      } else if (typeof pack.finished_date === 'string') {
-        dateStr = pack.finished_date.split('T')[0]
-      } else {
-        dateStr = String(pack.finished_date)
-      }
+      const dateStr = toDateString(pack.finished_date)
+      if (!dateStr) continue
       
       if (!packsByDate[dateStr]) {
         packsByDate[dateStr] = []
@@ -144,21 +152,20 @@ export async function GET(request: NextRequest) {
     // Group work sessions by date
     const sessionsByDate: { [date: string]: any[] } = {}
     for (const session of workSessions.rows) {
-      // work_date is a DATE type from PostgreSQL, convert to YYYY-MM-DD string
-      let dateStr: string
-      if (session.work_date instanceof Date) {
-        dateStr = session.work_date.toISOString().split('T')[0]
-      } else if (typeof session.work_date === 'string') {
-        dateStr = session.work_date.split('T')[0]
-      } else {
-        dateStr = String(session.work_date)
-      }
+      const dateStr = toDateString(session.work_date)
+      if (!dateStr) continue
       
       if (!sessionsByDate[dateStr]) {
         sessionsByDate[dateStr] = []
       }
       sessionsByDate[dateStr].push(session)
     }
+    
+    // Debug: log the grouped dates
+    console.log('Grouped dates:', {
+      packDates: Object.keys(packsByDate),
+      sessionDates: Object.keys(sessionsByDate)
+    })
 
     // Calculate daily summaries
     const dailySummaries: DailyRipSummary[] = []
