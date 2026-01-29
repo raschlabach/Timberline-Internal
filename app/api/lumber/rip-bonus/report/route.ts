@@ -109,25 +109,55 @@ export async function GET(request: NextRequest) {
 
     // Combine regular and misc packs
     const allPacks = [...packsResult.rows, ...miscPacksResult.rows]
+    
+    // Debug logging
+    console.log('Rip Bonus Report Debug:', {
+      month, year,
+      startDate, endDate,
+      workSessionCount: workSessions.rows.length,
+      regularPackCount: packsResult.rows.length,
+      miscPackCount: miscPacksResult.rows.length,
+      sampleWorkSession: workSessions.rows[0] || null,
+      samplePack: packsResult.rows[0] || null
+    })
 
     // Group packs by date (both regular and misc)
+    // Convert date to consistent YYYY-MM-DD string format
     const packsByDate: { [date: string]: any[] } = {}
     for (const pack of allPacks) {
-      const date = pack.finished_date
-      if (!packsByDate[date]) {
-        packsByDate[date] = []
+      // finished_date is a DATE type from PostgreSQL, convert to YYYY-MM-DD string
+      let dateStr: string
+      if (pack.finished_date instanceof Date) {
+        dateStr = pack.finished_date.toISOString().split('T')[0]
+      } else if (typeof pack.finished_date === 'string') {
+        dateStr = pack.finished_date.split('T')[0]
+      } else {
+        dateStr = String(pack.finished_date)
       }
-      packsByDate[date].push(pack)
+      
+      if (!packsByDate[dateStr]) {
+        packsByDate[dateStr] = []
+      }
+      packsByDate[dateStr].push(pack)
     }
 
     // Group work sessions by date
     const sessionsByDate: { [date: string]: any[] } = {}
     for (const session of workSessions.rows) {
-      const date = session.work_date.toISOString().split('T')[0]
-      if (!sessionsByDate[date]) {
-        sessionsByDate[date] = []
+      // work_date is a DATE type from PostgreSQL, convert to YYYY-MM-DD string
+      let dateStr: string
+      if (session.work_date instanceof Date) {
+        dateStr = session.work_date.toISOString().split('T')[0]
+      } else if (typeof session.work_date === 'string') {
+        dateStr = session.work_date.split('T')[0]
+      } else {
+        dateStr = String(session.work_date)
       }
-      sessionsByDate[date].push(session)
+      
+      if (!sessionsByDate[dateStr]) {
+        sessionsByDate[dateStr] = []
+      }
+      sessionsByDate[dateStr].push(session)
     }
 
     // Calculate daily summaries
@@ -137,9 +167,15 @@ export async function GET(request: NextRequest) {
     // Threshold for qualifying as a major contributor (30% of daily BF)
     const QUALIFYING_THRESHOLD = 0.30
 
-    for (const date of Object.keys(packsByDate).sort()) {
-      const packsForDay = packsByDate[date]
+    // Also include days that have work sessions but no packs
+    const allDates = new Set([...Object.keys(packsByDate), ...Object.keys(sessionsByDate)])
+    
+    for (const date of Array.from(allDates).sort()) {
+      const packsForDay = packsByDate[date] || []
       const sessionsForDay = sessionsByDate[date] || []
+      
+      // Skip days with no packs (no BF to calculate)
+      if (packsForDay.length === 0) continue
       
       const totalHours = sessionsForDay.reduce((sum, s) => sum + parseFloat(s.total_hours), 0)
       const totalBF = packsForDay.reduce((sum, p) => sum + (p.actual_board_feet || 0), 0)
