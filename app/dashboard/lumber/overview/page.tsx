@@ -77,7 +77,8 @@ export default function OverviewPage() {
               loads: [],
               average_price: null,
               total_price_weighted: 0,
-              total_footage_with_price: 0
+              total_footage_with_price: 0,
+              total_value: 0
             }
           }
           

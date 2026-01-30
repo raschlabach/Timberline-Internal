@@ -359,6 +359,18 @@ export interface InventoryGroup {
   average_price: number | null
   total_price_weighted: number
   total_footage_with_price: number
+  total_value: number
+}
+
+export interface ExcludedInventoryLoad {
+  load_id: string
+  species: string
+  grade: string
+  thickness: Thickness
+  actual_footage: number
+  load_inventory: number
+  price: number | null
+  supplier_name: string | null
 }
 
 export interface InventoryLoad {

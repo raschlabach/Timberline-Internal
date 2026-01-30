@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { InventoryGroup, InventoryLoadDetail, LumberPackWithDetails } from '@/types/lumber'
+import { InventoryGroup, InventoryLoadDetail, LumberPackWithDetails, ExcludedInventoryLoad } from '@/types/lumber'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -383,6 +383,10 @@ export default function InventoryPage() {
   const [inventoryLoadsSortColumn, setInventoryLoadsSortColumn] = useState<string>('load_id')
   const [inventoryLoadsSortDirection, setInventoryLoadsSortDirection] = useState<'asc' | 'desc'>('asc')
 
+  // Excluded loads state (loads without valid pricing for value calculation)
+  const [excludedLoads, setExcludedLoads] = useState<ExcludedInventoryLoad[]>([])
+  const [excludedLoadsDialogOpen, setExcludedLoadsDialogOpen] = useState(false)
+
   // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -453,6 +457,7 @@ export default function InventoryPage() {
         
         // Group by species, grade, thickness
         const grouped: Record<string, InventoryGroup> = {}
+        const excluded: ExcludedInventoryLoad[] = []
         
         loadDetails.forEach(load => {
           const key = `${load.species}|${load.grade}|${load.thickness}`
@@ -469,37 +474,62 @@ export default function InventoryPage() {
               loads: [],
               average_price: null,
               total_price_weighted: 0,
-              total_footage_with_price: 0
+              total_footage_with_price: 0,
+              total_value: 0
             }
           }
           
           const actualFootage = Number(load.actual_footage) || 0
-          let price = load.price ? Number(load.price) : null
-          
-          // If price is blank or less than $0.30/BF, calculate from invoice_total / actual_footage
-          if ((price === null || price < 0.30) && load.invoice_total && actualFootage > 0) {
-            const calculatedPrice = Number(load.invoice_total) / actualFootage
-            // Only use calculated price if it's reasonable (>= $0.30/BF)
-            if (calculatedPrice >= 0.30) {
-              price = calculatedPrice
-            }
-          }
+          const loadInventory = Number(load.load_inventory) || 0
+          const invoiceTotal = load.invoice_total ? Number(load.invoice_total) : null
+          const price = load.price ? Number(load.price) : null
           
           grouped[key].total_actual_footage += actualFootage
           grouped[key].total_finished_footage += Number(load.finished_footage) || 0
-          grouped[key].current_inventory += Number(load.load_inventory) || 0
+          grouped[key].current_inventory += loadInventory
           grouped[key].load_count += 1
           grouped[key].loads.push(load)
           
-          // Calculate weighted average price
-          // Only include prices >= $0.30 per BF (exclude blank or unrealistic low prices)
-          if (price !== null && price >= 0.30 && actualFootage > 0) {
-            grouped[key].total_price_weighted += price * actualFootage
-            grouped[key].total_footage_with_price += actualFootage
+          // Calculate value contribution for this load
+          // Only include loads with inventory > 0
+          if (loadInventory > 0) {
+            let valueContribution = 0
+            let effectivePrice: number | null = null
+            
+            // Priority 1: If invoice_total exists, use (invoice_total / actual_footage) * load_inventory
+            if (invoiceTotal !== null && actualFootage > 0) {
+              effectivePrice = invoiceTotal / actualFootage
+              valueContribution = effectivePrice * loadInventory
+            }
+            // Priority 2: If no invoice_total but valid price (>= $0.30), use price * load_inventory
+            else if (price !== null && price >= 0.30) {
+              effectivePrice = price
+              valueContribution = price * loadInventory
+            }
+            // Otherwise: Exclude from value calculation and track for warning
+            else {
+              excluded.push({
+                load_id: load.load_id,
+                species: load.species,
+                grade: load.grade,
+                thickness: load.thickness,
+                actual_footage: actualFootage,
+                load_inventory: loadInventory,
+                price: price,
+                supplier_name: load.supplier_name
+              })
+            }
+            
+            // Add to total value and weighted price tracking
+            if (valueContribution > 0 && effectivePrice !== null) {
+              grouped[key].total_value += valueContribution
+              grouped[key].total_price_weighted += effectivePrice * actualFootage
+              grouped[key].total_footage_with_price += actualFootage
+            }
           }
         })
         
-        // Calculate average prices for each group
+        // Calculate average prices for each group (for display purposes)
         Object.values(grouped).forEach(group => {
           if (group.total_footage_with_price > 0) {
             group.average_price = group.total_price_weighted / group.total_footage_with_price
@@ -507,6 +537,7 @@ export default function InventoryPage() {
         })
         
         setInventoryGroups(Object.values(grouped))
+        setExcludedLoads(excluded)
       }
       
       if (speciesRes.ok) {
@@ -645,10 +676,9 @@ export default function InventoryPage() {
         })
       })
 
-      // Calculate total value
-      const total_value = average_price && total.current_inventory > 0
-        ? total.current_inventory * average_price
-        : 0
+      // Calculate total value by summing pre-calculated values from each group
+      // (already calculated per-load based on invoice_total or price * inventory)
+      const total_value = groups.reduce((sum, g) => sum + (g.total_value || 0), 0)
 
       // Get incoming data for this species/grade
       const incoming = incomingBySpeciesGrade[species]?.[grade] || {
@@ -772,6 +802,34 @@ export default function InventoryPage() {
       average_price: thicknessAveragePrice,
     }
   })
+
+  // Calculate grand totals across all thicknesses
+  const grandTotals = useMemo(() => {
+    return thicknessWithSpecies.reduce((totals, t) => ({
+      loads_with_inventory: totals.loads_with_inventory + (t.loads_with_inventory || 0),
+      pack_count: totals.pack_count + (t.pack_count || 0),
+      current_inventory: totals.current_inventory + (t.current_inventory || 0),
+      total_value: totals.total_value + (t.total_value || 0),
+      incoming_load_count: totals.incoming_load_count + (t.incoming_load_count || 0),
+      incoming_footage: totals.incoming_footage + (t.incoming_footage || 0),
+      total_price_weighted: totals.total_price_weighted + (t.total_price_weighted || 0),
+      total_footage_with_price: totals.total_footage_with_price + (t.total_footage_with_price || 0),
+    }), {
+      loads_with_inventory: 0,
+      pack_count: 0,
+      current_inventory: 0,
+      total_value: 0,
+      incoming_load_count: 0,
+      incoming_footage: 0,
+      total_price_weighted: 0,
+      total_footage_with_price: 0,
+    })
+  }, [thicknessWithSpecies])
+
+  // Calculate weighted average price for grand totals
+  const grandAveragePrice = grandTotals.total_footage_with_price > 0
+    ? grandTotals.total_price_weighted / grandTotals.total_footage_with_price
+    : null
 
   // Get unique values for inventory loads filters
   const inventoryLoadsFilterOptions = useMemo(() => {
@@ -1412,6 +1470,31 @@ export default function InventoryPage() {
           <p className="text-gray-600 mt-1">Current inventory levels and tracking</p>
         </div>
 
+        {/* Warning Banner for Excluded Loads */}
+        {excludedLoads.length > 0 && (
+          <div 
+            className="no-print bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-amber-100 transition-colors"
+            onClick={() => setExcludedLoadsDialogOpen(true)}
+          >
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">
+                {excludedLoads.length} load{excludedLoads.length > 1 ? 's' : ''} excluded from total value calculation
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                These loads have no invoice total and either no price or a price below $0.30/BF. Click to view details.
+              </p>
+            </div>
+            <div className="flex-shrink-0">
+              <span className="text-amber-600 text-sm font-medium">View Details →</span>
+            </div>
+          </div>
+        )}
+
       {/* Detailed Inventory Table - Species → Grades */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-4 py-3 bg-gray-800 text-white flex justify-between items-center">
@@ -1625,6 +1708,47 @@ export default function InventoryPage() {
                 })
               )}
             </tbody>
+            {thicknessWithSpecies.length > 0 && (
+              <tfoot className="bg-gray-800 text-white">
+                <tr>
+                  <td className="px-1 py-2"></td>
+                  <td className="px-1 py-2 whitespace-nowrap">
+                    <span className="text-sm font-bold">TOTALS</span>
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm italic text-gray-300">
+                    All
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm italic text-gray-300">
+                    All
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm text-right font-semibold">
+                    {grandTotals.loads_with_inventory.toLocaleString()}
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm text-right font-semibold">
+                    {grandTotals.pack_count.toLocaleString()}
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm text-right">
+                    <span className="font-semibold text-green-400">
+                      {grandAveragePrice ? `$${grandAveragePrice.toFixed(3)}` : '-'}
+                    </span>
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm font-bold text-blue-300 text-right">
+                    {grandTotals.current_inventory.toLocaleString()}
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm text-right">
+                    <span className="font-bold text-purple-300">
+                      {grandTotals.total_value > 0 ? `$${grandTotals.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-'}
+                    </span>
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm text-right font-semibold text-blue-300">
+                    {grandTotals.incoming_load_count.toLocaleString()}
+                  </td>
+                  <td className="px-1 py-2 whitespace-nowrap text-sm text-right font-semibold text-blue-300">
+                    {grandTotals.incoming_footage.toLocaleString()}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -1749,7 +1873,7 @@ export default function InventoryPage() {
         </div>
         
         {/* Loads Table */}
-        <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-280px)] min-h-[500px] overflow-y-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-800 text-white sticky top-0">
               <tr>
@@ -2575,6 +2699,72 @@ export default function InventoryPage() {
           ) : (
             <div className="p-8 text-center text-gray-500">No load data available</div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Excluded Loads Dialog */}
+      <Dialog open={excludedLoadsDialogOpen} onOpenChange={setExcludedLoadsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              Loads Excluded from Total Value Calculation
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <p className="text-sm text-gray-600 mb-4">
+              The following loads are in inventory but are excluded from the total value calculation because they have no invoice total and either no price or a price below $0.30/BF. 
+              To include them in the total value, add an invoice total or a valid price to each load.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full divide-y divide-gray-200 border rounded-lg">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Load #</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Supplier</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Species</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Grade</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">Thickness</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase">Act BF</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase">Inv BF</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase">Price</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {excludedLoads.map((load, idx) => (
+                    <tr key={`${load.load_id}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{load.load_id}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">{load.supplier_name || '-'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">{load.species}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">{load.grade}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">{load.thickness}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-700">{load.actual_footage.toLocaleString()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-right font-medium text-blue-600">{load.load_inventory.toLocaleString()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-amber-600">
+                        {load.price !== null ? `$${load.price.toFixed(3)}` : 'No price'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-100">
+                  <tr>
+                    <td colSpan={5} className="px-3 py-2 text-sm font-semibold text-gray-700">
+                      Total ({excludedLoads.length} load{excludedLoads.length !== 1 ? 's' : ''})
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm font-semibold text-gray-700">
+                      {excludedLoads.reduce((sum, l) => sum + l.actual_footage, 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm font-semibold text-blue-600">
+                      {excludedLoads.reduce((sum, l) => sum + l.load_inventory, 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       </div>
