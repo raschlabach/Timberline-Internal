@@ -224,8 +224,9 @@ export async function GET(request: NextRequest) {
       ).length
 
       // Step 3: Calculate daily bonus pool
-      // Daily Pool = Bonus Rate × Hours Worked × Number of Qualifying People
-      const dailyBonusPool = bonusRate * totalHours * qualifyingPeopleCount
+      // Daily Pool = Bonus Rate × Hours Worked × 4 (fixed multiplier for efficiency incentive)
+      // Using 4 regardless of actual workers incentivizes efficiency - fewer workers = larger individual shares
+      const dailyBonusPool = bonusRate * totalHours * 4
 
       // Step 4: Calculate total split BF (sum of all contributors' split shares)
       const totalSplitBF = Object.values(operatorContributions).reduce((sum, data) => sum + data.bf_split, 0)
