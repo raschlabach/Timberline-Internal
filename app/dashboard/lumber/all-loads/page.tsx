@@ -347,6 +347,31 @@ export default function AllLoadsPage() {
     }
   }
 
+  // Handle vertical tab navigation - moves to next row in same column
+  function handleVerticalTab(e: React.KeyboardEvent, packIdx: number, columnName: string) {
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      
+      // Determine target row index
+      const targetIdx = e.shiftKey 
+        ? (packIdx > 0 ? packIdx - 1 : loadPacks.length - 1)  // Shift+Tab goes up (wraps to bottom)
+        : (packIdx < loadPacks.length - 1 ? packIdx + 1 : 0)  // Tab goes down (wraps to top)
+      
+      // Find the target input by data attribute
+      const targetInput = document.querySelector(
+        `[data-pack-row="${targetIdx}"][data-pack-col="${columnName}"]`
+      ) as HTMLElement
+      
+      if (targetInput) {
+        targetInput.focus()
+        // If it's an input, select its content
+        if (targetInput instanceof HTMLInputElement) {
+          targetInput.select()
+        }
+      }
+    }
+  }
+
   async function addNewPack() {
     if (!selectedLoadForPacks) return
 
@@ -824,6 +849,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.pack_id ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'pack_id', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'pack_id')}
+                            data-pack-row={idx}
+                            data-pack-col="pack_id"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -832,6 +860,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.length ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'length', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'length')}
+                            data-pack-row={idx}
+                            data-pack-col="length"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -840,6 +871,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.tally_board_feet ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'tally_board_feet', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'tally_board_feet')}
+                            data-pack-row={idx}
+                            data-pack-col="tally_board_feet"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -848,6 +882,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.actual_board_feet ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'actual_board_feet', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'actual_board_feet')}
+                            data-pack-row={idx}
+                            data-pack-col="actual_board_feet"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -857,6 +894,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.rip_yield ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'rip_yield', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'rip_yield')}
+                            data-pack-row={idx}
+                            data-pack-col="rip_yield"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -961,6 +1001,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.finished_at ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'finished_at', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'finished_at')}
+                            data-pack-row={idx}
+                            data-pack-col="finished_at"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -968,6 +1011,9 @@ export default function AllLoadsPage() {
                             className="h-7 text-xs"
                             value={packEdits[pack.id]?.rip_comments ?? ''}
                             onChange={(e) => updatePackEdit(pack.id, 'rip_comments', e.target.value)}
+                            onKeyDown={(e) => handleVerticalTab(e, idx, 'rip_comments')}
+                            data-pack-row={idx}
+                            data-pack-col="rip_comments"
                           />
                         </td>
                         <td className="px-1 py-1 text-center">
