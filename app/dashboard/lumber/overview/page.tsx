@@ -183,6 +183,18 @@ export default function OverviewPage() {
     }
   }, [status])
 
+  // Helper function to get thickness border color
+  const getThicknessBorderColor = (thickness: string): string => {
+    const colorMap: Record<string, string> = {
+      '4/4': 'border-l-blue-500',
+      '5/4': 'border-l-green-500',
+      '6/4': 'border-l-purple-500',
+      '7/4': 'border-l-orange-500',
+      '8/4': 'border-l-red-500',
+    }
+    return colorMap[thickness] || 'border-l-gray-400'
+  }
+
   // Process inventory data into thickness → species → grade hierarchy
   const inventoryByThickness = useMemo(() => {
     const thicknessGroups: Record<string, Record<string, Record<string, InventoryGroup[]>>> = {}
@@ -893,7 +905,7 @@ export default function OverviewPage() {
                       <React.Fragment key={`inventory-${thicknessData.thickness}`}>
                         {/* Thickness Row */}
                         <tr 
-                          className="bg-gray-100 hover:bg-gray-200 cursor-pointer"
+                          className={`bg-gray-100 hover:bg-gray-200 cursor-pointer border-l-4 ${getThicknessBorderColor(thicknessData.thickness)}`}
                           onClick={() => toggleInventoryThickness(thicknessData.thickness)}
                         >
                           <td className="px-2 py-2">
@@ -930,7 +942,7 @@ export default function OverviewPage() {
                             <React.Fragment key={speciesKey}>
                               {/* Species Row */}
                               <tr 
-                                className="bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                                className={`bg-gray-50 hover:bg-gray-100 cursor-pointer border-l-4 ${getThicknessBorderColor(thicknessData.thickness)}`}
                                 onClick={() => toggleInventorySpecies(speciesKey)}
                               >
                                 <td className="px-2 py-1.5 pl-6">
@@ -974,7 +986,7 @@ export default function OverviewPage() {
                                   <React.Fragment key={gradeKey}>
                                     {/* Grade Row */}
                                     <tr 
-                                      className="bg-white hover:bg-gray-50 cursor-pointer"
+                                      className={`bg-white hover:bg-gray-50 cursor-pointer border-l-4 ${getThicknessBorderColor(thicknessData.thickness)}`}
                                       onClick={() => toggleInventoryGrade(gradeKey)}
                                     >
                                       <td className="px-2 py-1.5 pl-10">
@@ -1009,7 +1021,7 @@ export default function OverviewPage() {
                                     {isGradeExpanded && gradeData.loads.map((load, loadIdx) => (
                                       <tr 
                                         key={`${gradeKey}-${load.load_id}-${loadIdx}`}
-                                        className="bg-gray-50/50 border-t border-gray-100"
+                                        className={`bg-gray-50/50 border-t border-gray-100 border-l-4 ${getThicknessBorderColor(thicknessData.thickness)}`}
                                       >
                                         <td className="px-2 py-1.5"></td>
                                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-300">

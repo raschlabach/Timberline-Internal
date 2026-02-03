@@ -91,7 +91,7 @@ function SortableSpeciesRow({
       <tr
         ref={setNodeRef}
         style={style}
-        className={`${rowBgClass} transition-colors cursor-pointer border-b border-gray-200`}
+        className={`${rowBgClass} transition-colors cursor-pointer border-b border-gray-200 border-l-4 ${getThicknessBorderColor(thickness)}`}
         onClick={onToggle}
       >
         <td className="px-1 py-1">
@@ -333,6 +333,18 @@ function SortableSpeciesColumn({ species, grades, total_actual, total_finished, 
       </div>
     </div>
   )
+}
+
+// Helper function to get thickness border color
+const getThicknessBorderColor = (thickness: string): string => {
+  const colorMap: Record<string, string> = {
+    '4/4': 'border-l-blue-500',
+    '5/4': 'border-l-green-500',
+    '6/4': 'border-l-purple-500',
+    '7/4': 'border-l-orange-500',
+    '8/4': 'border-l-red-500',
+  }
+  return colorMap[thickness] || 'border-l-gray-400'
 }
 
 export default function InventoryPage() {
@@ -1548,8 +1560,9 @@ export default function InventoryPage() {
                       <tr 
                         key={`thickness-${thicknessData.thickness}`}
                         className={`
-                          hover:bg-gray-50 transition-colors cursor-pointer
+                          hover:bg-gray-50 transition-colors cursor-pointer border-l-4
                           ${thicknessIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                          ${getThicknessBorderColor(thicknessData.thickness)}
                         `}
                         onClick={() => toggleThickness(thicknessData.thickness)}
                       >
@@ -1641,7 +1654,7 @@ export default function InventoryPage() {
                                     return (
                                       <tr
                                         key={`grade-${thicknessData.thickness}-${speciesData.species}-${grade.grade}`}
-                                        className="bg-blue-50/40 hover:bg-blue-50/60 transition-colors cursor-pointer"
+                                        className={`bg-gray-50/40 hover:bg-gray-100/60 transition-colors cursor-pointer border-l-4 ${getThicknessBorderColor(thicknessData.thickness)}`}
                                         onClick={() => {
                                           setSelectedGradeLoads({
                                             species: speciesData.species,
