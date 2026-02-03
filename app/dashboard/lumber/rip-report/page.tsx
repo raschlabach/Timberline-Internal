@@ -186,22 +186,13 @@ export default function RipReportPage() {
     setEndDate(now.toISOString().split('T')[0])
   }
 
-  if (status === 'loading' || isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
-
-  // Calculate thickness totals for regular data
+  // Calculate thickness totals for regular data - MUST be before any early returns
   const thicknessTotals = useMemo(() => {
     if (!reportData) return {}
     const totals: Record<string, { totalBF: number; packCount: number; loadCount: number }> = {}
     
     for (const [thickness, speciesData] of Object.entries(reportData.regularData)) {
       totals[thickness] = { totalBF: 0, packCount: 0, loadCount: 0 }
-      const loadIds = new Set<string>()
       
       for (const [, gradeData] of Object.entries(speciesData)) {
         for (const [, data] of Object.entries(gradeData)) {
@@ -270,6 +261,15 @@ export default function RipReportPage() {
     }
     return totals
   }, [reportData])
+
+  // Loading state - AFTER all hooks
+  if (status === 'loading' || isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
