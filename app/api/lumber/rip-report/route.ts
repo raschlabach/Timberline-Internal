@@ -24,8 +24,12 @@ export async function GET(request: NextRequest) {
     adjustedEndDate.setDate(adjustedEndDate.getDate() + 1)
     const endDateStr = adjustedEndDate.toISOString().split('T')[0]
 
+    console.log('Rip Report API called with:', { startDate, endDate, endDateStr })
+
     // Get all finished regular packs for the date range with load item info
-    const regularPacksResult = await query(
+    let regularPacksResult
+    try {
+      regularPacksResult = await query(
       `SELECT 
          p.id,
          p.pack_id,
@@ -62,11 +66,17 @@ export async function GET(request: NextRequest) {
          AND p.finished_at >= $1
          AND p.finished_at < $2
        ORDER BY li.thickness, li.species, li.grade, p.finished_at`,
-      [startDate, endDateStr]
-    )
+        [startDate, endDateStr]
+      )
+    } catch (err) {
+      console.error('Error fetching regular packs:', err)
+      regularPacksResult = { rows: [] }
+    }
 
     // Get all finished misc packs for the date range
-    const miscPacksResult = await query(
+    let miscPacksResult
+    try {
+      miscPacksResult = await query(
       `SELECT 
          mp.id,
          mp.pack_id,
@@ -97,29 +107,45 @@ export async function GET(request: NextRequest) {
          AND mp.finished_at >= $1
          AND mp.finished_at < $2
        ORDER BY mp.thickness, mp.species, mp.grade, mp.finished_at`,
-      [startDate, endDateStr]
-    )
+        [startDate, endDateStr]
+      )
+    } catch (err) {
+      console.error('Error fetching misc packs:', err)
+      miscPacksResult = { rows: [] }
+    }
 
     // Get work sessions for hours calculation
-    const workSessionsResult = await query(
+    let workSessionsResult
+    try {
+      workSessionsResult = await query(
       `SELECT *
        FROM lumber_work_sessions
        WHERE work_date >= $1 AND work_date < $2
        ORDER BY work_date`,
-      [startDate, endDateStr]
-    )
+        [startDate, endDateStr]
+      )
+    } catch (err) {
+      console.error('Error fetching work sessions:', err)
+      workSessionsResult = { rows: [] }
+    }
 
     // Get unique load counts from regular packs
-    const loadCountResult = await query(
-      `SELECT COUNT(DISTINCT ll.id) as load_count
-       FROM lumber_packs p
-       JOIN lumber_load_items li ON p.load_item_id = li.id
-       JOIN lumber_loads ll ON li.load_id = ll.id
-       WHERE p.is_finished = TRUE
-         AND p.finished_at >= $1
-         AND p.finished_at < $2`,
-      [startDate, endDateStr]
-    )
+    let loadCountResult
+    try {
+      loadCountResult = await query(
+        `SELECT COUNT(DISTINCT ll.id) as load_count
+         FROM lumber_packs p
+         JOIN lumber_load_items li ON p.load_item_id = li.id
+         JOIN lumber_loads ll ON li.load_id = ll.id
+         WHERE p.is_finished = TRUE
+           AND p.finished_at >= $1
+           AND p.finished_at < $2`,
+        [startDate, endDateStr]
+      )
+    } catch (err) {
+      console.error('Error fetching load count:', err)
+      loadCountResult = { rows: [{ load_count: 0 }] }
+    }
 
     const regularPacks = regularPacksResult.rows
     const miscPacks = miscPacksResult.rows

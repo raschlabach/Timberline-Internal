@@ -109,11 +109,12 @@ export default function RipReportPage() {
     }
   }
 
+  // Auto-fetch when dates change or on initial load
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && startDate && endDate) {
       fetchReport()
     }
-  }, [status])
+  }, [status, startDate, endDate])
 
   const toggleThickness = (thickness: string) => {
     setExpandedThicknesses(prev => {
@@ -184,6 +185,14 @@ export default function RipReportPage() {
     const first = new Date(now.getFullYear(), 0, 1)
     setStartDate(first.toISOString().split('T')[0])
     setEndDate(now.toISOString().split('T')[0])
+  }
+
+  const setLastYear = () => {
+    const now = new Date()
+    const first = new Date(now.getFullYear() - 1, 0, 1)
+    const last = new Date(now.getFullYear() - 1, 11, 31)
+    setStartDate(first.toISOString().split('T')[0])
+    setEndDate(last.toISOString().split('T')[0])
   }
 
   // Calculate thickness totals for regular data - MUST be before any early returns
@@ -300,14 +309,18 @@ export default function RipReportPage() {
               className="w-40"
             />
           </div>
-          <Button onClick={fetchReport} className="bg-blue-600 hover:bg-blue-700">
-            Generate Report
-          </Button>
-          <div className="flex gap-2 ml-4">
+          <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={setThisMonth}>This Month</Button>
             <Button variant="outline" size="sm" onClick={setLastMonth}>Last Month</Button>
             <Button variant="outline" size="sm" onClick={setThisYear}>This Year</Button>
+            <Button variant="outline" size="sm" onClick={setLastYear}>Last Year</Button>
           </div>
+          {isLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+              Loading...
+            </div>
+          )}
         </div>
       </div>
 
