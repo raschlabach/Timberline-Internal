@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3 } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -276,6 +276,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       icon={<TrendingUp size={16} />}
                       label="Rip Bonus"
                       isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/rip-report"
+                      icon={<BarChart3 size={16} />}
+                      label="Rip Report"
+                      isActive={isActiveRoute('/dashboard/lumber/rip-report')}
                     />
                   </>
                 )}
