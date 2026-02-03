@@ -658,12 +658,13 @@ export default function OverviewPage() {
                   <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">Species / Grade</th>
                   <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Loads</th>
                   <th className="px-2 py-1.5 text-right text-xs font-medium text-gray-600 uppercase">Est. BF</th>
+                  <th className="px-2 py-1.5 text-left text-xs font-medium text-gray-600 uppercase">ETA</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {incomingByThickness.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
                       No incoming loads
                     </td>
                   </tr>
@@ -694,6 +695,9 @@ export default function OverviewPage() {
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-yellow-900 text-right">
                             {thicknessData.estimated_bf.toLocaleString()}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-yellow-700">
+                            -
                           </td>
                         </tr>
                         
@@ -733,34 +737,50 @@ export default function OverviewPage() {
                                 <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-yellow-700 text-right">
                                   {speciesData.estimated_bf.toLocaleString()}
                                 </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-yellow-600">
+                                  -
+                                </td>
                               </tr>
                               
                               {/* Grade Rows */}
-                              {isSpeciesExpanded && speciesData.grades.map((gradeData) => (
-                                <tr 
-                                  key={`${speciesKey}-${gradeData.grade}`}
-                                  className="bg-white hover:bg-yellow-50 cursor-pointer"
-                                  onClick={() => openIncomingLoadsDialog(thicknessData.thickness, speciesData.species, gradeData.grade, gradeData.loads)}
-                                >
-                                  <td className="px-2 py-1.5 pl-10"></td>
-                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-400">
-                                    {thicknessData.thickness}
-                                  </td>
-                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs">
-                                    <div className="flex items-center gap-1.5 pl-4">
-                                      <span className="text-gray-300">└</span>
-                                      <span className="font-medium">{gradeData.grade}</span>
-                                      <Eye className="h-3 w-3 text-gray-400" />
-                                    </div>
-                                  </td>
-                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-yellow-600 text-right">
-                                    {gradeData.load_count}
-                                  </td>
-                                  <td className="px-2 py-1.5 whitespace-nowrap text-xs text-yellow-600 text-right">
-                                    {gradeData.estimated_bf.toLocaleString()}
-                                  </td>
-                                </tr>
-                              ))}
+                              {isSpeciesExpanded && speciesData.grades.map((gradeData) => {
+                                // Find earliest ETA from loads in this grade
+                                const earliestEta = gradeData.loads
+                                  .filter((l: any) => l.estimated_delivery_date)
+                                  .map((l: any) => new Date(l.estimated_delivery_date))
+                                  .sort((a: Date, b: Date) => a.getTime() - b.getTime())[0]
+                                
+                                return (
+                                  <tr 
+                                    key={`${speciesKey}-${gradeData.grade}`}
+                                    className="bg-white hover:bg-yellow-50 cursor-pointer"
+                                    onClick={() => openIncomingLoadsDialog(thicknessData.thickness, speciesData.species, gradeData.grade, gradeData.loads)}
+                                  >
+                                    <td className="px-2 py-1.5 pl-10"></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-400">
+                                      {thicknessData.thickness}
+                                    </td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-xs">
+                                      <div className="flex items-center gap-1.5 pl-4">
+                                        <span className="text-gray-300">└</span>
+                                        <span className="font-medium">{gradeData.grade}</span>
+                                        <Eye className="h-3 w-3 text-gray-400" />
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-xs text-yellow-600 text-right">
+                                      {gradeData.load_count}
+                                    </td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-xs text-yellow-600 text-right">
+                                      {gradeData.estimated_bf.toLocaleString()}
+                                    </td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-xs text-yellow-600">
+                                      {earliestEta 
+                                        ? earliestEta.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+                                        : '-'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
                             </React.Fragment>
                           )
                         })}
@@ -839,9 +859,9 @@ export default function OverviewPage() {
       <div className="grid grid-cols-2 gap-4">
         {/* Inventory Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-4 py-2 bg-blue-600 text-white">
+          <div className="px-4 py-2 bg-gray-800 text-white">
             <h2 className="text-sm font-semibold">Current Inventory</h2>
-            <p className="text-[10px] text-blue-100 mt-0.5">
+            <p className="text-[10px] text-gray-300 mt-0.5">
               Actual BF arrived - by thickness, species, grade
             </p>
           </div>
@@ -873,30 +893,30 @@ export default function OverviewPage() {
                       <React.Fragment key={`inventory-${thicknessData.thickness}`}>
                         {/* Thickness Row */}
                         <tr 
-                          className="bg-blue-100 hover:bg-blue-200 cursor-pointer"
+                          className="bg-gray-100 hover:bg-gray-200 cursor-pointer"
                           onClick={() => toggleInventoryThickness(thicknessData.thickness)}
                         >
                           <td className="px-2 py-2">
-                            <button className="text-blue-700 hover:text-blue-900">
+                            <button className="text-gray-600 hover:text-gray-900">
                               {isThicknessExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
                           </td>
-                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-blue-900">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-gray-900">
                             {thicknessData.thickness}
                           </td>
-                          <td className="px-2 py-2 whitespace-nowrap text-xs text-blue-700 italic">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 italic">
                             All Species
                           </td>
-                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-blue-900 text-right">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-gray-700 text-right">
                             {thicknessData.loads_with_inventory}
                           </td>
-                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-blue-900 text-right">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-gray-700 text-right">
                             {thicknessData.pack_count}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs font-semibold text-green-600 text-right">
                             {thicknessData.average_price ? `$${thicknessData.average_price.toFixed(3)}` : '-'}
                           </td>
-                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-blue-900 text-right">
+                          <td className="px-2 py-2 whitespace-nowrap text-xs font-bold text-blue-600 text-right">
                             {thicknessData.current_inventory.toLocaleString()}
                           </td>
                         </tr>
@@ -910,11 +930,11 @@ export default function OverviewPage() {
                             <React.Fragment key={speciesKey}>
                               {/* Species Row */}
                               <tr 
-                                className="bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                                className="bg-gray-50 hover:bg-gray-100 cursor-pointer"
                                 onClick={() => toggleInventorySpecies(speciesKey)}
                               >
                                 <td className="px-2 py-1.5 pl-6">
-                                  <button className="text-blue-600 hover:text-blue-800">
+                                  <button className="text-gray-500 hover:text-gray-700">
                                     {isSpeciesExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                                   </button>
                                 </td>
@@ -931,16 +951,16 @@ export default function OverviewPage() {
                                     <span className="font-semibold">{speciesData.species}</span>
                                   </div>
                                 </td>
-                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-700 text-right">
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-gray-700 text-right">
                                   {speciesData.loads_with_inventory}
                                 </td>
-                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-700 text-right">
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-gray-700 text-right">
                                   {speciesData.pack_count}
                                 </td>
                                 <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-green-600 text-right">
                                   {speciesData.average_price ? `$${speciesData.average_price.toFixed(3)}` : '-'}
                                 </td>
-                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-700 text-right">
+                                <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
                                   {speciesData.current_inventory.toLocaleString()}
                                 </td>
                               </tr>
@@ -954,7 +974,7 @@ export default function OverviewPage() {
                                   <React.Fragment key={gradeKey}>
                                     {/* Grade Row */}
                                     <tr 
-                                      className="bg-white hover:bg-blue-50 cursor-pointer"
+                                      className="bg-white hover:bg-gray-50 cursor-pointer"
                                       onClick={() => toggleInventoryGrade(gradeKey)}
                                     >
                                       <td className="px-2 py-1.5 pl-10">
@@ -971,10 +991,10 @@ export default function OverviewPage() {
                                           <span className="font-medium">{gradeData.grade}</span>
                                         </div>
                                       </td>
-                                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-blue-600 text-right">
+                                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600 text-right">
                                         {gradeData.loads_with_inventory}
                                       </td>
-                                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-blue-600 text-right">
+                                      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600 text-right">
                                         {gradeData.pack_count}
                                       </td>
                                       <td className="px-2 py-1.5 whitespace-nowrap text-xs text-green-600 text-right">
@@ -989,7 +1009,7 @@ export default function OverviewPage() {
                                     {isGradeExpanded && gradeData.loads.map((load, loadIdx) => (
                                       <tr 
                                         key={`${gradeKey}-${load.load_id}-${loadIdx}`}
-                                        className="bg-blue-50/50 border-t border-blue-100"
+                                        className="bg-gray-50/50 border-t border-gray-100"
                                       >
                                         <td className="px-2 py-1.5"></td>
                                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-300">
@@ -998,10 +1018,10 @@ export default function OverviewPage() {
                                         <td className="px-2 py-1.5 whitespace-nowrap text-xs pl-12">
                                           <div className="flex items-center gap-2">
                                             <span className="text-gray-300">└</span>
-                                            <span className="text-blue-700 font-semibold">{load.load_id}</span>
+                                            <span className="text-gray-900 font-semibold">{load.load_id}</span>
                                             <button
                                               onClick={(e) => { e.stopPropagation(); handleViewRipEntry(load); }}
-                                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded"
+                                              className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
                                               title="View Rip Entry"
                                             >
                                               <Eye className="h-3 w-3" />
@@ -1020,7 +1040,7 @@ export default function OverviewPage() {
                                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-green-600 text-right">
                                           {load.price ? `$${Number(load.price).toFixed(3)}` : '-'}
                                         </td>
-                                        <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-700 text-right">
+                                        <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-600 text-right">
                                           {Number(load.load_inventory || 0).toLocaleString()}
                                         </td>
                                       </tr>
