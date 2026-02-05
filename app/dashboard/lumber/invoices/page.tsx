@@ -408,8 +408,8 @@ export default function InvoicesPage() {
             <span>Invoice # + In QuickBooks</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-red-100 border border-red-300"></div>
-            <span>Date Mismatch (different months)</span>
+            <span className="text-red-600 font-semibold">Red Text</span>
+            <span>= Inv Date & Inv Entry in different months</span>
           </div>
         </div>
       </div>
@@ -513,19 +513,17 @@ export default function InvoicesPage() {
                 </tr>
               ) : (
                 filteredLoads.map((load, loadIdx) => {
-                  // Check if arrival date and invoice date are in different months
-                  const arrivalDate = load.actual_arrival_date ? new Date(load.actual_arrival_date) : null
+                  // Check if invoice date and inventory entry date are in different months
                   const invoiceDate = load.invoice_date ? new Date(load.invoice_date) : null
-                  const monthMismatch = arrivalDate && invoiceDate && (
-                    arrivalDate.getMonth() !== invoiceDate.getMonth() ||
-                    arrivalDate.getFullYear() !== invoiceDate.getFullYear()
+                  const invEntryDate = load.items?.[0]?.actual_footage_entered_at ? new Date(load.items[0].actual_footage_entered_at) : null
+                  const dateMonthMismatch = invoiceDate && invEntryDate && (
+                    invoiceDate.getMonth() !== invEntryDate.getMonth() ||
+                    invoiceDate.getFullYear() !== invEntryDate.getFullYear()
                   )
                   
-                  // Determine row color based on invoice status
+                  // Determine row color based on invoice status (no more red rows for date mismatch)
                   let rowColor = 'bg-yellow-50 hover:bg-yellow-100' // No invoice number
-                  if (monthMismatch) {
-                    rowColor = 'bg-red-100 hover:bg-red-200' // Date mismatch takes priority
-                  } else if (load.invoice_number && load.entered_in_quickbooks) {
+                  if (load.invoice_number && load.entered_in_quickbooks) {
                     rowColor = 'bg-green-100 hover:bg-green-200' // Has invoice # AND in QB
                   } else if (load.invoice_number) {
                     rowColor = 'bg-blue-100 hover:bg-blue-200' // Has invoice # only
@@ -575,14 +573,14 @@ export default function InvoicesPage() {
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <span className="text-xs">
+                      <span className={`text-xs ${dateMonthMismatch ? 'text-red-600 font-semibold' : ''}`}>
                         {load.invoice_date 
                           ? new Date(load.invoice_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
                           : '-'}
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <span className="text-xs">
+                      <span className={`text-xs ${dateMonthMismatch ? 'text-red-600 font-semibold' : ''}`}>
                         {load.items?.[0]?.actual_footage_entered_at 
                           ? new Date(load.items[0].actual_footage_entered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                           : load.items?.[0]?.actual_footage 
