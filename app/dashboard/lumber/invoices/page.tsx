@@ -182,6 +182,11 @@ export default function InvoicesPage() {
           aVal = a.invoice_date ? new Date(a.invoice_date).getTime() : 0
           bVal = b.invoice_date ? new Date(b.invoice_date).getTime() : 0
           break
+        case 'inventory_entry':
+          // Use the earliest actual_footage_entered_at from items
+          aVal = a.items?.[0]?.actual_footage_entered_at ? new Date(a.items[0].actual_footage_entered_at).getTime() : 0
+          bVal = b.items?.[0]?.actual_footage_entered_at ? new Date(b.items[0].actual_footage_entered_at).getTime() : 0
+          break
         default:
           return 0
       }
@@ -487,13 +492,22 @@ export default function InvoicesPage() {
                     {getSortIcon('invoice_date')}
                   </div>
                 </th>
+                <th 
+                  className="px-2 py-1 text-left text-xs font-medium uppercase cursor-pointer hover:bg-gray-700"
+                  onClick={() => handleSort('inventory_entry')}
+                >
+                  <div className="flex items-center">
+                    Inv Entry
+                    {getSortIcon('inventory_entry')}
+                  </div>
+                </th>
                 <th className="px-2 py-1 text-left text-xs font-medium uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredLoads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-500">
                     {loads.length === 0 ? 'No pending invoices' : 'No invoices match your filters'}
                   </td>
                 </tr>
@@ -564,6 +578,13 @@ export default function InvoicesPage() {
                       <span className="text-xs">
                         {load.invoice_date 
                           ? new Date(load.invoice_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+                          : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.items?.[0]?.actual_footage_entered_at 
+                          ? new Date(load.items[0].actual_footage_entered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                           : '-'}
                       </span>
                     </td>

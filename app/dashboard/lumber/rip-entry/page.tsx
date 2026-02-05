@@ -686,6 +686,18 @@ export default function RipEntryPage() {
   const finishedBF = packs.filter(p => p.is_finished).reduce((sum, p) => sum + Number(p.tally_board_feet || p.actual_board_feet || 0), 0)
   const remainingBF = totalBF - finishedBF
   const avgLength = packs.length > 0 ? packs.reduce((sum, p) => sum + Number(p.length || 0), 0) / packs.length : 0
+  
+  // Calculate total actual board feet (including edited values) for the Act Ft column total
+  const totalActualBF = packs.reduce((sum, p) => {
+    // For finished packs, use the saved actual_board_feet
+    if (p.is_finished) {
+      return sum + Number(p.actual_board_feet || 0)
+    }
+    // For unfinished packs, use edited value if available, otherwise use saved value
+    const editedValue = packEdits[p.id]?.actual_board_feet
+    const actualValue = editedValue ?? p.actual_board_feet ?? 0
+    return sum + Number(actualValue)
+  }, 0)
 
   // Group packs by length for the remaining display
   const remainingByLength = packs.filter(p => !p.is_finished).reduce((acc, pack) => {
@@ -1286,7 +1298,7 @@ export default function RipEntryPage() {
                           ))
                         )}
                         <tr className="bg-gray-100 font-semibold">
-                          <td className="px-2 py-1">{finishedBF.toLocaleString()} BF</td>
+                          <td className="px-2 py-1">{Math.round(totalActualBF).toLocaleString()} BF</td>
                           <td className="px-2 py-1">
                             {packs.length > 0 
                               ? (packs.filter(p => p.rip_yield).reduce((sum, p) => sum + (p.rip_yield || 0), 0) / packs.filter(p => p.rip_yield).length).toFixed(2)

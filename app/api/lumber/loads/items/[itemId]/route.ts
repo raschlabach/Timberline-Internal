@@ -44,6 +44,12 @@ export async function PATCH(
     if (body.actual_footage !== undefined) {
       updates.push(`actual_footage = $${paramIndex++}`)
       values.push(body.actual_footage)
+      
+      // Set actual_footage_entered_at timestamp when footage is first entered
+      // Only set if actual_footage is being set to a non-null value and timestamp isn't already set
+      if (body.actual_footage !== null) {
+        updates.push(`actual_footage_entered_at = COALESCE(actual_footage_entered_at, CURRENT_TIMESTAMP)`)
+      }
     }
 
     if (body.price !== undefined) {

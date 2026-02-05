@@ -130,6 +130,7 @@ export interface LumberLoadItem {
   thickness: Thickness
   estimated_footage: number | null
   actual_footage: number | null
+  actual_footage_entered_at: string | null
   price: number | null
   created_at: string
   updated_at: string
