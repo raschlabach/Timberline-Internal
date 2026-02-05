@@ -585,7 +585,9 @@ export default function InvoicesPage() {
                       <span className="text-xs">
                         {load.items?.[0]?.actual_footage_entered_at 
                           ? new Date(load.items[0].actual_footage_entered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                          : '-'}
+                          : load.items?.[0]?.actual_footage 
+                            ? 'N/A' 
+                            : '-'}
                       </span>
                     </td>
                     <td className="px-2 py-1">
