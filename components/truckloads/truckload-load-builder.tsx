@@ -308,6 +308,29 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     contentRef: pickupPrintRef,
   })
 
+  // Split stacks into left and right columns (alternating) for two-column layout
+  const { leftDeliveryStacks, rightDeliveryStacks } = useMemo(() => {
+    const multiItem = state.deliveryVinylStacks.filter(s => s.skids.length > 1)
+    const left: typeof multiItem = []
+    const right: typeof multiItem = []
+    multiItem.forEach((stack, i) => {
+      if (i % 2 === 0) left.push(stack)
+      else right.push(stack)
+    })
+    return { leftDeliveryStacks: left, rightDeliveryStacks: right }
+  }, [state.deliveryVinylStacks])
+
+  const { leftPickupStacks, rightPickupStacks } = useMemo(() => {
+    const multiItem = state.pickupVinylStacks.filter(s => s.skids.length > 1)
+    const left: typeof multiItem = []
+    const right: typeof multiItem = []
+    multiItem.forEach((stack, i) => {
+      if (i % 2 === 0) left.push(stack)
+      else right.push(stack)
+    })
+    return { leftPickupStacks: left, rightPickupStacks: right }
+  }, [state.pickupVinylStacks])
+
   // Create wrapped action functions that include auto-save
   const wrappedActions = useMemo(() => ({
     ...actions,
@@ -450,6 +473,20 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           <div ref={deliveryPrintRef} className="print:overflow-hidden">
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center">
+                {/* Left Stack Column */}
+                {leftDeliveryStacks.length > 0 && (
+                  <div className="flex flex-col min-w-[250px] max-w-[280px] shrink-0">
+                    <div className="mb-2 print:hidden">
+                      <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+                    </div>
+                    <StackPanel
+                      vinylStacks={leftDeliveryStacks}
+                      actions={wrappedActions}
+                      activeTab={activeTab}
+                    />
+                  </div>
+                )}
+
                 {/* Trailer Grid */}
                 <TrailerGrid
                   key={`delivery-${renderKey}`}
@@ -463,27 +500,35 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                   stops={stops}
                 />
 
-                {/* Outgoing Stack Panel */}
-                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-                  <div className="mb-4 print:hidden">
-                    <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
-                    <p className="text-xs text-gray-600">
-                      {activeTab === 'delivery' 
-                        ? 'Manage stacked items' 
-                        : 'Switch to Outgoing tab to manage stacks'
-                      }
-                    </p>
+                {/* Right Stack Column */}
+                {rightDeliveryStacks.length > 0 && (
+                  <div className="flex flex-col min-w-[250px] max-w-[280px] shrink-0">
+                    {leftDeliveryStacks.length === 0 && (
+                      <div className="mb-2 print:hidden">
+                        <h3 className="font-semibold text-sm">Outgoing Stacks</h3>
+                      </div>
+                    )}
+                    {leftDeliveryStacks.length > 0 && <div className="mb-2 h-5" />}
+                    <StackPanel
+                      vinylStacks={rightDeliveryStacks}
+                      actions={wrappedActions}
+                      activeTab={activeTab}
+                    />
                   </div>
-                  <StackPanel
-                    vinylStacks={state.deliveryVinylStacks}
-                    actions={wrappedActions}
-                    activeTab={activeTab}
-                  />
-                </div>
+                )}
               </div>
             </ScrollArea>
             {/* Print-only content */}
             <div className="hidden print:flex print-layout-wrapper">
+              {leftDeliveryStacks.length > 0 && (
+                <div className="print-stacks-wrapper">
+                  <StackPanel
+                    vinylStacks={leftDeliveryStacks}
+                    actions={wrappedActions}
+                    activeTab={activeTab}
+                  />
+                </div>
+              )}
               <div className="print-grid-wrapper">
                 <TrailerGrid
                   key={`delivery-print-${renderKey}`}
@@ -497,13 +542,15 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                   stops={stops}
                 />
               </div>
-              <div className="print-stacks-wrapper">
-                <StackPanel
-                  vinylStacks={state.deliveryVinylStacks}
-                  actions={wrappedActions}
-                  activeTab={activeTab}
-                />
-              </div>
+              {rightDeliveryStacks.length > 0 && (
+                <div className="print-stacks-wrapper">
+                  <StackPanel
+                    vinylStacks={rightDeliveryStacks}
+                    actions={wrappedActions}
+                    activeTab={activeTab}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -555,6 +602,20 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
           <div ref={pickupPrintRef} className="print:overflow-hidden">
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center">
+                {/* Left Stack Column */}
+                {leftPickupStacks.length > 0 && (
+                  <div className="flex flex-col min-w-[250px] max-w-[280px] shrink-0">
+                    <div className="mb-2 print:hidden">
+                      <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+                    </div>
+                    <StackPanel
+                      vinylStacks={leftPickupStacks}
+                      actions={wrappedActions}
+                      activeTab={activeTab}
+                    />
+                  </div>
+                )}
+
                 {/* Trailer Grid */}
                 <TrailerGrid
                   key={`pickup-${renderKey}`}
@@ -568,27 +629,35 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                   stops={stops}
                 />
 
-                {/* Incoming Stack Panel */}
-                <div className="flex flex-col min-w-[280px] max-w-[320px] shrink-0">
-                  <div className="mb-4 print:hidden">
-                    <h3 className="font-semibold text-sm">Incoming Stacks</h3>
-                    <p className="text-xs text-gray-600">
-                      {activeTab === 'pickup' 
-                        ? 'Manage stacked items' 
-                        : 'Switch to Incoming tab to manage stacks'
-                      }
-                    </p>
+                {/* Right Stack Column */}
+                {rightPickupStacks.length > 0 && (
+                  <div className="flex flex-col min-w-[250px] max-w-[280px] shrink-0">
+                    {leftPickupStacks.length === 0 && (
+                      <div className="mb-2 print:hidden">
+                        <h3 className="font-semibold text-sm">Incoming Stacks</h3>
+                      </div>
+                    )}
+                    {leftPickupStacks.length > 0 && <div className="mb-2 h-5" />}
+                    <StackPanel
+                      vinylStacks={rightPickupStacks}
+                      actions={wrappedActions}
+                      activeTab={activeTab}
+                    />
                   </div>
-                  <StackPanel
-                    vinylStacks={state.pickupVinylStacks}
-                    actions={wrappedActions}
-                    activeTab={activeTab}
-                  />
-                </div>
+                )}
               </div>
             </ScrollArea>
             {/* Print-only content */}
             <div className="hidden print:flex print-layout-wrapper">
+              {leftPickupStacks.length > 0 && (
+                <div className="print-stacks-wrapper">
+                  <StackPanel
+                    vinylStacks={leftPickupStacks}
+                    actions={wrappedActions}
+                    activeTab={activeTab}
+                  />
+                </div>
+              )}
               <div className="print-grid-wrapper">
                 <TrailerGrid
                   key={`pickup-print-${renderKey}`}
@@ -602,13 +671,15 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
                   stops={stops}
                 />
               </div>
-              <div className="print-stacks-wrapper">
-                <StackPanel
-                  vinylStacks={state.pickupVinylStacks}
-                  actions={wrappedActions}
-                  activeTab={activeTab}
-                />
-              </div>
+              {rightPickupStacks.length > 0 && (
+                <div className="print-stacks-wrapper">
+                  <StackPanel
+                    vinylStacks={rightPickupStacks}
+                    actions={wrappedActions}
+                    activeTab={activeTab}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </Card>
