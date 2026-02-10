@@ -334,6 +334,11 @@ function SortableTableRow({
             </TooltipProvider>
           )}
           {(() => {
+            // Don't show auto deduction indicator for orders with split loads
+            if (row.assignmentQuote !== null && row.assignmentQuote !== undefined) {
+              return null
+            }
+            
             // Check if this is a cross-driver situation and has a deduction
             // Also show for unassigned (blank) handled-by drivers
             const isCrossDriverPickup = row.assignmentType === 'delivery' && (!row.pickupDriverName || row.pickupDriverName !== selectedTruckload?.driver.driverName)
@@ -630,6 +635,11 @@ function SortableTableRow({
       {/* Cross-Driver Deduction Input Column - Only show for cross-driver situations */}
       <TableCell className="text-sm">
         {(() => {
+          // Don't show auto deduction input for orders with split loads
+          if (row.assignmentQuote !== null && row.assignmentQuote !== undefined) {
+            return '—'
+          }
+          
           // Check if this is a cross-driver situation
           // Also show for unassigned (blank) handled-by drivers
           const isCrossDriverPickup = row.assignmentType === 'delivery' && (!row.pickupDriverName || row.pickupDriverName !== selectedTruckload?.driver.driverName)
