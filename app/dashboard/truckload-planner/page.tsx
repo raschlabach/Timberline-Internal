@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, differenceInDays } from 'date-fns'
 import { Card, CardContent } from '@/components/ui/card'
@@ -20,6 +21,7 @@ import {
   Palmtree,
   Repeat,
   GripVertical,
+  ExternalLink,
 } from 'lucide-react'
 import { CreateDraftDialog } from '@/components/planner/create-draft-dialog'
 import { EditPlannerTruckloadDialog } from '@/components/planner/edit-planner-truckload-dialog'
@@ -32,6 +34,7 @@ import type { PlannerTruckload, PlannerDriver, DriverScheduleEvent, PlannerNote 
 type ViewMode = 'week' | '2week' | 'month' | 'custom'
 
 export default function TruckloadPlanner() {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<ViewMode>('2week')
@@ -170,18 +173,34 @@ export default function TruckloadPlanner() {
     }
   }, [])
 
-  function handleDragStart(driverId: number) {
+  // --- Driver row reorder drag handlers ---
+  function handleDriverDragStart(e: React.DragEvent, driverId: number) {
+    e.dataTransfer.setData('text/driver-reorder', String(driverId))
     setDragDriverId(driverId)
   }
 
-  function handleDragOver(e: React.DragEvent, driverId: number) {
+  function handleDriverRowDragOver(e: React.DragEvent, driverId: number) {
     e.preventDefault()
     if (driverId !== dragOverDriverId) {
       setDragOverDriverId(driverId)
     }
   }
 
-  function handleDrop(targetDriverId: number) {
+  function handleDriverRowDrop(e: React.DragEvent, targetDriverId: number) {
+    // Check if this is a truckload being dropped onto a driver row
+    const truckloadData = e.dataTransfer.getData('text/truckload-reassign')
+    if (truckloadData) {
+      e.preventDefault()
+      const truckloadId = parseInt(truckloadData)
+      if (!isNaN(truckloadId)) {
+        handleTruckloadReassign(truckloadId, targetDriverId)
+      }
+      setDragDriverId(null)
+      setDragOverDriverId(null)
+      return
+    }
+
+    // Otherwise it's a driver row reorder
     if (dragDriverId === null || dragDriverId === targetDriverId) {
       setDragDriverId(null)
       setDragOverDriverId(null)
@@ -209,6 +228,27 @@ export default function TruckloadPlanner() {
   function handleDragEnd() {
     setDragDriverId(null)
     setDragOverDriverId(null)
+  }
+
+  // --- Draft truckload reassignment drag handlers ---
+  function handleTruckloadDragStart(e: React.DragEvent, truckloadId: number) {
+    e.stopPropagation() // Don't trigger the driver row drag
+    e.dataTransfer.setData('text/truckload-reassign', String(truckloadId))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  async function handleTruckloadReassign(truckloadId: number, newDriverId: number) {
+    try {
+      const response = await fetch(`/api/truckloads/${truckloadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId: newDriverId }),
+      })
+      if (!response.ok) throw new Error('Failed to reassign truckload')
+      handleRefresh()
+    } catch (error) {
+      console.error('Error reassigning truckload:', error)
+    }
   }
 
   function handleRefresh() {
@@ -627,9 +667,9 @@ export default function TruckloadPlanner() {
                   isDragging ? 'opacity-40' : ''
                 } ${isDragOver ? 'border-t-2 border-t-indigo-400' : ''}`}
                 draggable
-                onDragStart={() => handleDragStart(driver.id)}
-                onDragOver={(e) => handleDragOver(e, driver.id)}
-                onDrop={() => handleDrop(driver.id)}
+                onDragStart={(e) => handleDriverDragStart(e, driver.id)}
+                onDragOver={(e) => handleDriverRowDragOver(e, driver.id)}
+                onDrop={(e) => handleDriverRowDrop(e, driver.id)}
                 onDragEnd={handleDragEnd}
               >
                 {/* Driver name cell */}
@@ -726,23 +766,28 @@ export default function TruckloadPlanner() {
                     return (
                       <div
                         key={`load-${truckload.id}`}
-                        className="absolute z-[3] px-0.5"
+                        className={`absolute z-[3] px-0.5 ${isDraft ? 'cursor-grab active:cursor-grabbing' : ''}`}
                         style={{
                           left: `${pos.left}%`,
                           width: `${pos.width}%`,
                           top: `${4 + (stackOffset + loadIdx) * 26}px`,
                           height: '22px',
                         }}
+                        draggable={isDraft}
+                        onDragStart={isDraft ? (e) => handleTruckloadDragStart(e, truckload.id) : undefined}
                       >
                         <div
-                          className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate ${
+                          className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate border-2 ${
                             isDraft
-                              ? 'bg-amber-50 border border-dashed border-amber-300 text-amber-800 hover:bg-amber-100'
+                              ? 'border-gray-400 border-dashed'
                               : isCompleted
-                              ? 'bg-green-50 border border-green-200 text-green-800 hover:bg-green-100'
-                              : 'bg-blue-50 border border-blue-200 text-blue-800 hover:bg-blue-100'
+                              ? 'border-green-500'
+                              : 'border-blue-500'
                           }`}
-                          style={{ borderLeftWidth: '3px', borderLeftColor: driver.color }}
+                          style={{
+                            backgroundColor: driver.color ? `${driver.color}25` : undefined,
+                            color: '#1f2937',
+                          }}
                           onClick={(e) => handleTruckloadClick(truckload, e)}
                           title={[
                             truckload.description || `Truckload #${truckload.id}`,
@@ -769,6 +814,18 @@ export default function TruckloadPlanner() {
                           )}
                           {truckload.billOfLadingNumber && !timeLabel && (
                             <span className="ml-auto text-[9px] opacity-50 flex-shrink-0">{truckload.billOfLadingNumber}</span>
+                          )}
+                          {!isDraft && (
+                            <button
+                              className="ml-auto flex-shrink-0 p-0.5 rounded hover:bg-black/10 transition-colors"
+                              title="Open in Trucking page"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/dashboard/trucking/${truckload.id}`)
+                              }}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -818,15 +875,15 @@ export default function TruckloadPlanner() {
       {/* Legend */}
       <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded border border-dashed border-amber-300 bg-amber-50" />
+          <div className="w-4 h-3 rounded border-2 border-dashed border-gray-400 bg-gray-100" />
           <span>Draft</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded border border-blue-200 bg-blue-50" />
+          <div className="w-4 h-3 rounded border-2 border-blue-500 bg-blue-50" />
           <span>Active</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded border border-green-200 bg-green-50" />
+          <div className="w-4 h-3 rounded border-2 border-green-500 bg-green-50" />
           <span>Completed</span>
         </div>
         <div className="flex items-center gap-1.5">
