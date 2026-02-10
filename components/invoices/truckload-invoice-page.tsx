@@ -344,8 +344,9 @@ function SortableTableRow({
             }
             
             // Check if this is a cross-driver situation and has a deduction
-            // Also show for unassigned (blank) handled-by drivers
-            const isCrossDriverPickup = row.assignmentType === 'delivery' && (!row.pickupDriverName || row.pickupDriverName !== selectedTruckload?.driver.driverName)
+            // For deliveries: only show if pickup driver exists AND is different (skip blank pickup drivers)
+            // For pickups: show if delivery driver is blank OR different
+            const isCrossDriverPickup = row.assignmentType === 'delivery' && (row.pickupDriverName && row.pickupDriverName !== selectedTruckload?.driver.driverName)
             const isCrossDriverDelivery = row.assignmentType === 'pickup' && (!row.deliveryDriverName || row.deliveryDriverName !== selectedTruckload?.driver.driverName)
             
             if (!isCrossDriverPickup && !isCrossDriverDelivery) {
@@ -648,8 +649,9 @@ function SortableTableRow({
           }
           
           // Check if this is a cross-driver situation
-          // Also show for unassigned (blank) handled-by drivers
-          const isCrossDriverPickup = row.assignmentType === 'delivery' && (!row.pickupDriverName || row.pickupDriverName !== selectedTruckload?.driver.driverName)
+          // For deliveries: only show if pickup driver exists AND is different (skip blank pickup drivers)
+          // For pickups: show if delivery driver is blank OR different
+          const isCrossDriverPickup = row.assignmentType === 'delivery' && (row.pickupDriverName && row.pickupDriverName !== selectedTruckload?.driver.driverName)
           const isCrossDriverDelivery = row.assignmentType === 'pickup' && (!row.deliveryDriverName || row.deliveryDriverName !== selectedTruckload?.driver.driverName)
           
           if (!isCrossDriverPickup && !isCrossDriverDelivery) {
