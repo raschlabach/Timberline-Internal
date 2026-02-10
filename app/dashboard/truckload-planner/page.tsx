@@ -654,9 +654,38 @@ export default function TruckloadPlanner() {
           {orderedDrivers.map((driver) => {
             const driverLoads = getDriverTruckloads(driver.id)
             const driverScheduleEvents = getDriverEvents(driver.id)
-            // Calculate how many rows we need for stacking (simple: count overlapping loads)
-            const blockCount = driverLoads.length + driverScheduleEvents.length
-            const rowHeight = Math.max(56, blockCount * 28 + 8)
+
+            // Assign vertical lanes: only stack when loads actually overlap in dates
+            function assignLanes(items: { startDate: string; endDate: string }[]): number[] {
+              const lanes: number[] = new Array(items.length).fill(0)
+              // For each item, find the lowest lane that doesn't conflict with already-placed overlapping items
+              for (let i = 0; i < items.length; i++) {
+                const usedLanes = new Set<number>()
+                for (let j = 0; j < i; j++) {
+                  // Check if items overlap in date range
+                  if (items[j].startDate <= items[i].endDate && items[j].endDate >= items[i].startDate) {
+                    usedLanes.add(lanes[j])
+                  }
+                }
+                let lane = 0
+                while (usedLanes.has(lane)) lane++
+                lanes[i] = lane
+              }
+              return lanes
+            }
+
+            const eventLanes = assignLanes(driverScheduleEvents.map((e) => ({ startDate: e.startDate, endDate: e.endDate })))
+            const maxEventLane = eventLanes.length > 0 ? Math.max(...eventLanes) + 1 : 0
+
+            const loadLanes = assignLanes(driverLoads.map((l) => ({ startDate: l.startDate, endDate: l.endDate })))
+            const maxLoadLane = loadLanes.length > 0 ? Math.max(...loadLanes) + 1 : 0
+
+            const blockHeight = 32
+            const blockGap = 4
+            const topPad = 6
+            const eventRowsHeight = maxEventLane > 0 ? maxEventLane * (blockHeight + blockGap) : 0
+            const loadRowsHeight = maxLoadLane > 0 ? maxLoadLane * (blockHeight + blockGap) : 0
+            const rowHeight = Math.max(48, topPad + eventRowsHeight + loadRowsHeight + topPad)
             const isDragging = dragDriverId === driver.id
             const isDragOver = dragOverDriverId === driver.id && dragDriverId !== driver.id
 
@@ -717,6 +746,7 @@ export default function TruckloadPlanner() {
                   {driverScheduleEvents.map((event, eventIdx) => {
                     const pos = getEventBlockPosition(event)
                     if (!pos) return null
+                    const lane = eventLanes[eventIdx]
 
                     return (
                       <div
@@ -725,8 +755,8 @@ export default function TruckloadPlanner() {
                         style={{
                           left: `${pos.left}%`,
                           width: `${pos.width}%`,
-                          top: `${4 + eventIdx * 26}px`,
-                          height: '22px',
+                          top: `${topPad + lane * (blockHeight + blockGap)}px`,
+                          height: `${blockHeight}px`,
                         }}
                       >
                         <div
@@ -756,7 +786,7 @@ export default function TruckloadPlanner() {
 
                     const isDraft = truckload.status === 'draft'
                     const isCompleted = truckload.isCompleted || truckload.status === 'completed'
-                    const stackOffset = driverScheduleEvents.length
+                    const lane = loadLanes[loadIdx]
 
                     // Build time label
                     let timeLabel = ''
@@ -770,8 +800,8 @@ export default function TruckloadPlanner() {
                         style={{
                           left: `${pos.left}%`,
                           width: `${pos.width}%`,
-                          top: `${4 + (stackOffset + loadIdx) * 26}px`,
-                          height: '22px',
+                          top: `${topPad + eventRowsHeight + lane * (blockHeight + blockGap)}px`,
+                          height: `${blockHeight}px`,
                         }}
                         draggable={isDraft}
                         onDragStart={isDraft ? (e) => handleTruckloadDragStart(e, truckload.id) : undefined}
@@ -779,13 +809,13 @@ export default function TruckloadPlanner() {
                         <div
                           className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate border-2 ${
                             isDraft
-                              ? 'border-gray-400 border-dashed'
+                              ? 'bg-gray-100 border-dashed'
                               : isCompleted
-                              ? 'border-green-500'
-                              : 'border-blue-500'
+                              ? 'bg-green-50'
+                              : 'bg-blue-50'
                           }`}
                           style={{
-                            backgroundColor: driver.color ? `${driver.color}25` : undefined,
+                            borderColor: driver.color || '#9ca3af',
                             color: '#1f2937',
                           }}
                           onClick={(e) => handleTruckloadClick(truckload, e)}
@@ -879,11 +909,11 @@ export default function TruckloadPlanner() {
           <span>Draft</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded border-2 border-blue-500 bg-blue-50" />
+          <div className="w-4 h-3 rounded border-2 border-gray-400 bg-blue-50" />
           <span>Active</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded border-2 border-green-500 bg-green-50" />
+          <div className="w-4 h-3 rounded border-2 border-gray-400 bg-green-50" />
           <span>Completed</span>
         </div>
         <div className="flex items-center gap-1.5">
