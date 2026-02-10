@@ -7,15 +7,55 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
-    // Check if we should show all non-completed orders (for load board)
     const { searchParams } = new URL(request.url);
-    const showAll = searchParams.get('all') === 'true';
-
-    // Build WHERE clause - when showAll is true, return ALL non-completed orders
-    // When false, only return unassigned orders
-    const whereClause = showAll 
-      ? `WHERE o.status != 'completed'`
-      : `WHERE o.status = 'unassigned'`;
+    
+    // View toggles: comma-separated list of active views (e.g., "unassigned,pickup")
+    // If not provided, defaults to all non-completed views
+    const viewParam = searchParams.get('view') || '';
+    const activeViews = viewParam ? viewParam.split(',').map(v => v.trim()) : [];
+    const hasViewFilter = activeViews.length > 0;
+    
+    // Search: customer name filter (server-side ILIKE)
+    const search = searchParams.get('search') || '';
+    
+    // Build dynamic WHERE conditions based on active view toggles
+    // These filter by assignment state using the LEFT JOINed pickup/delivery CTEs
+    const viewConditions: string[] = [];
+    
+    if (!hasViewFilter) {
+      // No view specified — return all non-completed orders (backward compatible)
+      viewConditions.push('true');
+    } else {
+      if (activeViews.includes('unassigned')) {
+        viewConditions.push('(pa.truckload_id IS NULL AND da.truckload_id IS NULL)');
+      }
+      if (activeViews.includes('pickup')) {
+        viewConditions.push('(pa.truckload_id IS NOT NULL AND da.truckload_id IS NULL)');
+      }
+      if (activeViews.includes('delivery')) {
+        viewConditions.push('(da.truckload_id IS NOT NULL)');
+      }
+      if (activeViews.includes('assigned')) {
+        viewConditions.push('(pa.truckload_id IS NOT NULL AND da.truckload_id IS NOT NULL AND COALESCE(transfer_orders.is_transfer_order, false) = false)');
+      }
+    }
+    
+    // If user toggled all views off (no conditions matched), return nothing
+    if (hasViewFilter && viewConditions.length === 0) {
+      return NextResponse.json({ orders: [], totalCount: 0 });
+    }
+    
+    const viewWhereClause = viewConditions.length > 0
+      ? `AND (${viewConditions.join(' OR ')})`
+      : '';
+    
+    // Build search condition
+    const queryParams: (string | number)[] = [];
+    let searchCondition = '';
+    if (search) {
+      queryParams.push(`%${search}%`);
+      searchCondition = `AND (pc.customer_name ILIKE $${queryParams.length} OR dc.customer_name ILIKE $${queryParams.length})`;
+    }
 
     const sqlQuery = `
       WITH skids_summary AS (
@@ -241,16 +281,19 @@ export async function GET(request: NextRequest) {
         WHERE order_id = o.id
         GROUP BY order_id
       ) ol ON true
-      ${whereClause}
+      WHERE o.status != 'completed'
+      ${viewWhereClause}
+      ${searchCondition}
       ORDER BY 
-        -- Sort by created_at DESC (newest first)
         o.created_at DESC
     `;
 
-    const result = await query(sqlQuery);
-    console.log(`Fetched ${result.rows.length} non-completed orders (showAll: ${showAll})`);
+    const result = await query(sqlQuery, queryParams);
     
-    return NextResponse.json(result.rows);
+    return NextResponse.json({
+      orders: result.rows,
+      totalCount: result.rows.length
+    });
   } catch (error) {
     console.error('Error fetching recent orders:', error);
     if (error instanceof Error) {
@@ -264,4 +307,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

@@ -81,10 +81,11 @@ function useRecentOrders() {
       const response = await fetch('/api/orders/recent');
       if (!response.ok) throw new Error('Failed to fetch recent orders');
       const data = await response.json();
+      const ordersList = data.orders || data;
       
       // Only update if we have new data
-      if (JSON.stringify(data) !== JSON.stringify(orders)) {
-        setOrders(data);
+      if (JSON.stringify(ordersList) !== JSON.stringify(orders)) {
+        setOrders(ordersList);
         setLastUpdate(new Date().toISOString());
       }
     } catch (err) {

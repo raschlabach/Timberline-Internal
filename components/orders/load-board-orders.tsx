@@ -264,10 +264,12 @@ function useLoadBoardOrders(
   };
   
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersTotalCount, setOrdersTotalCount] = useState<number>(0);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'pickupDate', direction: 'asc' });
   const [viewToggles, setViewToggles] = useState<ViewToggles>(
     initialViewToggles || defaultViewToggles
@@ -362,12 +364,39 @@ function useLoadBoardOrders(
     }
   }, [viewToggles, LOCAL_STORAGE_KEYS.viewToggles]);
 
+  // Debounce search term - waits 300ms after user stops typing before triggering API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Build the view param string from current toggles (excluding 'completed' which has its own endpoint)
+  const getViewParam = useCallback((toggles: ViewToggles): string => {
+    const views: string[] = [];
+    if (toggles.unassigned) views.push('unassigned');
+    if (toggles.pickup) views.push('pickup');
+    if (toggles.delivery) views.push('delivery');
+    if (toggles.assigned) views.push('assigned');
+    return views.join(',');
+  }, []);
+
   const fetchOrders = useCallback(async () => {
     try {
-      // Add cache-busting timestamp to prevent 304 responses
       const timestamp = new Date().getTime();
-      // Always fetch all non-completed orders (we'll filter by toggles on the frontend)
-      const response = await fetch(`/api/orders/recent?t=${timestamp}&all=true`, {
+      const viewParam = getViewParam(viewToggles);
+      
+      // If no non-completed views are active, don't fetch
+      if (!viewParam) {
+        setOrders([]);
+        setOrdersTotalCount(0);
+        setIsLoading(false);
+        return;
+      }
+      
+      const searchParam = debouncedSearchTerm ? `&search=${encodeURIComponent(debouncedSearchTerm)}` : '';
+      const response = await fetch(`/api/orders/recent?t=${timestamp}&view=${viewParam}${searchParam}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -375,7 +404,8 @@ function useLoadBoardOrders(
       });
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
-      setOrders(data);
+      setOrders(data.orders || []);
+      setOrdersTotalCount(data.totalCount || 0);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load orders');
@@ -383,7 +413,7 @@ function useLoadBoardOrders(
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [viewToggles, debouncedSearchTerm, getViewParam]);
 
   const fetchCompletedOrders = useCallback(async (page: number = 1, search: string = '') => {
     try {
@@ -436,31 +466,27 @@ function useLoadBoardOrders(
     return () => clearInterval(checkInterval);
   }, [fetchOrders]);
 
-  // Set up polling interval
+  // Fetch orders on mount and when view toggles or debounced search changes
+  // Also set up polling interval for background refreshes
   useEffect(() => {
-    fetchOrders(); // Initial fetch
+    fetchOrders(); // Fetch immediately when deps change
     
     const intervalId = setInterval(() => {
       fetchOrders();
-    }, 30000); // Poll every 30 seconds instead of 3 seconds
+    }, 30000); // Poll every 30 seconds
 
     return () => clearInterval(intervalId);
   }, [fetchOrders]);
 
-  // Refetch orders when toggles change
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  // Fetch completed orders when completed toggle is enabled or search term changes
+  // Fetch completed orders when completed toggle is enabled or debounced search term changes
   useEffect(() => {
     if (viewToggles.completed) {
-      fetchCompletedOrders(completedPage, searchTerm);
+      fetchCompletedOrders(completedPage, debouncedSearchTerm);
     } else {
       setCompletedOrders([]);
       setCompletedPage(1);
     }
-  }, [viewToggles.completed, completedPage, searchTerm, fetchCompletedOrders]);
+  }, [viewToggles.completed, completedPage, debouncedSearchTerm, fetchCompletedOrders]);
 
   // Listen for orderCreated event to refresh immediately (works if on same page)
   useEffect(() => {
@@ -526,44 +552,20 @@ function useLoadBoardOrders(
     }
   };
 
-  // Function to get orders that match current toggles and search (before load type filtering)
+  // Get base orders (server-filtered by view toggles + completed orders)
+  // Used for computing load type filter counts
   const getBaseOrders = () => {
     const allOrdersToCheck = [...orders];
     if (viewToggles.completed) {
       allOrdersToCheck.push(...completedOrders);
     }
     
+    // Apply instant client-side search for responsive filter counts
     return allOrdersToCheck.filter(order => {
-          const hasPickupAssignment = order.pickupAssignment !== null;
-          const hasDeliveryAssignment = order.deliveryAssignment !== null;
-      const isCompleted = order.status === 'completed';
-
-      // Filter by toggle states
-      if (isCompleted) {
-        if (!viewToggles.completed) return false;
-        } else {
-        let matchesAnyToggle = false;
-        if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.delivery && hasDeliveryAssignment && !isCompleted) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment && !order.isTransferOrder) {
-          matchesAnyToggle = true;
-        }
-        if (!matchesAnyToggle) return false;
-      }
-
-      // Search term filter
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
         order.pickupCustomer.name.toLowerCase().includes(searchLower) ||
         order.deliveryCustomer.name.toLowerCase().includes(searchLower);
-
       return matchesSearch;
     });
   };
@@ -584,33 +586,10 @@ function useLoadBoardOrders(
 
   const filterCounts = getFilterCounts();
 
-  // Helper function to check if an order is completed - uses the same logic as getOrderStage
-  // An order is completed when both pickup and delivery truckloads are completed
-  const isOrderCompleted = useCallback((order: Order): boolean => {
-    const pickupAssignment = order.pickupAssignment;
-    const deliveryAssignment = order.deliveryAssignment;
-    
-    // Check if pickup truckload is completed
-    const pickupTruckload = pickupAssignment ? truckloads.find(t => t.id === pickupAssignment.truckloadId) : null;
-    const isPickupCompleted = pickupTruckload?.isCompleted || false;
-    
-    // Check if delivery truckload is completed
-    const deliveryTruckload = deliveryAssignment ? truckloads.find(t => t.id === deliveryAssignment.truckloadId) : null;
-    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
-    
-    // Order is completed when both pickup and delivery are completed
-    // This matches the logic in getOrderStage that shows "Completed" status
-    return isPickupCompleted && isDeliveryCompleted;
-  }, [truckloads]);
-
-  // Combine regular orders and completed orders based on toggles
+  // Combine server-filtered orders with completed orders
+  // View toggle filtering is handled server-side, so we just combine the results
   const allOrdersToFilter = useMemo(() => {
-    const allOrders: Order[] = [];
-    
-    // Add non-completed orders if any toggle except completed is enabled
-    if (viewToggles.unassigned || viewToggles.pickup || viewToggles.delivery || viewToggles.assigned) {
-      allOrders.push(...orders);
-    }
+    const allOrders: Order[] = [...orders];
     
     // Add completed orders if completed toggle is enabled
     if (viewToggles.completed) {
@@ -622,54 +601,13 @@ function useLoadBoardOrders(
 
   const filteredOrders = useMemo(() => {
     return sortOrders(allOrdersToFilter.filter(order => {
-      const hasPickupAssignment = order.pickupAssignment !== null;
-      const hasDeliveryAssignment = order.deliveryAssignment !== null;
-      // Use the same completion check logic as getOrderStage (status column)
-      const isCompleted = isOrderCompleted(order);
-
-      // CRITICAL FIRST CHECK: Completed orders should ONLY show if completed toggle is enabled
-      // They should NEVER show for delivery, pickup, assigned, or unassigned toggles
-      // This check happens FIRST before any other toggle logic
-      if (isCompleted && !viewToggles.completed) {
-        return false; // Immediately exclude completed orders when completed toggle is off
-      }
-
-      // Filter by toggle states
-      if (isCompleted) {
-        // If we get here, completed toggle is ON, so show the completed order
-        // Continue to search/filter checks below
-      } else {
-        // Non-completed orders only - check which toggle they match
-        let matchesAnyToggle = false;
-
-        if (viewToggles.unassigned && !hasPickupAssignment && !hasDeliveryAssignment) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.pickup && hasPickupAssignment && !hasDeliveryAssignment) {
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.delivery && hasDeliveryAssignment) {
-          // Delivery toggle: show orders with delivery assignment that are NOT completed
-          // (isCompleted is already false here since we're in the else block)
-          matchesAnyToggle = true;
-        }
-        if (viewToggles.assigned && hasPickupAssignment && hasDeliveryAssignment) {
-          // Exclude transfer orders (pickup and delivery in same truckload)
-          if (!order.isTransferOrder) {
-            matchesAnyToggle = true;
-          }
-        }
-
-        if (!matchesAnyToggle) return false;
-      }
-
-      // Search term filter
+      // Instant client-side search filter for responsive UX while debounced API call is in-flight
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
         order.pickupCustomer.name.toLowerCase().includes(searchLower) ||
         order.deliveryCustomer.name.toLowerCase().includes(searchLower);
 
-      // Load type filters
+      // Load type filters (always client-side — fast on already-filtered data)
       const hasActiveFilters = Object.values(activeFilters).some(value => value);
       if (!hasActiveFilters) return matchesSearch;
 
@@ -679,10 +617,11 @@ function useLoadBoardOrders(
 
       return matchesSearch && matchesFilters;
     }));
-  }, [allOrdersToFilter, isOrderCompleted, viewToggles, searchTerm, activeFilters]);
+  }, [allOrdersToFilter, searchTerm, activeFilters]);
 
   return { 
     orders: filteredOrders, 
+    ordersTotalCount,
     isLoading, 
     error, 
     refresh: fetchOrders,

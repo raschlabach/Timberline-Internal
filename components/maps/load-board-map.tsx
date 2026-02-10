@@ -560,7 +560,8 @@ export default function LoadBoardMap() {
         throw new Error('Failed to fetch orders');
       }
       const data = await response.json();
-      const processedLocations = processOrders(data);
+      const ordersList = data.orders || data;
+      const processedLocations = processOrders(ordersList);
       setLoadLocations(processedLocations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
