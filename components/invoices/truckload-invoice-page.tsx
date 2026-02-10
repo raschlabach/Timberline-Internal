@@ -121,6 +121,7 @@ interface AssignedOrderRow {
   assignmentId: number
   middlefield: boolean
   backhaul: boolean
+  rrOrder: boolean
   ohioToIndiana: boolean
   footage: number
   skidsData: Array<{ width: number; length: number; quantity: number }>
@@ -334,8 +335,11 @@ function SortableTableRow({
             </TooltipProvider>
           )}
           {(() => {
-            // Don't show auto deduction indicator for orders with split loads
+            // Don't show auto deduction indicator for orders with split loads or RNR orders
             if (row.assignmentQuote !== null && row.assignmentQuote !== undefined) {
+              return null
+            }
+            if (row.rrOrder) {
               return null
             }
             
@@ -635,8 +639,11 @@ function SortableTableRow({
       {/* Cross-Driver Deduction Input Column - Only show for cross-driver situations */}
       <TableCell className="text-sm">
         {(() => {
-          // Don't show auto deduction input for orders with split loads
+          // Don't show auto deduction input for orders with split loads or RNR orders
           if (row.assignmentQuote !== null && row.assignmentQuote !== undefined) {
+            return '—'
+          }
+          if (row.rrOrder) {
             return '—'
           }
           
@@ -2311,6 +2318,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           excludeFromLoadValue: (o as any).exclude_from_load_value === true || false,
           middlefield: (o as any).middlefield || false,
           backhaul: (o as any).backhaul || false,
+          rrOrder: (o as any).rr_order || false,
           ohioToIndiana: (o as any).oh_to_in || false,
           footage: typeof o.footage === 'number' ? o.footage : (typeof o.footage === 'string' ? parseFloat(o.footage) || 0 : 0),
           skidsData: o.skids_data || [],

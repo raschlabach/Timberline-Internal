@@ -172,6 +172,7 @@ export async function GET(
         toa.assignment_quote,
         COALESCE(o.middlefield, false) as middlefield,
         COALESCE(o.backhaul, false) as backhaul,
+        COALESCE(o.rr_order, false) as rr_order,
         COALESCE(o.is_transfer_order, false) as is_transfer_order,
         -- Pickup assignment info for delivery assignments
         pa.driver_name as pickup_driver_name,
