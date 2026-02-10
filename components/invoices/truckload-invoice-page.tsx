@@ -335,8 +335,9 @@ function SortableTableRow({
           )}
           {(() => {
             // Check if this is a cross-driver situation and has a deduction
-            const isCrossDriverPickup = row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupDriverName !== selectedTruckload?.driver.driverName
-            const isCrossDriverDelivery = row.assignmentType === 'pickup' && row.deliveryDriverName && row.deliveryDriverName !== selectedTruckload?.driver.driverName
+            // Also show for unassigned (blank) handled-by drivers
+            const isCrossDriverPickup = row.assignmentType === 'delivery' && (!row.pickupDriverName || row.pickupDriverName !== selectedTruckload?.driver.driverName)
+            const isCrossDriverDelivery = row.assignmentType === 'pickup' && (!row.deliveryDriverName || row.deliveryDriverName !== selectedTruckload?.driver.driverName)
             
             if (!isCrossDriverPickup && !isCrossDriverDelivery) {
               return null
@@ -630,16 +631,17 @@ function SortableTableRow({
       <TableCell className="text-sm">
         {(() => {
           // Check if this is a cross-driver situation
-          const isCrossDriverPickup = row.assignmentType === 'delivery' && row.pickupDriverName && row.pickupDriverName !== selectedTruckload?.driver.driverName
-          const isCrossDriverDelivery = row.assignmentType === 'pickup' && row.deliveryDriverName && row.deliveryDriverName !== selectedTruckload?.driver.driverName
+          // Also show for unassigned (blank) handled-by drivers
+          const isCrossDriverPickup = row.assignmentType === 'delivery' && (!row.pickupDriverName || row.pickupDriverName !== selectedTruckload?.driver.driverName)
+          const isCrossDriverDelivery = row.assignmentType === 'pickup' && (!row.deliveryDriverName || row.deliveryDriverName !== selectedTruckload?.driver.driverName)
           
           if (!isCrossDriverPickup && !isCrossDriverDelivery) {
             return '—'
           }
           
           const action: 'Picked up' | 'Delivered' = isCrossDriverPickup ? 'Picked up' : 'Delivered'
-          const otherDriverName = isCrossDriverPickup ? row.pickupDriverName! : row.deliveryDriverName!
-          const otherDate = isCrossDriverPickup ? row.pickupAssignmentDate! : row.deliveryAssignmentDate!
+          const otherDriverName = isCrossDriverPickup ? (row.pickupDriverName || 'Unassigned') : (row.deliveryDriverName || 'Unassigned')
+          const otherDate = isCrossDriverPickup ? (row.pickupAssignmentDate || '') : (row.deliveryAssignmentDate || '')
           const customerName = isCrossDriverPickup ? row.pickupName : row.deliveryName
           const deductionKey = `${row.orderId}-${action}`
           
@@ -1551,6 +1553,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       return isManual &&
         !d.splitLoadId && 
         d.orderId && 
+        (!d.comment || d.comment.trim() === '') &&
         currentOrderIds.has(String(d.orderId))
     })
   }, [allDeductions, orders])
@@ -3160,12 +3163,13 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           // Get list of order IDs in the current truckload (as strings for comparison)
                           const currentOrderIds = new Set(orders.map(o => String(o.orderId)))
                           
-                          // Filter pickup/delivery deductions: isManual && orderId && !splitLoadId (same as driver pay page)
+                          // Filter pickup/delivery deductions: isManual && orderId && !splitLoadId && no comment (checkmark deductions only)
                           const pickupDeliveryDeductions = allDeductions.filter(deduction => {
                             const isManual = deduction.isManual === true || String(deduction.isManual) === 'true' || Number(deduction.isManual) === 1
                             return isManual &&
                                    !deduction.splitLoadId && 
                                    deduction.orderId &&
+                                   (!deduction.comment || deduction.comment.trim() === '') &&
                                    currentOrderIds.has(String(deduction.orderId))
                           })
                           

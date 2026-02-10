@@ -234,6 +234,46 @@ export async function GET(request: NextRequest) {
       console.error('Error checking/applying assignment_quote migration:', migrationCheckError)
     }
 
+    // Check if verification check columns exist in truckloads, if not, add them
+    try {
+      const verificationCheckColsCheck = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'truckloads'
+        AND column_name IN ('dispatch_checked_by', 'dispatch_checked_at', 'quickbooks_checked_by', 'quickbooks_checked_at')
+      `)
+      const existingVerificationCols = verificationCheckColsCheck.rows.map((row: any) => row.column_name)
+      if (existingVerificationCols.length < 4) {
+        console.log('Verification check columns not found, adding them...')
+        const client = await getClient()
+        try {
+          await client.query('BEGIN')
+          if (!existingVerificationCols.includes('dispatch_checked_by')) {
+            await client.query(`ALTER TABLE truckloads ADD COLUMN dispatch_checked_by VARCHAR(100)`)
+          }
+          if (!existingVerificationCols.includes('dispatch_checked_at')) {
+            await client.query(`ALTER TABLE truckloads ADD COLUMN dispatch_checked_at TIMESTAMP`)
+          }
+          if (!existingVerificationCols.includes('quickbooks_checked_by')) {
+            await client.query(`ALTER TABLE truckloads ADD COLUMN quickbooks_checked_by VARCHAR(100)`)
+          }
+          if (!existingVerificationCols.includes('quickbooks_checked_at')) {
+            await client.query(`ALTER TABLE truckloads ADD COLUMN quickbooks_checked_at TIMESTAMP`)
+          }
+          await client.query('COMMIT')
+          console.log('Verification check columns added successfully')
+        } catch (migrationError) {
+          await client.query('ROLLBACK')
+          console.error('Error adding verification check columns:', migrationError)
+        } finally {
+          client.release()
+        }
+      }
+    } catch (migrationCheckError) {
+      console.error('Error checking verification check columns:', migrationCheckError)
+    }
+
     // Get all truckloads for drivers in the date range
     // Try query with new columns first, fallback to basic query if columns don't exist
     let truckloadsResult
@@ -253,7 +293,11 @@ export async function GET(request: NextRequest) {
           t.pay_manual_amount as "payManualAmount",
           t.calculated_load_value as "calculatedLoadValue",
           t.calculated_driver_pay as "calculatedDriverPay",
-          t.calculated_at as "calculatedAt"
+          t.calculated_at as "calculatedAt",
+          t.dispatch_checked_by as "dispatchCheckedBy",
+          t.dispatch_checked_at as "dispatchCheckedAt",
+          t.quickbooks_checked_by as "quickbooksCheckedBy",
+          t.quickbooks_checked_at as "quickbooksCheckedAt"
         FROM truckloads t
         LEFT JOIN users u ON t.driver_id = u.id
         LEFT JOIN drivers d ON u.id = d.user_id
@@ -305,7 +349,11 @@ export async function GET(request: NextRequest) {
           payManualAmount: null,
           calculatedLoadValue: null,
           calculatedDriverPay: null,
-          calculatedAt: null
+          calculatedAt: null,
+          dispatchCheckedBy: null,
+          dispatchCheckedAt: null,
+          quickbooksCheckedBy: null,
+          quickbooksCheckedAt: null
         }))
       } else {
         console.error('Unexpected error querying truckloads:', queryError)
@@ -683,7 +731,11 @@ export async function GET(request: NextRequest) {
           deductions: [],
           payCalculationMethod: truckload.payCalculationMethod || 'automatic',
           payHours: truckload.payHours ? parseFloat(truckload.payHours) : null,
-          payManualAmount: truckload.payManualAmount ? parseFloat(truckload.payManualAmount) : null
+          payManualAmount: truckload.payManualAmount ? parseFloat(truckload.payManualAmount) : null,
+          dispatchCheckedBy: truckload.dispatchCheckedBy || null,
+          dispatchCheckedAt: truckload.dispatchCheckedAt || null,
+          quickbooksCheckedBy: truckload.quickbooksCheckedBy || null,
+          quickbooksCheckedAt: truckload.quickbooksCheckedAt || null
         })
       }
     })

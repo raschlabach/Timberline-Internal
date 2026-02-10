@@ -158,7 +158,7 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay } = data
+    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay, dispatchCheckedBy, dispatchCheckedAt, quickbooksCheckedBy, quickbooksCheckedAt } = data
 
     // Build dynamic update query based on what fields are provided
     const updates: string[] = []
@@ -252,6 +252,26 @@ export async function PATCH(
       }
     }
 
+    if (dispatchCheckedBy !== undefined) {
+      updates.push(`dispatch_checked_by = $${paramIndex++}`)
+      values.push(dispatchCheckedBy || null)
+    }
+
+    if (dispatchCheckedAt !== undefined) {
+      updates.push(`dispatch_checked_at = $${paramIndex++}`)
+      values.push(dispatchCheckedAt || null)
+    }
+
+    if (quickbooksCheckedBy !== undefined) {
+      updates.push(`quickbooks_checked_by = $${paramIndex++}`)
+      values.push(quickbooksCheckedBy || null)
+    }
+
+    if (quickbooksCheckedAt !== undefined) {
+      updates.push(`quickbooks_checked_at = $${paramIndex++}`)
+      values.push(quickbooksCheckedAt || null)
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ 
         success: false, 
@@ -282,7 +302,11 @@ export async function PATCH(
          pay_manual_amount as "payManualAmount",
          calculated_load_value as "calculatedLoadValue",
          calculated_driver_pay as "calculatedDriverPay",
-         calculated_at as "calculatedAt"`,
+         calculated_at as "calculatedAt",
+         dispatch_checked_by as "dispatchCheckedBy",
+         dispatch_checked_at as "dispatchCheckedAt",
+         quickbooks_checked_by as "quickbooksCheckedBy",
+         quickbooks_checked_at as "quickbooksCheckedAt"`,
       values
     )
 

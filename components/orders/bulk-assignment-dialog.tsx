@@ -4,14 +4,12 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TruckloadSummary } from '@/types/truckloads'
-import { ApiDriver, ApiTruckload, DriverOption, TruckloadView, filterAndSortTruckloads, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
+import { ApiDriver, ApiTruckload, DriverOption, mapDriverOption, mapTruckloadSummary } from '@/lib/truckload-utils'
 import { Package, CheckCircle2, Calendar, Clock, MapPin, Truck } from 'lucide-react'
 
 // Component for truckload selection grid
@@ -41,18 +39,17 @@ function TruckloadSelectionGrid({
     <>
       {/* Driver Selector - Horizontal */}
       {driverColumns.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap p-3 bg-gray-50 rounded-lg border border-gray-200 mb-4">
+        <div className="flex items-center gap-2.5 flex-wrap p-3 bg-gray-50 rounded-lg border border-gray-200 mb-4">
           <span className="text-sm font-medium text-gray-700 mr-2">Select Drivers:</span>
           {driverColumns.map((driver) => (
             <Button
               key={driver.driverName}
               variant={selectedDrivers.has(driver.driverName) ? "default" : "outline"}
-              size="sm"
               onClick={() => toggleDriverSelection(driver.driverName)}
-              className="text-xs h-7"
+              className="text-sm h-9 px-4"
             >
               <div
-                className="w-2 h-2 rounded-full mr-1.5"
+                className="w-2.5 h-2.5 rounded-full mr-2"
                 style={{ backgroundColor: driver.driverColor }}
               />
               {driver.driverName}
@@ -261,13 +258,11 @@ export function BulkAssignmentDialog({
   poolItems,
   onAssignmentComplete
 }: BulkAssignmentDialogProps) {
-  const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([])
   const [truckloads, setTruckloads] = useState<TruckloadSummary[]>([])
   const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [selectedPickupTruckloadId, setSelectedPickupTruckloadId] = useState<number | null>(null)
   const [selectedDeliveryTruckloadId, setSelectedDeliveryTruckloadId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [truckloadView, setTruckloadView] = useState<TruckloadView>('current')
   const [selectedDrivers, setSelectedDrivers] = useState<Set<string>>(new Set())
 
   // Toggle driver selection
@@ -285,17 +280,12 @@ export function BulkAssignmentDialog({
 
   useEffect(() => {
     if (isOpen) {
-      setTruckloadView('current')
       setSelectedPickupTruckloadId(null)
       setSelectedDeliveryTruckloadId(null)
       setSelectedDrivers(new Set()) // Reset selection on dialog open
       fetchData()
     }
   }, [isOpen])
-
-  useEffect(() => {
-    setTruckloads(filterAndSortTruckloads(allTruckloads, truckloadView))
-  }, [allTruckloads, truckloadView])
 
   useEffect(() => {
     if (selectedPickupTruckloadId && !truckloads.some(function hasSelection(truckload) {
@@ -310,11 +300,6 @@ export function BulkAssignmentDialog({
     }
   }, [truckloads, selectedPickupTruckloadId, selectedDeliveryTruckloadId])
 
-  function handleTruckloadViewChange(nextValue: string): void {
-    const view = nextValue === 'completed' ? 'completed' : 'current'
-    setTruckloadView(view)
-  }
-
   function handlePickupTruckloadSelection(truckloadId: number): void {
     setSelectedPickupTruckloadId(truckloadId)
   }
@@ -327,7 +312,7 @@ export function BulkAssignmentDialog({
     setIsLoading(true)
     try {
       const [truckloadsResponse, driversResponse] = await Promise.all([
-        fetch('/api/truckloads'),
+        fetch('/api/truckloads?activeOnly=true'),
         fetch('/api/drivers')
       ])
 
@@ -351,7 +336,7 @@ export function BulkAssignmentDialog({
         return mapTruckloadSummary(truckload)
       })
 
-      setAllTruckloads(mappedTruckloads)
+      setTruckloads(mappedTruckloads)
     } catch (error) {
       console.error('Error fetching data:', error)
       toast.error('Failed to load truckloads and drivers')
@@ -438,6 +423,10 @@ export function BulkAssignmentDialog({
       driverColor: driver.color,
       truckloads: truckloads.filter(function filterDriverTruckloads(t) {
         return t.driverName === driver.fullName
+      }).sort(function sortNewestFirst(a, b) {
+        const aTime = a.startDate ? new Date(a.startDate).getTime() : 0
+        const bTime = b.startDate ? new Date(b.startDate).getTime() : 0
+        return bTime - aTime
       })
     }
     return acc
@@ -472,61 +461,10 @@ export function BulkAssignmentDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
-          {/* Assignment Summary */}
-          <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-            <Label className="text-lg font-semibold">Assignment Summary</Label>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">Total Assignments:</span>
-                <span className="ml-2 font-semibold">{totalAssignments}</span>
-              </div>
-              <div>
-                <span className="text-red-600">Pickups:</span>
-                <span className="ml-2 font-semibold">{pickupCount}</span>
-              </div>
-              <div>
-                <span className="text-gray-900">Deliveries:</span>
-                <span className="ml-2 font-semibold">{deliveryCount}</span>
-              </div>
-            </div>
-            
-            <ScrollArea className="h-24 mt-3">
-              <div className="space-y-1">
-                {poolItems.map((item, index) => (
-                  <div key={`${item.orderId}-${index}`} className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Order {item.orderId}</span>
-                      <div className="flex gap-1">
-                        {item.assignmentTypes.map(type => (
-                          <Badge
-                            key={type}
-                            variant={type === 'pickup' ? 'destructive' : 'default'}
-                            className="text-xs"
-                          >
-                            {type === 'pickup' ? 'Pickup' : 'Delivery'}
-                          </Badge>
-                        ))}
-                      </div>
-                      <span className="text-gray-500">
-                        ({item.assignmentTypes.includes('pickup') ? item.pickupCustomer.name : item.deliveryCustomer.name})
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-
           {/* Truckload Selection - Split into Pickup and Delivery */}
           <div className="space-y-6 flex-1 overflow-hidden">
             <div className="flex items-center justify-between gap-4">
               <Label className="text-lg font-semibold">Select Truckloads</Label>
-              <Tabs value={truckloadView} onValueChange={handleTruckloadViewChange}>
-                <TabsList>
-                  <TabsTrigger value="current">Current</TabsTrigger>
-                  <TabsTrigger value="completed">Completed</TabsTrigger>
-                </TabsList>
-              </Tabs>
             </div>
 
             {/* Combined Truckload Selection - Shows both pickup and delivery buttons on each truckload */}

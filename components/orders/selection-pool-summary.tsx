@@ -127,32 +127,32 @@ export function SelectionPoolSummary({
 
           {/* Skids Summary */}
           <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-sm text-gray-600 mb-2">Skids</div>
-            <div className="space-y-1">
+            <div className="text-sm text-gray-600 mb-1">Skids</div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
               {Object.entries(skidSummary).length > 0 ? (
                 Object.entries(skidSummary).map(([dimensions, quantity]) => (
-                  <div key={dimensions} className="text-sm">
-                    {quantity} - {dimensions} skids
-                  </div>
+                  <span key={dimensions} className="text-sm whitespace-nowrap">
+                    {quantity} - {dimensions}
+                  </span>
                 ))
               ) : (
-                <div className="text-sm text-gray-500">No skids</div>
+                <span className="text-sm text-gray-500">No skids</span>
               )}
             </div>
           </div>
 
           {/* Vinyl Summary */}
           <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-sm text-gray-600 mb-2">Vinyl</div>
-            <div className="space-y-1">
+            <div className="text-sm text-gray-600 mb-1">Vinyl</div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
               {Object.entries(vinylSummary).length > 0 ? (
                 Object.entries(vinylSummary).map(([dimensions, quantity]) => (
-                  <div key={dimensions} className="text-sm">
-                    {quantity} - {dimensions} vinyl
-                  </div>
+                  <span key={dimensions} className="text-sm whitespace-nowrap">
+                    {quantity} - {dimensions}
+                  </span>
                 ))
               ) : (
-                <div className="text-sm text-gray-500">No vinyl</div>
+                <span className="text-sm text-gray-500">No vinyl</span>
               )}
             </div>
           </div>

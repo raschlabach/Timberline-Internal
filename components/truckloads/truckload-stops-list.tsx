@@ -15,7 +15,6 @@ import {
   MessageSquare,
   Zap,
   GripVertical,
-  MoreVertical,
   X,
   ArrowRightLeft
 } from "lucide-react"
@@ -27,15 +26,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { BillOfLadingDialog } from "@/app/components/BillOfLadingDialog"
 import { OrderInfoDialog } from "@/components/orders/order-info-dialog"
 import { TransferStopDialog } from "@/components/truckloads/transfer-stop-dialog"
+import { BatchTransferDialog } from "@/components/truckloads/batch-transfer-dialog"
 import { toast } from "sonner"
 import {
   DndContext,
@@ -143,10 +137,11 @@ interface SortableGroupedStopProps {
   onStopUpdate: () => void
   truckloadId: number
   columnWidths: ColumnWidths
+  selectedStops: Set<string>
+  onToggleStopSelection: (stopKey: string) => void
 }
 
-function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId, columnWidths }: SortableGroupedStopProps) {
-  const [transferStop, setTransferStop] = useState<TruckloadStop | null>(null)
+function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truckloadId, columnWidths, selectedStops, onToggleStopSelection }: SortableGroupedStopProps) {
   const [isUnassigning, setIsUnassigning] = useState(false)
 
   const {
@@ -334,134 +329,146 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                     </div>
                   </div>
 
-                  {/* Right side: Date, flags, buttons */}
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                  {/* Right side: Date, flags, buttons - split into status icons (fixed width) and action buttons */}
+                  <div className="flex items-center gap-0 flex-shrink-0">
                     <div className={`text-xs mr-1 whitespace-nowrap ${stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}`}>
                       {stop.pickup_date && format(parseLocalDate(stop.pickup_date), 'MM/dd/yy')}
                     </div>
-                    {stop.is_rush && (
+                    {/* Status icons - fixed width so they don't shift action buttons */}
+                    <div className="flex items-center w-[60px] justify-end mr-1">
+                      {stop.is_rush && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="p-0.5">
+                              <Zap className="h-3.5 w-3.5 text-yellow-500" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Rush Order</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {stop.needs_attention && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="p-0.5">
+                              <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Needs Attention</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {stop.comments && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="p-0.5">
+                              <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{stop.comments}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    {/* Action buttons - always aligned */}
+                    <div className="flex items-center gap-0.5">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="p-0.5">
-                            <Zap className="h-3.5 w-3.5 text-yellow-500" />
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                            onClick={() => onOrderInfoClick(stop.id)}
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Rush Order</p>
+                          <p>Order Details</p>
                         </TooltipContent>
                       </Tooltip>
-                    )}
-                    {stop.needs_attention && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="p-0.5">
-                            <AlertCircle className="h-3.5 w-3.5 text-red-500" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Needs Attention</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {stop.comments && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="p-0.5">
-                            <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>{stop.comments}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
-                          onClick={() => onOrderInfoClick(stop.id)}
-                        >
-                          <Info className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Order Details</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <BillOfLadingDialog 
-                      order={{
-                        id: stop.id.toString(),
-                        shipper: {
-                          name: stop.pickup_customer.name,
-                          address: stop.pickup_customer.address,
-                          phone: stop.pickup_customer.phone || '',
-                          phone2: stop.pickup_customer.phone2 || ''
-                        },
-                        consignee: {
-                          name: stop.delivery_customer.name,
-                          address: stop.delivery_customer.address,
-                          phone: stop.delivery_customer.phone || '',
-                          phone2: stop.delivery_customer.phone2 || ''
-                        },
-                        items: [
-                          ...(stop.skids_data || []).map(skid => ({
-                            packages: skid.quantity || 0,
-                            description: `Skid ${skid.width}x${skid.length}`,
-                            weight: 0,
-                            charges: 0
-                          })),
-                          ...(stop.vinyl_data || []).map(vinyl => ({
-                            packages: vinyl.quantity || 0,
-                            description: `Vinyl ${vinyl.width}x${vinyl.length}`,
-                            weight: 0,
-                            charges: 0
-                          })),
-                          ...(stop.hand_bundles_data || []).map(handBundle => ({
-                            packages: handBundle.quantity || 0,
-                            description: handBundle.description || 'Hand Bundle',
-                            weight: 0,
-                            charges: 0
-                          }))
-                        ]
-                      }} 
-                    >
-                      <Button 
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                      <BillOfLadingDialog 
+                        order={{
+                          id: stop.id.toString(),
+                          shipper: {
+                            name: stop.pickup_customer.name,
+                            address: stop.pickup_customer.address,
+                            phone: stop.pickup_customer.phone || '',
+                            phone2: stop.pickup_customer.phone2 || ''
+                          },
+                          consignee: {
+                            name: stop.delivery_customer.name,
+                            address: stop.delivery_customer.address,
+                            phone: stop.delivery_customer.phone || '',
+                            phone2: stop.delivery_customer.phone2 || ''
+                          },
+                          items: [
+                            ...(stop.skids_data || []).map(skid => ({
+                              packages: skid.quantity || 0,
+                              description: `Skid ${skid.width}x${skid.length}`,
+                              weight: 0,
+                              charges: 0
+                            })),
+                            ...(stop.vinyl_data || []).map(vinyl => ({
+                              packages: vinyl.quantity || 0,
+                              description: `Vinyl ${vinyl.width}x${vinyl.length}`,
+                              weight: 0,
+                              charges: 0
+                            })),
+                            ...(stop.hand_bundles_data || []).map(handBundle => ({
+                              packages: handBundle.quantity || 0,
+                              description: handBundle.description || 'Hand Bundle',
+                              weight: 0,
+                              charges: 0
+                            }))
+                          ]
+                        }} 
                       >
-                        <FileText className="h-3.5 w-3.5" />
-                      </Button>
-                    </BillOfLadingDialog>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
+                        <Button 
                           variant="ghost"
                           size="sm"
                           className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
                         >
-                          <MoreVertical className="h-3.5 w-3.5" />
+                          <FileText className="h-3.5 w-3.5" />
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          className="text-red-600 focus:text-red-600"
-                          onClick={() => handleUnassign(stop)}
-                          disabled={isUnassigning}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          {isUnassigning ? 'Unassigning...' : 'Unassign Stop'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setTransferStop(stop)}
-                        >
-                          <ArrowRightLeft className="h-4 w-4 mr-2" />
-                          Transfer Stop
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      </BillOfLadingDialog>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`h-6 w-6 p-0 ${
+                              selectedStops.has(`${stop.id}-${stop.assignment_type}`)
+                                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                                : 'bg-gray-100 text-gray-700 hover:bg-orange-100 hover:text-orange-700'
+                            }`}
+                            onClick={() => onToggleStopSelection(`${stop.id}-${stop.assignment_type}`)}
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>{selectedStops.has(`${stop.id}-${stop.assignment_type}`) ? 'Remove from transfer' : 'Add to transfer'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 bg-gray-100 text-red-500 hover:bg-red-100 hover:text-red-700"
+                            onClick={() => handleUnassign(stop)}
+                            disabled={isUnassigning}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top"><p>{isUnassigning ? 'Unassigning...' : 'Unassign Stop'}</p></TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -469,15 +476,6 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
           </div>
         </div>
       </Card>
-
-      <TransferStopDialog
-        isOpen={!!transferStop}
-        onClose={() => setTransferStop(null)}
-        onTransferComplete={onStopUpdate}
-        currentTruckloadId={truckloadId}
-        orderId={transferStop?.id || 0}
-        assignmentType={transferStop?.assignment_type || 'pickup'}
-      />
     </>
   )
 }
@@ -780,33 +778,33 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
                   <FileText className="h-3.5 w-3.5" />
                 </Button>
               </BillOfLadingDialog>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+                    className="h-6 w-6 p-0 bg-gray-100 text-gray-700 hover:bg-orange-100 hover:text-orange-700"
+                    onClick={() => setIsTransferDialogOpen(true)}
                   >
-                    <MoreVertical className="h-3.5 w-3.5" />
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    className="text-red-600 focus:text-red-600"
+                </TooltipTrigger>
+                <TooltipContent side="top"><p>Transfer Stop</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 bg-gray-100 text-red-500 hover:bg-red-100 hover:text-red-700"
                     onClick={handleUnassign}
                     disabled={isUnassigning}
                   >
-                    <X className="h-4 w-4 mr-2" />
-                    {isUnassigning ? 'Unassigning...' : 'Unassign Stop'}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsTransferDialogOpen(true)}
-                  >
-                    <ArrowRightLeft className="h-4 w-4 mr-2" />
-                    Transfer Stop
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top"><p>{isUnassigning ? 'Unassigning...' : 'Unassign Stop'}</p></TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -869,6 +867,43 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
   const [isOrderInfoOpen, setIsOrderInfoOpen] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
+  const [selectedStops, setSelectedStops] = useState<Set<string>>(new Set())
+  const [isBatchTransferOpen, setIsBatchTransferOpen] = useState(false)
+
+  function toggleStopSelection(stopKey: string): void {
+    setSelectedStops(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(stopKey)) {
+        newSet.delete(stopKey)
+      } else {
+        newSet.add(stopKey)
+      }
+      return newSet
+    })
+  }
+
+  function clearSelection(): void {
+    setSelectedStops(new Set())
+  }
+
+  // Build the batch transfer items from selected stop keys
+  function getSelectedStopItems(): Array<{ orderId: number; assignmentType: 'pickup' | 'delivery' }> {
+    return Array.from(selectedStops).map(key => {
+      const [idStr, ...typeParts] = key.split('-')
+      return {
+        orderId: Number(idStr),
+        assignmentType: typeParts.join('-') as 'pickup' | 'delivery'
+      }
+    })
+  }
+
+  function handleBatchTransferComplete(): void {
+    clearSelection()
+    fetchStops()
+    if (onStopsUpdate) {
+      onStopsUpdate()
+    }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1183,6 +1218,36 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
   return (
     <TooltipProvider>
       <div className="h-full flex flex-col min-h-0 overflow-hidden">
+        {/* Batch Transfer Bar */}
+        {selectedStops.size > 0 && (
+          <div className="flex items-center justify-between px-3 py-2 bg-orange-50 border-b border-orange-200">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200">
+                {selectedStops.size} stop{selectedStops.size !== 1 ? 's' : ''} selected
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearSelection}
+                className="h-7 text-xs"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setIsBatchTransferOpen(true)}
+                className="h-7 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                <ArrowRightLeft className="h-3 w-3 mr-1" />
+                Batch Transfer ({selectedStops.size})
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 min-h-0 overflow-y-auto">
         <DndContext
           sensors={sensors}
@@ -1204,6 +1269,8 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
                       onStopUpdate={fetchStops}
                       truckloadId={truckloadId}
                       columnWidths={columnWidths}
+                      selectedStops={selectedStops}
+                      onToggleStopSelection={toggleStopSelection}
                     />
                   ))}
                 </div>
@@ -1221,6 +1288,14 @@ export function TruckloadStopsList({ truckloadId, onStopsUpdate }: TruckloadStop
           onOrderUpdate={handleOrderUpdate}
         />
       )}
+
+      <BatchTransferDialog
+        isOpen={isBatchTransferOpen}
+        onClose={() => setIsBatchTransferOpen(false)}
+        onTransferComplete={handleBatchTransferComplete}
+        currentTruckloadId={truckloadId}
+        stops={getSelectedStopItems()}
+      />
     </TooltipProvider>
   )
 } 

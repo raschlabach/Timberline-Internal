@@ -24,7 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AssignOrderDialog } from "@/components/orders/assign-order-dialog";
 import { OrderInfoDialog } from "@/components/orders/order-info-dialog";
 import { BillOfLadingDialog } from "@/app/components/BillOfLadingDialog";
-import { AssignmentTypeDialog } from "@/components/orders/assignment-type-dialog";
+// AssignmentTypeDialog removed - replaced with inline P/D/B toggle buttons
 import { SelectionPoolSummary } from "@/components/orders/selection-pool-summary";
 import { BulkAssignmentDialog } from "@/components/orders/bulk-assignment-dialog";
 import { DocumentAttachmentDialog } from "@/components/orders/document-attachment-dialog";
@@ -1020,7 +1020,6 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
   
   // Selection pool state
   const [selectionPool, setSelectionPool] = useState<PoolItem[]>([]);
-  const [isAssignmentTypeDialogOpen, setIsAssignmentTypeDialogOpen] = useState(false);
   const [isBulkAssignmentDialogOpen, setIsBulkAssignmentDialogOpen] = useState(false);
 
   // Load selection pool from localStorage on mount
@@ -1122,6 +1121,53 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
     if (hasPickup) return 'pickup';
     if (hasDelivery) return 'delivery';
     return null;
+  };
+
+  // Toggle a specific type (pickup/delivery) in/out of the pool
+  const togglePoolType = (orderId: number, type: 'pickup' | 'delivery') => {
+    if (isInPool(orderId, type)) {
+      removeFromPool(orderId, type);
+    } else {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+      
+      // Check if already assigned to a truckload for this type
+      if (type === 'pickup' && order.pickupAssignment) return;
+      if (type === 'delivery' && order.deliveryAssignment) return;
+
+      const existingItem = selectionPool.find(item => item.orderId === orderId);
+      if (existingItem) {
+        // Add this type to the existing pool entry
+        const newTypes = [...existingItem.assignmentTypes, type];
+        setSelectionPool(prev => prev.map(item => 
+          item.orderId === orderId ? { ...item, assignmentTypes: newTypes } : item
+        ));
+      } else {
+        // Create new pool entry
+        addToPool(orderId, [type]);
+      }
+    }
+  };
+
+  // Toggle both pickup and delivery in/out of the pool
+  const togglePoolBoth = (orderId: number) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const poolStatus = getPoolStatus(orderId);
+    
+    if (poolStatus === 'both') {
+      // Both are active, remove the entire order from pool
+      setSelectionPool(prev => prev.filter(item => item.orderId !== orderId));
+    } else {
+      // Add both available types
+      const types: ('pickup' | 'delivery')[] = [];
+      if (!order.pickupAssignment) types.push('pickup');
+      if (!order.deliveryAssignment) types.push('delivery');
+      if (types.length > 0) {
+        addToPool(orderId, types);
+      }
+    }
   };
 
   const handleBulkAssignmentComplete = () => {
@@ -1818,48 +1864,62 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2 w-[150px] text-right h-[36px]">
-                      <div className="flex items-center justify-end gap-1.5 transition-opacity h-full">
+                      <div className="flex items-center justify-end gap-1 transition-opacity h-full">
                         {(() => {
-                          const poolStatus = getPoolStatus(order.id);
-                          const isInPool = poolStatus !== null;
-                          
-                          if (isInPool) {
-                            return (
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                className="h-5 px-2 text-[11px] font-medium text-red-600 hover:bg-red-100 hover:text-red-700"
-                                onClick={() => {
-                                  // Remove from pool
-                                  if (poolStatus === 'pickup') {
-                                    removeFromPool(order.id, 'pickup');
-                                  } else if (poolStatus === 'delivery') {
-                                    removeFromPool(order.id, 'delivery');
-                                  } else if (poolStatus === 'both') {
-                                    // Show dialog to choose which to remove
-                                    setSelectedOrder(order);
-                                    setIsAssignmentTypeDialogOpen(true);
-                                  }
-                                }}
+                          const pickupActive = isInPool(order.id, 'pickup');
+                          const deliveryActive = isInPool(order.id, 'delivery');
+                          const pickupDisabled = !!order.pickupAssignment;
+                          const deliveryDisabled = !!order.deliveryAssignment;
+
+                          return (
+                            <>
+                              <button
+                                className={`h-5 w-5 rounded text-[11px] font-bold leading-none transition-all ${
+                                  pickupDisabled 
+                                    ? 'text-gray-300 cursor-not-allowed' 
+                                    : pickupActive 
+                                      ? 'bg-red-600 text-white shadow-sm ring-1 ring-red-700' 
+                                      : 'text-gray-500 hover:bg-red-100 hover:text-red-600'
+                                }`}
+                                onClick={() => !pickupDisabled && togglePoolType(order.id, 'pickup')}
+                                title={pickupDisabled ? 'Pickup already assigned' : pickupActive ? 'Remove pickup from pool' : 'Add pickup to pool'}
                               >
-                                Remove
-                              </Button>
-                            );
-                          } else {
-                            return (
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                className="h-5 px-2 text-[11px] font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                                onClick={() => {
-                                  setSelectedOrder(order);
-                                  setIsAssignmentTypeDialogOpen(true);
-                                }}
+                                P
+                              </button>
+                              <button
+                                className={`h-5 w-5 rounded text-[11px] font-bold leading-none transition-all ${
+                                  deliveryDisabled 
+                                    ? 'text-gray-300 cursor-not-allowed' 
+                                    : deliveryActive 
+                                      ? 'bg-gray-800 text-white shadow-sm ring-1 ring-gray-900' 
+                                      : 'text-gray-500 hover:bg-gray-200 hover:text-gray-800'
+                                }`}
+                                onClick={() => !deliveryDisabled && togglePoolType(order.id, 'delivery')}
+                                title={deliveryDisabled ? 'Delivery already assigned' : deliveryActive ? 'Remove delivery from pool' : 'Add delivery to pool'}
                               >
-                                Assign
-                              </Button>
-                            );
-                          }
+                                D
+                              </button>
+                              <button
+                                className={`h-5 w-5 rounded text-[11px] font-bold leading-none transition-all ${
+                                  (pickupDisabled && deliveryDisabled)
+                                    ? 'text-gray-300 cursor-not-allowed' 
+                                    : (pickupActive && deliveryActive) 
+                                      ? 'bg-red-800 text-white shadow-sm ring-1 ring-red-900' 
+                                      : 'text-gray-500 hover:bg-red-100 hover:text-red-800'
+                                }`}
+                                onClick={() => !(pickupDisabled && deliveryDisabled) && togglePoolBoth(order.id)}
+                                title={
+                                  (pickupDisabled && deliveryDisabled)
+                                    ? 'Both already assigned'
+                                    : (pickupActive && deliveryActive) 
+                                      ? 'Remove both from pool' 
+                                      : 'Add both to pool'
+                                }
+                              >
+                                B
+                              </button>
+                            </>
+                          );
                         })()}
                         <BillOfLadingDialog 
                           order={{
@@ -2007,22 +2067,6 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
       )}
 
       {/* Assignment Type Dialog */}
-      {selectedOrder && (
-        <AssignmentTypeDialog
-          isOpen={isAssignmentTypeDialogOpen}
-          onClose={() => {
-            setIsAssignmentTypeDialogOpen(false);
-            setSelectedOrder(null);
-          }}
-          orderId={selectedOrder.id}
-          pickupCustomer={selectedOrder.pickupCustomer}
-          deliveryCustomer={selectedOrder.deliveryCustomer}
-          pickupAssignment={selectedOrder.pickupAssignment}
-          deliveryAssignment={selectedOrder.deliveryAssignment}
-          onAddToPool={addToPool}
-        />
-      )}
-
       {/* Bulk Assignment Dialog */}
       <BulkAssignmentDialog
         isOpen={isBulkAssignmentDialogOpen}

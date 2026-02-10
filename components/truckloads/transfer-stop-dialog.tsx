@@ -83,7 +83,7 @@ export function TransferStopDialog({
     try {
       // Fetch both truckloads and drivers in parallel
       const [truckloadsResponse, driversResponse] = await Promise.all([
-        fetch('/api/truckloads'),
+        fetch('/api/truckloads?activeOnly=true'),
         fetch('/api/drivers')
       ])
 

@@ -3,15 +3,18 @@ import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// GET /api/truckloads - Get all truckloads
-export async function GET() {
+// GET /api/truckloads - Get all truckloads (supports ?activeOnly=true to exclude completed)
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('Fetching truckloads...')
+    const { searchParams } = new URL(request.url)
+    const activeOnly = searchParams.get('activeOnly') === 'true'
+
+    console.log('Fetching truckloads...', activeOnly ? '(active only)' : '(all)')
 
     const result = await query(`
       WITH truckload_assignments AS (
@@ -107,6 +110,7 @@ export async function GET() {
       LEFT JOIN drivers d ON u.id = d.user_id
       LEFT JOIN footage_calculations fc ON t.id = fc.truckload_id
       LEFT JOIN quotes_status qs ON t.id = qs.truckload_id
+      ${activeOnly ? 'WHERE (t.is_completed IS NULL OR t.is_completed = false)' : ''}
       ORDER BY t.start_date DESC
     `)
 

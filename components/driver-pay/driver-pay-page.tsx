@@ -17,10 +17,11 @@ function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number)
   return new Date(year, month - 1, day)
 }
-import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings, Printer, Check } from 'lucide-react'
+import { CalendarIcon, Edit2, Save, X, Plus, Trash2, DollarSign, AlertTriangle, Settings, Printer, Check, CheckCircle, Circle } from 'lucide-react'
 import { toast } from 'sonner'
 import { DateRange } from 'react-day-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { useSession } from 'next-auth/react'
 
 interface DriverPayPageProps {}
 
@@ -92,6 +93,10 @@ interface Truckload {
   calculatedLoadValue?: number | null
   calculatedDriverPay?: number | null
   calculatedAt?: string | null
+  dispatchCheckedBy?: string | null
+  dispatchCheckedAt?: string | null
+  quickbooksCheckedBy?: string | null
+  quickbooksCheckedAt?: string | null
 }
 
 interface DriverData {
@@ -143,6 +148,7 @@ function getThisWeekRange(): { start: Date; end: Date } {
 export default function DriverPayPage({}: DriverPayPageProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { data: session } = useSession()
   
   // Read URL parameters for state restoration
   const urlDriverId = searchParams?.get('driverId')
@@ -1005,6 +1011,72 @@ export default function DriverPayPage({}: DriverPayPageProps) {
       setIsLoadingMiddlefield(false)
     }
   }
+
+  // Toggle verification check (dispatch or quickbooks) on a truckload
+  const handleToggleVerificationCheck = useCallback(async (
+    truckloadId: number,
+    checkType: 'dispatch' | 'quickbooks'
+  ) => {
+    if (!selectedDriver) return
+    const truckload = selectedDriver.truckloads.find(t => t.id === truckloadId)
+    if (!truckload) return
+
+    const checkedByField = checkType === 'dispatch' ? 'dispatchCheckedBy' : 'quickbooksCheckedBy'
+    const checkedAtField = checkType === 'dispatch' ? 'dispatchCheckedAt' : 'quickbooksCheckedAt'
+    const isCurrentlyChecked = !!truckload[checkedByField]
+    const userName = session?.user?.name || 'Unknown'
+    const now = new Date().toISOString()
+
+    // Optimistic update
+    setDrivers(prev => prev.map(driver => {
+      if (driver.driverId !== selectedDriver.driverId) return driver
+      return {
+        ...driver,
+        truckloads: driver.truckloads.map(tl => {
+          if (tl.id !== truckloadId) return tl
+          return {
+            ...tl,
+            [checkedByField]: isCurrentlyChecked ? null : userName,
+            [checkedAtField]: isCurrentlyChecked ? null : now
+          }
+        })
+      }
+    }))
+
+    try {
+      const response = await fetch(`/api/truckloads/${truckloadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          [checkedByField]: isCurrentlyChecked ? null : userName,
+          [checkedAtField]: isCurrentlyChecked ? null : now
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update verification check')
+      }
+    } catch (error) {
+      console.error('Error toggling verification check:', error)
+      toast.error('Failed to save verification check')
+      // Revert optimistic update
+      setDrivers(prev => prev.map(driver => {
+        if (driver.driverId !== selectedDriver.driverId) return driver
+        return {
+          ...driver,
+          truckloads: driver.truckloads.map(tl => {
+            if (tl.id !== truckloadId) return tl
+            return {
+              ...tl,
+              [checkedByField]: isCurrentlyChecked ? truckload[checkedByField] : null,
+              [checkedAtField]: isCurrentlyChecked ? truckload[checkedAtField] : null
+            }
+          })
+        }
+      }))
+    }
+  }, [selectedDriver, session, setDrivers])
 
   const totals = calculateDriverTotals()
 
@@ -1915,6 +1987,56 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 )}
                               </div>
                             </div>
+                          </div>
+
+                          {/* Verification Checks */}
+                          <div className="pt-2 border-t border-gray-200 flex items-center gap-4 print:pt-1 print:gap-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors ${
+                                truckload.dispatchCheckedBy
+                                  ? 'bg-green-50 text-green-700 border border-green-200'
+                                  : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'
+                              }`}
+                              onClick={() => handleToggleVerificationCheck(truckload.id, 'dispatch')}
+                              title={truckload.dispatchCheckedBy 
+                                ? `Checked by ${truckload.dispatchCheckedBy} on ${truckload.dispatchCheckedAt ? format(new Date(truckload.dispatchCheckedAt), 'MM/dd/yyyy h:mm a') : 'unknown date'}` 
+                                : 'Click to mark Dispatch checked'}
+                            >
+                              {truckload.dispatchCheckedBy ? (
+                                <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <Circle className="h-3.5 w-3.5 text-gray-400" />
+                              )}
+                              <span className="font-medium">Dispatch</span>
+                              {truckload.dispatchCheckedBy && (
+                                <span className="text-green-600">
+                                  — {truckload.dispatchCheckedBy}, {truckload.dispatchCheckedAt ? format(new Date(truckload.dispatchCheckedAt), 'MM/dd h:mm a') : ''}
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors ${
+                                truckload.quickbooksCheckedBy
+                                  ? 'bg-green-50 text-green-700 border border-green-200'
+                                  : 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100'
+                              }`}
+                              onClick={() => handleToggleVerificationCheck(truckload.id, 'quickbooks')}
+                              title={truckload.quickbooksCheckedBy 
+                                ? `Checked by ${truckload.quickbooksCheckedBy} on ${truckload.quickbooksCheckedAt ? format(new Date(truckload.quickbooksCheckedAt), 'MM/dd/yyyy h:mm a') : 'unknown date'}` 
+                                : 'Click to mark QuickBooks checked'}
+                            >
+                              {truckload.quickbooksCheckedBy ? (
+                                <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <Circle className="h-3.5 w-3.5 text-gray-400" />
+                              )}
+                              <span className="font-medium">QuickBooks</span>
+                              {truckload.quickbooksCheckedBy && (
+                                <span className="text-green-600">
+                                  — {truckload.quickbooksCheckedBy}, {truckload.quickbooksCheckedAt ? format(new Date(truckload.quickbooksCheckedAt), 'MM/dd h:mm a') : ''}
+                                </span>
+                              )}
+                            </button>
                           </div>
                         </div>
                       </Card>
