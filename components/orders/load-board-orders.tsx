@@ -385,11 +385,12 @@ function useLoadBoardOrders(
     }
   }, []);
 
-  const fetchCompletedOrders = useCallback(async (page: number = 1) => {
+  const fetchCompletedOrders = useCallback(async (page: number = 1, search: string = '') => {
     try {
       const limit = 100;
       const offset = (page - 1) * limit;
-      const response = await fetch(`/api/orders/completed?limit=${limit}&offset=${offset}`, {
+      const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+      const response = await fetch(`/api/orders/completed?limit=${limit}&offset=${offset}${searchParam}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -451,15 +452,15 @@ function useLoadBoardOrders(
     fetchOrders();
   }, [fetchOrders]);
 
-  // Fetch completed orders when completed toggle is enabled
+  // Fetch completed orders when completed toggle is enabled or search term changes
   useEffect(() => {
     if (viewToggles.completed) {
-      fetchCompletedOrders(completedPage);
+      fetchCompletedOrders(completedPage, searchTerm);
     } else {
       setCompletedOrders([]);
       setCompletedPage(1);
     }
-  }, [viewToggles.completed, completedPage, fetchCompletedOrders]);
+  }, [viewToggles.completed, completedPage, searchTerm, fetchCompletedOrders]);
 
   // Listen for orderCreated event to refresh immediately (works if on same page)
   useEffect(() => {

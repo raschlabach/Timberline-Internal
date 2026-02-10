@@ -7,19 +7,15 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
-    // Check if we should show all orders (including assigned ones)
+    // Check if we should show all non-completed orders (for load board)
     const { searchParams } = new URL(request.url);
     const showAll = searchParams.get('all') === 'true';
-    
-    // First test basic orders query
-    const testQuery = 'SELECT COUNT(*) FROM orders';
-    const testResult = await query(testQuery);
-    console.log('Total orders in database:', testResult.rows[0].count);
 
-    // Build WHERE clause conditionally based on showAll parameter
+    // Build WHERE clause - when showAll is true, return ALL non-completed orders
+    // When false, only return unassigned orders
     const whereClause = showAll 
       ? `WHERE o.status != 'completed'`
-      : `WHERE o.status != 'completed'`;
+      : `WHERE o.status = 'unassigned'`;
 
     const sqlQuery = `
       WITH skids_summary AS (
@@ -249,12 +245,10 @@ export async function GET(request: NextRequest) {
       ORDER BY 
         -- Sort by created_at DESC (newest first)
         o.created_at DESC
-      LIMIT 50
     `;
 
-    console.log('Fetching orders with detailed skid and vinyl data...');
     const result = await query(sqlQuery);
-    console.log(`Found ${result.rows.length} orders`);
+    console.log(`Fetched ${result.rows.length} non-completed orders (showAll: ${showAll})`);
     
     return NextResponse.json(result.rows);
   } catch (error) {

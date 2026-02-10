@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         JOIN 
           locations l ON c.location_id = l.id
         LEFT JOIN (
-          -- Count current/active orders (unassigned, assigned, in_progress)
+          -- Count current/active orders (all non-completed statuses)
           SELECT 
             customer_id,
             SUM(order_count) as current_count
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
               pickup_customer_id as customer_id,
               COUNT(*) as order_count
             FROM orders 
-            WHERE status IN ('unassigned', 'assigned', 'in_progress')
+            WHERE status != 'completed'
             GROUP BY pickup_customer_id
             
             UNION ALL
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
               delivery_customer_id as customer_id,
               COUNT(*) as order_count
             FROM orders 
-            WHERE status IN ('unassigned', 'assigned', 'in_progress')
+            WHERE status != 'completed'
             GROUP BY delivery_customer_id
           ) current_union
           GROUP BY customer_id

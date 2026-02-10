@@ -15,10 +15,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '100', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const search = searchParams.get('search') || '';
 
-    // First get total count
-    const countQuery = `SELECT COUNT(*) as total FROM orders WHERE status = 'completed'`;
-    const countResult = await query(countQuery);
+    // Build search condition for customer name filtering (server-side)
+    const searchCondition = search 
+      ? `AND (pc.customer_name ILIKE $3 OR dc.customer_name ILIKE $3)`
+      : '';
+    const searchParam = search ? `%${search}%` : null;
+
+    // First get total count (with search filter if provided)
+    const countQuery = search
+      ? `SELECT COUNT(*) as total 
+         FROM orders o
+         LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+         LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+         WHERE o.status = 'completed' 
+         AND (pc.customer_name ILIKE $1 OR dc.customer_name ILIKE $1)`
+      : `SELECT COUNT(*) as total FROM orders WHERE status = 'completed'`;
+    const countResult = await query(countQuery, search ? [`%${search}%`] : []);
     const totalCount = parseInt(countResult.rows[0].total, 10);
 
     const sqlQuery = `
@@ -245,13 +259,17 @@ export async function GET(request: NextRequest) {
         GROUP BY order_id
       ) ol ON true
       WHERE o.status = 'completed'
+      ${searchCondition}
       ORDER BY 
         o.updated_at DESC,
         o.created_at DESC
       LIMIT $1 OFFSET $2
     `;
 
-    const result = await query(sqlQuery, [limit, offset]);
+    const queryParams = search 
+      ? [limit, offset, searchParam]
+      : [limit, offset];
+    const result = await query(sqlQuery, queryParams);
     
     return NextResponse.json({
       orders: result.rows,
