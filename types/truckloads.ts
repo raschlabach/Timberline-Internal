@@ -1,3 +1,5 @@
+export type TruckloadStatus = 'draft' | 'active' | 'completed';
+
 export interface TruckloadSummary {
   id: number;
   driverId: string;
@@ -7,6 +9,7 @@ export interface TruckloadSummary {
   billOfLadingNumber: string;
   description: string;
   isCompleted: boolean;
+  status?: TruckloadStatus;
   totalMileage: number;
   estimatedDuration: number;
   driverName: string;
@@ -39,4 +42,49 @@ export interface TruckloadKanbanProps {
   showDays?: number;
   onMoveTruckload: (truckloadId: number, driverId: string, date: string) => void;
   onChangeShowDays: (days: number) => void;
+}
+
+// Planner types
+export type ScheduleEventType = 'vacation' | 'sick' | 'unavailable' | 'other';
+
+export interface DriverScheduleEvent {
+  id: number;
+  driverId: number;
+  eventType: ScheduleEventType;
+  startDate: string;
+  endDate: string;
+  description: string | null;
+  driverName: string;
+  driverColor?: string;
+}
+
+export type PlannerNoteType = 'daily' | 'weekly';
+
+export interface PlannerNote {
+  id: number;
+  noteType: PlannerNoteType;
+  noteDate: string;
+  content: string;
+  createdBy?: number;
+  createdByName?: string;
+}
+
+export interface PlannerTruckload {
+  id: number;
+  driverId: number;
+  startDate: string;
+  endDate: string;
+  trailerNumber: string | null;
+  billOfLadingNumber: string | null;
+  description: string | null;
+  isCompleted: boolean;
+  status: TruckloadStatus;
+  driverName: string;
+  driverColor: string;
+}
+
+export interface PlannerDriver {
+  id: number;
+  full_name: string;
+  color: string;
 } 

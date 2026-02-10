@@ -34,7 +34,7 @@ export async function DELETE(
       
       // Check for active truckloads specifically
       const activeCheck = await client.query(
-        `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1 AND is_completed = FALSE`,
+        `SELECT COUNT(*) as count FROM truckloads WHERE driver_id = $1 AND is_completed = FALSE AND COALESCE(status, 'active') != 'draft'`,
         [driverId]
       )
       const activeCount = parseInt(activeCheck.rows[0].count)

@@ -110,7 +110,8 @@ export async function GET(request: Request) {
       LEFT JOIN drivers d ON u.id = d.user_id
       LEFT JOIN footage_calculations fc ON t.id = fc.truckload_id
       LEFT JOIN quotes_status qs ON t.id = qs.truckload_id
-      ${activeOnly ? 'WHERE (t.is_completed IS NULL OR t.is_completed = false)' : ''}
+      WHERE COALESCE(t.status, 'active') != 'draft'
+      ${activeOnly ? 'AND (t.is_completed IS NULL OR t.is_completed = false)' : ''}
       ORDER BY t.start_date DESC
     `)
 
@@ -217,7 +218,7 @@ export async function POST(request: Request) {
   const client = await getClient()
   
   try {
-    const { driverId, startDate, endDate, trailerNumber, billOfLadingNumber, description } = await request.json()
+    const { driverId, startDate, endDate, trailerNumber, billOfLadingNumber, description, status } = await request.json()
 
     // Validate required fields
     if (!driverId) {
@@ -246,6 +247,7 @@ export async function POST(request: Request) {
       }
 
       // Insert into truckloads table
+      const truckloadStatus = status === 'draft' ? 'draft' : 'active'
       const result = await client.query(
         `INSERT INTO truckloads (
           driver_id,
@@ -254,10 +256,11 @@ export async function POST(request: Request) {
           trailer_number,
           bill_of_lading_number,
           description,
-          created_by
+          created_by,
+          status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, status`,
         [
           driverId,
           // Ensure dates are in YYYY-MM-DD format (extract date part if ISO string)
@@ -270,7 +273,8 @@ export async function POST(request: Request) {
           trailerNumber || null,
           bolNumber,
           description || '',
-          session.user.id
+          session.user.id,
+          truckloadStatus
         ]
       )
 

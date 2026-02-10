@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3 } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3, CalendarClock } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -124,7 +124,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       href="/dashboard/truckload-manager"
                       icon={<ClipboardList size={20} />}
                       label="Truckload Manager"
-                      isActive={isActiveSubRoute('/dashboard/truckload-manager')}
+                      isActive={isActiveSubRoute('/dashboard/truckload-manager') || isActiveSubRoute('/dashboard/truckload-planner')}
+                    />
+                    <SubNavItem
+                      href="/dashboard/truckload-planner"
+                      icon={<CalendarClock size={16} />}
+                      label="Truckload Planner"
+                      isActive={isActiveSubRoute('/dashboard/truckload-planner')}
                     />
                     <NavItem
                       href="/dashboard/invoices"

@@ -158,7 +158,7 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay, dispatchCheckedBy, dispatchCheckedAt, quickbooksCheckedBy, quickbooksCheckedAt } = data
+    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay, dispatchCheckedBy, dispatchCheckedAt, quickbooksCheckedBy, quickbooksCheckedAt, status } = data
 
     // Build dynamic update query based on what fields are provided
     const updates: string[] = []
@@ -272,6 +272,17 @@ export async function PATCH(
       values.push(quickbooksCheckedAt || null)
     }
 
+    if (status !== undefined) {
+      updates.push(`status = $${paramIndex++}`)
+      values.push(status)
+      // When promoting from draft to active, also ensure is_completed matches
+      if (status === 'completed') {
+        updates.push(`is_completed = true`)
+      } else if (status === 'active') {
+        updates.push(`is_completed = false`)
+      }
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ 
         success: false, 
@@ -306,7 +317,8 @@ export async function PATCH(
          dispatch_checked_by as "dispatchCheckedBy",
          dispatch_checked_at as "dispatchCheckedAt",
          quickbooks_checked_by as "quickbooksCheckedBy",
-         quickbooks_checked_at as "quickbooksCheckedAt"`,
+         quickbooks_checked_at as "quickbooksCheckedAt",
+         COALESCE(status, 'active') as "status"`,
       values
     )
 

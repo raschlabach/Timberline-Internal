@@ -124,6 +124,7 @@ export async function GET() {
       LEFT JOIN drivers d ON u.id = d.user_id
       LEFT JOIN footage_calculations fc ON t.id = fc.truckload_id
       LEFT JOIN quotes_status qs ON t.id = qs.truckload_id
+      WHERE COALESCE(t.status, 'active') != 'draft'
       ORDER BY t.start_date DESC
     `)
 

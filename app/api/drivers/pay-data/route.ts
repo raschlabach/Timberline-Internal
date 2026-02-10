@@ -302,6 +302,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN users u ON t.driver_id = u.id
         LEFT JOIN drivers d ON u.id = d.user_id
         WHERE t.driver_id IS NOT NULL
+          AND COALESCE(t.status, 'active') != 'draft'
           AND (
             (t.start_date >= $1::date AND t.start_date <= $2::date)
             OR (t.end_date >= $1::date AND t.end_date <= $2::date)
@@ -334,6 +335,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN users u ON t.driver_id = u.id
           LEFT JOIN drivers d ON u.id = d.user_id
           WHERE t.driver_id IS NOT NULL
+            AND COALESCE(t.status, 'active') != 'draft'
             AND (
               (t.start_date >= $1::date AND t.start_date <= $2::date)
               OR (t.end_date >= $1::date AND t.end_date <= $2::date)
@@ -638,6 +640,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN drivers d ON u.id = d.user_id
         LEFT JOIN driver_pay_settings dps ON t.driver_id = dps.driver_id
         WHERE t.driver_id IS NOT NULL
+          AND COALESCE(t.status, 'active') != 'draft'
           AND (
             (t.start_date >= $1::date AND t.start_date <= $2::date)
             OR (t.end_date >= $1::date AND t.end_date <= $2::date)
@@ -659,6 +662,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN users u ON t.driver_id = u.id
           LEFT JOIN drivers d ON u.id = d.user_id
           WHERE t.driver_id IS NOT NULL
+            AND COALESCE(t.status, 'active') != 'draft'
             AND (
               (t.start_date >= $1::date AND t.start_date <= $2::date)
               OR (t.end_date >= $1::date AND t.end_date <= $2::date)
