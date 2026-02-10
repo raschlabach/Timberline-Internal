@@ -32,7 +32,9 @@ export function EditPlannerTruckloadDialog({
   const [formData, setFormData] = useState({
     driverId: '',
     startDate: '',
+    startTime: '',
     endDate: '',
+    endTime: '',
     trailerNumber: '',
     billOfLadingNumber: '',
     description: '',
@@ -43,7 +45,9 @@ export function EditPlannerTruckloadDialog({
       setFormData({
         driverId: truckload.driverId?.toString() || '',
         startDate: truckload.startDate?.substring(0, 10) || '',
+        startTime: truckload.startTime || '',
         endDate: truckload.endDate?.substring(0, 10) || '',
+        endTime: truckload.endTime || '',
         trailerNumber: truckload.trailerNumber || '',
         billOfLadingNumber: truckload.billOfLadingNumber || '',
         description: truckload.description || '',
@@ -68,6 +72,8 @@ export function EditPlannerTruckloadDialog({
           driverId: parseInt(formData.driverId),
           startDate: formData.startDate,
           endDate: formData.endDate,
+          startTime: formData.startTime || null,
+          endTime: formData.endTime || null,
           trailerNumber: formData.trailerNumber || null,
           description: formData.description || null,
           bill_of_lading_number: formData.billOfLadingNumber || null,
@@ -190,12 +196,31 @@ export function EditPlannerTruckloadDialog({
               />
             </div>
             <div className="space-y-2">
+              <Label>Start Time</Label>
+              <Input
+                type="time"
+                value={formData.startTime}
+                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label>End Date</Label>
               <Input
                 type="date"
                 value={formData.endDate}
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>End Time</Label>
+              <Input
+                type="time"
+                value={formData.endTime}
+                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
               />
             </div>
           </div>

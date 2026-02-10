@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
         t.description,
         t.is_completed as "isCompleted",
         COALESCE(t.status, 'active') as "status",
+        t.start_time as "startTime",
+        t.end_time as "endTime",
         u.full_name as "driverName",
         d.color as "driverColor"
       FROM truckloads t

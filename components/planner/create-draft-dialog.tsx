@@ -33,7 +33,9 @@ export function CreateDraftDialog({
   const [formData, setFormData] = useState({
     driverId: defaultDriverId?.toString() || '',
     startDate: defaultDate || today,
+    startTime: '',
     endDate: defaultDate || today,
+    endTime: '',
     trailerNumber: '',
     description: '',
   })
@@ -43,7 +45,9 @@ export function CreateDraftDialog({
       setFormData({
         driverId: defaultDriverId?.toString() || '',
         startDate: defaultDate || today,
+        startTime: '',
         endDate: defaultDate || today,
+        endTime: '',
         trailerNumber: '',
         description: '',
       })
@@ -62,6 +66,8 @@ export function CreateDraftDialog({
           driverId: parseInt(formData.driverId),
           startDate: formData.startDate,
           endDate: formData.endDate,
+          startTime: formData.startTime || null,
+          endTime: formData.endTime || null,
           trailerNumber: formData.trailerNumber || null,
           billOfLadingNumber: null,
           description: formData.description || '',
@@ -131,6 +137,18 @@ export function CreateDraftDialog({
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="draft-startTime">Start Time (Optional)</Label>
+              <Input
+                type="time"
+                id="draft-startTime"
+                value={formData.startTime}
+                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="draft-endDate">End Date</Label>
               <Input
                 type="date"
@@ -138,6 +156,15 @@ export function CreateDraftDialog({
                 value={formData.endDate}
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="draft-endTime">End Time (Optional)</Label>
+              <Input
+                type="time"
+                id="draft-endTime"
+                value={formData.endTime}
+                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
               />
             </div>
           </div>

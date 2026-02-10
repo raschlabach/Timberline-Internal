@@ -158,7 +158,7 @@ export async function PATCH(
     }
 
     const data = await request.json()
-    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay, dispatchCheckedBy, dispatchCheckedAt, quickbooksCheckedBy, quickbooksCheckedAt, status } = data
+    const { driverId, startDate, endDate, trailerNumber, description, bill_of_lading_number, payCalculationMethod, payHours, payManualAmount, calculatedLoadValue, calculatedDriverPay, dispatchCheckedBy, dispatchCheckedAt, quickbooksCheckedBy, quickbooksCheckedAt, status, startTime, endTime } = data
 
     // Build dynamic update query based on what fields are provided
     const updates: string[] = []
@@ -270,6 +270,16 @@ export async function PATCH(
     if (quickbooksCheckedAt !== undefined) {
       updates.push(`quickbooks_checked_at = $${paramIndex++}`)
       values.push(quickbooksCheckedAt || null)
+    }
+
+    if (startTime !== undefined) {
+      updates.push(`start_time = $${paramIndex++}`)
+      values.push(startTime || null)
+    }
+
+    if (endTime !== undefined) {
+      updates.push(`end_time = $${paramIndex++}`)
+      values.push(endTime || null)
     }
 
     if (status !== undefined) {

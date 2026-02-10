@@ -218,7 +218,7 @@ export async function POST(request: Request) {
   const client = await getClient()
   
   try {
-    const { driverId, startDate, endDate, trailerNumber, billOfLadingNumber, description, status } = await request.json()
+    const { driverId, startDate, endDate, trailerNumber, billOfLadingNumber, description, status, startTime, endTime } = await request.json()
 
     // Validate required fields
     if (!driverId) {
@@ -257,9 +257,11 @@ export async function POST(request: Request) {
           bill_of_lading_number,
           description,
           created_by,
-          status
+          status,
+          start_time,
+          end_time
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id, status`,
         [
           driverId,
@@ -274,7 +276,9 @@ export async function POST(request: Request) {
           bolNumber,
           description || '',
           session.user.id,
-          truckloadStatus
+          truckloadStatus,
+          startTime || null,
+          endTime || null
         ]
       )
 

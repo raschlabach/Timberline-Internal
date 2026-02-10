@@ -74,6 +74,8 @@ export interface PlannerTruckload {
   driverId: number;
   startDate: string;
   endDate: string;
+  startTime: string | null;
+  endTime: string | null;
   trailerNumber: string | null;
   billOfLadingNumber: string | null;
   description: string | null;
