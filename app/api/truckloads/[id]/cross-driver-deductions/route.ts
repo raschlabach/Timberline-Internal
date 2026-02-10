@@ -27,8 +27,8 @@ export async function POST(
     const isManualDeduction = comment !== undefined && comment !== null && comment !== ''
     
     if (!isManualDeduction) {
-      // Pickup/delivery deduction - require all fields
-      if (!orderId || !driverName || !date || !action || !customerName || amount === undefined || amount === null || !appliesTo) {
+      // Pickup/delivery deduction - require core fields (driverName and date are optional metadata)
+      if (!orderId || !action || !customerName || amount === undefined || amount === null || !appliesTo) {
         return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
       }
     } else {

@@ -651,7 +651,9 @@ function SortableTableRow({
           
           const action: 'Picked up' | 'Delivered' = isCrossDriverPickup ? 'Picked up' : 'Delivered'
           const otherDriverName = isCrossDriverPickup ? (row.pickupDriverName || 'Unassigned') : (row.deliveryDriverName || 'Unassigned')
-          const otherDate = isCrossDriverPickup ? (row.pickupAssignmentDate || '') : (row.deliveryAssignmentDate || '')
+          const otherDate = isCrossDriverPickup 
+            ? (row.pickupAssignmentDate || selectedTruckload?.startDate || '') 
+            : (row.deliveryAssignmentDate || selectedTruckload?.startDate || '')
           const customerName = isCrossDriverPickup ? row.pickupName : row.deliveryName
           const deductionKey = `${row.orderId}-${action}`
           
