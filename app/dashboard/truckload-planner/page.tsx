@@ -49,7 +49,7 @@ export default function TruckloadPlanner() {
   const [isRecurringDraftOpen, setIsRecurringDraftOpen] = useState(false)
   const [isRecurringNoteOpen, setIsRecurringNoteOpen] = useState(false)
 
-  // Driver row ordering (persisted to localStorage)
+  // Driver row ordering state (persisted to localStorage)
   const [driverOrder, setDriverOrder] = useState<number[]>([])
   const [dragDriverId, setDragDriverId] = useState<number | null>(null)
   const [dragOverDriverId, setDragOverDriverId] = useState<number | null>(null)
@@ -65,74 +65,6 @@ export default function TruckloadPlanner() {
       // ignore parse errors
     }
   }, [])
-
-  // Compute ordered drivers: respect saved order, append any new drivers at the end
-  const orderedDrivers = useMemo(() => {
-    if (!drivers.length) return []
-    if (!driverOrder.length) return drivers
-
-    const ordered: PlannerDriver[] = []
-    const remaining = [...drivers]
-
-    for (const id of driverOrder) {
-      const idx = remaining.findIndex((d) => d.id === id)
-      if (idx !== -1) {
-        ordered.push(remaining.splice(idx, 1)[0])
-      }
-    }
-    // Append any drivers not in the saved order
-    return [...ordered, ...remaining]
-  }, [drivers, driverOrder])
-
-  const saveDriverOrder = useCallback((newOrder: number[]) => {
-    setDriverOrder(newOrder)
-    try {
-      localStorage.setItem('planner-driver-order', JSON.stringify(newOrder))
-    } catch {
-      // ignore storage errors
-    }
-  }, [])
-
-  function handleDragStart(driverId: number) {
-    setDragDriverId(driverId)
-  }
-
-  function handleDragOver(e: React.DragEvent, driverId: number) {
-    e.preventDefault()
-    if (driverId !== dragOverDriverId) {
-      setDragOverDriverId(driverId)
-    }
-  }
-
-  function handleDrop(targetDriverId: number) {
-    if (dragDriverId === null || dragDriverId === targetDriverId) {
-      setDragDriverId(null)
-      setDragOverDriverId(null)
-      return
-    }
-
-    const currentOrder = orderedDrivers.map((d) => d.id)
-    const fromIdx = currentOrder.indexOf(dragDriverId)
-    const toIdx = currentOrder.indexOf(targetDriverId)
-
-    if (fromIdx === -1 || toIdx === -1) {
-      setDragDriverId(null)
-      setDragOverDriverId(null)
-      return
-    }
-
-    const newOrder = [...currentOrder]
-    newOrder.splice(fromIdx, 1)
-    newOrder.splice(toIdx, 0, dragDriverId)
-    saveDriverOrder(newOrder)
-    setDragDriverId(null)
-    setDragOverDriverId(null)
-  }
-
-  function handleDragEnd() {
-    setDragDriverId(null)
-    setDragOverDriverId(null)
-  }
 
   // Calculate date range based on view mode
   const { weekStart, weekEnd, dateRange } = useMemo(() => {
@@ -210,6 +142,74 @@ export default function TruckloadPlanner() {
   const truckloads = data?.truckloads || []
   const driverEvents = data?.driverEvents || []
   const plannerNotes = data?.plannerNotes || []
+
+  // Compute ordered drivers: respect saved order, append any new drivers at the end
+  const orderedDrivers = useMemo(() => {
+    if (!drivers.length) return []
+    if (!driverOrder.length) return drivers
+
+    const ordered: PlannerDriver[] = []
+    const remaining = [...drivers]
+
+    for (const id of driverOrder) {
+      const idx = remaining.findIndex((d) => d.id === id)
+      if (idx !== -1) {
+        ordered.push(remaining.splice(idx, 1)[0])
+      }
+    }
+    // Append any drivers not in the saved order
+    return [...ordered, ...remaining]
+  }, [drivers, driverOrder])
+
+  const saveDriverOrder = useCallback((newOrder: number[]) => {
+    setDriverOrder(newOrder)
+    try {
+      localStorage.setItem('planner-driver-order', JSON.stringify(newOrder))
+    } catch {
+      // ignore storage errors
+    }
+  }, [])
+
+  function handleDragStart(driverId: number) {
+    setDragDriverId(driverId)
+  }
+
+  function handleDragOver(e: React.DragEvent, driverId: number) {
+    e.preventDefault()
+    if (driverId !== dragOverDriverId) {
+      setDragOverDriverId(driverId)
+    }
+  }
+
+  function handleDrop(targetDriverId: number) {
+    if (dragDriverId === null || dragDriverId === targetDriverId) {
+      setDragDriverId(null)
+      setDragOverDriverId(null)
+      return
+    }
+
+    const currentOrder = orderedDrivers.map((d) => d.id)
+    const fromIdx = currentOrder.indexOf(dragDriverId)
+    const toIdx = currentOrder.indexOf(targetDriverId)
+
+    if (fromIdx === -1 || toIdx === -1) {
+      setDragDriverId(null)
+      setDragOverDriverId(null)
+      return
+    }
+
+    const newOrder = [...currentOrder]
+    newOrder.splice(fromIdx, 1)
+    newOrder.splice(toIdx, 0, dragDriverId)
+    saveDriverOrder(newOrder)
+    setDragDriverId(null)
+    setDragOverDriverId(null)
+  }
+
+  function handleDragEnd() {
+    setDragDriverId(null)
+    setDragOverDriverId(null)
+  }
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ['planner-data'] })
