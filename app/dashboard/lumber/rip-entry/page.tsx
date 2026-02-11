@@ -77,6 +77,9 @@ export default function RipEntryPage() {
   ])
   const [selectedItemIdForTally, setSelectedItemIdForTally] = useState<number | null>(null)
   
+  // Confirm complete load dialog state
+  const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false)
+
   // Edit pack dialog state
   const [editPackDialogOpen, setEditPackDialogOpen] = useState(false)
   const [editingPack, setEditingPack] = useState<LumberPackWithDetails | null>(null)
@@ -128,6 +131,64 @@ export default function RipEntryPage() {
     }
   }, [status])
 
+  // Track whether all packs are finished but load is not complete (for navigation warning)
+  const isAllPacksFinishedButLoadIncomplete = selectedLoad && packs.length > 0 && packs.every(p => p.is_finished) && !selectedLoad.all_packs_finished
+
+  // Warn user when navigating away if all packs are finished but load not completed
+  useEffect(() => {
+    if (!isAllPacksFinishedButLoadIncomplete) return
+
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isAllPacksFinishedButLoadIncomplete])
+
+  // Intercept Next.js client-side navigation (back to list) when all packs finished but load not completed
+  const originalHandleBackToList = () => {
+    setSelectedLoad(null)
+    setPacks([])
+    setPackEdits({})
+    setOperatorId('')
+    setStacker1Id('')
+    setStacker2Id('')
+    setStacker3Id('')
+    setStacker4Id('')
+    setLoadQuality('')
+    setTallies([{ pack_id: 0, length: 0, tally_board_feet: 0 }])
+    setSelectedItemIdForTally(null)
+  }
+
+  // Refresh only pack data without touching operator/stacker dropdowns
+  async function refreshPacks(loadId: number) {
+    try {
+      const response = await fetch(`/api/lumber/packs/by-load/${loadId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setPacks(data)
+        
+        // Initialize pack edits
+        const edits: typeof packEdits = {}
+        data.forEach((pack: LumberPackWithDetails) => {
+          edits[pack.id] = {
+            pack_id: pack.pack_id,
+            length: pack.length,
+            tally_board_feet: pack.tally_board_feet,
+            actual_board_feet: pack.actual_board_feet,
+            rip_yield: pack.rip_yield,
+            rip_comments: pack.rip_comments
+          }
+        })
+        setPackEdits(edits)
+      }
+    } catch (error) {
+      console.error('Error fetching packs:', error)
+    }
+  }
+
   async function handleSelectLoad(loadId: number) {
     const load = loads.find(l => l.id === loadId)
     if (!load) return
@@ -155,7 +216,7 @@ export default function RipEntryPage() {
         })
         setPackEdits(edits)
         
-        // Pre-populate operator/stacker from last assigned pack
+        // Pre-populate operator/stacker from last assigned pack (only on initial load selection)
         if (data.length > 0) {
           // Find the most recent pack with operator assigned (work backwards)
           const lastAssignedPack = [...data].reverse().find((pack: LumberPackWithDetails) => pack.operator_id)
@@ -190,17 +251,12 @@ export default function RipEntryPage() {
   }
 
   function handleBackToList() {
-    setSelectedLoad(null)
-    setPacks([])
-    setPackEdits({})
-    setOperatorId('')
-    setStacker1Id('')
-    setStacker2Id('')
-    setStacker3Id('')
-    setStacker4Id('')
-    setLoadQuality('')
-    setTallies([{ pack_id: 0, length: 0, tally_board_feet: 0 }])
-    setSelectedItemIdForTally(null)
+    if (isAllPacksFinishedButLoadIncomplete) {
+      if (!confirm('All packs are finished but this load has not been marked as complete. Are you sure you want to leave?')) {
+        return
+      }
+    }
+    originalHandleBackToList()
   }
 
   function handlePackEdit(packId: number, field: string, value: any) {
@@ -229,7 +285,7 @@ export default function RipEntryPage() {
         
         // Refresh packs
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
       }
     } catch (error) {
@@ -262,7 +318,7 @@ export default function RipEntryPage() {
         
         // Refresh
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
       }
     } catch (error) {
@@ -332,7 +388,7 @@ export default function RipEntryPage() {
         
         // Refresh
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
       } else {
         const error = await response.json()
@@ -414,7 +470,7 @@ export default function RipEntryPage() {
         setEditingPack(null)
         // Refresh packs
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
       } else {
         toast.error('Failed to update pack')
@@ -480,7 +536,7 @@ export default function RipEntryPage() {
         
         // Refresh packs
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
       } else {
         toast.error('Failed to add pack')
@@ -504,7 +560,7 @@ export default function RipEntryPage() {
         
         // Refresh packs
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
       } else {
         toast.error('Failed to delete pack')
@@ -571,7 +627,7 @@ export default function RipEntryPage() {
         
         // Refresh packs for this load
         if (selectedLoad) {
-          handleSelectLoad(selectedLoad.id)
+          refreshPacks(selectedLoad.id)
         }
         
         // Reset tally state
@@ -990,7 +1046,7 @@ export default function RipEntryPage() {
                 
                 {/* Complete Load Button */}
                 <Button
-                  onClick={handleMarkLoadComplete}
+                  onClick={() => setConfirmCompleteOpen(true)}
                   className="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2"
                 >
                   Complete Load
@@ -1330,6 +1386,58 @@ export default function RipEntryPage() {
           )}
         </div>
       )}
+
+      {/* Confirm Complete Load Dialog */}
+      <Dialog open={confirmCompleteOpen} onOpenChange={setConfirmCompleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Complete Load {selectedLoad?.load_id}?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-600">
+              This will mark the load as fully ripped and remove it from the rip entry page. 
+              Make sure all packs have been accounted for before completing.
+            </p>
+            {packs.length > 0 && (
+              <div className="bg-gray-50 rounded p-3 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Total Packs:</span>
+                  <span className="font-medium">{totalPacks}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Finished Packs:</span>
+                  <span className="font-medium">{finishedPacks}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Total Actual BF:</span>
+                  <span className="font-medium">{Math.round(totalActualBF).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+            {finishedPacks < totalPacks && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                <p className="text-sm text-yellow-800 font-medium">
+                  Warning: {totalPacks - finishedPacks} pack{totalPacks - finishedPacks !== 1 ? 's are' : ' is'} not finished yet.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setConfirmCompleteOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  setConfirmCompleteOpen(false)
+                  handleMarkLoadComplete()
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                Confirm Complete
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Pack Dialog */}
       <Dialog open={editPackDialogOpen} onOpenChange={setEditPackDialogOpen}>

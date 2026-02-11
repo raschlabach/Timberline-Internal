@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3, CalendarClock } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3, CalendarClock, ArrowLeft } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -55,11 +55,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isActiveRoute = (href: string) => pathname === href
   const isActiveSubRoute = (basePath: string) => pathname?.startsWith(basePath) || false
+  
+  // Hide sidebar on rip entry page to maximize horizontal space
+  const isRipEntryPage = pathname === '/dashboard/lumber/rip-entry'
+  const isSidebarHidden = isRipEntryPage
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f8f9fa]">
-      {/* Sidebar */}
-      <aside className="w-[280px] bg-white border-r border-gray-200 shadow-sm hidden md:flex md:flex-col">
+      {/* Sidebar - hidden on rip entry page */}
+      <aside className={`w-[280px] bg-white border-r border-gray-200 shadow-sm ${isSidebarHidden ? 'hidden' : 'hidden md:flex md:flex-col'}`}>
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <Truck size={28} className="text-blue-600" />
@@ -323,7 +327,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center px-8">
           <div className="flex items-center justify-between w-full">
-            <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+            {isSidebarHidden ? (
+              <Link 
+                href="/dashboard/lumber/overview" 
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                <span className="text-sm font-medium">Back to Dashboard</span>
+              </Link>
+            ) : (
+              <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+            )}
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <div className="text-sm font-medium text-gray-900">
