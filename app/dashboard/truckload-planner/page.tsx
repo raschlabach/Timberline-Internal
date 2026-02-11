@@ -788,11 +788,6 @@ export default function TruckloadPlanner() {
                     const isCompleted = truckload.isCompleted || truckload.status === 'completed'
                     const lane = loadLanes[loadIdx]
 
-                    // Build time label
-                    let timeLabel = ''
-                    if (truckload.startTime) timeLabel += truckload.startTime
-                    if (truckload.endTime) timeLabel += (timeLabel ? ' - ' : '') + truckload.endTime
-
                     return (
                       <div
                         key={`load-${truckload.id}`}
@@ -819,10 +814,7 @@ export default function TruckloadPlanner() {
                             color: '#1f2937',
                           }}
                           onClick={(e) => handleTruckloadClick(truckload, e)}
-                          title={[
-                            truckload.description || `Truckload #${truckload.id}`,
-                            timeLabel ? `Time: ${timeLabel}` : '',
-                          ].filter(Boolean).join('\n')}
+                          title={truckload.description || `Truckload #${truckload.id}`}
                         >
                           {isDraft ? (
                             <Badge variant="outline" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 border-amber-300 flex-shrink-0">
@@ -837,9 +829,6 @@ export default function TruckloadPlanner() {
                           )}
                           {truckload.description && (
                             <span className="truncate">{truckload.description}</span>
-                          )}
-                          {timeLabel && (
-                            <span className="ml-auto text-[9px] opacity-60 flex-shrink-0 tabular-nums">{timeLabel}</span>
                           )}
                           {!isDraft && (
                             <button
