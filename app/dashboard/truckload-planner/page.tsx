@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   ChevronLeft,
   ChevronRight,
@@ -801,48 +802,63 @@ export default function TruckloadPlanner() {
                         draggable={isDraft}
                         onDragStart={isDraft ? (e) => handleTruckloadDragStart(e, truckload.id) : undefined}
                       >
-                        <div
-                          className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate border-2 ${
-                            isDraft
-                              ? 'bg-gray-100 border-dashed'
-                              : isCompleted
-                              ? 'bg-green-50'
-                              : 'bg-blue-50'
-                          }`}
-                          style={{
-                            borderColor: driver.color || '#9ca3af',
-                            color: '#1f2937',
-                          }}
-                          onClick={(e) => handleTruckloadClick(truckload, e)}
-                          title={truckload.description || `Truckload #${truckload.id}`}
-                        >
-                          {isDraft ? (
-                            <Badge variant="outline" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 border-amber-300 flex-shrink-0">
-                              Draft
-                            </Badge>
-                          ) : isCompleted ? (
-                            <Badge variant="outline" className="h-4 px-1 text-[9px] bg-green-100 text-green-700 border-green-300 flex-shrink-0">
-                              Done
-                            </Badge>
-                          ) : (
-                            <Truck className="h-3 w-3 flex-shrink-0" />
-                          )}
-                          {truckload.description && (
-                            <span className="truncate">{truckload.description}</span>
-                          )}
-                          {!isDraft && (
-                            <button
-                              className="ml-auto flex-shrink-0 p-0.5 rounded hover:bg-black/10 transition-colors"
-                              title="Open in Trucking page"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                router.push(`/dashboard/trucking/${truckload.id}`)
-                              }}
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div
+                                className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate border-2 ${
+                                  isDraft
+                                    ? 'bg-gray-100 border-dashed'
+                                    : isCompleted
+                                    ? 'bg-green-50'
+                                    : 'bg-blue-50'
+                                }`}
+                                style={{
+                                  borderColor: driver.color || '#9ca3af',
+                                  color: '#1f2937',
+                                }}
+                                onClick={(e) => handleTruckloadClick(truckload, e)}
+                              >
+                                {isDraft ? (
+                                  <Badge variant="outline" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 border-amber-300 flex-shrink-0">
+                                    Draft
+                                  </Badge>
+                                ) : isCompleted ? (
+                                  <Badge variant="outline" className="h-4 px-1 text-[9px] bg-green-100 text-green-700 border-green-300 flex-shrink-0">
+                                    Done
+                                  </Badge>
+                                ) : (
+                                  <Truck className="h-3 w-3 flex-shrink-0" />
+                                )}
+                                {truckload.description && (
+                                  <span className="truncate">{truckload.description}</span>
+                                )}
+                                {!isDraft && (
+                                  <button
+                                    className="ml-auto flex-shrink-0 p-0.5 rounded hover:bg-black/10 transition-colors"
+                                    title="Open in Trucking page"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      router.push(`/dashboard/trucking/${truckload.id}`)
+                                    }}
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <div className="space-y-1">
+                                <p className="font-semibold">{truckload.description || `Truckload #${truckload.id}`}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {truckload.startDate}{truckload.startDate !== truckload.endDate ? ` → ${truckload.endDate}` : ''}
+                                  {' · '}{driver.full_name}
+                                  {isDraft ? ' · Draft' : isCompleted ? ' · Completed' : ' · Active'}
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     )
                   })}
