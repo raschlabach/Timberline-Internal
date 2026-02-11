@@ -600,13 +600,13 @@ export default function TruckloadPlanner() {
 
       {/* Calendar Grid */}
       <div className="bg-white rounded-lg border overflow-auto">
-        <div style={{ width: `${140 + dateRange.length * 120}px` }}>
+        <div style={viewMode !== 'week' ? { width: `${140 + dateRange.length * 120}px` } : undefined}>
           {/* Date headers */}
           <div className="flex bg-gray-50 border-b">
             <div className="w-[140px] min-w-[140px] p-2 text-left text-xs font-semibold text-gray-600 border-r sticky left-0 bg-gray-50 z-10">
               Driver
             </div>
-            <div className="flex">
+            <div className={viewMode === 'week' ? 'flex flex-1' : 'flex'}>
               {dateRange.map((date) => {
                 const dayIsToday = isToday(date)
                 const isSunday = date.getDay() === 0
@@ -614,7 +614,7 @@ export default function TruckloadPlanner() {
                 return (
                   <div
                     key={date.toISOString()}
-                    className={`w-[120px] min-w-[120px] p-1.5 text-center border-r ${
+                    className={`${viewMode === 'week' ? 'flex-1' : 'w-[120px] min-w-[120px]'} p-1.5 text-center border-r ${
                       dayIsToday ? 'bg-indigo-50' : isSunday || isSaturday ? 'bg-gray-100' : ''
                     }`}
                   >
@@ -636,9 +636,9 @@ export default function TruckloadPlanner() {
                 Notes
               </div>
             </div>
-            <div className="flex">
+            <div className={viewMode === 'week' ? 'flex flex-1' : 'flex'}>
               {dateRange.map((date) => (
-                <div key={`note-${date.toISOString()}`} className="w-[120px] min-w-[120px] border-r p-0.5">
+                <div key={`note-${date.toISOString()}`} className={`${viewMode === 'week' ? 'flex-1' : 'w-[120px] min-w-[120px]'} border-r p-0.5`}>
                   <WeeklyNoteEditor
                     noteType="daily"
                     noteDate={format(date, 'yyyy-MM-dd')}
@@ -715,7 +715,7 @@ export default function TruckloadPlanner() {
                 </div>
 
                 {/* Day columns with overlaid truckload blocks */}
-                <div className="relative" style={{ minHeight: `${rowHeight}px`, width: `${dateRange.length * 120}px` }}>
+                <div className={`relative ${viewMode === 'week' ? 'flex-1' : ''}`} style={{ minHeight: `${rowHeight}px`, ...(viewMode !== 'week' ? { width: `${dateRange.length * 120}px` } : {}) }}>
                   {/* Background day grid (click targets) */}
                   <div className="absolute inset-0 flex">
                     {dateRange.map((date) => {
@@ -728,7 +728,7 @@ export default function TruckloadPlanner() {
                       return (
                         <div
                           key={`bg-${driver.id}-${date.toISOString()}`}
-                          className={`w-[120px] min-w-[120px] border-r cursor-pointer transition-colors ${
+                          className={`${viewMode === 'week' ? 'flex-1' : 'w-[120px] min-w-[120px]'} border-r cursor-pointer transition-colors ${
                             hasEvent
                               ? 'bg-purple-50/30'
                               : dayIsToday
@@ -882,12 +882,12 @@ export default function TruckloadPlanner() {
                 Weekly Notes
               </div>
             </div>
-            <div className="flex">
+            <div className={viewMode === 'week' ? 'flex flex-1' : 'flex'}>
               {weekGroups.map((group, groupIndex) => (
                 <div
                   key={`weekly-${groupIndex}`}
-                  className="border-r p-1"
-                  style={{ width: `${group.dates.length * 120}px` }}
+                  className={`border-r p-1 ${viewMode === 'week' ? '' : ''}`}
+                  style={viewMode === 'week' ? { flex: group.dates.length } : { width: `${group.dates.length * 120}px` }}
                 >
                   <WeeklyNoteEditor
                     noteType="weekly"
