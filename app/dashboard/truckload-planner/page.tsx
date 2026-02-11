@@ -37,7 +37,7 @@ export default function TruckloadPlanner() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [viewMode, setViewMode] = useState<ViewMode>('2week')
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [customStartDate, setCustomStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [customEndDate, setCustomEndDate] = useState(format(addWeeks(new Date(), 4), 'yyyy-MM-dd'))
 
@@ -84,7 +84,7 @@ export default function TruckloadPlanner() {
       return { weekStart: start, weekEnd: end, dateRange: range }
     }
 
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 }) // Start on Monday
+    const start = startOfWeek(currentDate, { weekStartsOn: 0 }) // Start on Sunday
     let numDays: number
 
     switch (viewMode) {
@@ -437,7 +437,7 @@ export default function TruckloadPlanner() {
 
     dateRange.forEach((date, index) => {
       const dayOfWeek = date.getDay()
-      if (dayOfWeek === 1 || index === 0) {
+      if (dayOfWeek === 0 || index === 0) {
         if (currentGroup.length > 0 && currentWeekStart) {
           groups.push({ weekStart: currentWeekStart, dates: currentGroup })
         }
@@ -599,13 +599,13 @@ export default function TruckloadPlanner() {
 
       {/* Calendar Grid */}
       <div className="bg-white rounded-lg border overflow-auto">
-        <div className="min-w-[900px]">
+        <div style={{ width: `${140 + dateRange.length * 120}px` }}>
           {/* Date headers */}
           <div className="flex bg-gray-50 border-b">
             <div className="w-[140px] min-w-[140px] p-2 text-left text-xs font-semibold text-gray-600 border-r sticky left-0 bg-gray-50 z-10">
               Driver
             </div>
-            <div className="flex-1 flex">
+            <div className="flex">
               {dateRange.map((date) => {
                 const dayIsToday = isToday(date)
                 const isSunday = date.getDay() === 0
@@ -613,7 +613,7 @@ export default function TruckloadPlanner() {
                 return (
                   <div
                     key={date.toISOString()}
-                    className={`flex-1 p-1.5 text-center border-r ${
+                    className={`w-[120px] min-w-[120px] p-1.5 text-center border-r ${
                       dayIsToday ? 'bg-indigo-50' : isSunday || isSaturday ? 'bg-gray-100' : ''
                     }`}
                   >
@@ -635,9 +635,9 @@ export default function TruckloadPlanner() {
                 Notes
               </div>
             </div>
-            <div className="flex-1 flex">
+            <div className="flex">
               {dateRange.map((date) => (
-                <div key={`note-${date.toISOString()}`} className="flex-1 border-r p-0.5">
+                <div key={`note-${date.toISOString()}`} className="w-[120px] min-w-[120px] border-r p-0.5">
                   <WeeklyNoteEditor
                     noteType="daily"
                     noteDate={format(date, 'yyyy-MM-dd')}
@@ -714,7 +714,7 @@ export default function TruckloadPlanner() {
                 </div>
 
                 {/* Day columns with overlaid truckload blocks */}
-                <div className="flex-1 relative" style={{ minHeight: `${rowHeight}px` }}>
+                <div className="relative" style={{ minHeight: `${rowHeight}px`, width: `${dateRange.length * 120}px` }}>
                   {/* Background day grid (click targets) */}
                   <div className="absolute inset-0 flex">
                     {dateRange.map((date) => {
@@ -727,7 +727,7 @@ export default function TruckloadPlanner() {
                       return (
                         <div
                           key={`bg-${driver.id}-${date.toISOString()}`}
-                          className={`flex-1 border-r cursor-pointer transition-colors ${
+                          className={`w-[120px] min-w-[120px] border-r cursor-pointer transition-colors ${
                             hasEvent
                               ? 'bg-purple-50/30'
                               : dayIsToday
@@ -822,7 +822,6 @@ export default function TruckloadPlanner() {
                           title={[
                             truckload.description || `Truckload #${truckload.id}`,
                             timeLabel ? `Time: ${timeLabel}` : '',
-                            truckload.billOfLadingNumber ? `BOL: ${truckload.billOfLadingNumber}` : ''
                           ].filter(Boolean).join('\n')}
                         >
                           {isDraft ? (
@@ -841,9 +840,6 @@ export default function TruckloadPlanner() {
                           )}
                           {timeLabel && (
                             <span className="ml-auto text-[9px] opacity-60 flex-shrink-0 tabular-nums">{timeLabel}</span>
-                          )}
-                          {truckload.billOfLadingNumber && !timeLabel && (
-                            <span className="ml-auto text-[9px] opacity-50 flex-shrink-0">{truckload.billOfLadingNumber}</span>
                           )}
                           {!isDraft && (
                             <button
@@ -881,12 +877,12 @@ export default function TruckloadPlanner() {
                 Weekly Notes
               </div>
             </div>
-            <div className="flex-1 flex">
+            <div className="flex">
               {weekGroups.map((group, groupIndex) => (
                 <div
                   key={`weekly-${groupIndex}`}
                   className="border-r p-1"
-                  style={{ flex: group.dates.length }}
+                  style={{ width: `${group.dates.length * 120}px` }}
                 >
                   <WeeklyNoteEditor
                     noteType="weekly"

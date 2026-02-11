@@ -97,13 +97,13 @@ export function RecurringNoteDialog({
     const untilDate = formData.endType === 'until_date' ? new Date(formData.untilDate + 'T23:59:59') : null
     const maxSafetyLimit = 200
 
-    // For weekly notes, we always step by week and generate Monday dates
+    // For weekly notes, we always step by week and generate Sunday dates
     if (formData.noteType === 'weekly') {
       let current = new Date(start)
-      // Align to Monday
+      // Align to Sunday
       const dayOfWeek = current.getDay()
-      const daysToMonday = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : (8 - dayOfWeek)
-      current = addDays(current, daysToMonday)
+      const daysToSunday = dayOfWeek === 0 ? 0 : (7 - dayOfWeek)
+      current = addDays(current, daysToSunday)
 
       const weekIncrement = formData.frequency === 'biweekly' ? 2 : formData.frequency === 'monthly' ? 4 : 1
 
@@ -252,7 +252,7 @@ export function RecurringNoteDialog({
               </Select>
               <p className="text-xs text-gray-400">
                 {isWeeklyNote
-                  ? 'Weekly notes appear in the footer row, anchored to each Monday'
+                  ? 'Weekly notes appear in the footer row, anchored to each Sunday'
                   : 'Daily notes appear in the header row for specific dates'}
               </p>
             </div>

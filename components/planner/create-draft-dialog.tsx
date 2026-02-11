@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { format } from 'date-fns'
+import { format, addDays } from 'date-fns'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,8 +28,11 @@ export function CreateDraftDialog({
   defaultDriverId,
   defaultDate
 }: CreateDraftDialogProps) {
+  type LoadType = 'day' | 'overnight' | 'manual'
+
   const today = format(new Date(), 'yyyy-MM-dd')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [loadType, setLoadType] = useState<LoadType>('day')
   const [formData, setFormData] = useState({
     driverId: defaultDriverId?.toString() || '',
     startDate: defaultDate || today,
@@ -42,6 +45,7 @@ export function CreateDraftDialog({
 
   useEffect(() => {
     if (isOpen) {
+      setLoadType('day')
       setFormData({
         driverId: defaultDriverId?.toString() || '',
         startDate: defaultDate || today,
@@ -53,6 +57,39 @@ export function CreateDraftDialog({
       })
     }
   }, [isOpen, defaultDriverId, defaultDate, today])
+
+  function handleLoadTypeChange(type: LoadType) {
+    setLoadType(type)
+    const startDate = formData.startDate || today
+    if (type === 'day') {
+      setFormData((prev) => ({
+        ...prev,
+        startTime: '',
+        endDate: startDate,
+        endTime: '',
+      }))
+    } else if (type === 'overnight') {
+      const nextDay = format(addDays(new Date(startDate + 'T12:00:00'), 1), 'yyyy-MM-dd')
+      setFormData((prev) => ({
+        ...prev,
+        startTime: '12:00',
+        endDate: nextDay,
+        endTime: '14:00',
+      }))
+    }
+    // 'manual' leaves everything as-is for the user to fill in
+  }
+
+  function handleStartDateChange(newStartDate: string) {
+    if (loadType === 'day') {
+      setFormData((prev) => ({ ...prev, startDate: newStartDate, endDate: newStartDate }))
+    } else if (loadType === 'overnight') {
+      const nextDay = format(addDays(new Date(newStartDate + 'T12:00:00'), 1), 'yyyy-MM-dd')
+      setFormData((prev) => ({ ...prev, startDate: newStartDate, endDate: nextDay, startTime: '12:00', endTime: '14:00' }))
+    } else {
+      setFormData((prev) => ({ ...prev, startDate: newStartDate }))
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -125,49 +162,92 @@ export function CreateDraftDialog({
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="draft-startDate">Start Date</Label>
-              <Input
-                type="date"
-                id="draft-startDate"
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                required
-              />
+          {/* Load Type Toggle */}
+          <div className="space-y-2">
+            <Label>Load Type</Label>
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
+              {([
+                { value: 'day' as LoadType, label: 'Day Load' },
+                { value: 'overnight' as LoadType, label: 'Overnight Load' },
+                { value: 'manual' as LoadType, label: 'Manual' },
+              ]).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-all ${
+                    loadType === option.value
+                      ? 'bg-white shadow-sm text-gray-900'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  onClick={() => handleLoadTypeChange(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="draft-startTime">Start Time (Optional)</Label>
-              <Input
-                type="time"
-                id="draft-startTime"
-                value={formData.startTime}
-                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-              />
-            </div>
+            <p className="text-xs text-gray-400">
+              {loadType === 'day'
+                ? 'Same-day load — end date matches start date, no times set.'
+                : loadType === 'overnight'
+                ? 'Starts at 12:00 PM, ends next day at 2:00 PM.'
+                : 'Set all dates and times manually.'}
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="draft-endDate">End Date</Label>
-              <Input
-                type="date"
-                id="draft-endDate"
-                value={formData.endDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="draft-endTime">End Time (Optional)</Label>
-              <Input
-                type="time"
-                id="draft-endTime"
-                value={formData.endTime}
-                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-              />
-            </div>
+          {/* Start Date — always shown */}
+          <div className="space-y-2">
+            <Label htmlFor="draft-startDate">Start Date</Label>
+            <Input
+              type="date"
+              id="draft-startDate"
+              value={formData.startDate}
+              onChange={(e) => handleStartDateChange(e.target.value)}
+              required
+            />
           </div>
+
+          {/* Manual-only fields */}
+          {loadType === 'manual' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="draft-startTime">Start Time</Label>
+                <Input
+                  type="time"
+                  id="draft-startTime"
+                  value={formData.startTime}
+                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="draft-endDate">End Date</Label>
+                <Input
+                  type="date"
+                  id="draft-endDate"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="draft-endTime">End Time</Label>
+                <Input
+                  type="time"
+                  id="draft-endTime"
+                  value={formData.endTime}
+                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Summary for non-manual */}
+          {loadType !== 'manual' && formData.startDate && (
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2">
+              {loadType === 'day'
+                ? `${formData.startDate} — full day`
+                : `${formData.startDate} at 12:00 PM → ${formData.endDate} at 2:00 PM`}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="draft-trailer">Trailer Number (Optional)</Label>
