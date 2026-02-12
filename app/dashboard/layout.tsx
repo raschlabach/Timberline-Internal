@@ -102,9 +102,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </header>
 
-        {/* Desktop sidebar navigation for drivers */}
+        {/* Desktop sidebar navigation for drivers - hidden on phones even in landscape */}
         <div className="flex flex-1 overflow-hidden">
-          <aside className="hidden md:flex md:flex-col w-[200px] bg-white border-r border-gray-200 shrink-0">
+          <aside className="hidden portrait:hidden lg:flex lg:flex-col w-[200px] bg-white border-r border-gray-200 shrink-0">
             <nav className="flex-1 py-4">
               <ul className="space-y-1 px-3">
                 {driverNavItems.map((item) => {
@@ -130,13 +130,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </aside>
 
           {/* Driver content area */}
-          <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 landscape:pb-14 md:pb-6">
+          <main className="flex-1 overflow-auto p-4 lg:p-6 pb-20 landscape:pb-14 lg:pb-6">
             {children}
           </main>
         </div>
 
-        {/* Mobile bottom navigation for drivers - compact in landscape */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-bottom">
+        {/* Bottom navigation for drivers - shows on phones (portrait & landscape) and tablets, hidden on lg+ desktop */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-bottom">
           <div className="flex items-center justify-around h-16 landscape:h-10">
             {driverNavItems.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
