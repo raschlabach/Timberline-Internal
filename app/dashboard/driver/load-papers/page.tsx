@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { formatPhoneNumber } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -25,19 +27,55 @@ import {
   Package,
   MapPin,
   Image as ImageIcon,
+  Phone,
+  ArrowUp,
+  ArrowDown,
+  Zap,
+  AlertCircle,
+  MessageSquare,
+  Navigation,
+  ExternalLink,
+  StickyNote,
+  Send,
+  Copy,
 } from 'lucide-react'
+
+interface CustomerInfo {
+  id: number
+  name: string
+  address: string
+  phone: string | null
+  phone2: string | null
+  notes: string | null
+}
+
+interface FreightItem {
+  id: number | string
+  type?: string
+  width: number
+  length: number
+  footage: number
+  quantity: number
+  description?: string
+}
 
 interface TruckloadOrder {
   id: number
   assignmentType: string
   sequenceNumber: number
-  pickupCustomerName: string
-  deliveryCustomerName: string
+  pickupCustomer: CustomerInfo
+  deliveryCustomer: CustomerInfo
   footage: number
   skids: number
   vinyl: number
+  handBundles: number
+  skidsData: FreightItem[]
+  vinylData: FreightItem[]
+  handBundlesData: Array<{ id: string; quantity: number; description: string }>
   comments: string | null
   isRush: boolean
+  needsAttention: boolean
+  isTransferOrder: boolean
   documents: OrderDocument[]
 }
 
@@ -74,6 +112,13 @@ export default function DriverLoadPapers() {
   const [viewingDocument, setViewingDocument] = useState<OrderDocument | null>(null)
   const [isDocViewOpen, setIsDocViewOpen] = useState(false)
 
+  // Customer note state
+  const [noteCustomerId, setNoteCustomerId] = useState<number | null>(null)
+  const [noteCustomerName, setNoteCustomerName] = useState('')
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false)
+  const [newNote, setNewNote] = useState('')
+  const [isSavingNote, setIsSavingNote] = useState(false)
+
   // Load driver's truckloads
   useEffect(() => {
     async function loadTruckloads() {
@@ -106,6 +151,33 @@ export default function DriverLoadPapers() {
     setIsDocViewOpen(true)
   }
 
+  function openNoteDialog(customerId: number, customerName: string) {
+    setNoteCustomerId(customerId)
+    setNoteCustomerName(customerName)
+    setNewNote('')
+    setIsNoteDialogOpen(true)
+  }
+
+  async function handleSaveNote() {
+    if (!newNote.trim() || !noteCustomerId) return
+    setIsSavingNote(true)
+    try {
+      const response = await fetch('/api/driver/customer-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: noteCustomerId, note: newNote.trim() }),
+      })
+      if (response.ok) {
+        setIsNoteDialogOpen(false)
+        setNewNote('')
+      }
+    } catch (error) {
+      console.error('Error saving note:', error)
+    } finally {
+      setIsSavingNote(false)
+    }
+  }
+
   function getStatusBadge(truckload: DriverTruckload) {
     if (truckload.isCompleted || truckload.status === 'completed') {
       return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px]">Completed</Badge>
@@ -135,6 +207,50 @@ export default function DriverLoadPapers() {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  // Build freight breakdown string like "4 - 4x4, 2 - 4x8"
+  function getFreightBreakdown(order: TruckloadOrder): string[] {
+    const lines: string[] = []
+    if (order.skidsData && order.skidsData.length > 0) {
+      // Group skids by dimension
+      const grouped = new Map<string, number>()
+      for (const skid of order.skidsData) {
+        const key = `${skid.width}x${skid.length}`
+        grouped.set(key, (grouped.get(key) || 0) + (skid.quantity || 1))
+      }
+      grouped.forEach((qty, dim) => {
+        lines.push(`${qty} - ${dim} skid${qty !== 1 ? 's' : ''}`)
+      })
+    }
+    if (order.vinylData && order.vinylData.length > 0) {
+      const grouped = new Map<string, number>()
+      for (const v of order.vinylData) {
+        const key = `${v.width}x${v.length}`
+        grouped.set(key, (grouped.get(key) || 0) + (v.quantity || 1))
+      }
+      grouped.forEach((qty, dim) => {
+        lines.push(`${qty} - ${dim} vinyl`)
+      })
+    }
+    if (order.handBundlesData && order.handBundlesData.length > 0) {
+      for (const hb of order.handBundlesData) {
+        lines.push(`${hb.quantity} - ${hb.description || 'Hand Bundle'}`)
+      }
+    }
+    return lines
+  }
+
+  function getMapLink(address: string): string {
+    return `https://maps.google.com/?q=${encodeURIComponent(address.trim())}`
+  }
+
+  function getAppleMapsLink(address: string): string {
+    return `https://maps.apple.com/?q=${encodeURIComponent(address.trim())}`
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text)
   }
 
   if (isLoading) {
@@ -239,93 +355,223 @@ export default function DriverLoadPapers() {
                   )}
                 </button>
 
-                {/* Expanded content - Orders & Documents */}
+                {/* Expanded content - Stops styled like trucking page */}
                 {isExpanded && (
                   <div className="border-t border-gray-100">
                     {truckload.orders.length > 0 ? (
-                      <div className="divide-y divide-gray-100">
-                        {truckload.orders.map((order) => (
-                          <div key={`${order.id}-${order.assignmentType}`} className="p-3 md:p-4">
-                            {/* Order info */}
-                            <div className="flex items-start gap-2 mb-2">
-                              <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                                order.assignmentType === 'pickup' ? 'bg-red-500' : 'bg-gray-900'
-                              }`} />
-                              <div className="min-w-0 flex-1">
+                      <div className="p-2 md:p-3 space-y-2">
+                        {truckload.orders.map((order) => {
+                          const isPickup = order.assignmentType === 'pickup'
+                          // For pickups: primary customer is pickup (From), secondary is delivery (Dest)
+                          // For deliveries: primary customer is delivery (To), secondary is pickup (Origin)
+                          const primaryCustomer = isPickup ? order.pickupCustomer : order.deliveryCustomer
+                          const secondaryCustomer = isPickup ? order.deliveryCustomer : order.pickupCustomer
+                          const primaryLabel = isPickup ? 'From:' : 'To:'
+                          const secondaryLabel = isPickup ? 'Dest:' : 'Origin:'
+                          const freightBreakdown = getFreightBreakdown(order)
+
+                          return (
+                            <div
+                              key={`${order.id}-${order.assignmentType}`}
+                              className="relative bg-white rounded-lg border border-gray-200 overflow-hidden"
+                            >
+                              {/* Color bar - red for pickup, black for delivery */}
+                              <div
+                                className="absolute top-0 left-0 h-full w-1.5"
+                                style={{ backgroundColor: isPickup ? '#ef4444' : '#000000' }}
+                              />
+
+                              <div className="pl-3.5 pr-3 py-2.5 space-y-2">
+                                {/* Top row: sequence, badge, flags */}
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[10px] ${
-                                      order.assignmentType === 'pickup'
-                                        ? 'bg-red-50 text-red-700 border-red-200'
-                                        : 'bg-gray-100 text-gray-700 border-gray-300'
-                                    }`}
-                                  >
-                                    {order.assignmentType === 'pickup' ? 'Pickup' : 'Delivery'}
-                                  </Badge>
-                                  <span className="text-xs text-gray-400">Order #{order.id}</span>
-                                  {order.isRush && (
-                                    <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200 text-[10px]">
-                                      Rush
+                                  <span className={`font-medium text-xs ${isPickup ? 'text-red-600' : 'text-gray-700'}`}>
+                                    #{order.sequenceNumber}
+                                  </span>
+                                  {order.isTransferOrder ? (
+                                    <Badge variant="outline" className="text-[10px] h-4 px-1 bg-blue-50 text-blue-800 border-blue-200">
+                                      Transfer
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant={isPickup ? 'destructive' : 'default'}
+                                      className={`text-[10px] h-4 px-1 ${
+                                        !isPickup ? 'bg-black text-white hover:bg-black/90' : ''
+                                      }`}
+                                    >
+                                      {isPickup ? (
+                                        <><ArrowUp className="h-2.5 w-2.5 mr-0.5" />Pickup</>
+                                      ) : (
+                                        <><ArrowDown className="h-2.5 w-2.5 mr-0.5" />Delivery</>
+                                      )}
                                     </Badge>
                                   )}
-                                </div>
-                                <div className="mt-1 space-y-0.5">
-                                  <div className="flex items-center gap-1.5">
-                                    <MapPin className="h-3 w-3 text-red-400 flex-shrink-0" />
-                                    <span className="text-sm font-medium text-gray-700 truncate">
-                                      {order.pickupCustomerName}
+                                  {order.isRush && (
+                                    <span className="flex items-center gap-0.5 text-[10px] text-yellow-600 font-medium">
+                                      <Zap className="h-3 w-3" />Rush
                                     </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <MapPin className="h-3 w-3 text-gray-500 flex-shrink-0" />
-                                    <span className="text-sm font-medium text-gray-700 truncate">
-                                      {order.deliveryCustomerName}
+                                  )}
+                                  {order.needsAttention && (
+                                    <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-medium">
+                                      <AlertCircle className="h-3 w-3" />Attention
                                     </span>
+                                  )}
+                                  {order.comments && (
+                                    <span className="flex items-center gap-0.5 text-[10px] text-blue-500 font-medium">
+                                      <MessageSquare className="h-3 w-3" />Note
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Primary customer (the stop location) */}
+                                <div className={`${isPickup ? 'text-red-600' : 'text-gray-900'}`}>
+                                  <div className={`text-[10px] ${isPickup ? 'text-red-500' : 'text-gray-500'}`}>{primaryLabel}</div>
+                                  <div className="font-bold text-sm leading-tight">{primaryCustomer.name}</div>
+                                  <div className={`text-xs leading-tight ${isPickup ? 'text-red-500' : 'text-gray-600'}`}>
+                                    {primaryCustomer.address}
+                                  </div>
+                                  {/* Phone numbers */}
+                                  {primaryCustomer.phone && (
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <a href={`tel:${primaryCustomer.phone}`} className="flex items-center gap-1">
+                                        <Phone className="h-3 w-3 text-gray-400" />
+                                        <span className="text-xs text-gray-600">{formatPhoneNumber(primaryCustomer.phone)}</span>
+                                      </a>
+                                      <button onClick={() => copyToClipboard(primaryCustomer.phone || '')} className="p-0.5">
+                                        <Copy className="h-2.5 w-2.5 text-gray-300" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  {primaryCustomer.phone2 && (
+                                    <div className="flex items-center gap-1.5">
+                                      <a href={`tel:${primaryCustomer.phone2}`} className="flex items-center gap-1">
+                                        <Phone className="h-3 w-3 text-gray-400" />
+                                        <span className="text-xs text-gray-600">{formatPhoneNumber(primaryCustomer.phone2)}</span>
+                                      </a>
+                                    </div>
+                                  )}
+                                  {/* Customer notes */}
+                                  {primaryCustomer.notes && (
+                                    <div className="mt-1.5 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                      <p className="text-[11px] text-amber-800 whitespace-pre-line">{primaryCustomer.notes}</p>
+                                    </div>
+                                  )}
+                                  {/* Map + Add Note buttons */}
+                                  <div className="flex gap-1.5 mt-1.5">
+                                    <a href={getMapLink(primaryCustomer.address)} target="_blank" rel="noopener noreferrer">
+                                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                                        <Navigation className="h-3 w-3" />Maps
+                                      </Button>
+                                    </a>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-[10px] gap-1 px-2"
+                                      onClick={() => openNoteDialog(primaryCustomer.id, primaryCustomer.name)}
+                                    >
+                                      <StickyNote className="h-3 w-3" />Add Note
+                                    </Button>
                                   </div>
                                 </div>
-                                {(order.footage > 0 || order.skids > 0 || order.vinyl > 0) && (
-                                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                                    {order.footage > 0 && <span>{order.footage.toLocaleString()} sq ft</span>}
-                                    {order.skids > 0 && <span>{order.skids} skid{order.skids !== 1 ? 's' : ''}</span>}
-                                    {order.vinyl > 0 && <span>{order.vinyl} vinyl</span>}
+
+                                {/* Secondary customer (origin/destination) */}
+                                <div className={`${isPickup ? 'text-red-500' : 'text-gray-600'}`}>
+                                  <div className={`text-[10px] ${isPickup ? 'text-red-400' : 'text-gray-400'}`}>{secondaryLabel}</div>
+                                  <div className={`font-medium text-xs leading-tight ${isPickup ? 'text-red-600' : 'text-gray-700'}`}>
+                                    {secondaryCustomer.name}
+                                  </div>
+                                  <div className="text-xs leading-tight opacity-75">{secondaryCustomer.address}</div>
+                                  {secondaryCustomer.phone && (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <a href={`tel:${secondaryCustomer.phone}`} className="flex items-center gap-1">
+                                        <Phone className="h-3 w-3 text-gray-400" />
+                                        <span className="text-xs text-gray-500">{formatPhoneNumber(secondaryCustomer.phone)}</span>
+                                      </a>
+                                    </div>
+                                  )}
+                                  {secondaryCustomer.notes && (
+                                    <div className="mt-1 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                      <p className="text-[11px] text-amber-800 whitespace-pre-line">{secondaryCustomer.notes}</p>
+                                    </div>
+                                  )}
+                                  <div className="flex gap-1.5 mt-1">
+                                    <a href={getMapLink(secondaryCustomer.address)} target="_blank" rel="noopener noreferrer">
+                                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2">
+                                        <Navigation className="h-3 w-3" />Maps
+                                      </Button>
+                                    </a>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-[10px] gap-1 px-2"
+                                      onClick={() => openNoteDialog(secondaryCustomer.id, secondaryCustomer.name)}
+                                    >
+                                      <StickyNote className="h-3 w-3" />Add Note
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Freight breakdown */}
+                                {(order.footage > 0 || freightBreakdown.length > 0) && (
+                                  <div className={`border-t pt-2 ${isPickup ? 'border-red-100' : 'border-gray-100'}`}>
+                                    <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${isPickup ? 'text-red-400' : 'text-gray-400'}`}>
+                                      Freight
+                                    </div>
+                                    {order.footage > 0 && (
+                                      <div className={`text-xs font-bold ${isPickup ? 'text-red-600' : 'text-gray-900'}`}>
+                                        {Math.round(order.footage).toLocaleString()} sq ft total
+                                      </div>
+                                    )}
+                                    {freightBreakdown.length > 0 && (
+                                      <div className="mt-0.5 space-y-0.5">
+                                        {freightBreakdown.map((line, i) => (
+                                          <div key={i} className={`text-xs ${isPickup ? 'text-red-500' : 'text-gray-600'}`}>
+                                            {line}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
+
+                                {/* Order comments */}
                                 {order.comments && (
-                                  <p className="text-xs text-gray-500 mt-1 bg-gray-50 rounded px-2 py-1">
-                                    {order.comments}
-                                  </p>
+                                  <div className="bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                      <MessageSquare className="h-3 w-3 text-blue-500" />
+                                      <span className="text-[10px] font-semibold text-blue-600 uppercase">Order Comments</span>
+                                    </div>
+                                    <p className="text-xs text-blue-800">{order.comments}</p>
+                                  </div>
+                                )}
+
+                                {/* Documents */}
+                                {order.documents.length > 0 && (
+                                  <div className="border-t border-gray-100 pt-2">
+                                    <div className="text-[10px] font-semibold text-violet-500 uppercase tracking-wider mb-1">
+                                      Documents ({order.documents.length})
+                                    </div>
+                                    <div className="space-y-1">
+                                      {order.documents.map((doc) => (
+                                        <button
+                                          key={`${doc.source}-${doc.id}`}
+                                          onClick={() => handleViewDocument(doc)}
+                                          className="w-full text-left flex items-center gap-2 bg-violet-50 hover:bg-violet-100 rounded-lg px-2.5 py-1.5 transition-colors active:bg-violet-200"
+                                        >
+                                          {getFileIcon(doc.fileType)}
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-medium text-gray-900 truncate">{doc.fileName}</p>
+                                            <p className="text-[10px] text-gray-400">{formatFileSize(doc.fileSize)}</p>
+                                          </div>
+                                          <Eye className="h-3.5 w-3.5 text-violet-500 flex-shrink-0" />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
                             </div>
-
-                            {/* Documents for this order */}
-                            {order.documents.length > 0 && (
-                              <div className="ml-3.5 mt-2 space-y-1.5">
-                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                  Documents ({order.documents.length})
-                                </p>
-                                {order.documents.map((doc) => (
-                                  <button
-                                    key={`${doc.source}-${doc.id}`}
-                                    onClick={() => handleViewDocument(doc)}
-                                    className="w-full text-left flex items-center gap-2 bg-violet-50 hover:bg-violet-100 rounded-lg px-3 py-2 transition-colors active:bg-violet-200"
-                                  >
-                                    {getFileIcon(doc.fileType)}
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-medium text-gray-900 truncate">{doc.fileName}</p>
-                                      <p className="text-[10px] text-gray-400">
-                                        {formatFileSize(doc.fileSize)}
-                                        {doc.uploadedBy && ` · ${doc.uploadedBy}`}
-                                      </p>
-                                    </div>
-                                    <Eye className="h-3.5 w-3.5 text-violet-500 flex-shrink-0" />
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : (
                       <div className="p-6 text-center text-gray-400">
@@ -347,6 +593,35 @@ export default function DriverLoadPapers() {
         </div>
       )}
 
+      {/* Add Note Dialog */}
+      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Add Note - {noteCustomerName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Type your note here..."
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              className="min-h-[80px] text-sm resize-none"
+            />
+            <Button
+              onClick={handleSaveNote}
+              disabled={!newNote.trim() || isSavingNote}
+              className="w-full gap-1.5"
+            >
+              {isSavingNote ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Save Note
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Document Viewer Dialog */}
       {viewingDocument && (
         <Dialog open={isDocViewOpen} onOpenChange={setIsDocViewOpen}>
@@ -355,7 +630,6 @@ export default function DriverLoadPapers() {
               <DialogTitle className="text-base truncate">{viewingDocument.fileName}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              {/* Document preview */}
               {viewingDocument.fileType?.startsWith('image/') ? (
                 <div className="bg-gray-100 rounded-lg p-2 flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -379,28 +653,15 @@ export default function DriverLoadPapers() {
                   <p className="text-sm text-gray-500">Preview not available for this file type</p>
                 </div>
               )}
-
-              {/* Actions */}
               <div className="flex gap-2">
-                <a
-                  href={viewingDocument.filePath}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1"
-                >
+                <a href={viewingDocument.filePath} target="_blank" rel="noopener noreferrer" className="flex-1">
                   <Button variant="outline" className="w-full gap-2">
-                    <Eye className="h-4 w-4" />
-                    Open Full Size
+                    <Eye className="h-4 w-4" />Open Full Size
                   </Button>
                 </a>
-                <a
-                  href={viewingDocument.filePath}
-                  download={viewingDocument.fileName}
-                  className="flex-1"
-                >
+                <a href={viewingDocument.filePath} download={viewingDocument.fileName} className="flex-1">
                   <Button className="w-full gap-2">
-                    <Download className="h-4 w-4" />
-                    Download
+                    <Download className="h-4 w-4" />Download
                   </Button>
                 </a>
               </div>
