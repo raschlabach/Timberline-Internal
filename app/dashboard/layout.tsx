@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3, CalendarClock, ArrowLeft } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -19,9 +19,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Check user roles
   const isAdmin = session?.user?.role === 'admin'
   const isRipOperator = session?.user?.role === 'rip_operator'
+  const isDriver = session?.user?.role === 'driver'
   
   // Rip operators only see specific lumber pages
-  const canSeeAllPages = !isRipOperator
+  const canSeeAllPages = !isRipOperator && !isDriver
   
   // Collapsible sections state
   const [isTimberlineExpanded, setIsTimberlineExpanded] = useState(true)
@@ -59,6 +60,104 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Hide sidebar on rip entry page to maximize horizontal space
   const isRipEntryPage = pathname === '/dashboard/lumber/rip-entry'
   const isSidebarHidden = isRipEntryPage
+
+  // Driver portal layout - mobile-first with bottom navigation
+  if (isDriver) {
+    const driverNavItems = [
+      { href: '/dashboard/driver/planner', icon: CalendarDays, label: 'Schedule' },
+      { href: '/dashboard/driver/customers', icon: Users, label: 'Customers' },
+      { href: '/dashboard/driver/load-papers', icon: FolderOpen, label: 'Load Papers' },
+    ]
+
+    return (
+      <div className="flex flex-col h-screen bg-[#f8f9fa]">
+        {/* Driver Header */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 md:px-8 shrink-0 z-20">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-blue-100 rounded-lg">
+                <Truck size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-base font-bold tracking-tight text-gray-900">Timberline</h1>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold leading-none">Driver Portal</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <div className="text-sm font-medium text-gray-900">
+                  {session?.user?.name || 'Driver'}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 h-8"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Desktop sidebar navigation for drivers */}
+        <div className="flex flex-1 overflow-hidden">
+          <aside className="hidden md:flex md:flex-col w-[200px] bg-white border-r border-gray-200 shrink-0">
+            <nav className="flex-1 py-4">
+              <ul className="space-y-1 px-3">
+                {driverNavItems.map((item) => {
+                  const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <item.icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <span className={`font-medium text-sm ${isActive ? 'text-blue-700' : ''}`}>{item.label}</span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
+          </aside>
+
+          {/* Driver content area */}
+          <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
+            {children}
+          </main>
+        </div>
+
+        {/* Mobile bottom navigation for drivers */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-bottom">
+          <div className="flex items-center justify-around h-16">
+            {driverNavItems.map((item) => {
+              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[72px] ${
+                    isActive ? 'text-blue-600' : 'text-gray-400'
+                  }`}
+                >
+                  <item.icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                  <span className={`text-[11px] font-medium ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>{item.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f8f9fa]">

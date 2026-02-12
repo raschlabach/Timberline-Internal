@@ -13,6 +13,14 @@ const RIP_OPERATOR_ALLOWED_PATHS = [
   '/dashboard/lumber/all-loads',
 ]
 
+// Pages that driver role CAN access
+const DRIVER_ALLOWED_PATHS = [
+  '/dashboard/driver',
+  '/dashboard/driver/planner',
+  '/dashboard/driver/customers',
+  '/dashboard/driver/load-papers',
+]
+
 /**
  * Middleware that runs on specific routes to protect them from unauthorized access
  */
@@ -90,6 +98,23 @@ export async function middleware(request: NextRequest) {
       // If not allowed, redirect to overview (their main page)
       if (!isAllowed) {
         return NextResponse.redirect(new URL('/dashboard/lumber/overview', request.url));
+      }
+    }
+  }
+
+  // Role-based access control for driver
+  if (isAuthenticated && token?.role === 'driver') {
+    const isDashboardPath = path.startsWith('/dashboard')
+    
+    if (isDashboardPath) {
+      // Check if the path is allowed for driver
+      const isAllowed = DRIVER_ALLOWED_PATHS.some(allowedPath => 
+        path === allowedPath || path.startsWith(allowedPath + '/')
+      )
+      
+      // If not allowed, redirect to driver portal home
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL('/dashboard/driver/planner', request.url));
       }
     }
   }
