@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         t.total_mileage as "totalMileage"
       FROM truckloads t
       WHERE t.driver_id = $1
+        AND COALESCE(t.status, 'active') != 'draft'
         AND (
           t.is_completed = false
           OR t.status != 'completed'
