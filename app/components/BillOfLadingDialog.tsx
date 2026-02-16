@@ -112,12 +112,29 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
         body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         .print\\:hidden {
           display: none !important;
         }
         * {
           box-sizing: border-box;
+        }
+        .bol-print-root {
+          width: 8in !important;
+          min-height: 10.5in !important;
+          height: 10.5in !important;
+          max-height: 10.5in !important;
+          padding: 0.25in !important;
+          display: flex !important;
+          flex-direction: column !important;
+          overflow: visible !important;
+        }
+        .bol-print-root *,
+        .bol-print-root div {
+          overflow: visible !important;
+          max-height: none !important;
         }
       }
     `,
@@ -133,12 +150,13 @@ export function BillOfLadingDialog({ order, children }: BillOfLadingDialogProps)
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-[52rem] w-auto h-auto">
+      <DialogContent className="max-w-[52rem] w-auto max-h-[90vh] overflow-y-auto">
         <div 
           ref={printRef} 
-          className="bg-white w-full flex flex-col relative z-0"
+          className="bol-print-root bg-white w-full flex flex-col relative z-0"
           style={{
             width: '8.5in',
+            minHeight: '10.5in',
             padding: '0.25in',
             margin: '0 auto',
             boxSizing: 'border-box',
