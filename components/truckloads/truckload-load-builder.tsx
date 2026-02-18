@@ -175,136 +175,83 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     toast.error('An unexpected error occurred. Please refresh the page.')
   }, [])
 
-  // Print handlers for delivery and pickup layouts
+  // Shared print styles for both delivery and pickup layouts
+  const printPageStyle = `
+    @page {
+      size: letter;
+      margin: 0.25in;
+    }
+    @media print {
+      body {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      html, body {
+        height: auto !important;
+        overflow: visible !important;
+      }
+      .print\\:hidden {
+        display: none !important;
+      }
+      .print-title {
+        text-align: center;
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+      .print-layout-wrapper {
+        padding: 0;
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 16px;
+        width: 100%;
+        zoom: 0.75;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .print-grid-wrapper,
+      .print-stacks-wrapper {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .print-grid-wrapper {
+        flex-shrink: 0;
+        width: fit-content;
+      }
+      .print-grid-wrapper > div {
+        padding: 2px !important;
+        background: transparent !important;
+      }
+      .print-stacks-wrapper {
+        width: 280px;
+        max-width: 280px;
+        flex-shrink: 0;
+      }
+      .print-stacks-wrapper > div {
+        width: 280px !important;
+        max-width: 280px !important;
+      }
+      .print-stacks-wrapper .card {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .print-stacks-wrapper button {
+        display: none !important;
+      }
+    }
+  `
+
   const handleDeliveryPrint = useReactToPrint({
     documentTitle: `Outgoing-Layout-${truckloadId}`,
-    pageStyle: `
-      @page {
-        size: letter;
-        margin: 0.5in;
-      }
-      @media print {
-        body {
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
-        }
-        html, body {
-          height: auto !important;
-          overflow: visible !important;
-        }
-        .print\\:hidden {
-          display: none !important;
-        }
-        [ref] {
-          height: auto !important;
-          overflow: hidden !important;
-        }
-        .print-layout-wrapper {
-          padding: 20px;
-          display: flex;
-          flex-direction: row;
-          justify-content: center;
-          align-items: flex-start;
-          gap: 20px;
-          width: 100%;
-          page-break-inside: avoid;
-          break-inside: avoid;
-          height: auto !important;
-        }
-        .print-grid-wrapper,
-        .print-stacks-wrapper {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        .print-grid-wrapper {
-          transform: scale(0.85);
-          transform-origin: top left;
-          flex-shrink: 0;
-          width: fit-content;
-        }
-        .print-stacks-wrapper {
-          transform: scale(0.85);
-          transform-origin: top left;
-          width: 250px;
-          max-width: 250px;
-          flex-shrink: 0;
-        }
-        .print-stacks-wrapper > div {
-          width: 250px !important;
-          max-width: 250px !important;
-        }
-        .print-stacks-wrapper .card {
-          width: 100% !important;
-          max-width: 100% !important;
-        }
-      }
-    `,
+    pageStyle: printPageStyle,
     contentRef: deliveryPrintRef,
   })
 
   const handlePickupPrint = useReactToPrint({
     documentTitle: `Incoming-Layout-${truckloadId}`,
-    pageStyle: `
-      @page {
-        size: letter;
-        margin: 0.5in;
-      }
-      @media print {
-        body {
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
-        }
-        html, body {
-          height: auto !important;
-          overflow: visible !important;
-        }
-        .print\\:hidden {
-          display: none !important;
-        }
-        [ref] {
-          height: auto !important;
-          overflow: hidden !important;
-        }
-        .print-layout-wrapper {
-          padding: 20px;
-          display: flex;
-          flex-direction: row;
-          justify-content: center;
-          align-items: flex-start;
-          gap: 20px;
-          width: 100%;
-          page-break-inside: avoid;
-          break-inside: avoid;
-          height: auto !important;
-        }
-        .print-grid-wrapper,
-        .print-stacks-wrapper {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        .print-grid-wrapper {
-          transform: scale(0.85);
-          transform-origin: top left;
-          flex-shrink: 0;
-          width: fit-content;
-        }
-        .print-stacks-wrapper {
-          transform: scale(0.85);
-          transform-origin: top left;
-          width: 250px;
-          max-width: 250px;
-          flex-shrink: 0;
-        }
-        .print-stacks-wrapper > div {
-          width: 250px !important;
-          max-width: 250px !important;
-        }
-        .print-stacks-wrapper .card {
-          width: 100% !important;
-          max-width: 100% !important;
-        }
-      }
-    `,
+    pageStyle: printPageStyle,
     contentRef: pickupPrintRef,
   })
 
@@ -455,10 +402,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               Print
             </Button>
           </div>
-          <div className="mb-4 print:block hidden">
-            <h1 className="font-bold text-3xl text-center mb-6">Outgoing Trailer Layout</h1>
-          </div>
-          
           {/* Footage Progress Bars */}
           <div className="print:hidden">
             <FootageProgressBars
@@ -471,6 +414,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
 
           {/* Grid and Stacks Side by Side - Scrollable */}
           <div ref={deliveryPrintRef} className="print:overflow-hidden">
+            <h1 className="hidden print:block print-title">Outgoing Trailer Layout</h1>
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center">
                 {/* Left Stack Column */}
@@ -584,10 +528,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               Print
             </Button>
           </div>
-          <div className="mb-4 print:block hidden">
-            <h1 className="font-bold text-3xl text-center mb-6">Incoming Trailer Layout</h1>
-          </div>
-
           {/* Footage Progress Bars */}
           <div className="print:hidden">
             <FootageProgressBars
@@ -600,6 +540,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
 
           {/* Grid and Stacks Side by Side - Scrollable */}
           <div ref={pickupPrintRef} className="print:overflow-hidden">
+            <h1 className="hidden print:block print-title">Incoming Trailer Layout</h1>
             <ScrollArea className="h-[calc(100vh-20rem)] print:hidden">
               <div className="flex gap-4 items-start justify-center">
                 {/* Left Stack Column */}
