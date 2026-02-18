@@ -3,7 +3,7 @@ import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// GET /api/driver/hours - Get the current driver's hours
+// GET /api/driver/hours - Get the current driver's hours + active timer + active truckloads
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,53 +16,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid user ID' }, { status: 400 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
+    // Fetch completed hours (last 30 days)
+    const hoursResult = await query(`
+      SELECT 
+        dh.id,
+        TO_CHAR(dh.date, 'YYYY-MM-DD') as date,
+        dh.description,
+        dh.hours,
+        dh.type,
+        dh.truckload_id as "truckloadId",
+        t.description as "truckloadDescription"
+      FROM driver_hours dh
+      LEFT JOIN truckloads t ON dh.truckload_id = t.id
+      WHERE dh.driver_id = $1
+        AND dh.started_at IS NULL
+        AND dh.date >= CURRENT_DATE - INTERVAL '30 days'
+      ORDER BY dh.date DESC, dh.id DESC
+    `, [driverId])
 
-    let hoursQuery: string
-    let hoursParams: any[]
+    // Fetch active timer (started but not stopped)
+    const activeTimerResult = await query(`
+      SELECT 
+        dh.id,
+        dh.started_at as "startedAt",
+        dh.type,
+        dh.description,
+        dh.truckload_id as "truckloadId",
+        t.description as "truckloadDescription"
+      FROM driver_hours dh
+      LEFT JOIN truckloads t ON dh.truckload_id = t.id
+      WHERE dh.driver_id = $1
+        AND dh.started_at IS NOT NULL
+      ORDER BY dh.started_at DESC
+      LIMIT 1
+    `, [driverId])
 
-    if (startDate && endDate) {
-      hoursQuery = `
-        SELECT 
-          dh.id,
-          TO_CHAR(dh.date, 'YYYY-MM-DD') as date,
-          dh.description,
-          dh.hours,
-          dh.type,
-          dh.truckload_id as "truckloadId",
-          t.description as "truckloadDescription"
-        FROM driver_hours dh
-        LEFT JOIN truckloads t ON dh.truckload_id = t.id
-        WHERE dh.driver_id = $1
-          AND dh.date >= $2::date
-          AND dh.date <= $3::date
-        ORDER BY dh.date DESC, dh.id DESC
-      `
-      hoursParams = [driverId, startDate, endDate]
-    } else {
-      hoursQuery = `
-        SELECT 
-          dh.id,
-          TO_CHAR(dh.date, 'YYYY-MM-DD') as date,
-          dh.description,
-          dh.hours,
-          dh.type,
-          dh.truckload_id as "truckloadId",
-          t.description as "truckloadDescription"
-        FROM driver_hours dh
-        LEFT JOIN truckloads t ON dh.truckload_id = t.id
-        WHERE dh.driver_id = $1
-          AND dh.date >= CURRENT_DATE - INTERVAL '30 days'
-        ORDER BY dh.date DESC, dh.id DESC
-      `
-      hoursParams = [driverId]
-    }
-
-    const result = await query(hoursQuery, hoursParams)
-
-    // Also fetch active truckloads for the load-specific form
+    // Fetch active truckloads for the load-specific option
     const truckloadsResult = await query(`
       SELECT 
         t.id,
@@ -79,19 +68,20 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      hours: result.rows,
+      hours: hoursResult.rows,
+      activeTimer: activeTimerResult.rows[0] || null,
       truckloads: truckloadsResult.rows,
     })
   } catch (error: any) {
     if (error?.message?.includes('does not exist') || error?.code === '42P01' || error?.message?.includes('column')) {
-      return NextResponse.json({ success: true, hours: [], truckloads: [] })
+      return NextResponse.json({ success: true, hours: [], activeTimer: null, truckloads: [] })
     }
     console.error('Error fetching driver hours:', error)
     return NextResponse.json({ success: false, error: 'Failed to fetch hours' }, { status: 500 })
   }
 }
 
-// POST /api/driver/hours - Submit hours (general or load-specific)
+// POST /api/driver/hours - Start timer or stop timer
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -104,86 +94,124 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid user ID' }, { status: 400 })
     }
 
-    const { date, description, hours, type, truckloadId } = await request.json()
+    const body = await request.json()
+    const { action } = body
 
-    if (!date || hours === undefined || !type) {
-      return NextResponse.json({ success: false, error: 'date, hours, and type are required' }, { status: 400 })
-    }
+    if (action === 'start') {
+      const { type, description, truckloadId } = body
 
-    if (type !== 'misc_driving' && type !== 'maintenance') {
-      return NextResponse.json({ success: false, error: 'type must be "misc_driving" or "maintenance"' }, { status: 400 })
-    }
-
-    const parsedHours = parseFloat(String(hours))
-    if (isNaN(parsedHours) || parsedHours <= 0) {
-      return NextResponse.json({ success: false, error: 'hours must be a positive number' }, { status: 400 })
-    }
-
-    let dateToSave = date
-    if (typeof date === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      dateToSave = date.split('T')[0]
-    }
-
-    // If load-specific, verify the truckload belongs to this driver
-    if (truckloadId) {
-      const truckloadCheck = await query(
-        `SELECT id FROM truckloads WHERE id = $1 AND driver_id = $2`,
-        [truckloadId, driverId]
-      )
-      if (truckloadCheck.rows.length === 0) {
-        return NextResponse.json({ success: false, error: 'Truckload not found or not assigned to you' }, { status: 403 })
+      if (!type || (type !== 'misc_driving' && type !== 'maintenance')) {
+        return NextResponse.json({ success: false, error: 'type must be "misc_driving" or "maintenance"' }, { status: 400 })
       }
+
+      // Check no timer is already running
+      const existingTimer = await query(
+        `SELECT id FROM driver_hours WHERE driver_id = $1 AND started_at IS NOT NULL`,
+        [driverId]
+      )
+      if (existingTimer.rows.length > 0) {
+        return NextResponse.json({ success: false, error: 'A timer is already running' }, { status: 409 })
+      }
+
+      // If load-specific, verify ownership
+      if (truckloadId) {
+        const check = await query(
+          `SELECT id FROM truckloads WHERE id = $1 AND driver_id = $2`,
+          [truckloadId, driverId]
+        )
+        if (check.rows.length === 0) {
+          return NextResponse.json({ success: false, error: 'Truckload not found or not assigned to you' }, { status: 403 })
+        }
+      }
+
+      // Insert a timer row
+      const result = await query(`
+        INSERT INTO driver_hours (driver_id, date, description, hours, type, is_driver_submitted, truckload_id, started_at)
+        VALUES ($1, CURRENT_DATE, $2, 0, $3, true, $4, NOW())
+        RETURNING 
+          id,
+          started_at as "startedAt",
+          type,
+          description,
+          truckload_id as "truckloadId"
+      `, [driverId, description || null, type, truckloadId || null])
+
+      return NextResponse.json({ success: true, timer: result.rows[0] })
     }
 
-    // Insert the hour entry
-    const result = await query(`
-      INSERT INTO driver_hours (driver_id, date, description, hours, type, is_driver_submitted, truckload_id)
-      VALUES ($1, $2::date, $3, $4, $5, true, $6)
-      RETURNING 
-        id,
-        TO_CHAR(date, 'YYYY-MM-DD') as date,
-        description,
-        hours,
-        type,
-        truckload_id as "truckloadId"
-    `, [driverId, dateToSave, description || null, parsedHours, type, truckloadId || null])
+    if (action === 'stop') {
+      const { timerId } = body
 
-    // If load-specific, auto-switch truckload to hourly pay method
-    if (truckloadId) {
-      // Sum all hours logged against this truckload by this driver
-      const totalHoursResult = await query(`
-        SELECT COALESCE(SUM(hours), 0) as total_hours
-        FROM driver_hours
-        WHERE truckload_id = $1 AND driver_id = $2
-      `, [truckloadId, driverId])
+      // Find the active timer
+      const timerResult = await query(
+        `SELECT id, started_at, truckload_id as "truckloadId"
+         FROM driver_hours 
+         WHERE id = $1 AND driver_id = $2 AND started_at IS NOT NULL`,
+        [timerId, driverId]
+      )
 
-      const totalHours = parseFloat(totalHoursResult.rows[0].total_hours) || 0
+      if (timerResult.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'No active timer found' }, { status: 404 })
+      }
 
-      await query(`
-        UPDATE truckloads
-        SET pay_calculation_method = 'hourly',
-            pay_hours = $1
-        WHERE id = $2
-      `, [totalHours, truckloadId]).catch(() => {
-        // Columns may not exist yet
-      })
+      const timer = timerResult.rows[0]
+      const startedAt = new Date(timer.started_at)
+      const now = new Date()
+      const elapsedMs = now.getTime() - startedAt.getTime()
+      const elapsedHours = Math.round((elapsedMs / (1000 * 60 * 60)) * 4) / 4 // Round to nearest 0.25
+
+      // Update the row: set hours, clear started_at, set date to today
+      const result = await query(`
+        UPDATE driver_hours
+        SET hours = $1,
+            started_at = NULL,
+            date = CURRENT_DATE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2 AND driver_id = $3
+        RETURNING 
+          id,
+          TO_CHAR(date, 'YYYY-MM-DD') as date,
+          description,
+          hours,
+          type,
+          truckload_id as "truckloadId"
+      `, [Math.max(elapsedHours, 0.25), timerId, driverId])
+
+      // If load-specific, auto-switch truckload to hourly
+      if (timer.truckloadId) {
+        const totalHoursResult = await query(`
+          SELECT COALESCE(SUM(hours), 0) as total_hours
+          FROM driver_hours
+          WHERE truckload_id = $1 AND driver_id = $2 AND started_at IS NULL
+        `, [timer.truckloadId, driverId])
+
+        const totalHours = parseFloat(totalHoursResult.rows[0].total_hours) || 0
+
+        await query(`
+          UPDATE truckloads
+          SET pay_calculation_method = 'hourly',
+              pay_hours = $1
+          WHERE id = $2
+        `, [totalHours, timer.truckloadId]).catch(() => {})
+      }
+
+      return NextResponse.json({ success: true, hour: result.rows[0] })
     }
 
-    return NextResponse.json({ success: true, hour: result.rows[0] })
+    return NextResponse.json({ success: false, error: 'Invalid action. Use "start" or "stop"' }, { status: 400 })
   } catch (error: any) {
     if (error?.message?.includes('column') && error?.message?.includes('does not exist')) {
-      // Try fallback without the new columns
       return NextResponse.json({
         success: false,
         error: 'Database migration needed. Please contact an administrator.',
       }, { status: 500 })
     }
-    console.error('Error creating driver hour:', error)
-    return NextResponse.json({ success: false, error: 'Failed to create hour entry' }, { status: 500 })
+    console.error('Error with driver timer:', error)
+    return NextResponse.json({ success: false, error: 'Failed to process timer action' }, { status: 500 })
   }
 }
 
-// DELETE /api/driver/hours - Delete a driver's own hour entry
+// DELETE /api/driver/hours - Delete a driver's own hour entry or cancel active timer
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -199,9 +227,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 })
     }
 
-    // Get the hour entry before deleting to check for truckload link
+    // Get the entry before deleting
     const hourEntry = await query(
-      `SELECT id, truckload_id as "truckloadId" FROM driver_hours WHERE id = $1 AND driver_id = $2`,
+      `SELECT id, truckload_id as "truckloadId", started_at FROM driver_hours WHERE id = $1 AND driver_id = $2`,
       [hourId, driverId]
     )
 
@@ -211,32 +239,27 @@ export async function DELETE(request: NextRequest) {
 
     const truckloadId = hourEntry.rows[0].truckloadId
 
-    // Delete the entry
     await query(`DELETE FROM driver_hours WHERE id = $1 AND driver_id = $2`, [hourId, driverId])
 
-    // If it was load-specific, recalculate the truckload's hours
-    if (truckloadId) {
+    // If it was load-specific and completed, recalculate
+    if (truckloadId && !hourEntry.rows[0].started_at) {
       const totalHoursResult = await query(`
         SELECT COALESCE(SUM(hours), 0) as total_hours
         FROM driver_hours
-        WHERE truckload_id = $1 AND driver_id = $2
+        WHERE truckload_id = $1 AND driver_id = $2 AND started_at IS NULL
       `, [truckloadId, driverId])
 
       const totalHours = parseFloat(totalHoursResult.rows[0].total_hours) || 0
 
       if (totalHours === 0) {
-        // No more hours, switch back to automatic
         await query(`
           UPDATE truckloads
-          SET pay_calculation_method = 'automatic',
-              pay_hours = NULL
+          SET pay_calculation_method = 'automatic', pay_hours = NULL
           WHERE id = $1
         `, [truckloadId]).catch(() => {})
       } else {
         await query(`
-          UPDATE truckloads
-          SET pay_hours = $1
-          WHERE id = $2
+          UPDATE truckloads SET pay_hours = $1 WHERE id = $2
         `, [totalHours, truckloadId]).catch(() => {})
       }
     }
