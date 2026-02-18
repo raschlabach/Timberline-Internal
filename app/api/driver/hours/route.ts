@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
       const startedAt = new Date(timer.started_at)
       const now = new Date()
       const elapsedMs = now.getTime() - startedAt.getTime()
-      const elapsedHours = Math.round((elapsedMs / (1000 * 60 * 60)) * 4) / 4 // Round to nearest 0.25
+      const elapsedHours = parseFloat((elapsedMs / (1000 * 60 * 60)).toFixed(2))
 
       // Update the row: set hours, clear started_at, set date to today
       const result = await query(`
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
           hours,
           type,
           truckload_id as "truckloadId"
-      `, [Math.max(elapsedHours, 0.25), timerId, driverId])
+      `, [Math.max(elapsedHours, 0.01), timerId, driverId])
 
       // If load-specific, auto-switch truckload to hourly
       if (timer.truckloadId) {
