@@ -231,10 +231,18 @@ export default function TruckloadPlanner() {
     setDragOverDriverId(null)
   }
 
-  // --- Draft truckload reassignment drag handlers ---
-  function handleTruckloadDragStart(e: React.DragEvent, truckloadId: number) {
-    e.stopPropagation() // Don't trigger the driver row drag
-    e.dataTransfer.setData('text/truckload-reassign', String(truckloadId))
+  // --- Truckload drag handlers (all truckloads, not just drafts) ---
+  function handleTruckloadDragStart(e: React.DragEvent, truckload: PlannerTruckload) {
+    e.stopPropagation()
+    const hasTime = !!(truckload.startTime || truckload.endTime)
+    const duration = differenceInDays(
+      new Date(truckload.endDate + 'T12:00:00'),
+      new Date(truckload.startDate + 'T12:00:00')
+    )
+    e.dataTransfer.setData('text/truckload-reassign', String(truckload.id))
+    e.dataTransfer.setData('text/truckload-has-time', hasTime ? '1' : '0')
+    e.dataTransfer.setData('text/truckload-duration', String(duration))
+    e.dataTransfer.setData('text/truckload-driver', String(truckload.driverId))
     e.dataTransfer.effectAllowed = 'move'
   }
 
@@ -250,6 +258,55 @@ export default function TruckloadPlanner() {
     } catch (error) {
       console.error('Error reassigning truckload:', error)
     }
+  }
+
+  async function handleTruckloadMove(truckloadId: number, newStartDate: string, duration: number, newDriverId?: number) {
+    try {
+      const newEndDate = format(addDays(new Date(newStartDate + 'T12:00:00'), duration), 'yyyy-MM-dd')
+      const body: Record<string, unknown> = { startDate: newStartDate, endDate: newEndDate }
+      if (newDriverId !== undefined) body.driverId = newDriverId
+      const response = await fetch(`/api/truckloads/${truckloadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!response.ok) throw new Error('Failed to move truckload')
+      handleRefresh()
+    } catch (error) {
+      console.error('Error moving truckload:', error)
+    }
+  }
+
+  function handleDayCellDrop(e: React.DragEvent, driverId: number, date: Date) {
+    const truckloadData = e.dataTransfer.getData('text/truckload-reassign')
+    if (!truckloadData) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const truckloadId = parseInt(truckloadData)
+    const hasTime = e.dataTransfer.getData('text/truckload-has-time') === '1'
+    const duration = parseInt(e.dataTransfer.getData('text/truckload-duration')) || 0
+    const originalDriverId = parseInt(e.dataTransfer.getData('text/truckload-driver'))
+    const newStartDate = format(date, 'yyyy-MM-dd')
+    const driverChanged = driverId !== originalDriverId
+
+    if (hasTime) {
+      // Has times set — only allow driver reassignment, not date changes
+      if (driverChanged) {
+        handleTruckloadReassign(truckloadId, driverId)
+      }
+    } else {
+      // No times — allow both date move and driver change
+      handleTruckloadMove(truckloadId, newStartDate, duration, driverChanged ? driverId : undefined)
+    }
+
+    setDragDriverId(null)
+    setDragOverDriverId(null)
+  }
+
+  function handleDayCellDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
   }
 
   function handleRefresh() {
@@ -738,6 +795,8 @@ export default function TruckloadPlanner() {
                               : 'hover:bg-gray-50/50'
                           }`}
                           onClick={() => handleCellClick(driver.id, date)}
+                          onDragOver={handleDayCellDragOver}
+                          onDrop={(e) => handleDayCellDrop(e, driver.id, date)}
                         />
                       )
                     })}
@@ -792,15 +851,15 @@ export default function TruckloadPlanner() {
                     return (
                       <div
                         key={`load-${truckload.id}`}
-                        className={`absolute z-[3] px-0.5 ${isDraft ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        className="absolute z-[3] px-0.5 cursor-grab active:cursor-grabbing"
                         style={{
                           left: `${pos.left}%`,
                           width: `${pos.width}%`,
                           top: `${topPad + eventRowsHeight + lane * (blockHeight + blockGap)}px`,
                           height: `${blockHeight}px`,
                         }}
-                        draggable={isDraft}
-                        onDragStart={isDraft ? (e) => handleTruckloadDragStart(e, truckload.id) : undefined}
+                        draggable
+                        onDragStart={(e) => handleTruckloadDragStart(e, truckload)}
                       >
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
