@@ -139,10 +139,15 @@ export default function DriverLogHoursPage() {
       })
       if (response.ok) {
         setIsStartFormOpen(false)
-        loadData()
+        await loadData()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Start timer failed:', response.status, errorData)
+        alert(errorData.error || 'Failed to start timer')
       }
     } catch (error) {
       console.error('Error starting timer:', error)
+      alert('Failed to start timer. Please try again.')
     } finally {
       setIsStarting(false)
     }
@@ -158,10 +163,15 @@ export default function DriverLogHoursPage() {
         body: JSON.stringify({ action: 'stop', timerId: activeTimer.id }),
       })
       if (response.ok) {
-        loadData()
+        await loadData()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Stop timer failed:', response.status, errorData)
+        alert(errorData.error || 'Failed to stop timer')
       }
     } catch (error) {
       console.error('Error stopping timer:', error)
+      alert('Failed to stop timer. Please try again.')
     } finally {
       setIsStopping(false)
     }

@@ -1,7 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+
+async function ensureColumns() {
+  try {
+    const colCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = 'driver_hours'
+        AND column_name IN ('is_driver_submitted', 'truckload_id', 'started_at')
+    `)
+    const existing = colCheck.rows.map((r: any) => r.column_name)
+    const missing: string[] = []
+    if (!existing.includes('is_driver_submitted')) missing.push('ADD COLUMN IF NOT EXISTS is_driver_submitted BOOLEAN DEFAULT false NOT NULL')
+    if (!existing.includes('truckload_id')) missing.push('ADD COLUMN IF NOT EXISTS truckload_id INTEGER REFERENCES truckloads(id) ON DELETE SET NULL')
+    if (!existing.includes('started_at')) missing.push('ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE')
+
+    if (missing.length > 0) {
+      const client = await getClient()
+      try {
+        await client.query('BEGIN')
+        await client.query(`ALTER TABLE driver_hours ${missing.join(', ')}`)
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_driver_hours_truckload_id ON driver_hours(truckload_id)`)
+        await client.query('COMMIT')
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {})
+        console.error('Error applying driver_hours migration:', e)
+      } finally {
+        client.release()
+      }
+    }
+  } catch (e) {
+    console.error('Error checking driver_hours columns:', e)
+  }
+}
 
 // GET /api/driver/hours - Get the current driver's hours + active timer + active truckloads
 export async function GET(request: NextRequest) {
@@ -15,6 +49,8 @@ export async function GET(request: NextRequest) {
     if (isNaN(driverId)) {
       return NextResponse.json({ success: false, error: 'Invalid user ID' }, { status: 400 })
     }
+
+    await ensureColumns()
 
     // Fetch completed hours (last 30 days)
     const hoursResult = await query(`
@@ -93,6 +129,8 @@ export async function POST(request: NextRequest) {
     if (isNaN(driverId)) {
       return NextResponse.json({ success: false, error: 'Invalid user ID' }, { status: 400 })
     }
+
+    await ensureColumns()
 
     const body = await request.json()
     const { action } = body
@@ -220,6 +258,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     const driverId = parseInt(session.user.id)
+
+    await ensureColumns()
+
     const { searchParams } = new URL(request.url)
     const hourId = searchParams.get('id')
 
