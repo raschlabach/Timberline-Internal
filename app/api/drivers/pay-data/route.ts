@@ -687,7 +687,9 @@ export async function GET(request: NextRequest) {
           TO_CHAR(date, 'YYYY-MM-DD') as date,
           description,
           hours,
-          type
+          type,
+          COALESCE(is_driver_submitted, false) as "isDriverSubmitted",
+          truckload_id as "truckloadId"
         FROM driver_hours
           WHERE driver_id = ANY($1::int[])
             AND date >= $2::date

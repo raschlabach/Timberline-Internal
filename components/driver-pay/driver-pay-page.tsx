@@ -38,6 +38,8 @@ interface DriverHour {
   description: string | null
   hours: number
   type: 'misc_driving' | 'maintenance'
+  isDriverSubmitted?: boolean
+  truckloadId?: number | null
 }
 
 interface Deduction {
@@ -1402,7 +1404,7 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                             </div>
                           ) : (
                             <>
-                              <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-4 flex-wrap">
                                 <span className="text-sm">{format(parseLocalDate(hour.date), 'MM/dd/yyyy')}</span>
                                 <span className="text-sm text-gray-600">{hour.description || '—'}</span>
                                 <span className={`text-xs px-2 py-0.5 rounded ${
@@ -1413,6 +1415,16 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                   {hour.type === 'maintenance' ? 'Maintenance' : 'Misc Driving'}
                                 </span>
                                 <span className="text-sm font-medium">{(typeof hour.hours === 'number' ? hour.hours : parseFloat(String(hour.hours)) || 0).toFixed(2)} hours</span>
+                                {hour.isDriverSubmitted && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium print:hidden">
+                                    Driver Submitted
+                                  </span>
+                                )}
+                                {hour.truckloadId && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 font-medium">
+                                    Load #{hour.truckloadId}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button

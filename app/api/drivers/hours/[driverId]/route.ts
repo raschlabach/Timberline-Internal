@@ -34,7 +34,9 @@ export async function GET(
         TO_CHAR(date, 'YYYY-MM-DD') as date,
         description,
         hours,
-        type
+        type,
+        COALESCE(is_driver_submitted, false) as "isDriverSubmitted",
+        truckload_id as "truckloadId"
       FROM driver_hours
       WHERE driver_id = $1
         AND date >= $2

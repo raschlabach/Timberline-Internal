@@ -19,6 +19,7 @@ const DRIVER_ALLOWED_PATHS = [
   '/dashboard/driver/planner',
   '/dashboard/driver/customers',
   '/dashboard/driver/load-papers',
+  '/dashboard/driver/log-hours',
 ]
 
 /**

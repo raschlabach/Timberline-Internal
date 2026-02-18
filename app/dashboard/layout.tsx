@@ -66,7 +66,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const driverNavItems = [
       { href: '/dashboard/driver/planner', icon: CalendarDays, label: 'Schedule' },
       { href: '/dashboard/driver/customers', icon: Users, label: 'Customers' },
-      { href: '/dashboard/driver/load-papers', icon: FolderOpen, label: 'Load Papers' },
+      { href: '/dashboard/driver/load-papers', icon: FolderOpen, label: 'Papers' },
+      { href: '/dashboard/driver/log-hours', icon: Clock, label: 'Hours' },
     ]
 
     return (
