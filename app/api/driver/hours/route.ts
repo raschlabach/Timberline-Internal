@@ -311,3 +311,36 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to delete hour entry' }, { status: 500 })
   }
 }
+
+// PATCH /api/driver/hours - Update description on a driver's own hour entry
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const driverId = parseInt(session.user.id)
+    const { id, description } = await request.json()
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 })
+    }
+
+    const result = await query(`
+      UPDATE driver_hours
+      SET description = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND driver_id = $3
+      RETURNING id, description
+    `, [description || null, id, driverId])
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Hour entry not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, hour: result.rows[0] })
+  } catch (error) {
+    console.error('Error updating driver hour:', error)
+    return NextResponse.json({ success: false, error: 'Failed to update hour entry' }, { status: 500 })
+  }
+}

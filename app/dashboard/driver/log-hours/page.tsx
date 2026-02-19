@@ -17,6 +17,8 @@ import {
   Square,
   Timer,
   X,
+  Pencil,
+  Check,
 } from 'lucide-react'
 
 interface DriverHourEntry {
@@ -67,6 +69,35 @@ export default function DriverLogHoursPage() {
   const [isStopping, setIsStopping] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [isDeleting, setIsDeleting] = useState<number | null>(null)
+
+  // Inline description editing
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingDescription, setEditingDescription] = useState('')
+  const [isSavingDescription, setIsSavingDescription] = useState(false)
+
+  function startEditing(id: number, currentDescription: string | null) {
+    setEditingId(id)
+    setEditingDescription(currentDescription || '')
+  }
+
+  async function saveDescription(id: number) {
+    setIsSavingDescription(true)
+    try {
+      const response = await fetch('/api/driver/hours', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, description: editingDescription.trim() || null }),
+      })
+      if (response.ok) {
+        setEditingId(null)
+        await loadData()
+      }
+    } catch (error) {
+      console.error('Error saving description:', error)
+    } finally {
+      setIsSavingDescription(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -307,8 +338,41 @@ export default function DriverLogHoursPage() {
                 {activeTimer.truckloadDescription || `Load #${activeTimer.truckloadId}`}
               </Badge>
             )}
-            {activeTimer.description && (
-              <span className="text-xs text-emerald-700">{activeTimer.description}</span>
+          </div>
+
+          {/* Editable description on active timer */}
+          <div className="mb-4">
+            {editingId === activeTimer.id ? (
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="What are you doing?"
+                  value={editingDescription}
+                  onChange={(e) => setEditingDescription(e.target.value)}
+                  className="h-10 rounded-lg text-sm flex-1"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveDescription(activeTimer.id) }}
+                />
+                <Button
+                  onClick={() => saveDescription(activeTimer.id)}
+                  disabled={isSavingDescription}
+                  size="sm"
+                  className="h-10 px-3 rounded-lg bg-emerald-700"
+                >
+                  {isSavingDescription ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                </Button>
+                <Button onClick={() => setEditingId(null)} variant="ghost" size="sm" className="h-10 px-2">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => startEditing(activeTimer.id, activeTimer.description)}
+                className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-900 transition-colors"
+              >
+                <Pencil className="h-3 w-3" />
+                <span>{activeTimer.description || 'Add description...'}</span>
+              </button>
             )}
           </div>
 
@@ -517,10 +581,35 @@ export default function DriverLogHoursPage() {
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Calendar className="h-3 w-3 flex-shrink-0" />
                       <span>{formatDate(hour.date)}</span>
-                      {hour.description && (
-                        <span className="text-gray-400 truncate">{hour.description}</span>
-                      )}
                     </div>
+                    {/* Editable description */}
+                    {editingId === hour.id ? (
+                      <div className="flex gap-1.5 mt-1.5">
+                        <Input
+                          type="text"
+                          placeholder="Add description..."
+                          value={editingDescription}
+                          onChange={(e) => setEditingDescription(e.target.value)}
+                          className="h-8 rounded-lg text-xs flex-1"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveDescription(hour.id) }}
+                        />
+                        <Button onClick={() => saveDescription(hour.id)} disabled={isSavingDescription} size="sm" className="h-8 w-8 p-0 rounded-lg">
+                          {isSavingDescription ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button onClick={() => setEditingId(null)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditing(hour.id, hour.description)}
+                        className="flex items-center gap-1 mt-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                        <span>{hour.description || 'Add description...'}</span>
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <div className="text-right">
@@ -575,10 +664,35 @@ export default function DriverLogHoursPage() {
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Calendar className="h-3 w-3 flex-shrink-0" />
                       <span>{formatDate(hour.date)}</span>
-                      {hour.description && (
-                        <span className="text-gray-400 truncate">{hour.description}</span>
-                      )}
                     </div>
+                    {/* Editable description */}
+                    {editingId === hour.id ? (
+                      <div className="flex gap-1.5 mt-1.5">
+                        <Input
+                          type="text"
+                          placeholder="Add description..."
+                          value={editingDescription}
+                          onChange={(e) => setEditingDescription(e.target.value)}
+                          className="h-8 rounded-lg text-xs flex-1"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveDescription(hour.id) }}
+                        />
+                        <Button onClick={() => saveDescription(hour.id)} disabled={isSavingDescription} size="sm" className="h-8 w-8 p-0 rounded-lg">
+                          {isSavingDescription ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button onClick={() => setEditingId(null)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditing(hour.id, hour.description)}
+                        className="flex items-center gap-1 mt-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                        <span>{hour.description || 'Add description...'}</span>
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <div className="text-right">
