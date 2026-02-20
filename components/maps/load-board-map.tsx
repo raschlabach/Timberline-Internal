@@ -1,22 +1,29 @@
 import dynamic from 'next/dynamic'
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { MissingAddressWarning } from "./missing-address-warning"
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X, Truck, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Truck, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
-import { LoadBoardMapFilters } from './load-board-map-filters';
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 
 // Use dynamic import for AssignStopsDialog
 const AssignStopsDialog = dynamic(() => import('./assign-stops-dialog'), {
   loading: () => <div>Loading...</div>
 })
+
+interface OrderFilters {
+  ohioToIndiana: boolean;
+  backhaul: boolean;
+  localFlatbed: boolean;
+  rrOrder: boolean;
+  localSemi: boolean;
+  middlefield: boolean;
+  paNy: boolean;
+}
 
 interface LoadLocation {
   id: number;
@@ -26,15 +33,7 @@ interface LoadLocation {
   customerName: string;
   pickupDate: string;
   footage: number;
-  filters: {
-    ohToIn: boolean;
-    backhaul: boolean;
-    localFlatbed: boolean;
-    rnrOrder: boolean;
-    localSemi: boolean;
-    middlefield: boolean;
-    paNy: boolean;
-  };
+  filters: OrderFilters;
   pickupAssignment?: {
     truckloadId: number;
     driverName: string;
@@ -104,15 +103,7 @@ interface TruckloadStop {
   assignment_type: 'pickup' | 'delivery';
   customer_name: string;
   pickupDate: string;
-  filters: {
-    ohToIn: boolean;
-    backhaul: boolean;
-    localFlatbed: boolean;
-    rnrOrder: boolean;
-    localSemi: boolean;
-    middlefield: boolean;
-    paNy: boolean;
-  };
+  filters: OrderFilters;
 }
 
 interface Truckload {
@@ -126,15 +117,7 @@ interface TruckloadOrder {
   assignment_type: 'pickup' | 'delivery';
   pickup_date?: string;
   footage?: number;
-  filters?: {
-    ohToIn: boolean;
-    backhaul: boolean;
-    localFlatbed: boolean;
-    rnrOrder: boolean;
-    localSemi: boolean;
-    middlefield: boolean;
-    paNy: boolean;
-  };
+  filters?: OrderFilters;
   pickup_customer?: {
     id: number;
     name: string;
@@ -154,15 +137,7 @@ interface TruckloadStopsResponse {
     assignment_type: 'pickup' | 'delivery';
     pickup_date?: string;
     footage?: number;
-    filters?: {
-      ohToIn: boolean;
-      backhaul: boolean;
-      localFlatbed: boolean;
-      rnrOrder: boolean;
-      localSemi: boolean;
-      middlefield: boolean;
-      paNy: boolean;
-    };
+    filters?: OrderFilters;
     pickup_customer?: {
       id: number;
       name: string;
@@ -176,7 +151,58 @@ interface TruckloadStopsResponse {
   }>;
 }
 
-type FilterType = 'ohToIn' | 'backhaul' | 'localFlatbed' | 'rnrOrder' | 'localSemi' | 'middlefield' | 'paNy';
+interface ViewToggles {
+  unassigned: boolean;
+  pickup: boolean;
+  delivery: boolean;
+  assigned: boolean;
+  completed: boolean;
+}
+
+const DEFAULT_FILTERS: Record<string, boolean> = {
+  ohioToIndiana: false,
+  backhaul: false,
+  localFlatbed: false,
+  rrOrder: false,
+  localSemi: false,
+  middlefield: false,
+  paNy: false,
+};
+
+const EMPTY_FILTERS: OrderFilters = {
+  ohioToIndiana: false,
+  backhaul: false,
+  localFlatbed: false,
+  rrOrder: false,
+  localSemi: false,
+  middlefield: false,
+  paNy: false,
+};
+
+const FILTER_OPTIONS = [
+  { id: 'ohioToIndiana', label: 'OH → IN' },
+  { id: 'backhaul', label: 'Backhaul' },
+  { id: 'localFlatbed', label: 'Local Flatbed' },
+  { id: 'rrOrder', label: 'RNR' },
+  { id: 'localSemi', label: 'Local Semi' },
+  { id: 'middlefield', label: 'Middlefield' },
+  { id: 'paNy', label: 'PA/NY' },
+];
+
+const LOAD_TYPE_CONFIG = {
+  ohioToIndiana: { label: 'OH-IN', color: '#BFDBFE', textColor: '#1E40AF' },
+  backhaul: { label: 'B', color: '#FDE68A', textColor: '#92400E' },
+  localFlatbed: { label: 'LF', color: '#C7D2FE', textColor: '#3730A3' },
+  rrOrder: { label: 'RNR', color: '#FBCFE8', textColor: '#9F1239' },
+  localSemi: { label: 'LS', color: '#A7F3D0', textColor: '#065F46' },
+  middlefield: { label: 'M', color: '#FCD34D', textColor: '#78350F' },
+  paNy: { label: 'PA-NY', color: '#DDD6FE', textColor: '#5B21B6' },
+} as const;
+
+const MAP_STORAGE_KEYS = {
+  filters: 'load-board-map-active-filters',
+  viewToggles: 'load-board-map-view-toggles',
+};
 
 const center = {
   lat: 40.5008, // Timberline Warehouse latitude
@@ -459,34 +485,34 @@ function TruckloadsDialog() {
 function processOrders(orders: any[]): LoadLocation[] {
   return orders.flatMap(order => {
     const locations: LoadLocation[] = [];
+    const baseFields = {
+      id: order.id,
+      pickupDate: order.pickupDate,
+      footage: order.footage || 0,
+      filters: order.filters || EMPTY_FILTERS,
+      pickupCustomer: order.pickupCustomer,
+      deliveryCustomer: order.deliveryCustomer,
+      pickupAssignment: order.pickupAssignment || undefined,
+      deliveryAssignment: order.deliveryAssignment || undefined,
+    };
     
-    if (order.pickupCustomer) {
+    if (order.pickupCustomer?.lat && order.pickupCustomer?.lng) {
       locations.push({
-        id: order.id,
+        ...baseFields,
         lat: order.pickupCustomer.lat,
         lng: order.pickupCustomer.lng,
         type: 'pickup',
         customerName: order.pickupCustomer.name,
-        pickupDate: order.pickupDate,
-        footage: order.footage || 0,
-        filters: order.filters,
-        pickupCustomer: order.pickupCustomer,
-        deliveryCustomer: order.deliveryCustomer
       });
     }
     
-    if (order.deliveryCustomer) {
+    if (order.deliveryCustomer?.lat && order.deliveryCustomer?.lng) {
       locations.push({
-        id: order.id,
+        ...baseFields,
         lat: order.deliveryCustomer.lat,
         lng: order.deliveryCustomer.lng,
         type: 'delivery',
         customerName: order.deliveryCustomer.name,
-        pickupDate: order.pickupDate,
-        footage: order.footage || 0,
-        filters: order.filters,
-        pickupCustomer: order.pickupCustomer,
-        deliveryCustomer: order.deliveryCustomer
       });
     }
     
@@ -497,6 +523,7 @@ function processOrders(orders: any[]): LoadLocation[] {
 export default function LoadBoardMap() {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [loadLocations, setLoadLocations] = useState<LoadLocation[]>([]);
+  const [completedLocations, setCompletedLocations] = useState<LoadLocation[]>([]);
   const [clusteredLoads, setClusteredLoads] = useState<ClusteredLocation[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<ClusteredLocation[]>([]);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -507,123 +534,172 @@ export default function LoadBoardMap() {
   const [truckloadStops, setTruckloadStops] = useState<Record<number, Truckload>>({});
   const [selectedMarkerInfo, setSelectedMarkerInfo] = useState<{ id: number; type: 'load' | 'truckload'; data: any } | null>(null);
   const [locationTruckloadStops, setLocationTruckloadStops] = useState<LoadLocation[]>([]);
-  const [filters, setFilters] = useState<{
-    dateRange: { from?: Date; to?: Date } | undefined;
-    loadTypes: {
-      ohToIn: boolean;
-      backhaul: boolean;
-      localFlatbed: boolean;
-      rnrOrder: boolean;
-      localSemi: boolean;
-      middlefield: boolean;
-      paNy: boolean;
-    };
-    showType: 'both' | 'pickups' | 'deliveries';
-    isExpanded: boolean;
-  }>({
-    dateRange: undefined,
-    loadTypes: {
-      ohToIn: false,
-      backhaul: false,
-      localFlatbed: false,
-      rnrOrder: false,
-      localSemi: false,
-      middlefield: false,
-      paNy: false
-    },
-    showType: 'both',
-    isExpanded: false
+  const [viewToggles, setViewToggles] = useState<ViewToggles>({
+    unassigned: true,
+    pickup: true,
+    delivery: false,
+    assigned: false,
+    completed: false,
   });
+  const [activeFilters, setActiveFilters] = useState<Record<string, boolean>>({ ...DEFAULT_FILTERS });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFilters, setSelectedFilters] = useState<FilterType[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [filteredLocations, setFilteredLocations] = useState<LoadLocation[]>([]);
+  const hasInitialized = useRef(false);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
   });
 
-  const fetchOrders = async () => {
+  // Load saved state from localStorage on mount
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+    try {
+      const savedFilters = localStorage.getItem(MAP_STORAGE_KEYS.filters);
+      if (savedFilters) {
+        const parsed = JSON.parse(savedFilters);
+        if (parsed && typeof parsed === 'object') {
+          setActiveFilters({ ...DEFAULT_FILTERS, ...parsed });
+        }
+      }
+      const savedToggles = localStorage.getItem(MAP_STORAGE_KEYS.viewToggles);
+      if (savedToggles) {
+        const parsed = JSON.parse(savedToggles) as ViewToggles;
+        if (parsed && typeof parsed === 'object') {
+          setViewToggles(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading map preferences:', e);
+    }
+  }, []);
+
+  // Persist filter state
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+    try { localStorage.setItem(MAP_STORAGE_KEYS.filters, JSON.stringify(activeFilters)); } catch {}
+  }, [activeFilters]);
+
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+    try { localStorage.setItem(MAP_STORAGE_KEYS.viewToggles, JSON.stringify(viewToggles)); } catch {}
+  }, [viewToggles]);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Build view param from toggles (excluding completed which uses its own endpoint)
+  const getViewParam = useCallback((toggles: ViewToggles): string => {
+    const views: string[] = [];
+    if (toggles.unassigned) views.push('unassigned');
+    if (toggles.pickup) views.push('pickup');
+    if (toggles.delivery) views.push('delivery');
+    if (toggles.assigned) views.push('assigned');
+    return views.join(',');
+  }, []);
+
+  const fetchOrders = useCallback(async () => {
     try {
       setIsLoading(true);
-      // Add cache-busting timestamp to prevent 304 responses
       const timestamp = new Date().getTime();
-      const response = await fetch(`/api/orders/recent?t=${timestamp}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-        }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch orders');
+      const viewParam = getViewParam(viewToggles);
+
+      if (!viewParam) {
+        setLoadLocations([]);
+        setIsLoading(false);
+        return;
       }
+
+      const searchParam = debouncedSearchTerm ? `&search=${encodeURIComponent(debouncedSearchTerm)}` : '';
+      const response = await fetch(`/api/orders/recent?t=${timestamp}&view=${viewParam}${searchParam}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
-      const ordersList = data.orders || data;
-      const processedLocations = processOrders(ordersList);
+      const processedLocations = processOrders(data.orders || []);
       setLoadLocations(processedLocations);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [viewToggles, debouncedSearchTerm, getViewParam]);
+
+  const fetchCompletedOrders = useCallback(async () => {
+    try {
+      const searchParam = debouncedSearchTerm ? `&search=${encodeURIComponent(debouncedSearchTerm)}` : '';
+      const response = await fetch(`/api/orders/completed?limit=200&offset=0${searchParam}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!response.ok) throw new Error('Failed to fetch completed orders');
+      const data = await response.json();
+      const processedLocations = processOrders(data.orders || []);
+      setCompletedLocations(processedLocations);
+    } catch (err) {
+      console.error('Error fetching completed orders:', err);
+    }
+  }, [debouncedSearchTerm]);
+
+  // Fetch orders when view toggles or search changes
+  useEffect(() => {
+    fetchOrders();
+    const intervalId = setInterval(fetchOrders, 30000);
+    return () => clearInterval(intervalId);
+  }, [fetchOrders]);
+
+  // Fetch completed orders when completed toggle is enabled
+  useEffect(() => {
+    if (viewToggles.completed) {
+      fetchCompletedOrders();
+    } else {
+      setCompletedLocations([]);
+    }
+  }, [viewToggles.completed, fetchCompletedOrders]);
+
+  // Fetch drivers on mount
+  useEffect(() => {
+    fetchDrivers();
+  }, []);
 
   // Check for new orders using localStorage (works across page navigations)
   useEffect(() => {
     const checkForNewOrders = () => {
       const lastOrderTimestamp = localStorage.getItem('lastOrderCreated');
       const lastCheckTimestamp = localStorage.getItem('lastOrdersCheckMap');
-      
       if (lastOrderTimestamp && lastCheckTimestamp) {
         const orderTime = parseInt(lastOrderTimestamp, 10);
         const checkTime = parseInt(lastCheckTimestamp, 10);
-        
-        // If a new order was created after our last check, refresh
         if (orderTime > checkTime) {
-          console.log('New order detected via localStorage in map, refreshing...');
           fetchOrders();
           localStorage.setItem('lastOrdersCheckMap', Date.now().toString());
         }
       } else if (lastOrderTimestamp) {
-        // First time checking, just update the check timestamp
         localStorage.setItem('lastOrdersCheckMap', Date.now().toString());
       }
     };
-
-    // Check immediately on mount
     checkForNewOrders();
-    
-    // Check every 2 seconds for new orders
     const checkInterval = setInterval(checkForNewOrders, 2000);
-    
     return () => clearInterval(checkInterval);
-  }, []);
+  }, [fetchOrders]);
 
+  // Listen for orderCreated event to refresh immediately
   useEffect(() => {
-    fetchOrders();
-    fetchDrivers();
-    const interval = setInterval(fetchOrders, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
-
-  // Listen for orderCreated event to refresh immediately (works if on same page)
-  useEffect(() => {
-    const handleOrderCreated = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('Order created event received, refreshing load board map...', customEvent.detail);
+    const handleOrderCreated = () => {
       fetchOrders();
-      // Update localStorage timestamp
       localStorage.setItem('lastOrderCreated', Date.now().toString());
     };
-
     window.addEventListener('orderCreated', handleOrderCreated);
-    console.log('Order created event listener registered for map');
-    return () => {
-      window.removeEventListener('orderCreated', handleOrderCreated);
-    };
-  }, []);
+    return () => window.removeEventListener('orderCreated', handleOrderCreated);
+  }, [fetchOrders]);
 
   async function fetchDrivers() {
     try {
@@ -737,15 +813,7 @@ export default function LoadBoardMap() {
                   customerName: customer.name,
                   pickupDate: order.pickup_date || new Date().toISOString(),
                   footage: order.footage || 0,
-                  filters: {
-                    ohToIn: false,
-                    backhaul: false,
-                    localFlatbed: false,
-                    rnrOrder: false,
-                    localSemi: false,
-                    middlefield: false,
-                    paNy: false
-                  },
+                  filters: { ...EMPTY_FILTERS },
                   pickupCustomer: order.pickup_customer,
                   deliveryCustomer: order.delivery_customer,
                   source: 'truckload',
@@ -813,77 +881,53 @@ export default function LoadBoardMap() {
             customerName: customer?.name || 'Unknown Customer',
             pickupDate: order.pickup_date || new Date().toISOString(),
             footage: order.footage || 0,
-            filters: {
-              ohToIn: false,
-              backhaul: false,
-              localFlatbed: false,
-              rnrOrder: false,
-              localSemi: false,
-              middlefield: false,
-              paNy: false
-            },
-            pickupCustomer: order.pickup_customer,
-            deliveryCustomer: order.delivery_customer
-          };
-        }
-
-        try {
-          const geocoder = new window.google.maps.Geocoder();
-          const result = await new Promise((resolve, reject) => {
-            geocoder.geocode({ address: customer.address }, (results, status) => {
-              if (status === 'OK' && results?.[0]) {
-                resolve(results[0]);
-              } else {
-                reject(new Error(`Geocoding failed: ${status}`));
+                  filters: { ...EMPTY_FILTERS },
+                  pickupCustomer: order.pickup_customer,
+                  deliveryCustomer: order.delivery_customer
+                };
               }
-            });
-          });
 
-          const location = (result as google.maps.GeocoderResult).geometry.location;
-          
-          return {
-            id: order.id,
-            lat: location.lat(),
-            lng: location.lng(),
-            type: order.assignment_type,
-            customerName: customer.name,
-            pickupDate: order.pickup_date || new Date().toISOString(),
-            footage: order.footage || 0,
-            filters: {
-              ohToIn: false,
-              backhaul: false,
-              localFlatbed: false,
-              rnrOrder: false,
-              localSemi: false,
-              middlefield: false,
-              paNy: false
-            },
-            pickupCustomer: order.pickup_customer,
-            deliveryCustomer: order.delivery_customer
-          };
-        } catch (error) {
-          console.error('Error geocoding address:', error);
-          return {
-            id: order.id,
-            lat: 0,
-            lng: 0,
-            type: order.assignment_type,
-            customerName: customer.name,
-            pickupDate: order.pickup_date || new Date().toISOString(),
-            footage: order.footage || 0,
-            filters: {
-              ohToIn: false,
-              backhaul: false,
-              localFlatbed: false,
-              rnrOrder: false,
-              localSemi: false,
-              middlefield: false,
-              paNy: false
-            },
-            pickupCustomer: order.pickup_customer,
-            deliveryCustomer: order.delivery_customer
-          };
-        }
+              try {
+                const geocoder = new window.google.maps.Geocoder();
+                const result = await new Promise((resolve, reject) => {
+                  geocoder.geocode({ address: customer.address }, (results, status) => {
+                    if (status === 'OK' && results?.[0]) {
+                      resolve(results[0]);
+                    } else {
+                      reject(new Error(`Geocoding failed: ${status}`));
+                    }
+                  });
+                });
+
+                const location = (result as google.maps.GeocoderResult).geometry.location;
+                
+                return {
+                  id: order.id,
+                  lat: location.lat(),
+                  lng: location.lng(),
+                  type: order.assignment_type,
+                  customerName: customer.name,
+                  pickupDate: order.pickup_date || new Date().toISOString(),
+                  footage: order.footage || 0,
+                  filters: { ...EMPTY_FILTERS },
+                  pickupCustomer: order.pickup_customer,
+                  deliveryCustomer: order.delivery_customer
+                };
+              } catch (error) {
+                console.error('Error geocoding address:', error);
+                return {
+                  id: order.id,
+                  lat: 0,
+                  lng: 0,
+                  type: order.assignment_type,
+                  customerName: customer.name,
+                  pickupDate: order.pickup_date || new Date().toISOString(),
+                  footage: order.footage || 0,
+                  filters: { ...EMPTY_FILTERS },
+                  pickupCustomer: order.pickup_customer,
+                  deliveryCustomer: order.delivery_customer
+                };
+              }
       }));
 
       setTruckloadStops(prev => ({
@@ -965,103 +1009,37 @@ export default function LoadBoardMap() {
     });
   };
 
-  const applyFilters = (loads: LoadLocation[]): LoadLocation[] => {
-    return loads.filter(load => {
-      // Show stops that are not assigned to any truckload
-      // Each stop (pickup and delivery) is considered independently
-      const isPickupUnassigned = !load.pickupAssignment?.truckloadId;
-      const isDeliveryUnassigned = !load.deliveryAssignment?.truckloadId;
+  // Combine all locations and apply client-side load type filters, then cluster
+  const filteredLocations = useMemo(() => {
+    const allOrders = [...loadLocations, ...(viewToggles.completed ? completedLocations : [])];
+    const hasActiveFilters = Object.values(activeFilters).some(v => v);
+    if (!hasActiveFilters) return allOrders;
+    return allOrders.filter(loc =>
+      Object.entries(activeFilters).some(([key, isActive]) =>
+        isActive && loc.filters[key as keyof OrderFilters]
+      )
+    );
+  }, [loadLocations, completedLocations, viewToggles.completed, activeFilters]);
 
-      // If neither stop is unassigned, filter out the entire load
-      if (!isPickupUnassigned && !isDeliveryUnassigned) {
-        return false;
-      }
-
-      // Apply date range filter
-      if (filters.dateRange && filters.dateRange.from && filters.dateRange.to) {
-        const pickupDate = new Date(load.pickupDate);
-        if (pickupDate < filters.dateRange.from || pickupDate > filters.dateRange.to) {
-          return false;
-        }
-      }
-
-      // Apply load type filters
-      const hasActiveLoadTypes = Object.values(filters.loadTypes).some(value => value);
-      if (hasActiveLoadTypes) {
-        const matchesLoadType = Object.entries(filters.loadTypes).some(([key, isActive]) => {
-          if (!isActive) return false;
-          switch (key) {
-            case 'ohToIn':
-              return load.filters.ohToIn;
-            case 'backhaul':
-              return load.filters.backhaul;
-            case 'localFlatbed':
-              return load.filters.localFlatbed;
-            case 'rnrOrder':
-              return load.filters.rnrOrder;
-            case 'localSemi':
-              return load.filters.localSemi;
-            case 'middlefield':
-              return load.filters.middlefield;
-            case 'paNy':
-              return load.filters.paNy;
-            default:
-              return false;
-          }
-        });
-        if (!matchesLoadType) return false;
-      }
-
-      // Apply show type filter
-      if (filters.showType !== 'both') {
-        if (filters.showType === 'pickups' && !load.pickupCustomer) return false;
-        if (filters.showType === 'deliveries' && !load.deliveryCustomer) return false;
-      }
-
-      return true;
+  // Calculate filter counts for the current set of locations
+  const filterCounts = useMemo(() => {
+    const allOrders = [...loadLocations, ...(viewToggles.completed ? completedLocations : [])];
+    const counts: Record<string, number> = {};
+    FILTER_OPTIONS.forEach(option => {
+      counts[option.id] = allOrders.filter(loc =>
+        loc.filters[option.id as keyof OrderFilters]
+      ).length;
     });
-  };
+    return counts;
+  }, [loadLocations, completedLocations, viewToggles.completed]);
 
+  // Update clustering
   useEffect(() => {
-    const filtered = loadLocations.filter(location => {
-      // Apply date range filter
-      if (filters.dateRange?.from && filters.dateRange?.to) {
-        const pickupDate = new Date(location.pickupDate);
-        if (pickupDate < filters.dateRange.from || pickupDate > filters.dateRange.to) {
-          return false;
-        }
-      }
-
-      // Apply load type filters
-      const hasActiveLoadTypes = Object.values(filters.loadTypes).some(value => value);
-      if (hasActiveLoadTypes) {
-        const matchesLoadType = Object.entries(filters.loadTypes).some(([key, isActive]) => 
-          isActive && location.filters[key as keyof typeof location.filters]
-        );
-        if (!matchesLoadType) return false;
-      }
-
-      // Apply show type filter
-      if (filters.showType !== 'both') {
-        if (filters.showType === 'pickups' && location.type !== 'pickup') return false;
-        if (filters.showType === 'deliveries' && location.type !== 'delivery') return false;
-      }
-
-      return true;
-    });
-    setFilteredLocations(filtered);
-  }, [loadLocations, filters]);
-
-  // Update the useEffect for clustering
-  useEffect(() => {
-    // Combine regular locations with truckload stops
     const allLocations = [
       ...filteredLocations,
       ...Array.from(selectedTruckloads).flatMap(truckloadId => {
         const truckload = truckloadStops[truckloadId];
         if (!truckload) return [];
-        
-        // Add a source property to distinguish truckload stops
         return truckload.stops.map(stop => ({
           ...stop,
           source: 'truckload' as const,
@@ -1070,7 +1048,6 @@ export default function LoadBoardMap() {
         }));
       })
     ];
-    
     const clusteredLocations = clusterMarkers(allLocations);
     setClusteredLoads(clusteredLocations);
   }, [filteredLocations, selectedTruckloads, truckloadStops]);
@@ -1147,17 +1124,154 @@ export default function LoadBoardMap() {
         </div>
       </div>
 
-      {/* Map Container */}
-      <div className="flex-1 relative">
-        <MissingAddressWarning />
-        <GoogleMap
-          mapContainerStyle={mapContainerStyle}
-          center={center}
-          zoom={7}
-          onLoad={onLoad}
-          onUnmount={onUnmount}
-          options={options}
-        >
+      {/* Map + Filter Bar Container */}
+      <div className="flex-1 flex flex-col">
+        {/* Filter Bar */}
+        <Card className="m-2 mb-0 p-2 bg-gradient-to-r from-gray-50 to-white border border-gray-200 shadow-sm flex-shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Search */}
+            <div className="flex items-center gap-1.5 bg-white rounded-md px-2 py-1 border border-gray-200">
+              <Search className="h-3.5 w-3.5 text-gray-500" />
+              <Input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border-0 bg-transparent text-xs h-7 w-40 focus:ring-0 focus:outline-none p-0"
+              />
+            </div>
+
+            {/* View Toggles */}
+            <div className="flex items-center gap-1.5 bg-white rounded-md px-2 py-1 border border-gray-200">
+              <span className="text-xs font-medium text-gray-600">View:</span>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant={viewToggles.unassigned ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, unassigned: !prev.unassigned }))}
+                  className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                    viewToggles.unassigned
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Unassigned
+                </Button>
+                <Button
+                  variant={viewToggles.pickup ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, pickup: !prev.pickup }))}
+                  className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                    viewToggles.pickup
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Pickup
+                </Button>
+                <Button
+                  variant={viewToggles.delivery ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, delivery: !prev.delivery }))}
+                  className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                    viewToggles.delivery
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Delivery
+                </Button>
+                <Button
+                  variant={viewToggles.assigned ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, assigned: !prev.assigned }))}
+                  className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                    viewToggles.assigned
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Assigned
+                </Button>
+                <Button
+                  variant={viewToggles.completed ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewToggles(prev => ({ ...prev, completed: !prev.completed }))}
+                  className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                    viewToggles.completed
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  Completed
+                </Button>
+              </div>
+            </div>
+
+            {/* Load Type Filters */}
+            <div className="flex items-center gap-1.5 bg-white rounded-md px-2 py-1 border border-gray-200">
+              <span className="text-xs font-medium text-gray-600">Load Type:</span>
+              <div className="flex items-center gap-1">
+                {FILTER_OPTIONS.map((option) => {
+                  const count = filterCounts[option.id] || 0;
+                  const config = LOAD_TYPE_CONFIG[option.id as keyof typeof LOAD_TYPE_CONFIG];
+                  const isActive = activeFilters[option.id];
+                  return (
+                    <Button
+                      key={option.id}
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setActiveFilters(prev => ({ ...prev, [option.id]: !prev[option.id] }))
+                      }
+                      className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                        isActive ? 'shadow-sm border-2' : 'border'
+                      }`}
+                      style={config ? {
+                        backgroundColor: config.color,
+                        color: config.textColor,
+                        borderColor: isActive ? config.textColor : config.color,
+                      } : {}}
+                    >
+                      <span className="flex items-center gap-0.5">
+                        <span>{option.label}</span>
+                        {count > 0 && (
+                          <span
+                            className={`inline-flex items-center justify-center w-3.5 h-3.5 text-[9px] rounded-full ${
+                              isActive && config ? 'bg-white' : config ? 'bg-white/80' : 'bg-blue-600 text-white'
+                            }`}
+                            style={config ? { color: config.textColor } : {}}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Point Count */}
+            <div className="ml-auto bg-blue-50 rounded-md px-2 py-1 border border-blue-200">
+              <span className="text-xs font-medium text-blue-700">
+                {filteredLocations.length} point{filteredLocations.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Map */}
+        <div className="flex-1 relative m-2 mt-1">
+          <MissingAddressWarning />
+          <GoogleMap
+            mapContainerStyle={mapContainerStyle}
+            center={center}
+            zoom={7}
+            onLoad={onLoad}
+            onUnmount={onUnmount}
+            options={options}
+          >
           {/* Timberline Warehouse Marker */}
           <MarkerF
             position={center}
@@ -1616,197 +1730,61 @@ export default function LoadBoardMap() {
           )}
         </GoogleMap>
 
-        {/* Filters Panel - Moved to right side and vertically centered */}
-        <div className={`
-          absolute top-1/2 -translate-y-1/2 right-4 z-10 transition-all duration-300 ease-in-out
-          ${filters.isExpanded ? 'w-64' : 'w-10'}
-        `}>
-          <Card className={`
-            bg-white/95 backdrop-blur-sm shadow-lg
-            ${filters.isExpanded ? 'p-4' : 'p-2'}
-          `}>
-            <div className="flex items-center justify-between mb-2">
-              {filters.isExpanded && (
-                <h3 className="text-sm font-medium">Filters</h3>
-              )}
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, isExpanded: !prev.isExpanded }))}
-                className="p-1 hover:bg-gray-100 rounded-md"
-              >
-                {filters.isExpanded ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            
-            {filters.isExpanded && (
-              <div className="space-y-4">
-                {/* Date Range Filter */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-gray-600">Date Range</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs text-gray-500">From</Label>
-                      <Input
-                        type="date"
-                        value={filters.dateRange?.from?.toISOString().split('T')[0] || ''}
-                        onChange={(e) => {
-                          const date = e.target.value ? new Date(e.target.value) : undefined;
-                          setFilters(prev => ({
-                            ...prev,
-                            dateRange: { ...prev.dateRange, from: date }
-                          }));
-                        }}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-gray-500">To</Label>
-                      <Input
-                        type="date"
-                        value={filters.dateRange?.to?.toISOString().split('T')[0] || ''}
-                        onChange={(e) => {
-                          const date = e.target.value ? new Date(e.target.value) : undefined;
-                          setFilters(prev => ({
-                            ...prev,
-                            dateRange: { ...prev.dateRange, to: date }
-                          }));
-                        }}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Load Type Filter */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-gray-600">Load Type</Label>
-                  <div className="space-y-1">
-                    {Object.entries(filters.loadTypes).map(([key, value]) => (
-                      <div key={key} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={key}
-                          checked={value}
-                          onCheckedChange={(checked) => {
-                            setFilters(prev => ({
-                              ...prev,
-                              loadTypes: {
-                                ...prev.loadTypes,
-                                [key]: checked === true
-                              }
-                            }));
-                          }}
-                          className="h-3 w-3"
-                        />
-                        <label
-                          htmlFor={key}
-                          className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          {key === 'ohToIn' ? 'OH → IN' :
-                           key === 'backhaul' ? 'Backhaul' :
-                           key === 'localFlatbed' ? 'Local Flatbed' :
-                           key === 'rnrOrder' ? 'RNR' :
-                           key === 'localSemi' ? 'Local Semi' :
-                           key === 'middlefield' ? 'Middlefield' :
-                           key === 'paNy' ? 'PA/NY' : key}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Show Type Filter */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-gray-600">Show</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={filters.showType === 'both' ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFilters(prev => ({ ...prev, showType: 'both' }))}
-                    >
-                      Both
-                    </Button>
-                    <Button
-                      variant={filters.showType === 'pickups' ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFilters(prev => ({ ...prev, showType: 'pickups' }))}
-                    >
-                      Pickups
-                    </Button>
-                    <Button
-                      variant={filters.showType === 'deliveries' ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFilters(prev => ({ ...prev, showType: 'deliveries' }))}
-                    >
-                      Deliveries
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Selected Locations Overlay - Adjusted position */}
-        {selectedLocations.length > 0 && (
-          <Card className="absolute top-4 right-[280px] w-96 max-h-[calc(100vh-8rem)] overflow-y-auto bg-white/95 shadow-lg p-3 z-10">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium">Selected ({selectedLocations.length})</h3>
-              <button 
-                onClick={clearSelection}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {selectedLocations.map((location) => (
-                <div 
-                  key={`${location.id}-${location.type}`} 
-                  className="flex items-center justify-between p-2 rounded-md bg-gray-50"
+          {/* Selected Locations Overlay */}
+          {selectedLocations.length > 0 && (
+            <Card className="absolute top-4 right-4 w-96 max-h-[calc(100vh-14rem)] overflow-y-auto bg-white/95 shadow-lg p-3 z-10">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium">Selected ({selectedLocations.length})</h3>
+                <button 
+                  onClick={clearSelection}
+                  className="text-gray-500 hover:text-gray-700"
                 >
-                  <div className="flex items-center gap-2">
-                    <Badge 
-                      variant={location.type === 'pickup' ? 'destructive' : 'default'}
-                      className="text-xs"
-                    >
-                      {location.type === 'pickup' ? 'Pickup' : 'Delivery'}
-                    </Badge>
-                    <span className="text-sm font-medium truncate max-w-[240px]">{location.customerName}</span>
-                  </div>
-                  <button 
-                    onClick={() => toggleLocationSelection(location)}
-                    className="text-gray-500 hover:text-gray-700 flex-shrink-0"
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {selectedLocations.map((location) => (
+                  <div 
+                    key={`${location.id}-${location.type}`} 
+                    className="flex items-center justify-between p-2 rounded-md bg-gray-50"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            
-            {/* Assign to Truckload Button */}
-            <Button 
-              className="w-full mt-2"
-              onClick={() => setIsAssignDialogOpen(true)}
-            >
-              <Truck className="h-4 w-4 mr-2" />
-              Assign to Truckload
-            </Button>
-          </Card>
-        )}
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant={location.type === 'pickup' ? 'destructive' : 'default'}
+                        className="text-xs"
+                      >
+                        {location.type === 'pickup' ? 'Pickup' : 'Delivery'}
+                      </Badge>
+                      <span className="text-sm font-medium truncate max-w-[240px]">{location.customerName}</span>
+                    </div>
+                    <button 
+                      onClick={() => toggleLocationSelection(location)}
+                      className="text-gray-500 hover:text-gray-700 flex-shrink-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              <Button 
+                className="w-full mt-2"
+                onClick={() => setIsAssignDialogOpen(true)}
+              >
+                <Truck className="h-4 w-4 mr-2" />
+                Assign to Truckload
+              </Button>
+            </Card>
+          )}
 
-        {/* Assignment Dialog */}
-        <AssignStopsDialog
-          isOpen={isAssignDialogOpen}
-          onClose={() => setIsAssignDialogOpen(false)}
-          selectedLocations={selectedLocations}
-          onAssignmentComplete={handleAssignmentComplete}
-        />
+          {/* Assignment Dialog */}
+          <AssignStopsDialog
+            isOpen={isAssignDialogOpen}
+            onClose={() => setIsAssignDialogOpen(false)}
+            selectedLocations={selectedLocations}
+            onAssignmentComplete={handleAssignmentComplete}
+          />
+        </div>
       </div>
     </div>
   );
