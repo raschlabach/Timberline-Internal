@@ -455,7 +455,31 @@ export async function DELETE(request: Request) {
         )
       }
 
-      // 4. Delete the truckload
+      // 4. Delete route stops for this truckload
+      await client.query(
+        `DELETE FROM route_stops WHERE truckload_id = $1`,
+        [id]
+      )
+
+      // 5. Delete trailer layout items and layouts for this truckload
+      await client.query(
+        `DELETE FROM trailer_layout_items WHERE trailer_layout_id IN (
+          SELECT id FROM trailer_layouts WHERE truckload_id = $1
+        )`,
+        [id]
+      )
+      await client.query(
+        `DELETE FROM trailer_layouts WHERE truckload_id = $1`,
+        [id]
+      )
+
+      // 6. Unlink comments from this truckload (nullable FK, set to null rather than delete)
+      await client.query(
+        `UPDATE comments SET truckload_id = NULL WHERE truckload_id = $1`,
+        [id]
+      )
+
+      // 7. Delete the truckload
       const result = await client.query(
         `DELETE FROM truckloads WHERE id = $1 RETURNING *`,
         [id]
