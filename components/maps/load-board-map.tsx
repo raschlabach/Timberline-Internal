@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, DirectionsRenderer } from '@react-google-maps/api';
 import { MissingAddressWarning } from "./missing-address-warning"
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -529,9 +529,11 @@ export default function LoadBoardMap() {
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [drivers, setDrivers] = useState<{ id: string; fullName: string; color: string; }[]>([]);
   const [expandedDrivers, setExpandedDrivers] = useState<Set<string>>(new Set());
+  const [allTruckloads, setAllTruckloads] = useState<TruckloadSummary[]>([]);
   const [driverTruckloads, setDriverTruckloads] = useState<Record<string, TruckloadSummary[]>>({});
   const [selectedTruckloads, setSelectedTruckloads] = useState<Set<number>>(new Set());
   const [truckloadStops, setTruckloadStops] = useState<Record<number, Truckload>>({});
+  const [truckloadRoutes, setTruckloadRoutes] = useState<Record<number, google.maps.DirectionsResult>>({});
   const [selectedMarkerInfo, setSelectedMarkerInfo] = useState<{ id: number; type: 'load' | 'truckload'; data: any } | null>(null);
   const [locationTruckloadStops, setLocationTruckloadStops] = useState<LoadLocation[]>([]);
   const [viewToggles, setViewToggles] = useState<ViewToggles>({
@@ -665,9 +667,10 @@ export default function LoadBoardMap() {
     }
   }, [viewToggles.completed, fetchCompletedOrders]);
 
-  // Fetch drivers on mount
+  // Fetch drivers and truckloads on mount
   useEffect(() => {
     fetchDrivers();
+    fetchAllTruckloads();
   }, []);
 
   // Check for new orders using localStorage (works across page navigations)
@@ -720,30 +723,23 @@ export default function LoadBoardMap() {
     }
   }
 
-  async function fetchDriverTruckloads(driverId: string) {
+  async function fetchAllTruckloads() {
     try {
-      const response = await fetch('/api/truckloads');
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/truckloads?t=${timestamp}`);
       if (!response.ok) throw new Error('Failed to fetch truckloads');
       const data = await response.json();
       if (data.success) {
-        // Filter truckloads for this driver and only active ones
-        // Note: The driver ID passed from toggleDriverExpansion is a string, but the truckload's driverId might be a number
-        // Let's do a type-resilient comparison
-        const driverTruckloads = data.truckloads.filter((t: any) => 
-          // Convert both to strings to ensure a correct comparison regardless of type
-          String(t.driverId) === String(driverId) && !t.isCompleted
-        );
-        
-        console.log(`Filtered truckloads for driver ${driverId}:`, driverTruckloads);
-        
-        setDriverTruckloads(prev => ({
-          ...prev,
-          [driverId]: driverTruckloads
-        }));
+        const active = (data.truckloads || []).filter((t: any) => !t.isCompleted);
+        setAllTruckloads(active);
       }
     } catch (error) {
-      console.error('Error fetching driver truckloads:', error);
+      console.error('Error fetching truckloads:', error);
     }
+  }
+
+  function getDriverTruckloads(driverId: string): TruckloadSummary[] {
+    return allTruckloads.filter(t => String(t.driverId) === String(driverId));
   }
 
   async function fetchAllTruckloadStopsForLocation(lat: number, lng: number) {
@@ -860,10 +856,8 @@ export default function LoadBoardMap() {
         return;
       }
 
-      // Find the driver color from the driverTruckloads state
-      const truckload = Object.values(driverTruckloads)
-        .flat()
-        .find(t => t.id === truckloadId);
+      // Find the driver color from the cached truckloads
+      const truckload = allTruckloads.find(t => t.id === truckloadId);
 
       // Format the stops data
       const stops = await Promise.all(data.orders.map(async (order: TruckloadOrder) => {
@@ -938,9 +932,45 @@ export default function LoadBoardMap() {
           stops
         }
       }));
+
+      // Calculate driving route for this truckload
+      calculateTruckloadRoute(truckloadId, data.orders);
     } catch (error) {
       console.error('Error fetching truckload stops:', error);
     }
+  }
+
+  const TIMBERLINE_ADDRESS = '1361 County Road 108, Sugar Creek, OH 44681';
+
+  function calculateTruckloadRoute(truckloadId: number, orders: TruckloadOrder[]) {
+    if (!window.google?.maps) return;
+
+    const directionsService = new google.maps.DirectionsService();
+    const waypoints: google.maps.DirectionsWaypoint[] = [];
+
+    for (const order of orders) {
+      const customer = order.assignment_type === 'pickup'
+        ? order.pickup_customer
+        : order.delivery_customer;
+      if (!customer?.address) continue;
+      waypoints.push({ location: customer.address, stopover: true });
+    }
+
+    if (waypoints.length === 0) return;
+
+    const request: google.maps.DirectionsRequest = {
+      origin: TIMBERLINE_ADDRESS,
+      destination: TIMBERLINE_ADDRESS,
+      waypoints,
+      optimizeWaypoints: false,
+      travelMode: google.maps.TravelMode.DRIVING,
+    };
+
+    directionsService.route(request, (result, status) => {
+      if (status === google.maps.DirectionsStatus.OK && result) {
+        setTruckloadRoutes(prev => ({ ...prev, [truckloadId]: result }));
+      }
+    });
   }
 
   const onLoad = (map: google.maps.Map) => {
@@ -984,24 +1014,24 @@ export default function LoadBoardMap() {
         newSet.delete(driverId);
       } else {
         newSet.add(driverId);
-        if (!driverTruckloads[driverId]) {
-          fetchDriverTruckloads(driverId);
-        }
       }
       return newSet;
     });
   };
 
   const toggleTruckloadSelection = (truckloadId: number, driverColor: string) => {
-    console.log('Toggling truckload selection:', truckloadId);
     setSelectedTruckloads(prev => {
       const newSet = new Set(prev);
       if (newSet.has(truckloadId)) {
         newSet.delete(truckloadId);
+        setTruckloadRoutes(r => {
+          const next = { ...r };
+          delete next[truckloadId];
+          return next;
+        });
       } else {
         newSet.add(truckloadId);
         if (!truckloadStops[truckloadId]) {
-          console.log('Fetching stops for truckload:', truckloadId);
           fetchTruckloadStops(truckloadId);
         }
       }
@@ -1082,43 +1112,46 @@ export default function LoadBoardMap() {
                 </span>
               </div>
               
-              {expandedDrivers.has(driver.id) && (
-                <div className="pl-8 space-y-2">
-                  {driverTruckloads[driver.id]?.map((truckload) => (
-                    <div
-                      key={truckload.id}
-                      className={`
-                        p-2 text-xs rounded cursor-pointer transition-colors
-                        ${selectedTruckloads.has(truckload.id) 
-                          ? 'bg-gray-100 border border-gray-300' 
-                          : 'bg-gray-50 hover:bg-gray-100'
-                        }
-                      `}
-                      onClick={() => toggleTruckloadSelection(truckload.id, driver.color)}
-                    >
-                      <div className="font-medium">
-                        #{truckload.id} - {truckload.description || 'No description'}
+              {expandedDrivers.has(driver.id) && (() => {
+                const truckloadsForDriver = getDriverTruckloads(driver.id);
+                return (
+                  <div className="pl-8 space-y-2">
+                    {truckloadsForDriver.map((truckload) => (
+                      <div
+                        key={truckload.id}
+                        className={`
+                          p-2 text-xs rounded cursor-pointer transition-colors
+                          ${selectedTruckloads.has(truckload.id) 
+                            ? 'bg-gray-100 border border-gray-300' 
+                            : 'bg-gray-50 hover:bg-gray-100'
+                          }
+                        `}
+                        onClick={() => toggleTruckloadSelection(truckload.id, driver.color)}
+                      >
+                        <div className="font-medium">
+                          #{truckload.id} - {truckload.description || 'No description'}
+                        </div>
+                        <div className="text-gray-600">
+                          {format(parseISO(truckload.startDate), 'MM/dd')} - {format(parseISO(truckload.endDate), 'MM/dd')}
+                        </div>
+                        <div className="flex gap-2 mt-1">
+                          <span className="text-red-500">
+                            Pickup: {truckload.pickupFootage} ft²
+                          </span>
+                          <span className="text-gray-900">
+                            Delivery: {truckload.deliveryFootage} ft²
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-gray-600">
-                        {format(parseISO(truckload.startDate), 'MM/dd')} - {format(parseISO(truckload.endDate), 'MM/dd')}
+                    ))}
+                    {truckloadsForDriver.length === 0 && (
+                      <div className="text-xs text-gray-500 italic p-2">
+                        No active truckloads
                       </div>
-                      <div className="flex gap-2 mt-1">
-                        <span className="text-red-500">
-                          Pickup: {truckload.pickupFootage} ft²
-                        </span>
-                        <span className="text-gray-900">
-                          Delivery: {truckload.deliveryFootage} ft²
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {(!driverTruckloads[driver.id] || driverTruckloads[driver.id].length === 0) && (
-                    <div className="text-xs text-gray-500 italic p-2">
-                      No active truckloads
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -1355,6 +1388,29 @@ export default function LoadBoardMap() {
                   />
                 )}
               </>
+            );
+          })}
+
+          {/* Truckload Route Lines */}
+          {Array.from(selectedTruckloads).map(truckloadId => {
+            const route = truckloadRoutes[truckloadId];
+            const truckload = truckloadStops[truckloadId];
+            if (!route || !truckload) return null;
+            return (
+              <DirectionsRenderer
+                key={`route-${truckloadId}`}
+                directions={route}
+                options={{
+                  suppressMarkers: true,
+                  polylineOptions: {
+                    strokeColor: truckload.driverColor || '#808080',
+                    strokeWeight: 3,
+                    strokeOpacity: 0.7,
+                    zIndex: 1,
+                  },
+                  markerOptions: { opacity: 0 },
+                }}
+              />
             );
           })}
 
