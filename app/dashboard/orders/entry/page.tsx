@@ -37,7 +37,9 @@ import {
   CustomerSelectorProps
 } from '@/types/orders';
 import { OrderCustomer, convertToOrderCustomer } from "@/types/shared";
-import { ChevronDown } from "lucide-react";
+import { PricingNote } from "@/types/pricing-notes";
+import { ChevronDown, FileText, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 
 export default function OrderEntryPage() {
@@ -74,6 +76,35 @@ export default function OrderEntryPage() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'presets' | 'recent'>('presets');
   const [isHandBundlesOpen, setIsHandBundlesOpen] = useState(false);
+  const [pricingNotes, setPricingNotes] = useState<PricingNote[]>([]);
+  const [isLoadingPricingNotes, setIsLoadingPricingNotes] = useState(false);
+
+  // Fetch pricing notes linked to the paying customer
+  useEffect(() => {
+    if (!formState.payingCustomer) {
+      setPricingNotes([]);
+      return;
+    }
+
+    const customerId = formState.payingCustomer.id;
+    setIsLoadingPricingNotes(true);
+
+    fetch(`/api/pricing-notes?customer_id=${customerId}&is_active=true`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch pricing notes');
+        return res.json();
+      })
+      .then((notes: PricingNote[]) => {
+        setPricingNotes(notes);
+      })
+      .catch(err => {
+        console.error('Error fetching pricing notes:', err);
+        setPricingNotes([]);
+      })
+      .finally(() => {
+        setIsLoadingPricingNotes(false);
+      });
+  }, [formState.payingCustomer]);
 
   // Auto-open hand bundles section when hand bundles are added
   useEffect(() => {
@@ -809,46 +840,113 @@ export default function OrderEntryPage() {
           </form>
         </div>
         
-        {/* Presets & Recent Orders Section - Takes up 6/12 of the page */}
+        {/* Right Panel - Quote Information or Presets & Recent Orders */}
         <div className="lg:col-span-6">
-          <Card className="shadow-md border border-slate-200 h-[calc(100vh-8rem)] flex flex-col">
-            <CardHeader className="bg-slate-100 border-b flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <CardTitle>
-                  {activeTab === 'presets' ? 'Saved Presets' : 'Recent Orders'}
-                </CardTitle>
-                <div className="flex bg-slate-200 rounded-lg p-1">
-                  <button
-                    onClick={() => setActiveTab('presets')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === 'presets'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Presets
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('recent')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === 'recent'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Recent
-                  </button>
+          {formState.payingCustomer ? (
+            <Card className="shadow-md border border-slate-200 h-[calc(100vh-8rem)] flex flex-col">
+              <CardHeader className="bg-slate-100 border-b flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Quote Information
+                  </CardTitle>
+                  <span className="text-sm text-slate-600">
+                    {formState.payingCustomer.customer_name}
+                  </span>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden">
-              {activeTab === 'presets' ? (
-                <PresetsList onSelectPreset={handleLoadPreset} />
-              ) : (
-                <RecentOrders onSelectOrder={handleLoadRecentOrder} />
-              )}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="p-4 flex-1 overflow-y-auto">
+                {isLoadingPricingNotes ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                    <span className="ml-2 text-slate-500">Loading pricing notes...</span>
+                  </div>
+                ) : pricingNotes.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <FileText className="h-10 w-10 mx-auto mb-3 text-slate-300" />
+                    <p className="font-medium">No pricing notes found</p>
+                    <p className="text-sm mt-1">
+                      No pricing notes are linked to {formState.payingCustomer.customer_name}.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pricingNotes.map(note => (
+                      <div
+                        key={note.id}
+                        className="border border-slate-200 rounded-lg p-3 bg-white hover:border-slate-300 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h3 className="font-semibold text-sm text-slate-900">{note.title}</h3>
+                          {note.category && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs shrink-0"
+                              style={{
+                                borderColor: note.category.color,
+                                color: note.category.color,
+                              }}
+                            >
+                              {note.category.name}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{note.content}</p>
+                        {note.tags && note.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {note.tags.map(tag => (
+                              <Badge key={tag} variant="secondary" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="shadow-md border border-slate-200 h-[calc(100vh-8rem)] flex flex-col">
+              <CardHeader className="bg-slate-100 border-b flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <CardTitle>
+                    {activeTab === 'presets' ? 'Saved Presets' : 'Recent Orders'}
+                  </CardTitle>
+                  <div className="flex bg-slate-200 rounded-lg p-1">
+                    <button
+                      onClick={() => setActiveTab('presets')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'presets'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Presets
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('recent')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'recent'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Recent
+                    </button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0 flex-1 overflow-hidden">
+                {activeTab === 'presets' ? (
+                  <PresetsList onSelectPreset={handleLoadPreset} />
+                ) : (
+                  <RecentOrders onSelectOrder={handleLoadRecentOrder} />
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

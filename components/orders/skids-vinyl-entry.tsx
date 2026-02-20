@@ -99,6 +99,11 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
     addSkid(4, 3);
   }, [addSkid]);
 
+  // Add a full load (8x53 skid)
+  const addFullLoad = useCallback(() => {
+    addSkid(8, 53);
+  }, [addSkid]);
+
   // Add a new vinyl
   const addVinyl = useCallback(() => {
     const nextNumber = getNextNumber('vinyl');
@@ -277,6 +282,16 @@ export function SkidsVinylEntry({ skidsVinyl, onUpdate }: SkidsVinylEntryProps) 
           >
             <Plus className="h-4 w-4 mr-2" />
             Add 4×3 Skid
+          </Button>
+          
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={addFullLoad}
+            className="flex-1"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Full Load
           </Button>
         </div>
         
