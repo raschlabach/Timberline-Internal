@@ -261,6 +261,7 @@ function SortableTableRow({
   crossDriverDeductions,
   onDeleteCrossDriverDeduction,
   onOpenStopDeductionDialog,
+  onOpenCustomerDeductionDialog,
   onUpdateExcludeFromLoadValue,
 }: {
   id: string
@@ -285,6 +286,7 @@ function SortableTableRow({
   crossDriverDeductions: CrossDriverDeduction[]
   onDeleteCrossDriverDeduction: (deductionId: string) => Promise<void>
   onOpenStopDeductionDialog: (orderId: string) => void
+  onOpenCustomerDeductionDialog: (orderId: string, customerName: string) => void
   onUpdateExcludeFromLoadValue: (orderId: string, excludeFromLoadValue: boolean) => void
 }) {
   const {
@@ -387,9 +389,28 @@ function SortableTableRow({
           notes={row.pickupNotes}
         >
           {isTransfer ? (
-            <span className="font-bold cursor-help">{row.pickupName}</span>
+            <span 
+              className="font-bold cursor-pointer hover:underline hover:text-blue-600"
+              onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.pickupName); }}
+            >
+              {row.pickupName}
+            </span>
           ) : (
-            row.assignmentType === 'pickup' ? <span className="font-bold cursor-help">{row.pickupName}</span> : <span className="cursor-help">{row.pickupName}</span>
+            row.assignmentType === 'pickup' ? (
+              <span 
+                className="font-bold cursor-pointer hover:underline hover:text-blue-600"
+                onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.pickupName); }}
+              >
+                {row.pickupName}
+              </span>
+            ) : (
+              <span 
+                className="cursor-pointer hover:underline hover:text-blue-600"
+                onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.pickupName); }}
+              >
+                {row.pickupName}
+              </span>
+            )
           )}
         </CustomerInfoTooltip>
       </TableCell>
@@ -402,9 +423,28 @@ function SortableTableRow({
           notes={row.deliveryNotes}
         >
           {isTransfer ? (
-            <span className="font-bold cursor-help">{row.deliveryName}</span>
+            <span 
+              className="font-bold cursor-pointer hover:underline hover:text-blue-600"
+              onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.deliveryName); }}
+            >
+              {row.deliveryName}
+            </span>
           ) : (
-            row.assignmentType === 'delivery' ? <span className="font-bold cursor-help">{row.deliveryName}</span> : <span className="cursor-help">{row.deliveryName}</span>
+            row.assignmentType === 'delivery' ? (
+              <span 
+                className="font-bold cursor-pointer hover:underline hover:text-blue-600"
+                onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.deliveryName); }}
+              >
+                {row.deliveryName}
+              </span>
+            ) : (
+              <span 
+                className="cursor-pointer hover:underline hover:text-blue-600"
+                onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.deliveryName); }}
+              >
+                {row.deliveryName}
+              </span>
+            )
           )}
         </CustomerInfoTooltip>
       </TableCell>
@@ -417,7 +457,12 @@ function SortableTableRow({
             phone2={null}
             notes={null}
           >
-            <span className="cursor-help">{row.payingCustomerName}</span>
+            <span 
+              className="cursor-pointer hover:underline hover:text-blue-600"
+              onClick={(e) => { e.stopPropagation(); onOpenCustomerDeductionDialog(row.orderId, row.payingCustomerName!); }}
+            >
+              {row.payingCustomerName}
+            </span>
           </CustomerInfoTooltip>
         ) : (
           '—'
@@ -914,11 +959,12 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
   // Per-row stop deduction/addition dialog
   const [stopDeductionDialogOpen, setStopDeductionDialogOpen] = useState<boolean>(false)
   const [stopDeductionDialogOrderId, setStopDeductionDialogOrderId] = useState<string | null>(null)
-  const [stopDeductionDialogCommentType, setStopDeductionDialogCommentType] = useState<'pickup' | 'delivery' | 'manual'>('manual')
+  const [stopDeductionDialogCommentType, setStopDeductionDialogCommentType] = useState<'pickup' | 'delivery' | 'manual' | 'customer'>('manual')
   const [stopDeductionDialogComment, setStopDeductionDialogComment] = useState<string>('')
   const [stopDeductionDialogAmount, setStopDeductionDialogAmount] = useState<string>('')
   const [stopDeductionDialogAppliesTo, setStopDeductionDialogAppliesTo] = useState<'load_value' | 'driver_pay'>('driver_pay')
   const [stopDeductionDialogIsAddition, setStopDeductionDialogIsAddition] = useState<boolean>(false)
+  const [stopDeductionDialogCustomerName, setStopDeductionDialogCustomerName] = useState<string>('')
   // Single-order split load dialog
   const [splitLoadDialogOpen, setSplitLoadDialogOpen] = useState(false)
   const [splitLoadOrderId, setSplitLoadOrderId] = useState<number | null>(null)
@@ -2009,6 +2055,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         setStopDeductionDialogAmount('')
         setStopDeductionDialogAppliesTo('driver_pay')
         setStopDeductionDialogIsAddition(false)
+        setStopDeductionDialogCustomerName('')
 
         toast.success(stopDeductionDialogIsAddition ? 'Addition saved successfully' : 'Deduction saved successfully')
       } else {
@@ -2975,9 +3022,20 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                           onOpenStopDeductionDialog={(orderId: string) => {
                             setStopDeductionDialogOrderId(orderId)
                             setStopDeductionDialogCommentType('manual')
+                            setStopDeductionDialogCustomerName('')
                             setStopDeductionDialogComment('')
                             setStopDeductionDialogAmount('')
                             setStopDeductionDialogAppliesTo('driver_pay')
+                            setStopDeductionDialogIsAddition(false)
+                            setStopDeductionDialogOpen(true)
+                          }}
+                          onOpenCustomerDeductionDialog={(orderId: string, customerName: string) => {
+                            setStopDeductionDialogOrderId(orderId)
+                            setStopDeductionDialogCommentType('customer')
+                            setStopDeductionDialogCustomerName(customerName)
+                            setStopDeductionDialogComment(`${customerName} discount`)
+                            setStopDeductionDialogAmount('')
+                            setStopDeductionDialogAppliesTo('load_value')
                             setStopDeductionDialogIsAddition(false)
                             setStopDeductionDialogOpen(true)
                           }}
@@ -3966,18 +4024,22 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
               <div className="space-y-2">
                 <Label htmlFor="stop-deduction-type">Type</Label>
                 <Select
-                  value={stopDeductionDialogCommentType}
+                  value={stopDeductionDialogCommentType === 'customer' ? 'manual' : stopDeductionDialogCommentType}
                   onValueChange={(value) => {
                     setStopDeductionDialogCommentType(value as 'pickup' | 'delivery' | 'manual')
                     // Auto-fill description based on type
                     if (stopDeductionDialogOrderId) {
                       const order = orders.find(o => String(o.orderId) === String(stopDeductionDialogOrderId))
                       if (order) {
+                        const suffix = stopDeductionDialogIsAddition ? 'extra charge' : 'discount'
                         if (value === 'pickup') {
-                          setStopDeductionDialogComment(`${order.pickupName} discount`)
+                          setStopDeductionDialogCustomerName(order.pickupName)
+                          setStopDeductionDialogComment(`${order.pickupName} ${suffix}`)
                         } else if (value === 'delivery') {
-                          setStopDeductionDialogComment(`${order.deliveryName} discount`)
+                          setStopDeductionDialogCustomerName(order.deliveryName)
+                          setStopDeductionDialogComment(`${order.deliveryName} ${suffix}`)
                         } else {
+                          setStopDeductionDialogCustomerName('')
                           setStopDeductionDialogComment('')
                         }
                       }
@@ -4010,6 +4072,9 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                   rows={3}
                   disabled={stopDeductionDialogCommentType !== 'manual'}
                 />
+                {stopDeductionDialogCommentType === 'customer' && (
+                  <p className="text-xs text-gray-500">Description auto-fills based on customer name clicked</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="stop-deduction-applies-to">Applies To</Label>
@@ -4042,7 +4107,15 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 <Label htmlFor="stop-deduction-is-addition">Deduction or Addition</Label>
                 <Select
                   value={stopDeductionDialogIsAddition ? 'addition' : 'deduction'}
-                  onValueChange={(value) => setStopDeductionDialogIsAddition(value === 'addition')}
+                  onValueChange={(value) => {
+                    const isAddition = value === 'addition'
+                    setStopDeductionDialogIsAddition(isAddition)
+                    // Update description if not manual type
+                    if (stopDeductionDialogCommentType !== 'manual' && stopDeductionDialogCustomerName) {
+                      const suffix = isAddition ? 'extra charge' : 'discount'
+                      setStopDeductionDialogComment(`${stopDeductionDialogCustomerName} ${suffix}`)
+                    }
+                  }}
                 >
                   <SelectTrigger id="stop-deduction-is-addition">
                     <SelectValue />
@@ -4063,6 +4136,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
                 setStopDeductionDialogAmount('')
                 setStopDeductionDialogAppliesTo('driver_pay')
                 setStopDeductionDialogIsAddition(false)
+                setStopDeductionDialogCustomerName('')
               }}>
                 Cancel
               </Button>
