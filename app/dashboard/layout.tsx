@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, ChevronDown, ChevronRight, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -24,31 +24,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Rip operators only see specific lumber pages
   const canSeeAllPages = !isRipOperator && !isDriver
   
-  // Collapsible sections state
-  const [isTimberlineExpanded, setIsTimberlineExpanded] = useState(true)
-  const [isLumberExpanded, setIsLumberExpanded] = useState(true)
-  
-  // Load saved state from localStorage
+  // Exclusive section toggle - only one section visible at a time
+  const isLumberRoute = pathname?.startsWith('/dashboard/lumber') || false
+  const [activeSection, setActiveSection] = useState<'timberline' | 'rnr'>(
+    isLumberRoute || isRipOperator ? 'rnr' : 'timberline'
+  )
+
   useEffect(() => {
-    const savedTimberline = localStorage.getItem('sidebar-timberline-expanded')
-    const savedLumber = localStorage.getItem('sidebar-lumber-expanded')
-    
-    if (savedTimberline !== null) setIsTimberlineExpanded(savedTimberline === 'true')
-    if (savedLumber !== null) setIsLumberExpanded(savedLumber === 'true')
-  }, [])
-  
-  // Save state when changed
-  const toggleTimberline = () => {
-    const newState = !isTimberlineExpanded
-    setIsTimberlineExpanded(newState)
-    localStorage.setItem('sidebar-timberline-expanded', String(newState))
-  }
-  
-  const toggleLumber = () => {
-    const newState = !isLumberExpanded
-    setIsLumberExpanded(newState)
-    localStorage.setItem('sidebar-lumber-expanded', String(newState))
-  }
+    if (pathname?.startsWith('/dashboard/lumber')) {
+      setActiveSection('rnr')
+    } else if (canSeeAllPages) {
+      setActiveSection('timberline')
+    }
+  }, [pathname, canSeeAllPages])
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/auth/login' })
@@ -162,117 +150,139 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f8f9fa]">
-      {/* Sidebar - hidden on rip entry page */}
       <aside className={`w-[280px] bg-white border-r border-gray-200 shadow-sm ${isSidebarHidden ? 'hidden' : 'hidden md:flex md:flex-col'}`}>
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <Truck size={28} className="text-blue-600" />
-            <h1 className="text-xl font-bold tracking-tight">Timberline</h1>
-          </div>
-        </div>
-        
-        <nav className="flex-1 py-4 overflow-y-auto">
-          <ul className="space-y-1 px-3">
-            {/* Timberline Database Section - Hidden for rip_operator */}
-            {canSeeAllPages && (
-              <>
-                <div className="pt-2 pb-2 px-4">
-                  <button 
-                    onClick={toggleTimberline}
-                    className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors w-full"
-                  >
-                    {isTimberlineExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    Timberline Database
-                  </button>
-                </div>
-                
-                {isTimberlineExpanded && (
-                  <>
-                    <NavItem
-                      href="/dashboard/orders"
-                      icon={<Package size={20} />}
-                      label="Order Entry"
-                      isActive={isActiveSubRoute('/dashboard/orders')}
-                      isPrimary
-                    />
-                    <SubNavItem
-                      href="/dashboard/customers"
-                      icon={<Users size={16} />}
-                      label="Customers"
-                      isActive={isActiveSubRoute('/dashboard/customers')}
-                    />
+        {/* Colored accent bar indicating active section */}
+        <div className={`h-1 shrink-0 transition-colors duration-300 ${activeSection === 'rnr' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
 
-                    <NavItem
-                      href="/dashboard/load-board"
-                      icon={<List size={20} />}
-                      label="Load Board"
-                      isActive={
-                        isActiveSubRoute('/dashboard/load-board') ||
-                        isActiveSubRoute('/dashboard/backhaul-planner')
-                      }
-                    />
-                    <SubNavItem
-                      href="/dashboard/load-board/map"
-                      icon={<Map size={16} />}
-                      label="Load Board Map"
-                      isActive={isActiveRoute('/dashboard/load-board/map')}
-                    />
-                    <SubNavItem
-                      href="/dashboard/backhaul-planner"
-                      icon={<ArrowLeftRight size={16} />}
-                      label="Backhaul Planner"
-                      isActive={isActiveRoute('/dashboard/backhaul-planner')}
-                    />
-
-                    <NavItem
-                      href="/dashboard/truckload-manager"
-                      icon={<ClipboardList size={20} />}
-                      label="Truckload Manager"
-                      isActive={isActiveSubRoute('/dashboard/truckload-manager') || isActiveSubRoute('/dashboard/truckload-planner')}
-                    />
-                    <SubNavItem
-                      href="/dashboard/truckload-planner"
-                      icon={<CalendarClock size={16} />}
-                      label="Truckload Planner"
-                      isActive={isActiveSubRoute('/dashboard/truckload-planner')}
-                    />
-                    <NavItem
-                      href="/dashboard/invoices"
-                      icon={<FileText size={20} />}
-                      label="Invoice Page"
-                      isActive={isActiveSubRoute('/dashboard/invoices')}
-                    />
-                    <SubNavItem
-                      href="/dashboard/driver-pay"
-                      icon={<DollarSign size={16} />}
-                      label="Driver Pay"
-                      isActive={isActiveSubRoute('/dashboard/driver-pay')}
-                    />
-                    <NavItem
-                      href="/dashboard/pricing-notes"
-                      icon={<Calculator size={20} />}
-                      label="Pricing Notes"
-                      isActive={isActiveSubRoute('/dashboard/pricing-notes')}
-                    />
-                  </>
-                )}
-              </>
-            )}
-            
-            {/* Lumber Tracker Section */}
-            <div className="pt-4 pb-2 px-4">
-              <button 
-                onClick={toggleLumber}
-                className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors w-full"
+        {/* Section Toggle */}
+        <div className="p-4 border-b border-gray-200 shrink-0">
+          {canSeeAllPages ? (
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setActiveSection('timberline')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
+                  activeSection === 'timberline'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
-                {isLumberExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                Lumber Tracker
+                <Truck size={16} className={activeSection === 'timberline' ? 'text-blue-600' : ''} />
+                Timberline
+              </button>
+              <button
+                onClick={() => setActiveSection('rnr')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
+                  activeSection === 'rnr'
+                    ? 'bg-white text-emerald-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Hammer size={16} className={activeSection === 'rnr' ? 'text-emerald-600' : ''} />
+                RNR
               </button>
             </div>
-            
-            {isLumberExpanded && (
+          ) : (
+            <div className="flex items-center gap-3 px-1">
+              <Hammer size={24} className="text-emerald-600" />
+              <h1 className="text-lg font-bold tracking-tight text-emerald-800">RNR Lumber</h1>
+            </div>
+          )}
+        </div>
+
+        <nav className="flex-1 py-3 overflow-y-auto">
+          <div className="space-y-0.5 px-3">
+
+            {/* ===== TIMBERLINE SECTION (blue theme) ===== */}
+            {activeSection === 'timberline' && canSeeAllPages && (
               <>
-                {/* Create Load Section - Hidden for rip_operator */}
+                <NavItem
+                  href="/dashboard/orders"
+                  icon={<Package size={20} />}
+                  label="Order Entry"
+                  isActive={isActiveSubRoute('/dashboard/orders')}
+                  isPrimary
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/customers"
+                  icon={<Users size={16} />}
+                  label="Customers"
+                  isActive={isActiveSubRoute('/dashboard/customers')}
+                  theme="blue"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/load-board"
+                  icon={<List size={20} />}
+                  label="Load Board"
+                  isActive={
+                    isActiveSubRoute('/dashboard/load-board') ||
+                    isActiveSubRoute('/dashboard/backhaul-planner')
+                  }
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/load-board/map"
+                  icon={<Map size={16} />}
+                  label="Load Board Map"
+                  isActive={isActiveRoute('/dashboard/load-board/map')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/backhaul-planner"
+                  icon={<ArrowLeftRight size={16} />}
+                  label="Backhaul Planner"
+                  isActive={isActiveRoute('/dashboard/backhaul-planner')}
+                  theme="blue"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/truckload-manager"
+                  icon={<ClipboardList size={20} />}
+                  label="Truckload Manager"
+                  isActive={isActiveSubRoute('/dashboard/truckload-manager') || isActiveSubRoute('/dashboard/truckload-planner')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/truckload-planner"
+                  icon={<CalendarClock size={16} />}
+                  label="Truckload Planner"
+                  isActive={isActiveSubRoute('/dashboard/truckload-planner')}
+                  theme="blue"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/invoices"
+                  icon={<FileText size={20} />}
+                  label="Invoice Page"
+                  isActive={isActiveSubRoute('/dashboard/invoices')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/driver-pay"
+                  icon={<DollarSign size={16} />}
+                  label="Driver Pay"
+                  isActive={isActiveSubRoute('/dashboard/driver-pay')}
+                  theme="blue"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/pricing-notes"
+                  icon={<Calculator size={20} />}
+                  label="Pricing Notes"
+                  isActive={isActiveSubRoute('/dashboard/pricing-notes')}
+                  theme="blue"
+                />
+              </>
+            )}
+
+            {/* ===== RNR / LUMBER SECTION (emerald theme) ===== */}
+            {activeSection === 'rnr' && (
+              <>
                 {canSeeAllPages && (
                   <>
                     <NavItem
@@ -280,33 +290,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       icon={<Package size={20} />}
                       label="Create Load"
                       isActive={isActiveRoute('/dashboard/lumber/create')}
+                      isPrimary
+                      theme="emerald"
                     />
                     <SubNavItem
                       href="/dashboard/lumber/po"
                       icon={<FileBox size={16} />}
                       label="PO Page"
                       isActive={isActiveRoute('/dashboard/lumber/po')}
+                      theme="emerald"
                     />
+                    <div className="pt-3" />
                   </>
                 )}
-                
-                {/* Overview Section - Always visible */}
+
                 <NavItem
                   href="/dashboard/lumber/overview"
                   icon={<Trees size={20} />}
                   label="Overview"
                   isActive={isActiveRoute('/dashboard/lumber/overview')}
+                  theme="emerald"
                 />
-                
-                {/* Incoming Loads and All Loads - Visible for rip_operator (read-only) */}
                 <SubNavItem
                   href="/dashboard/lumber/incoming"
                   icon={<Package size={16} />}
                   label={isRipOperator ? "Incoming Loads (View)" : "Incoming Loads"}
                   isActive={isActiveRoute('/dashboard/lumber/incoming')}
+                  theme="emerald"
                 />
-                
-                {/* Trucking and Invoice - Hidden for rip_operator */}
                 {canSeeAllPages && (
                   <>
                     <SubNavItem
@@ -314,40 +325,41 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       icon={<Truck size={16} />}
                       label="Trucking"
                       isActive={isActiveRoute('/dashboard/lumber/trucking')}
+                      theme="emerald"
                     />
                     <SubNavItem
                       href="/dashboard/lumber/invoices"
                       icon={<FileText size={16} />}
                       label="Invoice Page"
                       isActive={isActiveRoute('/dashboard/lumber/invoices')}
+                      theme="emerald"
                     />
                   </>
                 )}
-                
-                {/* All Loads - Visible for rip_operator (read-only) */}
                 <SubNavItem
                   href="/dashboard/lumber/all-loads"
                   icon={<List size={16} />}
                   label={isRipOperator ? "All Loads (View)" : "All Loads"}
                   isActive={isActiveRoute('/dashboard/lumber/all-loads')}
+                  theme="emerald"
                 />
-                
-                {/* Tally Entry - Hidden for rip_operator */}
+
+                <div className="pt-3" />
                 {canSeeAllPages && (
                   <NavItem
                     href="/dashboard/lumber/tally-entry"
                     icon={<ClipboardList size={20} />}
                     label="Tally Entry"
                     isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
+                    theme="emerald"
                   />
                 )}
-                
-                {/* Rip Entry Section - Always visible (main pages for rip_operator) */}
                 <SubNavItem
                   href="/dashboard/lumber/rip-entry"
                   icon={<Hammer size={16} />}
                   label="Rip Entry"
                   isActive={isActiveRoute('/dashboard/lumber/rip-entry')}
+                  theme="emerald"
                   className={isRipOperator ? '' : 'ml-6'}
                 />
                 <SubNavItem
@@ -355,6 +367,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<Package size={16} />}
                   label="Misc Rip"
                   isActive={isActiveRoute('/dashboard/lumber/misc-rip')}
+                  theme="emerald"
                   className={isRipOperator ? '' : 'ml-6'}
                 />
                 <SubNavItem
@@ -362,6 +375,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<Clock size={16} />}
                   label="Daily Hours"
                   isActive={isActiveRoute('/dashboard/lumber/daily-hours')}
+                  theme="emerald"
                   className={isRipOperator ? '' : 'ml-6'}
                 />
                 <SubNavItem
@@ -369,55 +383,63 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<PackageCheck size={16} />}
                   label="Ripped Packs"
                   isActive={isActiveRoute('/dashboard/lumber/ripped-packs')}
+                  theme="emerald"
                   className={isRipOperator ? '' : 'ml-6'}
                 />
-                
-                {/* Inventory Section - Hidden for rip_operator */}
+
                 {canSeeAllPages && (
                   <>
+                    <div className="pt-3" />
                     <NavItem
                       href="/dashboard/lumber/inventory"
                       icon={<PackageCheck size={20} />}
                       label="Inventory"
                       isActive={isActiveRoute('/dashboard/lumber/inventory')}
+                      theme="emerald"
                     />
                     <SubNavItem
                       href="/dashboard/lumber/rip-bonus"
                       icon={<TrendingUp size={16} />}
                       label="Rip Bonus"
                       isActive={isActiveRoute('/dashboard/lumber/rip-bonus')}
+                      theme="emerald"
                     />
                     <SubNavItem
                       href="/dashboard/lumber/rip-report"
                       icon={<BarChart3 size={16} />}
                       label="Rip Report"
                       isActive={isActiveRoute('/dashboard/lumber/rip-report')}
+                      theme="emerald"
                     />
                   </>
                 )}
-                
+
                 {isAdmin && (
                   <SubNavItem
                     href="/dashboard/lumber/admin"
                     icon={<UserCog size={16} />}
                     label="Admin"
                     isActive={isActiveRoute('/dashboard/lumber/admin')}
+                    theme="emerald"
                   />
                 )}
               </>
             )}
-            
-            {isAdmin && (
+          </div>
+
+          {/* User Management - outside both sections, always visible for admins */}
+          {isAdmin && (
+            <div className="px-3 pt-3 mt-2 border-t border-gray-100">
               <NavItem
                 href="/dashboard/users"
                 icon={<UserCog size={20} />}
                 label="User Management"
                 isActive={isActiveSubRoute('/dashboard/users')}
+                theme={activeSection === 'rnr' ? 'emerald' : 'blue'}
               />
-            )}
-          </ul>
-          
-          {/* Notifications Panel */}
+            </div>
+          )}
+
           <NotificationPanel />
         </nav>
       </aside>
@@ -475,37 +497,41 @@ interface NavItemProps {
   label: string
   isActive?: boolean
   isPrimary?: boolean
+  theme?: 'blue' | 'emerald'
 }
 
-function NavItem({ href, icon, label, isActive = false, isPrimary = false }: NavItemProps) {
+function NavItem({ href, icon, label, isActive = false, isPrimary = false, theme = 'blue' }: NavItemProps) {
   const baseClasses = 'flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors group'
-  const stateClasses = isPrimary
-    ? isActive
-      ? 'bg-blue-700 text-white shadow-sm'
-      : 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
-    : isActive
-      ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
-      : 'text-gray-600 hover:bg-gray-50'
 
-  const iconClasses = isPrimary
-    ? 'text-white'
-    : isActive
-      ? 'text-blue-600'
-      : 'text-gray-400 group-hover:text-blue-600'
+  let stateClasses: string
+  let iconClasses: string
+  let labelClasses: string
 
-  const labelClasses = isPrimary
-    ? 'text-white font-semibold'
-    : isActive
-      ? 'text-blue-700 font-medium'
-      : 'group-hover:text-gray-900 font-medium'
+  if (isPrimary) {
+    if (theme === 'emerald') {
+      stateClasses = isActive ? 'bg-emerald-700 text-white shadow-sm' : 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+    } else {
+      stateClasses = isActive ? 'bg-blue-700 text-white shadow-sm' : 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+    }
+    iconClasses = 'text-white'
+    labelClasses = 'text-white font-semibold'
+  } else if (theme === 'emerald') {
+    stateClasses = isActive ? 'bg-emerald-50 text-emerald-700 border-r-2 border-emerald-600' : 'text-gray-600 hover:bg-gray-50'
+    iconClasses = isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-emerald-600'
+    labelClasses = isActive ? 'text-emerald-700 font-medium' : 'group-hover:text-gray-900 font-medium'
+  } else {
+    stateClasses = isActive ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'
+    iconClasses = isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'
+    labelClasses = isActive ? 'text-blue-700 font-medium' : 'group-hover:text-gray-900 font-medium'
+  }
 
   return (
-    <li>
+    <div>
       <Link href={href} className={`${baseClasses} ${stateClasses}`}>
         <span className={`transition-colors ${iconClasses}`}>{icon}</span>
         <span className={`transition-colors ${labelClasses}`}>{label}</span>
       </Link>
-    </li>
+    </div>
   )
 }
 
@@ -515,26 +541,29 @@ interface SubNavItemProps {
   label: string
   isActive?: boolean
   className?: string
+  theme?: 'blue' | 'emerald'
 }
 
-function SubNavItem({ href, icon, label, isActive = false, className = 'ml-6' }: SubNavItemProps) {
+function SubNavItem({ href, icon, label, isActive = false, className = 'ml-6', theme = 'blue' }: SubNavItemProps) {
+  const activeClasses = theme === 'emerald'
+    ? 'bg-emerald-50 text-emerald-700 border-r-2 border-emerald-600'
+    : 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
+
+  const activeIcon = theme === 'emerald' ? 'text-emerald-600' : 'text-blue-600'
+  const hoverIcon = theme === 'emerald' ? 'text-gray-400 group-hover:text-emerald-600' : 'text-gray-400 group-hover:text-blue-600'
+  const activeLabel = theme === 'emerald' ? 'text-emerald-700' : 'text-blue-700'
+
   return (
-    <li className={className}>
-      <Link 
-        href={href} 
+    <div className={className}>
+      <Link
+        href={href}
         className={`flex items-center gap-3 px-4 py-2 text-sm rounded-lg transition-colors group ${
-          isActive 
-            ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' 
-            : 'text-gray-600 hover:bg-gray-50'
+          isActive ? activeClasses : 'text-gray-600 hover:bg-gray-50'
         }`}
       >
-        <span className={`transition-colors ${
-          isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'
-        }`}>{icon}</span>
-        <span className={`font-medium ${
-          isActive ? 'text-blue-700' : 'group-hover:text-gray-900'
-        }`}>{label}</span>
+        <span className={`transition-colors ${isActive ? activeIcon : hoverIcon}`}>{icon}</span>
+        <span className={`font-medium ${isActive ? activeLabel : 'group-hover:text-gray-900'}`}>{label}</span>
       </Link>
-    </li>
+    </div>
   )
 }
