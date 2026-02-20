@@ -37,10 +37,16 @@ import {
   CustomerSelectorProps
 } from '@/types/orders';
 import { OrderCustomer, convertToOrderCustomer } from "@/types/shared";
-import { PricingNote } from "@/types/pricing-notes";
-import { ChevronDown, FileText, Loader2 } from "lucide-react";
+import { PricingNote, PricingCategory, PricingNoteFormData } from "@/types/pricing-notes";
+import { ChevronDown, FileText, Loader2, X, CalendarIcon, Repeat, Plus, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PricingNoteForm } from "@/components/pricing-notes/pricing-note-form";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { format, addDays, addWeeks, addMonths } from "date-fns";
 
 export default function OrderEntryPage() {
   const router = useRouter();
@@ -78,6 +84,15 @@ export default function OrderEntryPage() {
   const [isHandBundlesOpen, setIsHandBundlesOpen] = useState(false);
   const [pricingNotes, setPricingNotes] = useState<PricingNote[]>([]);
   const [isLoadingPricingNotes, setIsLoadingPricingNotes] = useState(false);
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<PricingNote | null>(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteCategories, setNoteCategories] = useState<PricingCategory[]>([]);
+  const [noteCustomers, setNoteCustomers] = useState<Array<{ id: number; customer_name: string }>>([]);
+  const [dateMode, setDateMode] = useState<'single' | 'multiple' | 'recurring'>('single');
+  const [multipleDates, setMultipleDates] = useState<Date[]>([]);
+  const [recurringInterval, setRecurringInterval] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly'>('weekly');
+  const [recurringCount, setRecurringCount] = useState<number>(2);
 
   // Fetch pricing notes linked to the paying customer
   useEffect(() => {
@@ -137,8 +152,15 @@ export default function OrderEntryPage() {
       errors.footage = 'Please enter a valid footage amount';
     }
     
-    if (!formState.pickupDate) {
-      errors.pickupDate = 'Pickup Date is required';
+    const allDates = getAllPickupDates();
+    if (allDates.length === 0) {
+      if (dateMode === 'multiple') {
+        errors.pickupDate = 'Please select at least one pickup date';
+      } else if (dateMode === 'recurring') {
+        errors.pickupDate = 'Please select a start date for recurring orders';
+      } else {
+        errors.pickupDate = 'Pickup Date is required';
+      }
     }
 
     setValidationErrors(errors);
@@ -268,6 +290,43 @@ export default function OrderEntryPage() {
     }));
   }, []);
 
+  // Generate recurring dates from a start date, interval, and count
+  const generateRecurringDates = useCallback((startDate: Date, interval: typeof recurringInterval, count: number): Date[] => {
+    const dates: Date[] = [startDate];
+    for (let i = 1; i < count; i++) {
+      switch (interval) {
+        case 'daily':
+          dates.push(addDays(startDate, i));
+          break;
+        case 'weekly':
+          dates.push(addWeeks(startDate, i));
+          break;
+        case 'biweekly':
+          dates.push(addWeeks(startDate, i * 2));
+          break;
+        case 'monthly':
+          dates.push(addMonths(startDate, i));
+          break;
+      }
+    }
+    return dates;
+  }, []);
+
+  // Compute the final list of all pickup dates based on the current date mode
+  const getAllPickupDates = useCallback((): Date[] => {
+    switch (dateMode) {
+      case 'single':
+        return formState.pickupDate ? [formState.pickupDate] : [];
+      case 'multiple':
+        return [...multipleDates].sort((a, b) => a.getTime() - b.getTime());
+      case 'recurring':
+        if (!formState.pickupDate || recurringCount < 1) return [];
+        return generateRecurringDates(formState.pickupDate, recurringInterval, recurringCount);
+      default:
+        return [];
+    }
+  }, [dateMode, formState.pickupDate, multipleDates, recurringInterval, recurringCount, generateRecurringDates]);
+
   // Effect to handle mutual exclusivity between skids/vinyl and footage
   useEffect(() => {
     if (formState.freightType === 'footage' && formState.skidsVinyl.length > 0) {
@@ -279,73 +338,87 @@ export default function OrderEntryPage() {
     }
   }, [formState.freightType]);
 
-  // Handle form submission
+  // Handle form submission - creates one order per pickup date
   const handleSubmit = async (clearForm: boolean = true) => {
-    // Clear previous validation errors
     setValidationErrors({});
     
-    // Validate form
     if (!validateForm()) {
       toast.error('Please fix the validation errors before submitting');
       return;
     }
 
+    const allDates = getAllPickupDates();
+    if (allDates.length === 0) return;
+
     setIsSubmitting(true);
     
     try {
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pickupCustomer: formState.pickupCustomer,
-          deliveryCustomer: formState.deliveryCustomer,
-          payingCustomer: formState.payingCustomer,
-          filters: formState.filters,
-          freightType: formState.freightType,
-          skidsVinyl: formState.skidsVinyl,
-          footage: formState.footage,
-          handBundles: formState.handBundles,
-          // Convert Date object to YYYY-MM-DD string to avoid timezone issues
-          pickupDate: formState.pickupDate 
-            ? format(formState.pickupDate, 'yyyy-MM-dd')
-            : null,
-          comments: formState.comments,
-          freightQuote: formState.freightQuote ? parseFloat(formState.freightQuote) : null,
-          statusFlags: formState.statusFlags,
-          links: formState.links
-        })
-      });
+      const orderPayload = {
+        pickupCustomer: formState.pickupCustomer,
+        deliveryCustomer: formState.deliveryCustomer,
+        payingCustomer: formState.payingCustomer,
+        filters: formState.filters,
+        freightType: formState.freightType,
+        skidsVinyl: formState.skidsVinyl,
+        footage: formState.footage,
+        handBundles: formState.handBundles,
+        comments: formState.comments,
+        freightQuote: formState.freightQuote ? parseFloat(formState.freightQuote) : null,
+        statusFlags: formState.statusFlags,
+        links: formState.links
+      };
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create order');
+      const results = [];
+      const errors = [];
+
+      for (const date of allDates) {
+        try {
+          const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...orderPayload,
+              pickupDate: format(date, 'yyyy-MM-dd'),
+            })
+          });
+
+          if (!response.ok) {
+            const err = await response.json();
+            errors.push(`${format(date, 'MMM d')}: ${err.error || 'Failed'}`);
+          } else {
+            const result = await response.json();
+            results.push(result);
+          }
+        } catch (err) {
+          errors.push(`${format(date, 'MMM d')}: Network error`);
+        }
       }
 
-      const result = await response.json();
-      
-      // Dispatch event to notify of new order (works if load board is on same page)
-      window.dispatchEvent(new CustomEvent('orderCreated', { 
-        detail: { orderId: result.orderId }
-      }));
-      
-      // Store timestamp in localStorage (works across page navigations)
-      localStorage.setItem('lastOrderCreated', Date.now().toString());
-      console.log('Order created, timestamp stored in localStorage');
-      
-      toast.success('Order created successfully!');
-      
-      // Clear the form only if clearForm is true
-      if (clearForm) {
-      resetForm();
+      if (results.length > 0) {
+        window.dispatchEvent(new CustomEvent('orderCreated', { 
+          detail: { orderId: results[results.length - 1].orderId }
+        }));
+        localStorage.setItem('lastOrderCreated', Date.now().toString());
       }
 
-      // Stay on the order entry page for continued order creation
+      if (errors.length > 0) {
+        toast.error(`${errors.length} order(s) failed to create`);
+      }
+
+      if (results.length > 0) {
+        const msg = results.length === 1
+          ? 'Order created successfully!'
+          : `${results.length} orders created successfully!`;
+        toast.success(msg);
+      }
+
+      if (clearForm && results.length > 0) {
+        resetForm();
+      }
       
     } catch (error) {
-      console.error('Error creating order:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create order';
+      console.error('Error creating orders:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create orders';
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -383,6 +456,10 @@ export default function OrderEntryPage() {
     setFormState(initialState);
     setValidationErrors({});
     setIsHandBundlesOpen(false);
+    setDateMode('single');
+    setMultipleDates([]);
+    setRecurringInterval('weekly');
+    setRecurringCount(2);
   }, []);
 
   // Clear the form
@@ -479,6 +556,101 @@ export default function OrderEntryPage() {
     });
     setValidationErrors({});
   };
+
+  // Fetch categories and customers for the pricing note form
+  const fetchNoteFormData = useCallback(async () => {
+    try {
+      const [catRes, custRes] = await Promise.all([
+        fetch('/api/pricing-categories'),
+        fetch('/api/customers')
+      ]);
+      if (catRes.ok) {
+        const cats = await catRes.json();
+        setNoteCategories(Array.isArray(cats) ? cats : cats.categories || []);
+      }
+      if (custRes.ok) {
+        const custs = await custRes.json();
+        setNoteCustomers(Array.isArray(custs) ? custs : []);
+      }
+    } catch (err) {
+      console.error('Error fetching note form data:', err);
+    }
+  }, []);
+
+  // Refresh pricing notes for the current paying customer
+  const refreshPricingNotes = useCallback(async () => {
+    if (!formState.payingCustomer) return;
+    try {
+      const res = await fetch(`/api/pricing-notes?customer_id=${formState.payingCustomer.id}&is_active=true`);
+      if (res.ok) {
+        const notes: PricingNote[] = await res.json();
+        setPricingNotes(notes);
+      }
+    } catch (err) {
+      console.error('Error refreshing pricing notes:', err);
+    }
+  }, [formState.payingCustomer]);
+
+  function handleOpenAddNote() {
+    setEditingNote(null);
+    fetchNoteFormData();
+    setIsNoteDialogOpen(true);
+  }
+
+  function handleOpenEditNote(note: PricingNote) {
+    setEditingNote(note);
+    fetchNoteFormData();
+    setIsNoteDialogOpen(true);
+  }
+
+  async function handleDeleteNote(noteId: number) {
+    if (!confirm('Are you sure you want to delete this pricing note?')) return;
+    try {
+      const res = await fetch(`/api/pricing-notes/${noteId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast.success('Pricing note deleted');
+      await refreshPricingNotes();
+    } catch (err) {
+      console.error('Error deleting note:', err);
+      toast.error('Failed to delete pricing note');
+    }
+  }
+
+  async function handleSaveNote(data: PricingNoteFormData) {
+    setIsSavingNote(true);
+    try {
+      if (editingNote) {
+        const res = await fetch(`/api/pricing-notes/${editingNote.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error('Failed to update');
+        toast.success('Pricing note updated');
+      } else {
+        // Pre-link the paying customer when creating from this context
+        const customerIds = data.linked_customer_ids;
+        if (formState.payingCustomer && !customerIds.includes(formState.payingCustomer.id)) {
+          customerIds.push(formState.payingCustomer.id);
+        }
+        const res = await fetch('/api/pricing-notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, linked_customer_ids: customerIds })
+        });
+        if (!res.ok) throw new Error('Failed to create');
+        toast.success('Pricing note created');
+      }
+      setIsNoteDialogOpen(false);
+      setEditingNote(null);
+      await refreshPricingNotes();
+    } catch (err) {
+      console.error('Error saving note:', err);
+      toast.error('Failed to save pricing note');
+    } finally {
+      setIsSavingNote(false);
+    }
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -732,15 +904,166 @@ export default function OrderEntryPage() {
               <CardContent className="pt-3">
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="pickup-date" className="mb-1 block font-medium text-sm">
-                      Pickup Date <span className="text-red-500" aria-label="required">*</span>
-                    </Label>
-                    <div id="pickup-date">
-                      <DatePicker 
-                        date={formState.pickupDate}
-                        onSelect={handlePickupDateChange}
-                      />
+                    <div className="flex items-center justify-between mb-1">
+                      <Label htmlFor="pickup-date" className="font-medium text-sm">
+                        Pickup Date <span className="text-red-500" aria-label="required">*</span>
+                      </Label>
+                      <div className="flex bg-slate-200 rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDateMode('single')}
+                          className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
+                            dateMode === 'single'
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Single
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDateMode('multiple')}
+                          className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors ${
+                            dateMode === 'multiple'
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Multiple
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDateMode('recurring')}
+                          className={`px-2 py-0.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
+                            dateMode === 'recurring'
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Repeat className="h-3 w-3" />
+                          Recurring
+                        </button>
+                      </div>
                     </div>
+
+                    {dateMode === 'single' && (
+                      <div id="pickup-date">
+                        <DatePicker 
+                          date={formState.pickupDate}
+                          onSelect={handlePickupDateChange}
+                        />
+                      </div>
+                    )}
+
+                    {dateMode === 'multiple' && (
+                      <div className="space-y-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                multipleDates.length === 0 && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {multipleDates.length > 0
+                                ? `${multipleDates.length} date${multipleDates.length > 1 ? 's' : ''} selected`
+                                : 'Select dates'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="multiple"
+                              selected={multipleDates}
+                              onSelect={(dates) => setMultipleDates(dates || [])}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        {multipleDates.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {[...multipleDates].sort((a, b) => a.getTime() - b.getTime()).map((date, idx) => (
+                              <Badge
+                                key={idx}
+                                variant="secondary"
+                                className="text-xs flex items-center gap-1 pr-1"
+                              >
+                                {format(date, 'MMM d, yyyy')}
+                                <button
+                                  type="button"
+                                  onClick={() => setMultipleDates(prev => prev.filter((_, i) => {
+                                    const sorted = [...prev].sort((a, b) => a.getTime() - b.getTime());
+                                    return sorted[idx].getTime() !== prev[i].getTime();
+                                  }))}
+                                  className="ml-0.5 rounded-full hover:bg-slate-300 p-0.5"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {dateMode === 'recurring' && (
+                      <div className="space-y-2">
+                        <div id="pickup-date">
+                          <DatePicker 
+                            date={formState.pickupDate}
+                            onSelect={handlePickupDateChange}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs text-slate-500 mb-1 block">Interval</Label>
+                            <Select
+                              value={recurringInterval}
+                              onValueChange={(val) => setRecurringInterval(val as typeof recurringInterval)}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="biweekly">Bi-Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-500 mb-1 block">Occurrences</Label>
+                            <Input
+                              type="number"
+                              min={2}
+                              max={52}
+                              value={recurringCount}
+                              onChange={(e) => setRecurringCount(Math.max(2, Math.min(52, parseInt(e.target.value) || 2)))}
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                        {formState.pickupDate && recurringCount > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {generateRecurringDates(formState.pickupDate, recurringInterval, recurringCount).map((date, idx) => (
+                              <Badge key={idx} variant="secondary" className="text-xs">
+                                {format(date, 'MMM d, yyyy')}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {getAllPickupDates().length > 1 && (
+                      <p className="text-xs text-blue-600 font-medium mt-1">
+                        {getAllPickupDates().length} orders will be created
+                      </p>
+                    )}
+
                     {validationErrors.pickupDate && (
                       <p className="text-sm text-red-500 mt-1" role="alert" aria-live="polite">{validationErrors.pickupDate}</p>
                     )}
@@ -821,7 +1144,7 @@ export default function OrderEntryPage() {
                 className="bg-primary hover:bg-primary/90"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Creating Order...' : 'Submit and Clear'}
+                {isSubmitting ? 'Creating...' : getAllPickupDates().length > 1 ? `Submit ${getAllPickupDates().length} Orders & Clear` : 'Submit and Clear'}
               </Button>
               <Button 
                 type="button"
@@ -830,7 +1153,7 @@ export default function OrderEntryPage() {
                 className="border-primary text-primary hover:bg-primary/10"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Creating Order...' : 'Submit and Keep Data'}
+                {isSubmitting ? 'Creating...' : getAllPickupDates().length > 1 ? `Submit ${getAllPickupDates().length} Orders & Keep` : 'Submit and Keep Data'}
               </Button>
             </div>
             
@@ -843,6 +1166,7 @@ export default function OrderEntryPage() {
         {/* Right Panel - Quote Information or Presets & Recent Orders */}
         <div className="lg:col-span-6">
           {formState.payingCustomer ? (
+            <>
             <Card className="shadow-md border border-slate-200 h-[calc(100vh-8rem)] flex flex-col">
               <CardHeader className="bg-slate-100 border-b flex-shrink-0">
                 <div className="flex items-center justify-between">
@@ -850,9 +1174,21 @@ export default function OrderEntryPage() {
                     <FileText className="h-5 w-5" />
                     Quote Information
                   </CardTitle>
-                  <span className="text-sm text-slate-600">
-                    {formState.payingCustomer.customer_name}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600">
+                      {formState.payingCustomer.customer_name}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={handleOpenAddNote}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Note
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="p-4 flex-1 overflow-y-auto">
@@ -868,28 +1204,60 @@ export default function OrderEntryPage() {
                     <p className="text-sm mt-1">
                       No pricing notes are linked to {formState.payingCustomer.customer_name}.
                     </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={handleOpenAddNote}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Create First Note
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {pricingNotes.map(note => (
                       <div
                         key={note.id}
-                        className="border border-slate-200 rounded-lg p-3 bg-white hover:border-slate-300 transition-colors"
+                        className="border border-slate-200 rounded-lg p-3 bg-white hover:border-slate-300 transition-colors group"
                       >
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <h3 className="font-semibold text-sm text-slate-900">{note.title}</h3>
-                          {note.category && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs shrink-0"
-                              style={{
-                                borderColor: note.category.color,
-                                color: note.category.color,
-                              }}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {note.category && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs"
+                                style={{
+                                  borderColor: note.category.color,
+                                  color: note.category.color,
+                                }}
+                              >
+                                {note.category.name}
+                              </Badge>
+                            )}
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleOpenEditNote(note)}
+                              title="Edit note"
                             >
-                              {note.category.name}
-                            </Badge>
-                          )}
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleDeleteNote(note.id)}
+                              title="Delete note"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-sm text-slate-700 whitespace-pre-wrap">{note.content}</p>
                         {note.tags && note.tags.length > 0 && (
@@ -907,6 +1275,28 @@ export default function OrderEntryPage() {
                 )}
               </CardContent>
             </Card>
+
+            <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingNote ? 'Edit Pricing Note' : 'Add Pricing Note'}
+                  </DialogTitle>
+                </DialogHeader>
+                <PricingNoteForm
+                  note={editingNote}
+                  categories={noteCategories}
+                  customers={noteCustomers}
+                  onSubmit={handleSaveNote}
+                  onCancel={() => {
+                    setIsNoteDialogOpen(false);
+                    setEditingNote(null);
+                  }}
+                  isLoading={isSavingNote}
+                />
+              </DialogContent>
+            </Dialog>
+            </>
           ) : (
             <Card className="shadow-md border border-slate-200 h-[calc(100vh-8rem)] flex flex-col">
               <CardHeader className="bg-slate-100 border-b flex-shrink-0">
