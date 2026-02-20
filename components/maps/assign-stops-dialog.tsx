@@ -138,6 +138,11 @@ export default function AssignStopsDialog({
       driverName: driver.full_name,
       driverColor: driver.color,
       truckloads: truckloads.filter(t => t.driver_name === driver.full_name)
+        .sort(function sortOldestFirst(a, b) {
+          const aTime = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY
+          const bTime = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY
+          return aTime - bTime
+        })
     }
     return acc
   }, {} as Record<string, { driverName: string; driverColor: string; truckloads: Truckload[] }>)

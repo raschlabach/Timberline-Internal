@@ -423,10 +423,10 @@ export function BulkAssignmentDialog({
       driverColor: driver.color,
       truckloads: truckloads.filter(function filterDriverTruckloads(t) {
         return t.driverName === driver.fullName
-      }).sort(function sortNewestFirst(a, b) {
-        const aTime = a.startDate ? new Date(a.startDate).getTime() : 0
-        const bTime = b.startDate ? new Date(b.startDate).getTime() : 0
-        return bTime - aTime
+      }).sort(function sortOldestFirst(a, b) {
+        const aTime = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY
+        const bTime = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY
+        return aTime - bTime
       })
     }
     return acc
