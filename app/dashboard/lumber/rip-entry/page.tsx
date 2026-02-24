@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown, Pencil, Scissors } from 'lucide-react'
+import { RefreshCcw, Save, ArrowLeft, Trash2, Plus, ArrowUpDown, Pencil, Scissors, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Operator {
@@ -99,6 +99,91 @@ export default function RipEntryPage() {
     finished_at: ''
   })
 
+  // Manage operators dialog state
+  const [manageOperatorsOpen, setManageOperatorsOpen] = useState(false)
+  const [allOperators, setAllOperators] = useState<Operator[]>([])
+  const [newOperatorName, setNewOperatorName] = useState('')
+  const [editingOperatorId, setEditingOperatorId] = useState<number | null>(null)
+  const [editingOperatorName, setEditingOperatorName] = useState('')
+
+  async function fetchAllOperators() {
+    try {
+      const res = await fetch('/api/lumber/operators')
+      if (res.ok) {
+        const data = await res.json()
+        setAllOperators(data)
+        setOperators(data.filter((op: Operator) => op.is_active))
+      }
+    } catch (error) {
+      console.error('Error fetching operators:', error)
+    }
+  }
+
+  async function handleAddOperator() {
+    const trimmed = newOperatorName.trim()
+    if (!trimmed) return
+
+    try {
+      const res = await fetch('/api/lumber/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed, is_active: true })
+      })
+
+      if (res.ok) {
+        toast.success(`Added "${trimmed}"`)
+        setNewOperatorName('')
+        fetchAllOperators()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to add operator')
+      }
+    } catch (error) {
+      toast.error('Failed to add operator')
+    }
+  }
+
+  async function handleUpdateOperator(id: number, updates: Partial<Operator>) {
+    try {
+      const res = await fetch(`/api/lumber/operators/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+
+      if (res.ok) {
+        toast.success('Operator updated')
+        setEditingOperatorId(null)
+        fetchAllOperators()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to update operator')
+      }
+    } catch (error) {
+      toast.error('Failed to update operator')
+    }
+  }
+
+  async function handleDeleteOperator(id: number, name: string) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+
+    try {
+      const res = await fetch(`/api/lumber/operators/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (res.ok) {
+        toast.success(`Deleted "${name}"`)
+        fetchAllOperators()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to delete operator')
+      }
+    } catch (error) {
+      toast.error('Failed to delete operator')
+    }
+  }
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login?callbackUrl=/dashboard/lumber/rip-entry')
@@ -107,17 +192,12 @@ export default function RipEntryPage() {
 
   async function fetchLoads() {
     try {
-      const [loadsRes, operatorsRes] = await Promise.all([
+      const [loadsRes] = await Promise.all([
         fetch('/api/lumber/loads/for-rip'),
-        fetch('/api/lumber/operators')
+        fetchAllOperators()
       ])
       
       if (loadsRes.ok) setLoads(await loadsRes.json())
-      if (operatorsRes.ok) {
-        const allOperators = await operatorsRes.json()
-        // Only show active operators
-        setOperators(allOperators.filter((op: Operator) => op.is_active))
-      }
     } catch (error) {
       console.error('Error fetching rip entry data:', error)
     } finally {
@@ -778,6 +858,17 @@ export default function RipEntryPage() {
           </Button>
         )}
         <h1 className="text-xl font-bold">Rip Entry</h1>
+        <div className="ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setManageOperatorsOpen(true); fetchAllOperators() }}
+            className="flex items-center gap-2"
+          >
+            <Users className="h-4 w-4" />
+            Manage Team
+          </Button>
+        </div>
       </div>
 
       {!selectedLoad ? (
@@ -1629,6 +1720,115 @@ export default function RipEntryPage() {
                 Save Changes
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Manage Operators Dialog */}
+      <Dialog open={manageOperatorsOpen} onOpenChange={setManageOperatorsOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage Operators & Stackers</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Add new operator */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="New operator name..."
+                value={newOperatorName}
+                onChange={(e) => setNewOperatorName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddOperator() }}
+                className="text-sm"
+              />
+              <Button onClick={handleAddOperator} size="sm" disabled={!newOperatorName.trim()}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
+
+            {/* Operator list */}
+            <div className="border rounded max-h-80 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Name</th>
+                    <th className="px-3 py-2 text-center w-20">Active</th>
+                    <th className="px-3 py-2 w-20"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allOperators.map(op => (
+                    <tr key={op.id} className={`border-t ${!op.is_active ? 'bg-gray-50 text-gray-400' : ''}`}>
+                      <td className="px-3 py-1.5">
+                        {editingOperatorId === op.id ? (
+                          <div className="flex gap-1">
+                            <Input
+                              value={editingOperatorName}
+                              onChange={(e) => setEditingOperatorName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && editingOperatorName.trim()) {
+                                  handleUpdateOperator(op.id, { name: editingOperatorName.trim() })
+                                }
+                                if (e.key === 'Escape') setEditingOperatorId(null)
+                              }}
+                              className="h-7 text-sm"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => {
+                                if (editingOperatorName.trim()) {
+                                  handleUpdateOperator(op.id, { name: editingOperatorName.trim() })
+                                }
+                              }}
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span
+                            className="cursor-pointer hover:text-blue-600"
+                            onClick={() => { setEditingOperatorId(op.id); setEditingOperatorName(op.name) }}
+                            title="Click to rename"
+                          >
+                            {op.name}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-center">
+                        <Checkbox
+                          checked={op.is_active}
+                          onCheckedChange={(checked) => handleUpdateOperator(op.id, { is_active: checked as boolean })}
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleDeleteOperator(op.id, op.name)}
+                          title="Delete operator"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {allOperators.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-3 py-4 text-center text-gray-500">
+                        No operators yet. Add one above.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Inactive operators won't appear in the dropdowns but are kept for historical records. 
+              Operators assigned to existing packs cannot be deleted.
+            </p>
           </div>
         </DialogContent>
       </Dialog>

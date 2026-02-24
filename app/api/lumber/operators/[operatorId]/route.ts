@@ -10,7 +10,11 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user?.role !== 'admin') {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const role = session.user?.role
+    if (role !== 'admin' && role !== 'rip_operator') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -70,7 +74,11 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user?.role !== 'admin') {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const role = session.user?.role
+    if (role !== 'admin' && role !== 'rip_operator') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
