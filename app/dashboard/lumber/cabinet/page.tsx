@@ -25,6 +25,8 @@ interface ProcessedSheet {
   grandQtyTotal: number
   grandExtTotal: number
   extPriceDisplayIdx: number
+  partNumDisplayIdx: number
+  missingPartCount: number
 }
 
 // ===== Constants =====
@@ -156,6 +158,11 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
     // Find ext price column index in the display array
     const extPriceDisplayIdx = displayHeaders.findIndex(h =>
       h.toUpperCase().includes('EXT')
+    )
+
+    // Find RNR PART # column index in the display array
+    const partNumDisplayIdx = displayHeaders.findIndex(h =>
+      h.toUpperCase().includes('PART')
     )
 
     // Process data rows into sections
