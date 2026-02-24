@@ -209,13 +209,13 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       {order.is_rush && (
-                        <Zap className="h-4 w-4 text-red-500" title="Rush Order" />
+                        <span title="Rush Order"><Zap className="h-4 w-4 text-red-500" /></span>
                       )}
                       {order.needs_attention && (
-                        <AlertTriangle className="h-4 w-4 text-amber-500" title="Needs Attention" />
+                        <span title="Needs Attention"><AlertTriangle className="h-4 w-4 text-amber-500" /></span>
                       )}
                       {order.comments && (
-                        <MessageSquare className="h-3.5 w-3.5 text-blue-500" title="Has Comments" />
+                        <span title="Has Comments"><MessageSquare className="h-3.5 w-3.5 text-blue-500" /></span>
                       )}
                     </div>
                   </TableCell>
