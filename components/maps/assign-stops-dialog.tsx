@@ -60,7 +60,7 @@ export default function AssignStopsDialog({
     setIsLoading(true)
     try {
       const [truckloadsResponse, driversResponse] = await Promise.all([
-        fetch('/api/truckloads'),
+        fetch('/api/truckloads?activeOnly=true'),
         fetch('/api/drivers'),
       ])
       if (!truckloadsResponse.ok) throw new Error('Failed to fetch truckloads')
@@ -139,9 +139,18 @@ export default function AssignStopsDialog({
     return acc
   }, {} as Record<string, { driverName: string; driverColor: string; truckloads: TruckloadSummary[] }>)
 
-  const driverColumns = Object.values(truckloadsByDriver).sort((a, b) =>
-    a.driverName.localeCompare(b.driverName)
-  )
+  const unassignedTruckloads = truckloads.filter(t => !t.driverName)
+
+  const driverColumns = [
+    ...Object.values(truckloadsByDriver).sort((a, b) => a.driverName.localeCompare(b.driverName)),
+    ...(unassignedTruckloads.length > 0
+      ? [{
+          driverName: 'Unassigned',
+          driverColor: '#9ca3af',
+          truckloads: unassignedTruckloads
+        }]
+      : [])
+  ]
 
   const pickupCount = selectedLocations.filter(l => l.type === 'pickup').length
   const deliveryCount = selectedLocations.filter(l => l.type === 'delivery').length
