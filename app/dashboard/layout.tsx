@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -422,6 +422,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     isActive={isActiveRoute('/dashboard/lumber/admin')}
                     theme="emerald"
                   />
+                )}
+
+                {canSeeAllPages && (
+                  <>
+                    <div className="pt-3" />
+                    <NavItem
+                      href="/dashboard/lumber/cabinet"
+                      icon={<Boxes size={20} />}
+                      label="Cabinet Shop"
+                      isActive={isActiveRoute('/dashboard/lumber/cabinet')}
+                      theme="emerald"
+                    />
+                  </>
                 )}
               </>
             )}
