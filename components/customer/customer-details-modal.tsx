@@ -17,6 +17,7 @@ import {
   TabsContent
 } from "@/components/ui/tabs"
 import { CustomerQuotes } from './customer-quotes'
+import { CustomerOrderHistory } from './customer-order-history'
 
 interface Customer {
   id: number
@@ -176,10 +177,7 @@ export function CustomerDetailsModal({
           
           {/* Order History Tab */}
           <TabsContent value="loads">
-            <div className="p-4 border rounded-md">
-              <p className="text-muted-foreground italic">Order history will be displayed here...</p>
-              {/* Order history component will go here */}
-            </div>
+            <CustomerOrderHistory customerId={customer.id} />
           </TabsContent>
         </Tabs>
       </DialogContent>

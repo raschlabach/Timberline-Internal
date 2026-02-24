@@ -30,6 +30,7 @@ interface ProcessedSheet {
 }
 
 interface SpecialRow {
+  poNumber: string
   partNum: string
   quantity: number
   width: number
@@ -48,8 +49,6 @@ interface SpecialTabResult {
   dueDate: string
   ripRows: SpecialRow[]
   mouldRows: SpecialRow[]
-  speciesTotals: { specie: string; boardFt: number }[]
-  totalBoardFt: number
   missingPartCount: number
 }
 
@@ -100,8 +99,8 @@ const SPECIE_MAP: Record<string, string> = {
   'Walnut': 'Walnut',
 }
 
-const RIP_HEADERS = ['Part#', 'Qty', 'Rip Width', 'Specie', 'Thick', 'Width', 'Profile', 'Grade', 'Board Ft']
-const MOULD_HEADERS = ['Part#', 'Qty', 'Width', 'Profile', 'Thickness', 'Specie', 'Grade', 'Sort Order']
+const RIP_HEADERS = ['PO#', 'Part#', 'Qty', 'Rip Width', 'Specie', 'Thick', 'Width', 'Profile', 'Grade', 'Board Ft']
+const MOULD_HEADERS = ['PO#', 'Part#', 'Qty', 'Width', 'Profile', 'Thickness', 'Specie', 'Grade', 'Sort Order']
 
 // ===== Helpers =====
 
@@ -293,6 +292,7 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
         if (!parsed) continue
         const ripWidth = parsed.width + 0.125
         linealRows.push({
+          poNumber,
           partNum,
           quantity: qty,
           width: parsed.width,
@@ -320,6 +320,7 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
         if (!parsed) continue
         const ripWidth = parsed.width + 0.125
         linealRows.push({
+          poNumber,
           partNum,
           quantity: qty,
           width: parsed.width,
@@ -349,6 +350,7 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
           const partNum = String(row[5] ?? '')
           const ripWidth = MOULD_RIP_WIDTH[currentSection.profile] ?? (currentSection.width + 0.125)
           mouldingRows.push({
+            poNumber,
             partNum,
             quantity: col1,
             width: currentSection.width,
@@ -380,8 +382,6 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
       dueDate: linealDueDate,
       ripRows,
       mouldRows,
-      speciesTotals: calcSpeciesTotals(ripRows),
-      totalBoardFt: ripRows.reduce((sum, r) => sum + r.boardFt, 0),
       missingPartCount: linealRows.filter(r => isPartMissing(r.partNum)).length,
     })
   }
@@ -399,23 +399,11 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
       dueDate: mouldingDueDate,
       ripRows,
       mouldRows,
-      speciesTotals: calcSpeciesTotals(ripRows),
-      totalBoardFt: ripRows.reduce((sum, r) => sum + r.boardFt, 0),
       missingPartCount: mouldingRows.filter(r => isPartMissing(r.partNum)).length,
     })
   }
 
   return results
-}
-
-function calcSpeciesTotals(rows: SpecialRow[]): { specie: string; boardFt: number }[] {
-  const map: Record<string, number> = {}
-  for (const r of rows) {
-    map[r.specie] = (map[r.specie] || 0) + r.boardFt
-  }
-  return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([specie, boardFt]) => ({ specie, boardFt }))
 }
 
 // ===== Main Processing =====
@@ -532,10 +520,8 @@ function formatNum(val: number, decimals = 3): string {
 
 // ===== Rip/Mould Table Renderers =====
 
-function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
+function RipTable({ rows, compact }: {
   rows: SpecialRow[]
-  speciesTotals: { specie: string; boardFt: number }[]
-  totalBoardFt: number
   compact?: boolean
 }) {
   const fontSize = compact ? '10px' : undefined
@@ -567,6 +553,7 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
             <tr key={i}
               className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
               style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
+              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.poNumber}</td>
               <td className={compact ? undefined : 'px-3 py-1.5 whitespace-nowrap'}
                 style={compact ? { border: borderStyle, padding, whiteSpace: 'nowrap' } : undefined}>
                 {missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}
@@ -582,31 +569,6 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
             </tr>
           )
         })}
-        <tr className={compact ? undefined : 'border-t-2 border-gray-300'}>
-          <td colSpan={9} className={compact ? undefined : 'py-2'} style={compact ? { padding: '6px' } : undefined} />
-        </tr>
-        {speciesTotals.map((st, i) => (
-          <tr key={`st-${i}`} className={compact ? undefined : 'bg-emerald-50 font-semibold text-emerald-800'}>
-            <td colSpan={3} className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined} />
-            <td className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>{st.specie}</td>
-            <td colSpan={4} className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding } : undefined} />
-            <td className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>{formatNum(st.boardFt, 2)}</td>
-          </tr>
-        ))}
-        <tr className={compact ? undefined : 'bg-emerald-100 font-bold text-emerald-900'}>
-          <td colSpan={3} className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined} />
-          <td className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>TOTAL</td>
-          <td colSpan={4} className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding } : undefined} />
-          <td className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>{formatNum(totalBoardFt, 2)}</td>
-        </tr>
       </tbody>
     </table>
   )
@@ -642,6 +604,7 @@ function MouldTable({ rows, compact }: { rows: SpecialRow[]; compact?: boolean }
             <tr key={i}
               className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
               style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
+              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.poNumber}</td>
               <td className={compact ? undefined : 'px-3 py-1.5 whitespace-nowrap'}
                 style={compact ? { border: borderStyle, padding, whiteSpace: 'nowrap' } : undefined}>
                 {missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}
@@ -989,9 +952,6 @@ export default function CabinetOrderPage() {
                 }`}
               >
                 RIP View
-                <span className="ml-2 text-xs opacity-75">
-                  (Board Ft: {formatNum(activeSpecial.totalBoardFt, 1)})
-                </span>
               </button>
               <button
                 onClick={() => setSpecialView('mould')}
@@ -1007,11 +967,7 @@ export default function CabinetOrderPage() {
 
             <div className="overflow-x-auto">
               {specialView === 'rip' ? (
-                <RipTable
-                  rows={activeSpecial.ripRows}
-                  speciesTotals={activeSpecial.speciesTotals}
-                  totalBoardFt={activeSpecial.totalBoardFt}
-                />
+                <RipTable rows={activeSpecial.ripRows} />
               ) : (
                 <MouldTable rows={activeSpecial.mouldRows} />
               )}
@@ -1141,12 +1097,7 @@ export default function CabinetOrderPage() {
                   )}
                 </div>
               </div>
-              <RipTable
-                rows={sr.ripRows}
-                speciesTotals={sr.speciesTotals}
-                totalBoardFt={sr.totalBoardFt}
-                compact
-              />
+              <RipTable rows={sr.ripRows} compact />
             </div>
 
             {/* MOULD page */}
