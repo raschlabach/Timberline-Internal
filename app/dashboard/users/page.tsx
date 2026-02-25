@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Edit, Trash2, Users, Shield, UserCheck, User, Wrench } from 'lucide-react'
+import { Plus, Edit, Trash2, Users, Shield, UserCheck, User, Wrench, Ship } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface User {
@@ -19,7 +19,7 @@ interface User {
   username: string
   full_name: string
   email: string | null
-  role: 'admin' | 'user' | 'driver' | 'rip_operator'
+  role: 'admin' | 'user' | 'driver' | 'rip_operator' | 'shipping_station'
   is_active: boolean
   created_at: string
   updated_at: string
@@ -32,7 +32,7 @@ interface UserFormData {
   password: string
   fullName: string
   email: string
-  role: 'admin' | 'user' | 'driver' | 'rip_operator'
+  role: 'admin' | 'user' | 'driver' | 'rip_operator' | 'shipping_station'
   isActive: boolean
   driverColor: string
   driverPhone: string
@@ -174,6 +174,8 @@ export default function UserManagementPage() {
         return <UserCheck className="h-4 w-4" />
       case 'rip_operator':
         return <Wrench className="h-4 w-4" />
+      case 'shipping_station':
+        return <Ship className="h-4 w-4" />
       case 'user':
         return <User className="h-4 w-4" />
       default:
@@ -189,6 +191,8 @@ export default function UserManagementPage() {
         return 'secondary'
       case 'rip_operator':
         return 'secondary'
+      case 'shipping_station':
+        return 'secondary'
       case 'user':
         return 'outline'
       default:
@@ -200,6 +204,8 @@ export default function UserManagementPage() {
     switch (role) {
       case 'rip_operator':
         return 'Rip Operator'
+      case 'shipping_station':
+        return 'Shipping Station'
       default:
         return role
     }
@@ -318,7 +324,7 @@ export default function UserManagementPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="role">Role *</Label>
-                  <Select value={formData.role} onValueChange={(value: 'admin' | 'user' | 'driver' | 'rip_operator') => setFormData({ ...formData, role: value })}>
+                  <Select value={formData.role} onValueChange={(value: 'admin' | 'user' | 'driver' | 'rip_operator' | 'shipping_station') => setFormData({ ...formData, role: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -327,11 +333,17 @@ export default function UserManagementPage() {
                       <SelectItem value="user">User</SelectItem>
                       <SelectItem value="driver">Driver</SelectItem>
                       <SelectItem value="rip_operator">Rip Operator</SelectItem>
+                      <SelectItem value="shipping_station">Shipping Station</SelectItem>
                     </SelectContent>
                   </Select>
                   {formData.role === 'rip_operator' && (
                     <p className="text-xs text-gray-500">
                       Can only access: Overview, Rip Entry, Daily Hours, Ripped Packs
+                    </p>
+                  )}
+                  {formData.role === 'shipping_station' && (
+                    <p className="text-xs text-gray-500">
+                      Can only access: Overview, Incoming Loads, Trucking, NW Shipping Report
                     </p>
                   )}
                 </div>
@@ -387,7 +399,7 @@ export default function UserManagementPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -435,6 +447,16 @@ export default function UserManagementPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{users.filter(u => u.role === 'rip_operator').length}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Shipping Station</CardTitle>
+            <Ship className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{users.filter(u => u.role === 'shipping_station').length}</div>
           </CardContent>
         </Card>
       </div>

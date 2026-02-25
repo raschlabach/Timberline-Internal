@@ -20,14 +20,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isAdmin = session?.user?.role === 'admin'
   const isRipOperator = session?.user?.role === 'rip_operator'
   const isDriver = session?.user?.role === 'driver'
+  const isShippingStation = session?.user?.role === 'shipping_station'
   
-  // Rip operators only see specific lumber pages
-  const canSeeAllPages = !isRipOperator && !isDriver
+  // Restricted roles only see specific pages
+  const canSeeAllPages = !isRipOperator && !isDriver && !isShippingStation
   
   // Exclusive section toggle - only one section visible at a time
   const isLumberRoute = pathname?.startsWith('/dashboard/lumber') || false
   const [activeSection, setActiveSection] = useState<'timberline' | 'rnr'>(
-    isLumberRoute || isRipOperator ? 'rnr' : 'timberline'
+    isLumberRoute || isRipOperator || isShippingStation ? 'rnr' : 'timberline'
   )
 
   useEffect(() => {
@@ -183,8 +184,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           ) : (
             <div className="flex items-center gap-3 px-1">
-              <Hammer size={24} className="text-emerald-600" />
-              <h1 className="text-lg font-bold tracking-tight text-emerald-800">RNR Lumber</h1>
+              {isShippingStation ? (
+                <>
+                  <Ship size={24} className="text-emerald-600" />
+                  <h1 className="text-lg font-bold tracking-tight text-emerald-800">Shipping Station</h1>
+                </>
+              ) : (
+                <>
+                  <Hammer size={24} className="text-emerald-600" />
+                  <h1 className="text-lg font-bold tracking-tight text-emerald-800">RNR Lumber</h1>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -318,74 +328,80 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveRoute('/dashboard/lumber/incoming')}
                   theme="emerald"
                 />
-                {canSeeAllPages && (
-                  <>
-                    <SubNavItem
-                      href="/dashboard/lumber/trucking"
-                      icon={<Truck size={16} />}
-                      label="Trucking"
-                      isActive={isActiveRoute('/dashboard/lumber/trucking')}
-                      theme="emerald"
-                    />
-                    <SubNavItem
-                      href="/dashboard/lumber/invoices"
-                      icon={<FileText size={16} />}
-                      label="Invoice Page"
-                      isActive={isActiveRoute('/dashboard/lumber/invoices')}
-                      theme="emerald"
-                    />
-                  </>
-                )}
-                <SubNavItem
-                  href="/dashboard/lumber/all-loads"
-                  icon={<List size={16} />}
-                  label={isRipOperator ? "All Loads (View)" : "All Loads"}
-                  isActive={isActiveRoute('/dashboard/lumber/all-loads')}
-                  theme="emerald"
-                />
-
-                <div className="pt-3" />
-                {canSeeAllPages && (
-                  <NavItem
-                    href="/dashboard/lumber/tally-entry"
-                    icon={<ClipboardList size={20} />}
-                    label="Tally Entry"
-                    isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
+                {(canSeeAllPages || isShippingStation) && (
+                  <SubNavItem
+                    href="/dashboard/lumber/trucking"
+                    icon={<Truck size={16} />}
+                    label="Trucking"
+                    isActive={isActiveRoute('/dashboard/lumber/trucking')}
                     theme="emerald"
                   />
                 )}
-                <SubNavItem
-                  href="/dashboard/lumber/rip-entry"
-                  icon={<Hammer size={16} />}
-                  label="Rip Entry"
-                  isActive={isActiveRoute('/dashboard/lumber/rip-entry')}
-                  theme="emerald"
-                  className={isRipOperator ? '' : 'ml-6'}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/misc-rip"
-                  icon={<Package size={16} />}
-                  label="Misc Rip"
-                  isActive={isActiveRoute('/dashboard/lumber/misc-rip')}
-                  theme="emerald"
-                  className={isRipOperator ? '' : 'ml-6'}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/daily-hours"
-                  icon={<Clock size={16} />}
-                  label="Daily Hours"
-                  isActive={isActiveRoute('/dashboard/lumber/daily-hours')}
-                  theme="emerald"
-                  className={isRipOperator ? '' : 'ml-6'}
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/ripped-packs"
-                  icon={<PackageCheck size={16} />}
-                  label="Ripped Packs"
-                  isActive={isActiveRoute('/dashboard/lumber/ripped-packs')}
-                  theme="emerald"
-                  className={isRipOperator ? '' : 'ml-6'}
-                />
+                {canSeeAllPages && (
+                  <SubNavItem
+                    href="/dashboard/lumber/invoices"
+                    icon={<FileText size={16} />}
+                    label="Invoice Page"
+                    isActive={isActiveRoute('/dashboard/lumber/invoices')}
+                    theme="emerald"
+                  />
+                )}
+                {!isShippingStation && (
+                  <SubNavItem
+                    href="/dashboard/lumber/all-loads"
+                    icon={<List size={16} />}
+                    label={isRipOperator ? "All Loads (View)" : "All Loads"}
+                    isActive={isActiveRoute('/dashboard/lumber/all-loads')}
+                    theme="emerald"
+                  />
+                )}
+
+                {!isShippingStation && (
+                  <>
+                    <div className="pt-3" />
+                    {canSeeAllPages && (
+                      <NavItem
+                        href="/dashboard/lumber/tally-entry"
+                        icon={<ClipboardList size={20} />}
+                        label="Tally Entry"
+                        isActive={isActiveRoute('/dashboard/lumber/tally-entry')}
+                        theme="emerald"
+                      />
+                    )}
+                    <SubNavItem
+                      href="/dashboard/lumber/rip-entry"
+                      icon={<Hammer size={16} />}
+                      label="Rip Entry"
+                      isActive={isActiveRoute('/dashboard/lumber/rip-entry')}
+                      theme="emerald"
+                      className={isRipOperator ? '' : 'ml-6'}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/misc-rip"
+                      icon={<Package size={16} />}
+                      label="Misc Rip"
+                      isActive={isActiveRoute('/dashboard/lumber/misc-rip')}
+                      theme="emerald"
+                      className={isRipOperator ? '' : 'ml-6'}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/daily-hours"
+                      icon={<Clock size={16} />}
+                      label="Daily Hours"
+                      isActive={isActiveRoute('/dashboard/lumber/daily-hours')}
+                      theme="emerald"
+                      className={isRipOperator ? '' : 'ml-6'}
+                    />
+                    <SubNavItem
+                      href="/dashboard/lumber/ripped-packs"
+                      icon={<PackageCheck size={16} />}
+                      label="Ripped Packs"
+                      isActive={isActiveRoute('/dashboard/lumber/ripped-packs')}
+                      theme="emerald"
+                      className={isRipOperator ? '' : 'ml-6'}
+                    />
+                  </>
+                )}
 
                 {canSeeAllPages && (
                   <>
@@ -441,6 +457,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       isActive={pathname === '/dashboard/lumber/cabinet/parts'}
                       theme="emerald"
                     />
+                  </>
+                )}
+                {(canSeeAllPages || isShippingStation) && (
+                  <>
+                    {isShippingStation && <div className="pt-3" />}
                     <NavItem
                       href="/dashboard/lumber/nw-shipping"
                       icon={<Ship size={20} />}

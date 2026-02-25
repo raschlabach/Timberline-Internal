@@ -47,3 +47,14 @@ CREATE TABLE IF NOT EXISTS nw_shipping_report_items (
 
 CREATE INDEX IF NOT EXISTS idx_nw_report_items_report ON nw_shipping_report_items(report_id);
 CREATE INDEX IF NOT EXISTS idx_nw_report_items_part ON nw_shipping_report_items(archbold_part_id);
+
+-- Add delivery_date if table already exists without it
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'nw_shipping_reports' AND column_name = 'delivery_date'
+  ) THEN
+    ALTER TABLE nw_shipping_reports ADD COLUMN delivery_date DATE;
+  END IF;
+END $$;

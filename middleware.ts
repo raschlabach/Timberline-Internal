@@ -22,6 +22,14 @@ const DRIVER_ALLOWED_PATHS = [
   '/dashboard/driver/log-hours',
 ]
 
+// Pages that shipping_station role CAN access
+const SHIPPING_STATION_ALLOWED_PATHS = [
+  '/dashboard/lumber/overview',
+  '/dashboard/lumber/incoming',
+  '/dashboard/lumber/trucking',
+  '/dashboard/lumber/nw-shipping',
+]
+
 /**
  * Middleware that runs on specific routes to protect them from unauthorized access
  */
@@ -116,6 +124,21 @@ export async function middleware(request: NextRequest) {
       // If not allowed, redirect to driver portal home
       if (!isAllowed) {
         return NextResponse.redirect(new URL('/dashboard/driver/planner', request.url));
+      }
+    }
+  }
+
+  // Role-based access control for shipping_station
+  if (isAuthenticated && token?.role === 'shipping_station') {
+    const isDashboardPath = path.startsWith('/dashboard')
+    
+    if (isDashboardPath) {
+      const isAllowed = SHIPPING_STATION_ALLOWED_PATHS.some(allowedPath => 
+        path === allowedPath || path.startsWith(allowedPath + '/')
+      )
+      
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL('/dashboard/lumber/overview', request.url));
       }
     }
   }
