@@ -359,9 +359,9 @@ function PanelCalculator({ config, state, setState }: {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b">
-                <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
-                <th className="px-[5px] py-1 text-left text-gray-500">{config.widthLabel}</th>
-                <th className="px-[5px] py-1 text-left text-gray-500">{config.lengthLabel}</th>
+                <th className="py-1 text-center text-gray-400 w-6">#</th>
+                <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">{config.widthLabel}</th>
+                <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">{config.lengthLabel}</th>
                 <th className="px-1.5 py-1 text-right text-gray-500">BF</th>
                 <th className="px-1.5 py-1 text-right text-blue-600 bg-blue-50">Cost</th>
                 <th className="px-1.5 py-1 text-right text-gray-500">Layup W</th>
@@ -382,12 +382,12 @@ function PanelCalculator({ config, state, setState }: {
 
                 return (
                   <tr key={idx} className="border-b border-gray-100">
-                    <td className="px-1.5 py-1 text-center text-[10px] text-gray-400">{idx + 1}</td>
-                    <td className="px-[5px] py-1">
+                    <td className="py-1 text-center text-[10px] text-gray-400 w-6">{idx + 1}</td>
+                    <td className="px-[5px] py-1 w-[82px]">
                       <input type="number" step="0.01" className={inputCls}
                         value={row.width} onChange={(e) => updateRow(idx, 'width', e.target.value)} placeholder="—" />
                     </td>
-                    <td className="px-[5px] py-1">
+                    <td className="px-[5px] py-1 w-[82px]">
                       <input type="number" step="0.01" className={inputCls}
                         value={row.length} onChange={(e) => updateRow(idx, 'length', e.target.value)} placeholder="—" />
                     </td>
