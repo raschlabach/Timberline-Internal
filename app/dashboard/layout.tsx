@@ -430,8 +430,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <NavItem
                       href="/dashboard/lumber/cabinet"
                       icon={<Boxes size={20} />}
-                      label="Cabinet Shop"
-                      isActive={isActiveRoute('/dashboard/lumber/cabinet')}
+                      label="Order Processor"
+                      isActive={pathname === '/dashboard/lumber/cabinet'}
+                      theme="emerald"
+                    />
+                    <NavItem
+                      href="/dashboard/lumber/cabinet/parts"
+                      icon={<Calculator size={20} />}
+                      label="Part Builder"
+                      isActive={pathname === '/dashboard/lumber/cabinet/parts'}
                       theme="emerald"
                     />
                   </>
