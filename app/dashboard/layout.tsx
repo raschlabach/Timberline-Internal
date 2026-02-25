@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -439,6 +439,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       icon={<Calculator size={20} />}
                       label="Part Builder"
                       isActive={pathname === '/dashboard/lumber/cabinet/parts'}
+                      theme="emerald"
+                    />
+                    <NavItem
+                      href="/dashboard/lumber/nw-shipping"
+                      icon={<Ship size={20} />}
+                      label="NW Shipping Report"
+                      isActive={pathname?.startsWith('/dashboard/lumber/nw-shipping') || false}
                       theme="emerald"
                     />
                   </>
