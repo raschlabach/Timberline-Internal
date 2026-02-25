@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Copy, Check, Plus, Trash2, RotateCcw, ArrowRightLeft } from 'lucide-react'
+import { Copy, Check, Plus, Trash2, RotateCcw, ArrowRightLeft, CopyPlus } from 'lucide-react'
+
+const STORAGE_KEY = 'partBuilder_state'
 
 // ===== Layup Formulas =====
 
@@ -266,6 +268,14 @@ function PanelCalculator({ config, state, setState }: {
     setState(prev => ({ ...prev, rows: [...prev.rows, { width: '', length: '' }] }))
   }
 
+  function duplicateRow(idx: number) {
+    setState(prev => {
+      const rows = [...prev.rows]
+      rows.splice(idx + 1, 0, { ...prev.rows[idx] })
+      return { ...prev, rows }
+    })
+  }
+
   function removeRow(idx: number) {
     setState(prev => ({ ...prev, rows: prev.rows.filter((_, i) => i !== idx) }))
   }
@@ -367,7 +377,7 @@ function PanelCalculator({ config, state, setState }: {
                 <th className="px-1.5 py-1 text-right text-gray-500">Layup W</th>
                 <th className="px-1.5 py-1 text-right text-gray-500">Layup L</th>
                 <th className="px-1.5 py-1 text-right text-gray-500">PCS</th>
-                <th className="w-6" />
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody>
@@ -397,9 +407,14 @@ function PanelCalculator({ config, state, setState }: {
                     <OutCell value={layL} decimals={1} />
                     <OutCell value={w > 0 ? pcs : null} decimals={0} checkWidth={w > 0 && pcs === null} />
                     <td className="px-0.5 py-1">
-                      <button onClick={() => removeRow(idx)} className="p-0.5 text-gray-300 hover:text-red-500 transition-colors">
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex items-center">
+                        <button onClick={() => duplicateRow(idx)} className="p-0.5 text-gray-300 hover:text-blue-500 transition-colors" title="Duplicate row">
+                          <CopyPlus size={12} />
+                        </button>
+                        <button onClick={() => removeRow(idx)} className="p-0.5 text-gray-300 hover:text-red-500 transition-colors" title="Remove row">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -435,6 +450,14 @@ function LinearCalculator({ config, state, setState }: {
 
   function addRow() {
     setState(prev => ({ ...prev, rows: [...prev.rows, { length: '' }] }))
+  }
+
+  function duplicateRow(idx: number) {
+    setState(prev => {
+      const rows = [...prev.rows]
+      rows.splice(idx + 1, 0, { ...prev.rows[idx] })
+      return { ...prev, rows }
+    })
   }
 
   function removeRow(idx: number) {
@@ -538,7 +561,7 @@ function LinearCalculator({ config, state, setState }: {
                 <th className="px-1.5 py-1 text-right text-gray-500">BF</th>
                 <th className="px-1.5 py-1 text-right text-blue-600 bg-blue-50">Cost</th>
                 {hasCope && <th className="px-1.5 py-1 text-right text-blue-600 bg-blue-50">Center Rail</th>}
-                <th className="w-6" />
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody>
@@ -562,9 +585,14 @@ function LinearCalculator({ config, state, setState }: {
                     <OutCell value={cost > 0 ? cost : null} decimals={2} highlight />
                     {hasCope && <OutCell value={centerRailCost > 0 ? centerRailCost : null} decimals={2} highlight />}
                     <td className="px-0.5 py-1">
-                      <button onClick={() => removeRow(idx)} className="p-0.5 text-gray-300 hover:text-red-500 transition-colors">
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex items-center">
+                        <button onClick={() => duplicateRow(idx)} className="p-0.5 text-gray-300 hover:text-blue-500 transition-colors" title="Duplicate row">
+                          <CopyPlus size={12} />
+                        </button>
+                        <button onClick={() => removeRow(idx)} className="p-0.5 text-gray-300 hover:text-red-500 transition-colors" title="Remove row">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -584,60 +612,88 @@ function LinearCalculator({ config, state, setState }: {
 
 // ===== Main Page =====
 
-export default function PartBuilderPage() {
-  const [activeTabId, setActiveTabId] = useState('rp')
-
-  const [panelStates, setPanelStates] = useState<Record<string, PanelState>>(() => {
-    const s: Record<string, PanelState> = {}
-    for (const tab of TABS) {
-      if (tab.type === 'panel') {
-        s[tab.id] = {
-          rate: tab.defaultRate,
-          globalThickness: tab.defaultThickness,
-          rows: makePanelRows(12),
-          reverseRows: makePanelReverseRows(),
-        }
+function getDefaultPanelStates(): Record<string, PanelState> {
+  const s: Record<string, PanelState> = {}
+  for (const tab of TABS) {
+    if (tab.type === 'panel') {
+      s[tab.id] = {
+        rate: tab.defaultRate,
+        globalThickness: tab.defaultThickness,
+        rows: makePanelRows(12),
+        reverseRows: makePanelReverseRows(),
       }
     }
-    return s
+  }
+  return s
+}
+
+function getDefaultLinearStates(): Record<string, LinearState> {
+  const s: Record<string, LinearState> = {}
+  for (const tab of TABS) {
+    if (tab.type === 'linear') {
+      s[tab.id] = {
+        rate: tab.defaultRate,
+        globalWidth: tab.defaultWidth,
+        rows: makeLinearRows(12),
+        reverseRows: makeLinearReverseRows(),
+      }
+    }
+  }
+  return s
+}
+
+function loadSavedState(): { activeTabId: string; panelStates: Record<string, PanelState>; linearStates: Record<string, LinearState> } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch { return null }
+}
+
+export default function PartBuilderPage() {
+  const [activeTabId, setActiveTabId] = useState(() => {
+    const saved = loadSavedState()
+    return saved?.activeTabId ?? 'rp'
+  })
+
+  const [panelStates, setPanelStates] = useState<Record<string, PanelState>>(() => {
+    const saved = loadSavedState()
+    if (saved?.panelStates) {
+      const defaults = getDefaultPanelStates()
+      for (const key of Object.keys(defaults)) {
+        if (!saved.panelStates[key]) saved.panelStates[key] = defaults[key]
+      }
+      return saved.panelStates
+    }
+    return getDefaultPanelStates()
   })
 
   const [linearStates, setLinearStates] = useState<Record<string, LinearState>>(() => {
-    const s: Record<string, LinearState> = {}
-    for (const tab of TABS) {
-      if (tab.type === 'linear') {
-        s[tab.id] = {
-          rate: tab.defaultRate,
-          globalWidth: tab.defaultWidth,
-          rows: makeLinearRows(12),
-          reverseRows: makeLinearReverseRows(),
-        }
+    const saved = loadSavedState()
+    if (saved?.linearStates) {
+      const defaults = getDefaultLinearStates()
+      for (const key of Object.keys(defaults)) {
+        if (!saved.linearStates[key]) saved.linearStates[key] = defaults[key]
       }
+      return saved.linearStates
     }
-    return s
+    return getDefaultLinearStates()
   })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeTabId, panelStates, linearStates }))
+    } catch { /* storage full or unavailable */ }
+  }, [activeTabId, panelStates, linearStates])
 
   const activeTab = TABS.find(t => t.id === activeTabId)!
 
   function resetActiveTab() {
+    const defaults = activeTab.type === 'panel' ? getDefaultPanelStates() : getDefaultLinearStates()
     if (activeTab.type === 'panel') {
-      const cfg = activeTab as PanelConfig
-      setPanelStates(prev => ({
-        ...prev,
-        [cfg.id]: {
-          rate: cfg.defaultRate, globalThickness: cfg.defaultThickness,
-          rows: makePanelRows(12), reverseRows: makePanelReverseRows(),
-        },
-      }))
+      setPanelStates(prev => ({ ...prev, [activeTab.id]: defaults[activeTab.id] as PanelState }))
     } else {
-      const cfg = activeTab as LinearConfig
-      setLinearStates(prev => ({
-        ...prev,
-        [cfg.id]: {
-          rate: cfg.defaultRate, globalWidth: cfg.defaultWidth,
-          rows: makeLinearRows(12), reverseRows: makeLinearReverseRows(),
-        },
-      }))
+      setLinearStates(prev => ({ ...prev, [activeTab.id]: defaults[activeTab.id] as LinearState }))
     }
   }
 
