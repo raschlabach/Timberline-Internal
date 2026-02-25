@@ -11,11 +11,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { format, parseISO } from "date-fns"
 
 interface OrderAssignment {
   driverName: string
   driverColor: string
+  truckloadId: number
+  startDate: string | null
+  endDate: string | null
+}
+
+interface LoadFilters {
+  ohioToIndiana: boolean
+  backhaul: boolean
+  localFlatbed: boolean
+  rrOrder: boolean
+  localSemi: boolean
+  middlefield: boolean
+  paNy: boolean
 }
 
 interface OrderHistoryItem {
@@ -27,6 +46,9 @@ interface OrderHistoryItem {
   needs_attention: boolean
   freight_quote: string | null
   created_at: string
+  updated_at: string
+  creator: string
+  filters: LoadFilters
   customer_role: "pickup" | "delivery" | "paying" | "both"
   pickup_customer: { id: number; name: string }
   delivery_customer: { id: number; name: string }
@@ -41,52 +63,123 @@ interface CustomerOrderHistoryProps {
   customerId: number
 }
 
+const FILTER_LABELS: Record<keyof LoadFilters, string> = {
+  ohioToIndiana: "OH→IN",
+  backhaul: "Backhaul",
+  localFlatbed: "Local Flatbed",
+  rrOrder: "RNR",
+  localSemi: "Local Semi",
+  middlefield: "Middlefield",
+  paNy: "PA/NY",
+}
+
 function getRoleBadge(role: string) {
   switch (role) {
     case "pickup":
-      return <Badge variant="outline" className="border-red-300 text-red-700 bg-red-50">Pickup</Badge>
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-red-300 text-red-700 bg-red-50">Pickup</Badge>
     case "delivery":
-      return <Badge variant="outline" className="border-gray-400 text-gray-800 bg-gray-50">Delivery</Badge>
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-gray-400 text-gray-800 bg-gray-50">Delivery</Badge>
     case "paying":
-      return <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50">Paying</Badge>
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-700 bg-blue-50">Paying</Badge>
     case "both":
       return (
-        <div className="flex gap-1">
-          <Badge variant="outline" className="border-red-300 text-red-700 bg-red-50">Pickup</Badge>
-          <Badge variant="outline" className="border-gray-400 text-gray-800 bg-gray-50">Delivery</Badge>
+        <div className="flex gap-0.5">
+          <Badge variant="outline" className="text-[10px] px-1 py-0 border-red-300 text-red-700 bg-red-50">P</Badge>
+          <Badge variant="outline" className="text-[10px] px-1 py-0 border-gray-400 text-gray-800 bg-gray-50">D</Badge>
         </div>
       )
     default:
-      return <Badge variant="secondary">{role}</Badge>
+      return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{role}</Badge>
   }
 }
 
 function getStatusBadge(status: string) {
   switch (status) {
     case "unassigned":
-      return <Badge variant="secondary">Unassigned</Badge>
+      return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Unassigned</Badge>
     case "completed":
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Completed</Badge>
+      return <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 hover:bg-green-100">Completed</Badge>
     default:
-      return <Badge variant="outline">{status}</Badge>
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{status}</Badge>
   }
 }
 
-function formatDate(dateString: string | null): string {
+function formatDateShort(dateString: string | null): string {
   if (!dateString) return "—"
   try {
-    return format(parseISO(dateString), "MM/dd/yyyy")
+    return format(parseISO(dateString), "M/d/yy")
   } catch {
     return dateString
   }
 }
 
-function buildFreightSummary(order: OrderHistoryItem): string {
+function formatDateFull(dateString: string | null): string {
+  if (!dateString) return "—"
+  try {
+    return format(parseISO(dateString), "MMM d, yyyy h:mm a")
+  } catch {
+    return dateString
+  }
+}
+
+function buildFreightParts(order: OrderHistoryItem): string[] {
   const parts: string[] = []
-  if (order.skids > 0) parts.push(`${order.skids} skid${order.skids !== 1 ? "s" : ""}`)
-  if (order.vinyl > 0) parts.push(`${order.vinyl} vinyl`)
-  if (order.footage > 0) parts.push(`${Number(order.footage).toLocaleString()} sqft`)
-  return parts.length > 0 ? parts.join(", ") : "—"
+  if (order.skids > 0) parts.push(`${order.skids}S`)
+  if (order.vinyl > 0) parts.push(`${order.vinyl}V`)
+  if (order.footage > 0) parts.push(`${Number(order.footage).toLocaleString()}ft²`)
+  return parts
+}
+
+function getActiveFilters(filters: LoadFilters): string[] {
+  return (Object.entries(filters) as [keyof LoadFilters, boolean][])
+    .filter(([, active]) => active)
+    .map(([key]) => FILTER_LABELS[key])
+}
+
+function TruckAssignmentIcon({ assignment, type }: { assignment: OrderAssignment | null; type: "pickup" | "delivery" }) {
+  if (!assignment) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <Truck className={`h-3.5 w-3.5 ${type === "pickup" ? "text-red-200" : "text-gray-200"}`} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <p>No {type} assignment</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Truck
+            className={`h-3.5 w-3.5 ${type === "pickup" ? "text-red-600" : "text-gray-800"}`}
+            style={{ filter: `drop-shadow(0 0 1px ${assignment.driverColor || "#808080"})` }}
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs space-y-1 max-w-[200px]">
+        <p className="font-semibold capitalize">{type} Assignment</p>
+        <div className="flex items-center gap-1.5">
+          <div
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: assignment.driverColor || "#808080" }}
+          />
+          <span>{assignment.driverName}</span>
+        </div>
+        <p className="text-muted-foreground">Load #{assignment.truckloadId}</p>
+        {assignment.startDate && assignment.endDate && (
+          <p className="text-muted-foreground">
+            {formatDateShort(assignment.startDate)} – {formatDateShort(assignment.endDate)}
+          </p>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) {
@@ -100,11 +193,7 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
         setIsLoading(true)
         setHasError(false)
         const response = await fetch(`/api/customers/${customerId}/orders`)
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch orders")
-        }
-
+        if (!response.ok) throw new Error("Failed to fetch orders")
         const data = await response.json()
         setOrders(data)
       } catch (error) {
@@ -122,17 +211,17 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8 text-muted-foreground">
-        <Package className="h-5 w-5 animate-pulse mr-2" />
-        <span>Loading order history...</span>
+      <div className="flex items-center justify-center p-6 text-muted-foreground">
+        <Package className="h-4 w-4 animate-pulse mr-2" />
+        <span className="text-sm">Loading order history...</span>
       </div>
     )
   }
 
   if (hasError) {
     return (
-      <div className="text-center p-8 text-red-600">
-        <AlertTriangle className="mx-auto mb-2 h-6 w-6" />
+      <div className="text-center p-6 text-red-600">
+        <AlertTriangle className="mx-auto mb-1 h-5 w-5" />
         <p className="text-sm">Failed to load order history.</p>
       </div>
     )
@@ -140,8 +229,8 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
 
   if (orders.length === 0) {
     return (
-      <div className="text-center p-8 text-muted-foreground">
-        <Package className="mx-auto mb-2 h-8 w-8" />
+      <div className="text-center p-6 text-muted-foreground">
+        <Package className="mx-auto mb-1 h-6 w-6" />
         <p className="text-sm">No orders found for this customer.</p>
       </div>
     )
@@ -151,95 +240,141 @@ export function CustomerOrderHistory({ customerId }: CustomerOrderHistoryProps) 
   const completedOrders = orders.filter((o) => o.status === "completed")
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {orders.length} order{orders.length !== 1 ? "s" : ""} total
-          {activeOrders.length > 0 && ` · ${activeOrders.length} active`}
-          {completedOrders.length > 0 && ` · ${completedOrders.length} completed`}
-        </p>
-      </div>
+    <TooltipProvider delayDuration={200}>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs text-muted-foreground">
+            {orders.length} order{orders.length !== 1 ? "s" : ""}
+            {activeOrders.length > 0 && <span className="text-foreground font-medium"> · {activeOrders.length} active</span>}
+            {completedOrders.length > 0 && ` · ${completedOrders.length} completed`}
+          </p>
+        </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[70px]">Order</TableHead>
-              <TableHead className="w-[100px]">Role</TableHead>
-              <TableHead>Other Party</TableHead>
-              <TableHead className="w-[100px]">Status</TableHead>
-              <TableHead className="w-[100px]">Pickup Date</TableHead>
-              <TableHead>Freight</TableHead>
-              <TableHead className="w-[60px] text-center">Flags</TableHead>
-              <TableHead>Driver</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map((order) => {
-              const otherParty =
-                order.customer_role === "pickup"
-                  ? order.delivery_customer?.name
-                  : order.customer_role === "delivery"
-                    ? order.pickup_customer?.name
-                    : `${order.pickup_customer?.name} → ${order.delivery_customer?.name}`
+        <div className="rounded-md border overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="[&>th]:py-1.5 [&>th]:text-[11px] [&>th]:font-semibold">
+                <TableHead className="w-[50px]">#</TableHead>
+                <TableHead className="w-[58px]">Role</TableHead>
+                <TableHead>Other Party</TableHead>
+                <TableHead className="w-[68px]">Status</TableHead>
+                <TableHead className="w-[60px]">Pickup</TableHead>
+                <TableHead className="w-[70px]">Freight</TableHead>
+                <TableHead className="w-[38px] text-center px-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild><span className="cursor-default">P</span></TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Pickup Truck</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="w-[38px] text-center px-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild><span className="cursor-default">D</span></TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Delivery Truck</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="w-[30px] text-center px-0"></TableHead>
+                <TableHead className="w-[70px]">Load</TableHead>
+                <TableHead className="w-[90px]">Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((order) => {
+                const otherParty =
+                  order.customer_role === "pickup"
+                    ? order.delivery_customer?.name
+                    : order.customer_role === "delivery"
+                      ? order.pickup_customer?.name
+                      : `${order.pickup_customer?.name} → ${order.delivery_customer?.name}`
 
-              const driverInfo =
-                order.pickup_assignment || order.delivery_assignment
-              const driverAssignment =
-                order.customer_role === "pickup"
-                  ? order.pickup_assignment
-                  : order.customer_role === "delivery"
-                    ? order.delivery_assignment
-                    : order.pickup_assignment || order.delivery_assignment
+                const freightParts = buildFreightParts(order)
+                const activeFilters = getActiveFilters(order.filters)
+                const isCompleted = order.status === "completed"
 
-              return (
-                <TableRow key={order.id} className={order.status === "completed" ? "opacity-60" : ""}>
-                  <TableCell className="font-medium">#{order.id}</TableCell>
-                  <TableCell>{getRoleBadge(order.customer_role)}</TableCell>
-                  <TableCell className="text-sm truncate max-w-[160px]">
-                    {otherParty || "—"}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(order.status)}</TableCell>
-                  <TableCell className="text-sm">
-                    {formatDate(order.pickup_date)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {buildFreightSummary(order)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      {order.is_rush && (
-                        <span title="Rush Order"><Zap className="h-4 w-4 text-red-500" /></span>
+                return (
+                  <TableRow
+                    key={order.id}
+                    className={`[&>td]:py-1.5 [&>td]:text-xs ${isCompleted ? "opacity-50" : ""}`}
+                  >
+                    <TableCell className="font-medium tabular-nums">{order.id}</TableCell>
+                    <TableCell>{getRoleBadge(order.customer_role)}</TableCell>
+                    <TableCell className="truncate max-w-[140px]">
+                      {otherParty || "—"}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(order.status)}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatDateShort(order.pickup_date)}
+                    </TableCell>
+                    <TableCell>
+                      {freightParts.length > 0 ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-default truncate block max-w-[65px]">
+                              {freightParts.join(" · ")}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            {order.skids > 0 && <p>{order.skids} skid{order.skids !== 1 ? "s" : ""}</p>}
+                            {order.vinyl > 0 && <p>{order.vinyl} vinyl</p>}
+                            {order.footage > 0 && <p>{Number(order.footage).toLocaleString()} sq ft</p>}
+                            {order.freight_quote && <p className="mt-1 text-muted-foreground">Quote: {order.freight_quote}</p>}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
                       )}
-                      {order.needs_attention && (
-                        <span title="Needs Attention"><AlertTriangle className="h-4 w-4 text-amber-500" /></span>
-                      )}
-                      {order.comments && (
-                        <span title="Has Comments"><MessageSquare className="h-3.5 w-3.5 text-blue-500" /></span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {driverAssignment ? (
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: driverAssignment.driverColor || "#808080" }}
-                        />
-                        <span className="text-sm truncate max-w-[100px]">
-                          {driverAssignment.driverName}
-                        </span>
+                    </TableCell>
+                    <TableCell className="text-center px-1">
+                      <TruckAssignmentIcon assignment={order.pickup_assignment} type="pickup" />
+                    </TableCell>
+                    <TableCell className="text-center px-1">
+                      <TruckAssignmentIcon assignment={order.delivery_assignment} type="delivery" />
+                    </TableCell>
+                    <TableCell className="px-0">
+                      <div className="flex items-center justify-center gap-0.5">
+                        {order.is_rush && <span title="Rush"><Zap className="h-3 w-3 text-red-500" /></span>}
+                        {order.needs_attention && <span title="Attention"><AlertTriangle className="h-3 w-3 text-amber-500" /></span>}
+                        {order.comments && <span title="Comments"><MessageSquare className="h-3 w-3 text-blue-500" /></span>}
                       </div>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+                    </TableCell>
+                    <TableCell>
+                      {activeFilters.length > 0 ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground cursor-default truncate block max-w-[65px]">
+                              {activeFilters[0]}{activeFilters.length > 1 ? ` +${activeFilters.length - 1}` : ""}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            {activeFilters.map((f) => <p key={f}>{f}</p>)}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-muted-foreground cursor-default tabular-nums">
+                            {formatDateShort(order.created_at)}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs space-y-1">
+                          <p><span className="font-medium">Created:</span> {formatDateFull(order.created_at)}</p>
+                          <p><span className="font-medium">By:</span> {order.creator}</p>
+                          {isCompleted && (
+                            <p><span className="font-medium">Completed:</span> {formatDateFull(order.updated_at)}</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

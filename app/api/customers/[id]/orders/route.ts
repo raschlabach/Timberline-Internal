@@ -20,6 +20,18 @@ export async function GET(
         COALESCE(o.needs_attention, false) as needs_attention,
         o.freight_quote,
         o.created_at,
+        o.updated_at,
+        COALESCE(u.full_name, 'System') as creator,
+        -- Load type filters
+        json_build_object(
+          'ohioToIndiana', COALESCE(o.oh_to_in, false),
+          'backhaul', COALESCE(o.backhaul, false),
+          'localFlatbed', COALESCE(o.local_flatbed, false),
+          'rrOrder', COALESCE(o.rr_order, false),
+          'localSemi', COALESCE(o.local_semi, false),
+          'middlefield', COALESCE(o.middlefield, false),
+          'paNy', COALESCE(o.pa_ny, false)
+        ) as filters,
         -- Determine the customer's role on this order
         CASE
           WHEN o.pickup_customer_id = $1 AND o.delivery_customer_id = $1 THEN 'both'
@@ -48,17 +60,24 @@ export async function GET(
         CASE WHEN pa.driver_name IS NOT NULL THEN
           json_build_object(
             'driverName', pa.driver_name,
-            'driverColor', pa.driver_color
+            'driverColor', pa.driver_color,
+            'truckloadId', pa.truckload_id,
+            'startDate', pa.start_date,
+            'endDate', pa.end_date
           )
         ELSE NULL END as pickup_assignment,
         -- Delivery assignment
         CASE WHEN da.driver_name IS NOT NULL THEN
           json_build_object(
             'driverName', da.driver_name,
-            'driverColor', da.driver_color
+            'driverColor', da.driver_color,
+            'truckloadId', da.truckload_id,
+            'startDate', da.start_date,
+            'endDate', da.end_date
           )
         ELSE NULL END as delivery_assignment
       FROM orders o
+      LEFT JOIN users u ON o.created_by = u.id
       LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
       LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
       LEFT JOIN (
@@ -76,6 +95,9 @@ export async function GET(
       LEFT JOIN footage f ON o.id = f.order_id
       LEFT JOIN (
         SELECT toa.order_id,
+          t.id as truckload_id,
+          t.start_date,
+          t.end_date,
           u.full_name as driver_name,
           d.color as driver_color
         FROM truckload_order_assignments toa
@@ -86,6 +108,9 @@ export async function GET(
       ) pa ON o.id = pa.order_id
       LEFT JOIN (
         SELECT toa.order_id,
+          t.id as truckload_id,
+          t.start_date,
+          t.end_date,
           u.full_name as driver_name,
           d.color as driver_color
         FROM truckload_order_assignments toa
