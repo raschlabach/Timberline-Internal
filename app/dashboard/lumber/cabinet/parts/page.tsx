@@ -309,10 +309,10 @@ function PanelCalculator({ config, state, setState }: {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b">
-              <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
-              <th className="px-1.5 py-1 text-left text-gray-500">Width</th>
-              <th className="px-1.5 py-1 text-left text-gray-500">Length</th>
-              <th className="px-1.5 py-1 text-left text-gray-500">Price</th>
+              <th className="py-1 text-center text-gray-400 w-6">#</th>
+              <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">Width</th>
+              <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">Length</th>
+              <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">Price</th>
               <th className="px-1.5 py-1 text-right text-gray-500">BF</th>
               <th className="px-1.5 py-1 text-right text-blue-600 font-semibold">$/BF</th>
             </tr>
@@ -326,16 +326,16 @@ function PanelCalculator({ config, state, setState }: {
               const rRate = rBf > 0 && rP > 0 ? rP / rBf : 0
               return (
                 <tr key={idx} className="border-b border-gray-100">
-                  <td className="px-1.5 py-1 text-center text-[10px] text-gray-400">{idx + 1}</td>
-                  <td className="px-[5px] py-1">
+                  <td className="py-1 text-center text-[10px] text-gray-400 w-6">{idx + 1}</td>
+                  <td className="px-[5px] py-1 w-[82px]">
                     <input type="number" step="0.01" placeholder="W" className={reverseInputCls}
                       value={rr.width} onChange={(e) => updateReverseRow(idx, 'width', e.target.value)} />
                   </td>
-                  <td className="px-[5px] py-1">
+                  <td className="px-[5px] py-1 w-[82px]">
                     <input type="number" step="0.01" placeholder="L" className={reverseInputCls}
                       value={rr.length} onChange={(e) => updateReverseRow(idx, 'length', e.target.value)} />
                   </td>
-                  <td className="px-[5px] py-1">
+                  <td className="px-[5px] py-1 w-[82px]">
                     <input type="number" step="0.01" placeholder="$" className={reverseInputCls}
                       value={rr.price} onChange={(e) => updateReverseRow(idx, 'price', e.target.value)} />
                   </td>
@@ -486,9 +486,9 @@ function LinearCalculator({ config, state, setState }: {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b">
-              <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
-              <th className="px-1.5 py-1 text-left text-gray-500">Length</th>
-              <th className="px-1.5 py-1 text-left text-gray-500">Price</th>
+              <th className="py-1 text-center text-gray-400 w-6">#</th>
+              <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">Length</th>
+              <th className="px-[5px] py-1 text-left text-gray-500 w-[82px]">Price</th>
               <th className="px-1.5 py-1 text-right text-gray-500">LF</th>
               <th className="px-1.5 py-1 text-right text-blue-600 font-semibold">{config.rateLabel}</th>
             </tr>
@@ -502,12 +502,12 @@ function LinearCalculator({ config, state, setState }: {
               const rRate = rLf > 0 && rBase > 0 ? rBase / rLf : 0
               return (
                 <tr key={idx} className="border-b border-gray-100">
-                  <td className="px-1.5 py-1 text-center text-[10px] text-gray-400">{idx + 1}</td>
-                  <td className="px-[5px] py-1">
+                  <td className="py-1 text-center text-[10px] text-gray-400 w-6">{idx + 1}</td>
+                  <td className="px-[5px] py-1 w-[82px]">
                     <input type="number" step="0.01" placeholder="Length" className={reverseInputCls}
                       value={rr.length} onChange={(e) => updateReverseRow(idx, 'length', e.target.value)} />
                   </td>
-                  <td className="px-[5px] py-1">
+                  <td className="px-[5px] py-1 w-[82px]">
                     <input type="number" step="0.01" placeholder="$" className={reverseInputCls}
                       value={rr.price} onChange={(e) => updateReverseRow(idx, 'price', e.target.value)} />
                   </td>
