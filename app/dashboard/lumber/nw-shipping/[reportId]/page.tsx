@@ -233,7 +233,7 @@ export default function NWShippingReportDetailPage() {
 
       {/* Content */}
       {viewMode === 'edit' ? (
-        <ReportEditor items={items} parts={parts} onChange={setItems} />
+        <ReportEditor items={items} parts={parts} archboldPo={archboldPo} onChange={setItems} />
       ) : (
         <GroupedView items={items} />
       )}

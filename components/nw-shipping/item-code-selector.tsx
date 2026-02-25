@@ -14,9 +14,12 @@ interface ItemCodeSelectorProps {
   parts: ArchboldPart[]
   selectedPartId: number | null
   onSelect: (part: ArchboldPart | null) => void
+  dataRow?: number
+  dataCol?: number
+  onEnterKey?: () => void
 }
 
-export function ItemCodeSelector({ parts, selectedPartId, onSelect }: ItemCodeSelectorProps) {
+export function ItemCodeSelector({ parts, selectedPartId, onSelect, dataRow, dataCol, onEnterKey }: ItemCodeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -77,6 +80,14 @@ export function ItemCodeSelector({ parts, selectedPartId, onSelect }: ItemCodeSe
           setIsOpen(true)
         }}
         onFocus={handleFocus}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !isOpen && onEnterKey) {
+            e.preventDefault()
+            onEnterKey()
+          }
+        }}
+        data-row={dataRow}
+        data-col={dataCol}
       />
       {isOpen && (
         <div className="absolute z-50 top-full left-0 mt-1 w-64 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg">
