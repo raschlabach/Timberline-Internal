@@ -21,15 +21,16 @@ interface ProcessedSheet {
   dueDate: string
   displayHeaders: string[]
   sections: SheetSection[]
-  isSpecial: boolean
   grandQtyTotal: number
   grandExtTotal: number
   extPriceDisplayIdx: number
   partNumDisplayIdx: number
+  priceDisplayIdx: number
   missingPartCount: number
 }
 
 interface SpecialRow {
+  poNumber: string
   partNum: string
   quantity: number
   width: number
@@ -68,40 +69,71 @@ const MOULD_RIP_WIDTH: Record<string, number> = {
 }
 
 const SORT_ORDER_MAP: Record<string, number> = {
-  'PL 13': 1,
-  'S4S': 2,
-  'Quarter Round SP-13': 3,
-  'Slant Shaker': 4,
-  'ISP01': 5,
-  'Crown Pennwest': 6,
-  'Crown Manorwood': 7,
-  'Scribe SP-05': 1,
-  'Batten SP-09': 2,
-  'Crown CM02': 5,
+  'PL 13': 1, 'S4S': 2, 'Quarter Round SP-13': 3, 'Slant Shaker': 4,
+  'ISP01': 5, 'Crown Pennwest': 6, 'Crown Manorwood': 7,
+  'Scribe SP-05': 1, 'Batten SP-09': 2, 'Crown CM02': 5,
 }
 
 const SPECIE_MAP: Record<string, string> = {
-  'RED OAK': 'Red Oak',
-  'SOFT MAPLE': 'Sap Soft Maple',
-  'SAP SOFT MAPLE': 'Sap Soft Maple',
-  'HARD MAPLE': 'Hard Maple',
-  'CHERRY': 'Cherry',
-  'HICKORY': 'Hickory',
-  'PINE': 'Pine',
-  'WALNUT': 'Walnut',
-  'S. MAPLE': 'Sap Soft Maple',
-  'Red Oak': 'Red Oak',
-  'Red oak': 'Red Oak',
-  'Soft Maple': 'Sap Soft Maple',
-  'Hard Maple': 'Hard Maple',
-  'Cherry': 'Cherry',
-  'Hickory': 'Hickory',
-  'Pine': 'Pine',
-  'Walnut': 'Walnut',
+  'RED OAK': 'Red Oak', 'SOFT MAPLE': 'Sap Soft Maple', 'SAP SOFT MAPLE': 'Sap Soft Maple',
+  'HARD MAPLE': 'Hard Maple', 'CHERRY': 'Cherry', 'HICKORY': 'Hickory',
+  'PINE': 'Pine', 'WALNUT': 'Walnut', 'S. MAPLE': 'Sap Soft Maple',
+  'Red Oak': 'Red Oak', 'Red oak': 'Red Oak', 'Soft Maple': 'Sap Soft Maple',
+  'Hard Maple': 'Hard Maple', 'Cherry': 'Cherry', 'Hickory': 'Hickory',
+  'Pine': 'Pine', 'Walnut': 'Walnut',
 }
 
-const RIP_HEADERS = ['Part#', 'Qty', 'Rip Width', 'Specie', 'Thick', 'Width', 'Profile', 'Grade', 'Board Ft']
-const MOULD_HEADERS = ['Part#', 'Qty', 'Width', 'Profile', 'Thickness', 'Specie', 'Grade', 'Sort Order']
+const RIP_HEADERS = ['PO#', 'Part#', 'Qty', 'Rip Width', 'Specie', 'Thick', 'Width', 'Profile', 'Grade', 'Board Ft']
+const MOULD_HEADERS = ['PO#', 'Part#', 'Qty', 'Width', 'Profile', 'Thickness', 'Specie', 'Grade', 'Sort Order']
+
+// ===== Column Hiding =====
+
+function getHiddenColumns(sheetName: string, headerRow: CellValue[], dataRows: CellValue[][]): Set<number> {
+  const hidden = new Set<number>()
+  const n = sheetName.trim().toUpperCase()
+  const hdrAt = (i: number) => String(headerRow[i] ?? '').trim().toUpperCase()
+
+  const findByHeader = (test: (h: string) => boolean): number => {
+    for (let i = START_COL; i <= 15; i++) { if (test(hdrAt(i))) return i }
+    return -1
+  }
+
+  const findPwCol = (): number => {
+    for (let i = START_COL; i <= 12; i++) {
+      if (hdrAt(i) !== '') continue
+      for (let r = 5; r < Math.min(dataRows.length, 35); r++) {
+        const cell = dataRows[r]?.[i]
+        if (cell && /^(PW|PV|COL|Pvalley)/i.test(String(cell))) return i
+      }
+    }
+    return -1
+  }
+
+  const hideExt = () => { const c = findByHeader(h => h.startsWith('EXT')); if (c >= 0) hidden.add(c) }
+  const hideFaceLength = () => { const c = findByHeader(h => h.includes('FACE') && h.includes('LENGTH')); if (c >= 0) hidden.add(c) }
+
+  if (n.includes('RAILS ISP01')) {
+    const c = findByHeader(h => h === 'LENGTH'); if (c >= 0) hidden.add(c)
+    hideExt()
+  } else if (n.includes('2.1') && n.includes('SLANT RAIL')) {
+    hideFaceLength(); hideExt()
+  } else if (n.includes('2.35') && n.includes('SLANT RAIL')) {
+    hideFaceLength(); hideExt()
+  } else if (n.includes('2.35') && n.includes('SLANT STILE')) {
+    hideExt()
+  } else if (n.includes('2.85') && n.includes('SLANT STILE')) {
+    const pw = findPwCol(); if (pw >= 0) hidden.add(pw)
+    hideExt()
+  } else if (n.includes('2.85') && n.includes('SLANT RAIL')) {
+    hideFaceLength()
+    const pw = findPwCol(); if (pw >= 0) hidden.add(pw)
+    hideExt()
+  } else if (n.includes('BLANK PANEL') || n.includes('DR FRONT') || n.includes('SILLS') || n.includes('STILES ISP01')) {
+    hideExt()
+  }
+
+  return hidden
+}
 
 // ===== Helpers =====
 
@@ -109,22 +141,21 @@ function excelDateToString(serial: number): string {
   const utcDays = Math.floor(serial - 25569)
   const date = new Date(utcDays * 86400 * 1000)
   const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
-  const day = date.getUTCDate()
-  return `${day}-${month}`
+  return `${date.getUTCDate()}-${month}`
 }
 
 function normalizeSpecie(raw: string): string {
-  const trimmed = raw.trim()
-  return SPECIE_MAP[trimmed] ?? SPECIE_MAP[trimmed.toUpperCase()] ?? trimmed
+  const t = raw.trim()
+  return SPECIE_MAP[t] ?? SPECIE_MAP[t.toUpperCase()] ?? t
 }
 
 function fractionToDecimal(frac: string): number {
-  const trimmed = frac.trim()
-  const mixed = trimmed.match(/^(\d+)\s+(\d+)\/(\d+)$/)
+  const t = frac.trim()
+  const mixed = t.match(/^(\d+)\s+(\d+)\/(\d+)$/)
   if (mixed) return parseInt(mixed[1]) + parseInt(mixed[2]) / parseInt(mixed[3])
-  const simple = trimmed.match(/^(\d+)\/(\d+)$/)
+  const simple = t.match(/^(\d+)\/(\d+)$/)
   if (simple) return parseInt(simple[1]) / parseInt(simple[2])
-  return parseFloat(trimmed) || 0
+  return parseFloat(t) || 0
 }
 
 function isPartMissing(val: string): boolean {
@@ -138,7 +169,7 @@ function findHeaderRowIndex(rows: CellValue[][]): number {
     const row = rows[i]
     if (!row) continue
     const text = row.map(c => String(c ?? '').toUpperCase()).join(' ')
-    if (text.includes('WIDTH') || text.includes('DESCRIPTION')) return i
+    if (text.includes('WIDTH') || text.includes('DESCRIPTION') || text.includes('RNR PART')) return i
   }
   return 4
 }
@@ -196,11 +227,9 @@ function parseS4SDescription(desc: string): {
 } | null {
   const match = desc.match(/^([\d.]+)\s*[Xx]\s*([\d.]+)\s*[Xx]\s*(?:RL|96)\s+(.+)$/i)
   if (!match) return null
-
   const thickness = parseFloat(match[1])
   const width = parseFloat(match[2])
   let remainder = match[3].trim()
-
   let grade = 'Prime'
   if (/\b1\s*COMMON$/i.test(remainder)) {
     grade = '1 com'
@@ -208,7 +237,6 @@ function parseS4SDescription(desc: string): {
   } else if (/\bFAS$/i.test(remainder)) {
     remainder = remainder.replace(/\bFAS$/i, '').trim()
   }
-
   let profile = 'S4S'
   if (/\bPLOW\s*13\s*\(PL\s*13\)/i.test(remainder)) {
     profile = 'PL 13'
@@ -220,7 +248,6 @@ function parseS4SDescription(desc: string): {
     profile = 'S4S'
     remainder = remainder.replace(/\bS4S/i, '').trim()
   }
-
   return { thickness, width, specie: normalizeSpecie(remainder), profile, grade }
 }
 
@@ -229,14 +256,11 @@ function parseDoorFrameDescription(desc: string): {
 } | null {
   const match = desc.match(/^([\d.]+)\s*[Xx]\s*([\d.]+)\s+(.+?)\s+[Dd]oor\s+[Ff]raming/i)
   if (!match) return null
-
   const width = parseFloat(match[1])
   const thickness = parseFloat(match[2])
   let profile = match[3].trim()
-
   if (/ISP[-\s]?1/i.test(profile)) profile = 'ISP01'
   else if (/SLANT\s*SHAKER/i.test(profile)) profile = 'Slant Shaker'
-
   return { width, thickness, profile }
 }
 
@@ -245,11 +269,9 @@ function parseMouldingHeader(header: string): {
 } | null {
   const match = header.match(/^([\d\s/]+?)\s*x\s*([\d\s/]+?)\s*x\s*(?:RL|\d+)\s+(.+)$/i)
   if (!match) return null
-
   const thickness = fractionToDecimal(match[1])
   const width = fractionToDecimal(match[2])
-  let profile = match[3].trim().replace(/\s*\([^)]*\)\s*$/, '').trim()
-
+  const profile = match[3].trim().replace(/\s*\([^)]*\)\s*$/, '').trim()
   return { thickness, width, profile }
 }
 
@@ -293,14 +315,9 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
         if (!parsed) continue
         const ripWidth = parsed.width + 0.125
         linealRows.push({
-          partNum,
-          quantity: qty,
-          width: parsed.width,
-          profile: parsed.profile,
-          thickness: parsed.thickness,
-          specie: parsed.specie,
-          grade: parsed.grade,
-          ripWidth,
+          poNumber: poNumber || '', partNum, quantity: qty,
+          width: parsed.width, profile: parsed.profile, thickness: parsed.thickness,
+          specie: parsed.specie, grade: parsed.grade, ripWidth,
           sortOrder: SORT_ORDER_MAP[parsed.profile] ?? 99,
           boardFt: qty * ripWidth / 12,
         })
@@ -320,14 +337,9 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
         if (!parsed) continue
         const ripWidth = parsed.width + 0.125
         linealRows.push({
-          partNum,
-          quantity: qty,
-          width: parsed.width,
-          profile: parsed.profile,
-          thickness: parsed.thickness,
-          specie: normalizeSpecie(specie),
-          grade: 'Prime',
-          ripWidth,
+          poNumber: poNumber || '', partNum, quantity: qty,
+          width: parsed.width, profile: parsed.profile, thickness: parsed.thickness,
+          specie: normalizeSpecie(specie), grade: 'Prime', ripWidth,
           sortOrder: SORT_ORDER_MAP[parsed.profile] ?? 99,
           boardFt: qty * ripWidth / 12,
         })
@@ -349,14 +361,10 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
           const partNum = String(row[5] ?? '')
           const ripWidth = MOULD_RIP_WIDTH[currentSection.profile] ?? (currentSection.width + 0.125)
           mouldingRows.push({
-            partNum,
-            quantity: col1,
-            width: currentSection.width,
-            profile: currentSection.profile,
-            thickness: currentSection.thickness,
-            specie: normalizeSpecie(specie),
-            grade: 'Prime',
-            ripWidth,
+            poNumber: poNumber || '', partNum, quantity: col1,
+            width: currentSection.width, profile: currentSection.profile,
+            thickness: currentSection.thickness, specie: normalizeSpecie(specie),
+            grade: 'Prime', ripWidth,
             sortOrder: SORT_ORDER_MAP[currentSection.profile] ?? 99,
             boardFt: col1 * ripWidth / 12,
           })
@@ -368,18 +376,11 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
   const results: SpecialTabResult[] = []
 
   if (linealRows.length > 0) {
-    const ripRows = [...linealRows].sort((a, b) =>
-      a.specie.localeCompare(b.specie) || a.ripWidth - b.ripWidth
-    )
-    const mouldRows = [...linealRows].sort((a, b) =>
-      a.sortOrder - b.sortOrder || b.thickness - a.thickness || a.profile.localeCompare(b.profile)
-    )
+    const ripRows = [...linealRows].sort((a, b) => a.specie.localeCompare(b.specie) || a.ripWidth - b.ripWidth)
+    const mouldRows = [...linealRows].sort((a, b) => a.sortOrder - b.sortOrder || b.thickness - a.thickness || a.profile.localeCompare(b.profile))
     results.push({
-      label: 'S4S / Door Frame',
-      poNumbers: Array.from(new Set(linealPOs)),
-      dueDate: linealDueDate,
-      ripRows,
-      mouldRows,
+      label: 'S4S / Door Frame', poNumbers: Array.from(new Set(linealPOs)),
+      dueDate: linealDueDate, ripRows, mouldRows,
       speciesTotals: calcSpeciesTotals(ripRows),
       totalBoardFt: ripRows.reduce((sum, r) => sum + r.boardFt, 0),
       missingPartCount: linealRows.filter(r => isPartMissing(r.partNum)).length,
@@ -387,18 +388,11 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
   }
 
   if (mouldingRows.length > 0) {
-    const ripRows = [...mouldingRows].sort((a, b) =>
-      a.specie.localeCompare(b.specie) || b.ripWidth - a.ripWidth
-    )
-    const mouldRows = [...mouldingRows].sort((a, b) =>
-      a.sortOrder - b.sortOrder || a.specie.localeCompare(b.specie)
-    )
+    const ripRows = [...mouldingRows].sort((a, b) => a.specie.localeCompare(b.specie) || b.ripWidth - a.ripWidth)
+    const mouldRows = [...mouldingRows].sort((a, b) => a.sortOrder - b.sortOrder || a.specie.localeCompare(b.specie))
     results.push({
-      label: 'Moulding',
-      poNumbers: Array.from(new Set(mouldingPOs)),
-      dueDate: mouldingDueDate,
-      ripRows,
-      mouldRows,
+      label: 'Moulding', poNumbers: Array.from(new Set(mouldingPOs)),
+      dueDate: mouldingDueDate, ripRows, mouldRows,
       speciesTotals: calcSpeciesTotals(ripRows),
       totalBoardFt: ripRows.reduce((sum, r) => sum + r.boardFt, 0),
       missingPartCount: mouldingRows.filter(r => isPartMissing(r.partNum)).length,
@@ -410,12 +404,8 @@ function processSpecialTabs(workbook: XLSX.WorkBook): SpecialTabResult[] {
 
 function calcSpeciesTotals(rows: SpecialRow[]): { specie: string; boardFt: number }[] {
   const map: Record<string, number> = {}
-  for (const r of rows) {
-    map[r.specie] = (map[r.specie] || 0) + r.boardFt
-  }
-  return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([specie, boardFt]) => ({ specie, boardFt }))
+  for (const r of rows) map[r.specie] = (map[r.specie] || 0) + r.boardFt
+  return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([specie, boardFt]) => ({ specie, boardFt }))
 }
 
 // ===== Main Processing =====
@@ -428,37 +418,41 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
     const rows: CellValue[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
     if (rows.length < 3) continue
 
-    const isSpecial = SPECIAL_TABS.some(t => name.includes(t))
     const { poNumber, dueDate } = extractHeaderInfo(rows)
-
-    if (isSpecial) {
-      results.push({
-        name, poNumber, dueDate,
-        displayHeaders: [], sections: [], isSpecial: true,
-        grandQtyTotal: 0, grandExtTotal: 0,
-        extPriceDisplayIdx: -1, partNumDisplayIdx: -1, missingPartCount: 0,
-      })
-      continue
-    }
-
     const headerRowIdx = findHeaderRowIndex(rows)
     const headerRow = rows[headerRowIdx] || []
     const lastColIdx = findLastUsefulColumn(headerRow)
 
-    const displayHeaders: string[] = []
+    const hiddenCols = getHiddenColumns(name, headerRow, rows)
+    const visibleCols: number[] = []
     for (let i = START_COL; i <= lastColIdx; i++) {
-      if (i === START_COL) {
-        displayHeaders.push('QTY')
-      } else {
-        const raw = headerRow[i]
-        let label = raw !== null && raw !== undefined ? String(raw) : ''
-        if (/^\d{5}$/.test(label)) label = 'PRICE'
-        displayHeaders.push(label)
+      if (!hiddenCols.has(i)) visibleCols.push(i)
+    }
+
+    const displayHeaders: string[] = visibleCols.map(col => {
+      if (col === START_COL) return 'QTY'
+      const raw = headerRow[col]
+      let label = raw !== null && raw !== undefined ? String(raw) : ''
+      if (/^\d{5}$/.test(label)) label = 'PRICE'
+      return label
+    })
+
+    const nameUpper = name.trim().toUpperCase()
+    if (nameUpper.includes('DOOR FRAME') || nameUpper.includes('MOULDING')) {
+      for (let i = 0; i < displayHeaders.length; i++) {
+        if (displayHeaders[i] !== '') continue
+        const rawCol = visibleCols[i]
+        if (rawCol === 2) displayHeaders[i] = 'Species'
+        if (rawCol === 3 && nameUpper.includes('DOOR FRAME')) displayHeaders[i] = 'Description'
       }
     }
 
     const extPriceDisplayIdx = displayHeaders.findIndex(h => h.toUpperCase().includes('EXT'))
     const partNumDisplayIdx = displayHeaders.findIndex(h => h.toUpperCase().includes('PART'))
+    const priceDisplayIdx = displayHeaders.findIndex(h => {
+      const u = h.toUpperCase()
+      return (u.includes('PRICE') || u.includes('PRICING')) && !u.includes('EXT')
+    })
 
     const dataStartIdx = headerRowIdx + 1
     const sections: SheetSection[] = []
@@ -469,11 +463,7 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
       const filtered = currentGroup.filter(r => hasValidQty(r))
       if (filtered.length > 0) {
         const qtyTotal = filtered.reduce((sum, r) => sum + (Number(r[START_COL]) || 0), 0)
-        const slicedRows = filtered.map(r => {
-          const sliced: CellValue[] = []
-          for (let i = START_COL; i <= lastColIdx; i++) sliced.push(r[i] ?? null)
-          return sliced
-        })
+        const slicedRows = filtered.map(r => visibleCols.map(col => r[col] ?? null))
         let extPriceTotal = 0
         if (extPriceDisplayIdx >= 0) {
           extPriceTotal = slicedRows.reduce((sum, r) => sum + (Number(r[extPriceDisplayIdx]) || 0), 0)
@@ -501,10 +491,9 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
 
     results.push({
       name, poNumber, dueDate, displayHeaders, sections,
-      isSpecial: false,
       grandQtyTotal: sections.reduce((sum, s) => sum + s.qtyTotal, 0),
       grandExtTotal: sections.reduce((sum, s) => sum + s.extPriceTotal, 0),
-      extPriceDisplayIdx, partNumDisplayIdx, missingPartCount,
+      extPriceDisplayIdx, partNumDisplayIdx, priceDisplayIdx, missingPartCount,
     })
   }
 
@@ -517,9 +506,7 @@ function formatCell(val: CellValue, colIdx: number, headers: string[]): string {
   if (val === null || val === undefined) return ''
   if (typeof val === 'number') {
     const header = (headers[colIdx] || '').toUpperCase()
-    if (header.includes('EXT') || header.includes('PRICE') || header.includes('PRICING')) {
-      return val.toFixed(2)
-    }
+    if (header.includes('EXT') || header.includes('PRICE') || header.includes('PRICING')) return val.toFixed(2)
     if (Number.isInteger(val)) return val.toString()
     return parseFloat(val.toFixed(4)).toString()
   }
@@ -533,28 +520,22 @@ function formatNum(val: number, decimals = 3): string {
 // ===== Rip/Mould Table Renderers =====
 
 function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
-  rows: SpecialRow[]
-  speciesTotals: { specie: string; boardFt: number }[]
-  totalBoardFt: number
-  compact?: boolean
+  rows: SpecialRow[]; speciesTotals: { specie: string; boardFt: number }[]
+  totalBoardFt: number; compact?: boolean
 }) {
-  const fontSize = compact ? '10px' : undefined
-  const padding = compact ? '2px 6px' : undefined
-  const borderStyle = compact ? '1px solid #ccc' : undefined
-  const headerBorder = compact ? '1px solid #999' : undefined
+  const p = compact ? '2px 6px' : undefined
+  const bs = compact ? '1px solid #ccc' : undefined
+  const hb = compact ? '1px solid #999' : undefined
 
   return (
     <table className={compact ? undefined : 'w-full text-sm'} style={compact ? {
-      width: '100%', borderCollapse: 'collapse', fontSize, fontFamily: 'Arial, sans-serif',
+      width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif',
     } : undefined}>
       <thead>
         <tr className={compact ? undefined : 'bg-gray-50 border-b'}>
           {RIP_HEADERS.map((h, i) => (
             <th key={i} className={compact ? undefined : 'px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap'}
-              style={compact ? {
-                border: headerBorder, padding, textAlign: 'left', fontWeight: 600,
-                backgroundColor: '#f0f0f0', whiteSpace: 'nowrap',
-              } : undefined}>
+              style={compact ? { border: hb, padding: p, textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0', whiteSpace: 'nowrap' } : undefined}>
               {h}
             </th>
           ))}
@@ -563,49 +544,41 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
       <tbody>
         {rows.map((r, i) => {
           const missing = isPartMissing(r.partNum)
+          const Td = ({ children }: { children: React.ReactNode }) => (
+            <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: bs, padding: p } : undefined}>{children}</td>
+          )
           return (
-            <tr key={i}
-              className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
+            <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
               style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
-              <td className={compact ? undefined : 'px-3 py-1.5 whitespace-nowrap'}
-                style={compact ? { border: borderStyle, padding, whiteSpace: 'nowrap' } : undefined}>
-                {missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}
-              </td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.quantity}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{formatNum(r.ripWidth)}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.specie}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{formatNum(r.thickness)}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{formatNum(r.width)}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.profile}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.grade}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{formatNum(r.boardFt, 2)}</td>
+              <Td>{r.poNumber}</Td>
+              <Td>{missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}</Td>
+              <Td>{r.quantity}</Td>
+              <Td>{formatNum(r.ripWidth)}</Td>
+              <Td>{r.specie}</Td>
+              <Td>{formatNum(r.thickness)}</Td>
+              <Td>{formatNum(r.width)}</Td>
+              <Td>{r.profile}</Td>
+              <Td>{r.grade}</Td>
+              <Td>{formatNum(r.boardFt, 2)}</Td>
             </tr>
           )
         })}
         <tr className={compact ? undefined : 'border-t-2 border-gray-300'}>
-          <td colSpan={9} className={compact ? undefined : 'py-2'} style={compact ? { padding: '6px' } : undefined} />
+          <td colSpan={10} className={compact ? undefined : 'py-2'} style={compact ? { padding: '6px' } : undefined} />
         </tr>
         {speciesTotals.map((st, i) => (
           <tr key={`st-${i}`} className={compact ? undefined : 'bg-emerald-50 font-semibold text-emerald-800'}>
-            <td colSpan={3} className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined} />
-            <td className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>{st.specie}</td>
-            <td colSpan={4} className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding } : undefined} />
-            <td className={compact ? undefined : 'px-3 py-1'}
-              style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>{formatNum(st.boardFt, 2)}</td>
+            <td colSpan={4} className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined} />
+            <td className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>{st.specie}</td>
+            <td colSpan={4} className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p } : undefined} />
+            <td className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>{formatNum(st.boardFt, 2)}</td>
           </tr>
         ))}
         <tr className={compact ? undefined : 'bg-emerald-100 font-bold text-emerald-900'}>
-          <td colSpan={3} className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined} />
-          <td className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>TOTAL</td>
-          <td colSpan={4} className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding } : undefined} />
-          <td className={compact ? undefined : 'px-3 py-1.5'}
-            style={compact ? { border: headerBorder, padding, fontWeight: 'bold' } : undefined}>{formatNum(totalBoardFt, 2)}</td>
+          <td colSpan={4} className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined} />
+          <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>TOTAL</td>
+          <td colSpan={4} className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p } : undefined} />
+          <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>{formatNum(totalBoardFt, 2)}</td>
         </tr>
       </tbody>
     </table>
@@ -613,23 +586,19 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
 }
 
 function MouldTable({ rows, compact }: { rows: SpecialRow[]; compact?: boolean }) {
-  const fontSize = compact ? '10px' : undefined
-  const padding = compact ? '2px 6px' : undefined
-  const borderStyle = compact ? '1px solid #ccc' : undefined
-  const headerBorder = compact ? '1px solid #999' : undefined
+  const p = compact ? '2px 6px' : undefined
+  const bs = compact ? '1px solid #ccc' : undefined
+  const hb = compact ? '1px solid #999' : undefined
 
   return (
     <table className={compact ? undefined : 'w-full text-sm'} style={compact ? {
-      width: '100%', borderCollapse: 'collapse', fontSize, fontFamily: 'Arial, sans-serif',
+      width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif',
     } : undefined}>
       <thead>
         <tr className={compact ? undefined : 'bg-gray-50 border-b'}>
           {MOULD_HEADERS.map((h, i) => (
             <th key={i} className={compact ? undefined : 'px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap'}
-              style={compact ? {
-                border: headerBorder, padding, textAlign: 'left', fontWeight: 600,
-                backgroundColor: '#f0f0f0', whiteSpace: 'nowrap',
-              } : undefined}>
+              style={compact ? { border: hb, padding: p, textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0', whiteSpace: 'nowrap' } : undefined}>
               {h}
             </th>
           ))}
@@ -638,21 +607,21 @@ function MouldTable({ rows, compact }: { rows: SpecialRow[]; compact?: boolean }
       <tbody>
         {rows.map((r, i) => {
           const missing = isPartMissing(r.partNum)
+          const Td = ({ children }: { children: React.ReactNode }) => (
+            <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: bs, padding: p } : undefined}>{children}</td>
+          )
           return (
-            <tr key={i}
-              className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
+            <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
               style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
-              <td className={compact ? undefined : 'px-3 py-1.5 whitespace-nowrap'}
-                style={compact ? { border: borderStyle, padding, whiteSpace: 'nowrap' } : undefined}>
-                {missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}
-              </td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.quantity}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{formatNum(r.width)}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.profile}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{formatNum(r.thickness)}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.specie}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.grade}</td>
-              <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: borderStyle, padding } : undefined}>{r.sortOrder}</td>
+              <Td>{r.poNumber}</Td>
+              <Td>{missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}</Td>
+              <Td>{r.quantity}</Td>
+              <Td>{formatNum(r.width)}</Td>
+              <Td>{r.profile}</Td>
+              <Td>{formatNum(r.thickness)}</Td>
+              <Td>{r.specie}</Td>
+              <Td>{r.grade}</Td>
+              <Td>{r.sortOrder}</Td>
             </tr>
           )
         })}
@@ -672,6 +641,33 @@ export default function CabinetOrderPage() {
   const [fileName, setFileName] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({})
+  const [priceEdits, setPriceEdits] = useState<Record<string, string>>({})
+
+  const fetchPrices = useCallback(async () => {
+    try {
+      const res = await fetch('/api/lumber/cabinet/prices')
+      if (res.ok) {
+        const data: { part_number: string; our_price: string }[] = await res.json()
+        const map: Record<string, number> = {}
+        for (const row of data) map[row.part_number] = parseFloat(row.our_price)
+        setPriceMap(map)
+      }
+    } catch { /* prices unavailable - continue without */ }
+  }, [])
+
+  const savePrice = useCallback(async (partNum: string, price: number) => {
+    try {
+      const res = await fetch('/api/lumber/cabinet/prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ part_number: partNum, our_price: price }),
+      })
+      if (res.ok) {
+        setPriceMap(prev => ({ ...prev, [partNum]: price }))
+      }
+    } catch { /* save failed silently */ }
+  }, [])
 
   const processFile = useCallback((file: File) => {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
@@ -687,9 +683,10 @@ export default function CabinetOrderPage() {
       setSpecialResults(processSpecialTabs(workbook))
       setActiveTab(0)
       setActiveSpecialIdx(null)
+      fetchPrices()
     }
     reader.readAsArrayBuffer(file)
-  }, [])
+  }, [fetchPrices])
 
   function handleDragOver(e: React.DragEvent) { e.preventDefault(); setIsDragOver(true) }
   function handleDragLeave(e: React.DragEvent) { e.preventDefault(); setIsDragOver(false) }
@@ -706,18 +703,34 @@ export default function CabinetOrderPage() {
   function handleReset() {
     setSheets([]); setSpecialResults([]); setFileName('')
     setActiveTab(0); setActiveSpecialIdx(null)
+    setPriceMap({}); setPriceEdits({})
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const standardSheets = sheets.filter(s => !s.isSpecial)
-  const sheetsWithOrders = standardSheets.filter(s => s.sections.length > 0)
-  const activeSheet = activeSpecialIdx === null ? standardSheets[activeTab] : null
+  function handlePriceBlur(partNum: string) {
+    const raw = priceEdits[partNum]
+    if (raw === undefined) return
+    const val = parseFloat(raw)
+    if (!isNaN(val) && val >= 0) {
+      savePrice(partNum, val)
+    }
+    setPriceEdits(prev => {
+      const next = { ...prev }
+      delete next[partNum]
+      return next
+    })
+  }
+
+  const sheetsWithOrders = sheets.filter(s => s.sections.length > 0)
+  const activeSheet = activeSpecialIdx === null ? sheets[activeTab] : null
   const activeSpecial = activeSpecialIdx !== null ? specialResults[activeSpecialIdx] : null
 
-  const totalMissingParts = standardSheets.reduce((sum, s) => sum + s.missingPartCount, 0)
+  const totalMissingParts = sheets.reduce((sum, s) => sum + s.missingPartCount, 0)
     + specialResults.reduce((sum, s) => sum + s.missingPartCount, 0)
 
   const totalPrintPages = sheetsWithOrders.length + specialResults.length * 2
+
+  const hasPriceCol = (sheet: ProcessedSheet) => sheet.priceDisplayIdx >= 0 && sheet.partNumDisplayIdx >= 0
 
   // ===== Upload Screen =====
   if (sheets.length === 0) {
@@ -725,30 +738,20 @@ export default function CabinetOrderPage() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Cabinet Shop Order Processor</h1>
-          <p className="text-gray-500 mt-1">
-            Upload a Nature&apos;s Blend order file to clean, process, and print
-          </p>
+          <p className="text-gray-500 mt-1">Upload a Nature&apos;s Blend order file to clean, process, and print</p>
         </div>
-
         <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           className={`border-2 border-dashed rounded-xl p-16 text-center transition-all cursor-pointer ${
-            isDragOver
-              ? 'border-emerald-500 bg-emerald-50 scale-[1.01]'
-              : 'border-gray-300 hover:border-emerald-400 hover:bg-gray-50'
+            isDragOver ? 'border-emerald-500 bg-emerald-50 scale-[1.01]' : 'border-gray-300 hover:border-emerald-400 hover:bg-gray-50'
           }`}
         >
           <FileSpreadsheet className={`h-16 w-16 mx-auto mb-4 ${isDragOver ? 'text-emerald-500' : 'text-gray-400'}`} />
-          <p className="text-lg font-medium text-gray-700">
-            Drop Nature&apos;s Blend .xlsx file here
-          </p>
+          <p className="text-lg font-medium text-gray-700">Drop Nature&apos;s Blend .xlsx file here</p>
           <p className="text-sm text-gray-500 mt-2">or click to browse</p>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileInput} className="hidden" />
         </div>
-
         <div className="mt-8 p-4 bg-gray-50 rounded-lg text-sm text-gray-500">
           <p className="font-medium text-gray-700 mb-2">What this does:</p>
           <ul className="space-y-1 list-disc list-inside">
@@ -756,6 +759,7 @@ export default function CabinetOrderPage() {
             <li>Removes rows with no quantity ordered</li>
             <li>Totals quantity per section on each tab</li>
             <li>Processes S4S, Door Frame &amp; Moulding into Rip and Mould views</li>
+            <li>Compares NB pricing against your stored prices</li>
             <li>Flags parts missing a Part Number</li>
             <li>Prints all tabs with one click</li>
           </ul>
@@ -767,25 +771,18 @@ export default function CabinetOrderPage() {
   // ===== Preview & Print Screen =====
   return (
     <>
-      {/* Global print styles */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           @page { margin: 0.4in; size: landscape; }
           body * { visibility: hidden !important; }
           .cabinet-print-area, .cabinet-print-area * { visibility: visible !important; }
-          .cabinet-print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
+          .cabinet-print-area { position: absolute; left: 0; top: 0; width: 100%; }
           .cabinet-page-break { page-break-before: always; }
         }
       `}} />
 
-      {/* ===== Screen Preview ===== */}
       <div className="print:hidden">
-        {/* Header bar */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Cabinet Shop Order Processor</h1>
@@ -793,30 +790,23 @@ export default function CabinetOrderPage() {
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={handleReset} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              New File
+              <RotateCcw className="h-4 w-4" /> New File
             </Button>
             <Button onClick={handlePrint} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-              <Printer className="h-4 w-4" />
-              Print All ({totalPrintPages} pages)
+              <Printer className="h-4 w-4" /> Print All ({totalPrintPages} pages)
             </Button>
           </div>
         </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-5 gap-4 mb-6">
-          <div className="bg-white rounded-lg border p-4">
-            <div className="text-sm text-gray-500">Total Tabs</div>
-            <div className="text-2xl font-bold text-gray-900">{sheets.length}</div>
-          </div>
+        {/* Summary */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg border p-4">
             <div className="text-sm text-gray-500">Tabs With Orders</div>
             <div className="text-2xl font-bold text-emerald-700">{sheetsWithOrders.length}</div>
           </div>
           <div className="bg-white rounded-lg border p-4">
-            <div className="text-sm text-gray-500">Special Tabs</div>
-            <div className="text-2xl font-bold text-blue-600">{specialResults.length} groups</div>
-            <div className="text-xs text-blue-400">{specialResults.reduce((s, r) => s + r.ripRows.length, 0)} rows</div>
+            <div className="text-sm text-gray-500">Rip/Mould Groups</div>
+            <div className="text-2xl font-bold text-blue-600">{specialResults.length}</div>
           </div>
           <div className="bg-white rounded-lg border p-4">
             <div className="text-sm text-gray-500">Print Pages</div>
@@ -832,21 +822,16 @@ export default function CabinetOrderPage() {
 
         {/* Tab navigation */}
         <div className="flex gap-1 mb-4 overflow-x-auto pb-2 items-center">
-          {standardSheets.map((sheet, idx) => {
+          {sheets.map((sheet, idx) => {
             const hasOrders = sheet.sections.length > 0
             const isActive = activeSpecialIdx === null && idx === activeTab
             return (
-              <button
-                key={sheet.name}
-                onClick={() => { setActiveTab(idx); setActiveSpecialIdx(null) }}
+              <button key={sheet.name} onClick={() => { setActiveTab(idx); setActiveSpecialIdx(null) }}
                 className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                  isActive
-                    ? 'bg-emerald-600 text-white'
-                    : hasOrders
-                      ? 'bg-white text-gray-700 hover:bg-gray-100 border'
+                  isActive ? 'bg-emerald-600 text-white'
+                    : hasOrders ? 'bg-white text-gray-700 hover:bg-gray-100 border'
                       : 'bg-gray-100 text-gray-400 border border-gray-200'
-                }`}
-              >
+                }`}>
                 {sheet.name.trim()}
                 {hasOrders && <span className="ml-1.5 text-xs opacity-75">({sheet.grandQtyTotal})</span>}
                 {sheet.missingPartCount > 0 && <span className="ml-1 text-amber-500">⚠</span>}
@@ -854,28 +839,17 @@ export default function CabinetOrderPage() {
             )
           })}
 
-          {specialResults.length > 0 && (
-            <div className="w-px h-8 bg-gray-300 mx-2 shrink-0" />
-          )}
+          {specialResults.length > 0 && <div className="w-px h-8 bg-gray-300 mx-2 shrink-0" />}
 
-          {specialResults.map((sr, idx) => {
-            const isActive = activeSpecialIdx === idx
-            return (
-              <button
-                key={sr.label}
-                onClick={() => { setActiveSpecialIdx(idx); setSpecialView('rip') }}
-                className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
-                }`}
-              >
-                {sr.label}
-                <span className="ml-1.5 text-xs opacity-75">({sr.ripRows.length})</span>
-                {sr.missingPartCount > 0 && <span className="ml-1 text-amber-300">⚠</span>}
-              </button>
-            )
-          })}
+          {specialResults.map((sr, idx) => (
+            <button key={sr.label} onClick={() => { setActiveSpecialIdx(idx); setSpecialView('rip') }}
+              className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
+                activeSpecialIdx === idx ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+              }`}>
+              {sr.label} <span className="ml-1.5 text-xs opacity-75">({sr.ripRows.length})</span>
+              {sr.missingPartCount > 0 && <span className="ml-1 text-amber-300">⚠</span>}
+            </button>
+          ))}
         </div>
 
         {/* ===== Standard Sheet Content ===== */}
@@ -911,19 +885,31 @@ export default function CabinetOrderPage() {
                       {activeSheet.displayHeaders.map((h, i) => (
                         <th key={i} className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap">{h}</th>
                       ))}
+                      {hasPriceCol(activeSheet) && (
+                        <>
+                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">Our Price</th>
+                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">Diff</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {activeSheet.sections.map((section, sIdx) => (
                       <Fragment key={sIdx}>
                         {sIdx > 0 && (
-                          <tr><td colSpan={activeSheet.displayHeaders.length} className="py-2 border-b" /></tr>
+                          <tr><td colSpan={activeSheet.displayHeaders.length + (hasPriceCol(activeSheet) ? 2 : 0)} className="py-2 border-b" /></tr>
                         )}
                         {section.rows.map((row, rIdx) => {
                           const isMissingPart = activeSheet.partNumDisplayIdx >= 0 &&
                             (row[activeSheet.partNumDisplayIdx] === null ||
                              row[activeSheet.partNumDisplayIdx] === undefined ||
                              String(row[activeSheet.partNumDisplayIdx]).trim() === '')
+                          const partNum = activeSheet.partNumDisplayIdx >= 0 ? String(row[activeSheet.partNumDisplayIdx] ?? '').trim() : ''
+                          const theirPrice = activeSheet.priceDisplayIdx >= 0 ? Number(row[activeSheet.priceDisplayIdx]) || 0 : 0
+                          const ourPrice = partNum ? priceMap[partNum] : undefined
+                          const editVal = partNum ? priceEdits[partNum] : undefined
+                          const diff = ourPrice !== undefined ? (theirPrice - ourPrice) : undefined
+
                           return (
                             <tr key={rIdx} className={`border-b border-gray-100 ${isMissingPart ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
                               {row.map((cell, cIdx) => (
@@ -933,6 +919,33 @@ export default function CabinetOrderPage() {
                                     : formatCell(cell, cIdx, activeSheet.displayHeaders)}
                                 </td>
                               ))}
+                              {hasPriceCol(activeSheet) && partNum && !isMissingPart && (
+                                <>
+                                  <td className="px-2 py-1 bg-blue-50/50">
+                                    <input
+                                      type="number" step="0.01" min="0"
+                                      className="w-20 text-right border border-gray-300 rounded px-1.5 py-0.5 text-sm focus:border-blue-500 focus:outline-none"
+                                      value={editVal ?? (ourPrice !== undefined ? ourPrice.toFixed(2) : '')}
+                                      placeholder="—"
+                                      onChange={(e) => setPriceEdits(prev => ({ ...prev, [partNum]: e.target.value }))}
+                                      onBlur={() => handlePriceBlur(partNum)}
+                                    />
+                                  </td>
+                                  <td className={`px-3 py-1.5 font-medium text-sm ${
+                                    diff === undefined ? 'text-gray-300'
+                                      : Math.abs(diff) < 0.005 ? 'text-emerald-600'
+                                        : diff > 0 ? 'text-red-600' : 'text-amber-600'
+                                  }`}>
+                                    {diff === undefined ? '—' : diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
+                                  </td>
+                                </>
+                              )}
+                              {hasPriceCol(activeSheet) && (!partNum || isMissingPart) && (
+                                <>
+                                  <td className="px-2 py-1 bg-blue-50/50" />
+                                  <td className="px-3 py-1.5" />
+                                </>
+                              )}
                             </tr>
                           )
                         })}
@@ -940,11 +953,10 @@ export default function CabinetOrderPage() {
                           <td className="px-3 py-1.5">{section.qtyTotal}</td>
                           {activeSheet.displayHeaders.slice(1).map((_, cIdx) => (
                             <td key={cIdx} className="px-3 py-1.5">
-                              {cIdx + 1 === activeSheet.extPriceDisplayIdx
-                                ? `$${section.extPriceTotal.toFixed(2)}`
-                                : ''}
+                              {cIdx + 1 === activeSheet.extPriceDisplayIdx ? `$${section.extPriceTotal.toFixed(2)}` : ''}
                             </td>
                           ))}
+                          {hasPriceCol(activeSheet) && <><td /><td /></>}
                         </tr>
                       </Fragment>
                     ))}
@@ -961,9 +973,7 @@ export default function CabinetOrderPage() {
             <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
               <div>
                 <span className="font-semibold text-gray-900">{activeSpecial.label}</span>
-                <span className="text-sm text-gray-500 ml-3">
-                  PO# {activeSpecial.poNumbers.join(', ')}
-                </span>
+                <span className="text-sm text-gray-500 ml-3">PO# {activeSpecial.poNumbers.join(', ')}</span>
                 <span className="text-sm text-gray-500 ml-3">Due: {activeSpecial.dueDate}</span>
               </div>
               <div className="flex items-center gap-3">
@@ -977,44 +987,24 @@ export default function CabinetOrderPage() {
                 </span>
               </div>
             </div>
-
-            {/* Rip / Mould toggle */}
             <div className="flex border-b">
-              <button
-                onClick={() => setSpecialView('rip')}
+              <button onClick={() => setSpecialView('rip')}
                 className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                  specialView === 'rip'
-                    ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                RIP View
-                <span className="ml-2 text-xs opacity-75">
-                  (Board Ft: {formatNum(activeSpecial.totalBoardFt, 1)})
-                </span>
+                  specialView === 'rip' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-50'
+                }`}>
+                RIP View <span className="ml-2 text-xs opacity-75">(Board Ft: {formatNum(activeSpecial.totalBoardFt, 1)})</span>
               </button>
-              <button
-                onClick={() => setSpecialView('mould')}
+              <button onClick={() => setSpecialView('mould')}
                 className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                  specialView === 'mould'
-                    ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:bg-gray-50'
-                }`}
-              >
+                  specialView === 'mould' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-50'
+                }`}>
                 MOULD View
               </button>
             </div>
-
             <div className="overflow-x-auto">
-              {specialView === 'rip' ? (
-                <RipTable
-                  rows={activeSpecial.ripRows}
-                  speciesTotals={activeSpecial.speciesTotals}
-                  totalBoardFt={activeSpecial.totalBoardFt}
-                />
-              ) : (
-                <MouldTable rows={activeSpecial.mouldRows} />
-              )}
+              {specialView === 'rip'
+                ? <RipTable rows={activeSpecial.ripRows} speciesTotals={activeSpecial.speciesTotals} totalBoardFt={activeSpecial.totalBoardFt} />
+                : <MouldTable rows={activeSpecial.mouldRows} />}
             </div>
           </div>
         )}
@@ -1022,83 +1012,78 @@ export default function CabinetOrderPage() {
 
       {/* ===== Print Layout ===== */}
       <div className="cabinet-print-area hidden print:block">
-        {/* Standard sheets */}
         {sheetsWithOrders.map((sheet, sheetIdx) => (
           <div key={sheet.name} className={sheetIdx > 0 ? 'cabinet-page-break' : ''}>
             <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                Nature&apos;s Blend Wood Products
-              </div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Nature&apos;s Blend Wood Products</div>
               <div style={{ fontSize: '11px', display: 'flex', gap: '24px' }}>
                 <span>PO# {sheet.poNumber}</span>
                 <span>Due Date: {sheet.dueDate}</span>
               </div>
-              <div style={{
-                fontSize: '13px', fontWeight: 600, marginTop: '8px',
-                borderBottom: '2px solid #333', paddingBottom: '4px',
-              }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '8px', borderBottom: '2px solid #333', paddingBottom: '4px' }}>
                 {sheet.name.trim()}
                 {sheet.missingPartCount > 0 && (
-                  <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>
-                    ({sheet.missingPartCount} missing part #)
-                  </span>
+                  <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>({sheet.missingPartCount} missing part #)</span>
                 )}
               </div>
             </div>
 
-            <table style={{
-              width: '100%', borderCollapse: 'collapse',
-              fontSize: '10px', fontFamily: 'Arial, sans-serif',
-            }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif' }}>
               <thead>
                 <tr>
                   {sheet.displayHeaders.map((h, i) => (
-                    <th key={i} style={{
-                      border: '1px solid #999', padding: '3px 6px',
-                      textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {h}
-                    </th>
+                    <th key={i} style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
+                  {hasPriceCol(sheet) && (
+                    <>
+                      <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>Our Price</th>
+                      <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>Diff</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {sheet.sections.map((section, sIdx) => (
                   <Fragment key={sIdx}>
-                    {sIdx > 0 && (
-                      <tr><td colSpan={sheet.displayHeaders.length} style={{ padding: '4px' }} /></tr>
-                    )}
+                    {sIdx > 0 && <tr><td colSpan={sheet.displayHeaders.length + (hasPriceCol(sheet) ? 2 : 0)} style={{ padding: '4px' }} /></tr>}
                     {section.rows.map((row, rIdx) => {
                       const isMissing = sheet.partNumDisplayIdx >= 0 &&
-                        (row[sheet.partNumDisplayIdx] === null ||
-                         row[sheet.partNumDisplayIdx] === undefined ||
-                         String(row[sheet.partNumDisplayIdx]).trim() === '')
+                        (row[sheet.partNumDisplayIdx] === null || row[sheet.partNumDisplayIdx] === undefined || String(row[sheet.partNumDisplayIdx]).trim() === '')
+                      const partNum = sheet.partNumDisplayIdx >= 0 ? String(row[sheet.partNumDisplayIdx] ?? '').trim() : ''
+                      const theirPrice = sheet.priceDisplayIdx >= 0 ? Number(row[sheet.priceDisplayIdx]) || 0 : 0
+                      const ourPrice = partNum ? priceMap[partNum] : undefined
+                      const diff = ourPrice !== undefined ? (theirPrice - ourPrice) : undefined
                       return (
                         <tr key={rIdx} style={isMissing ? { backgroundColor: '#fffbeb' } : undefined}>
                           {row.map((cell, cIdx) => (
-                            <td key={cIdx} style={{
-                              border: '1px solid #ccc', padding: '2px 6px', whiteSpace: 'nowrap',
-                            }}>
-                              {cIdx === sheet.partNumDisplayIdx && isMissing
-                                ? '⚠'
-                                : formatCell(cell, cIdx, sheet.displayHeaders)}
+                            <td key={cIdx} style={{ border: '1px solid #ccc', padding: '2px 6px', whiteSpace: 'nowrap' }}>
+                              {cIdx === sheet.partNumDisplayIdx && isMissing ? '⚠' : formatCell(cell, cIdx, sheet.displayHeaders)}
                             </td>
                           ))}
+                          {hasPriceCol(sheet) && (
+                            <>
+                              <td style={{ border: '1px solid #ccc', padding: '2px 6px', backgroundColor: '#eff6ff' }}>
+                                {ourPrice !== undefined ? ourPrice.toFixed(2) : ''}
+                              </td>
+                              <td style={{
+                                border: '1px solid #ccc', padding: '2px 6px', fontWeight: 'bold',
+                                color: diff === undefined ? '#ccc' : Math.abs(diff) < 0.005 ? '#059669' : '#dc2626',
+                              }}>
+                                {diff === undefined ? '' : diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       )
                     })}
                     <tr>
-                      <td style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>
-                        {section.qtyTotal}
-                      </td>
+                      <td style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>{section.qtyTotal}</td>
                       {sheet.displayHeaders.slice(1).map((_, cIdx) => (
                         <td key={cIdx} style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>
-                          {cIdx + 1 === sheet.extPriceDisplayIdx
-                            ? `$${section.extPriceTotal.toFixed(2)}`
-                            : ''}
+                          {cIdx + 1 === sheet.extPriceDisplayIdx ? `$${section.extPriceTotal.toFixed(2)}` : ''}
                         </td>
                       ))}
+                      {hasPriceCol(sheet) && <><td style={{ border: '1px solid #999' }} /><td style={{ border: '1px solid #999' }} /></>}
                     </tr>
                   </Fragment>
                 ))}
@@ -1108,61 +1093,37 @@ export default function CabinetOrderPage() {
             {sheet.sections.length > 1 && (
               <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
                 Grand Total Qty: {sheet.grandQtyTotal}
-                {sheet.grandExtTotal > 0 && (
-                  <span style={{ marginLeft: '24px' }}>Grand Total: ${sheet.grandExtTotal.toFixed(2)}</span>
-                )}
+                {sheet.grandExtTotal > 0 && <span style={{ marginLeft: '24px' }}>Grand Total: ${sheet.grandExtTotal.toFixed(2)}</span>}
               </div>
             )}
           </div>
         ))}
 
-        {/* Special tabs - Rip pages then Mould pages */}
+        {/* Special tabs Rip + Mould print pages */}
         {specialResults.map((sr) => (
           <Fragment key={sr.label}>
-            {/* RIP page */}
             <div className="cabinet-page-break">
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                  Nature&apos;s Blend Wood Products
-                </div>
+                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Nature&apos;s Blend Wood Products</div>
                 <div style={{ fontSize: '11px', display: 'flex', gap: '24px' }}>
                   <span>PO# {sr.poNumbers.join(', ')}</span>
                   <span>Due Date: {sr.dueDate}</span>
                 </div>
-                <div style={{
-                  fontSize: '13px', fontWeight: 600, marginTop: '8px',
-                  borderBottom: '2px solid #333', paddingBottom: '4px',
-                }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '8px', borderBottom: '2px solid #333', paddingBottom: '4px' }}>
                   {sr.label} — RIP
-                  {sr.missingPartCount > 0 && (
-                    <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>
-                      ({sr.missingPartCount} missing part #)
-                    </span>
-                  )}
+                  {sr.missingPartCount > 0 && <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>({sr.missingPartCount} missing part #)</span>}
                 </div>
               </div>
-              <RipTable
-                rows={sr.ripRows}
-                speciesTotals={sr.speciesTotals}
-                totalBoardFt={sr.totalBoardFt}
-                compact
-              />
+              <RipTable rows={sr.ripRows} speciesTotals={sr.speciesTotals} totalBoardFt={sr.totalBoardFt} compact />
             </div>
-
-            {/* MOULD page */}
             <div className="cabinet-page-break">
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                  Nature&apos;s Blend Wood Products
-                </div>
+                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Nature&apos;s Blend Wood Products</div>
                 <div style={{ fontSize: '11px', display: 'flex', gap: '24px' }}>
                   <span>PO# {sr.poNumbers.join(', ')}</span>
                   <span>Due Date: {sr.dueDate}</span>
                 </div>
-                <div style={{
-                  fontSize: '13px', fontWeight: 600, marginTop: '8px',
-                  borderBottom: '2px solid #333', paddingBottom: '4px',
-                }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '8px', borderBottom: '2px solid #333', paddingBottom: '4px' }}>
                   {sr.label} — MOULD
                 </div>
               </div>
