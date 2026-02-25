@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Plus, Pencil, Trash2, Search, X, ClipboardPaste } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ArchboldPart {
@@ -32,6 +33,9 @@ const emptyForm: PartFormData = { item_code: '', width: '', length: '', used_for
 
 export function ArchboldPartsManager({ parts, onPartsChanged }: ArchboldPartsManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [isBulkImporting, setIsBulkImporting] = useState(false)
   const [editingPart, setEditingPart] = useState<ArchboldPart | null>(null)
   const [formData, setFormData] = useState<PartFormData>(emptyForm)
   const [isSaving, setIsSaving] = useState(false)
@@ -119,6 +123,66 @@ export function ArchboldPartsManager({ parts, onPartsChanged }: ArchboldPartsMan
     }
   }
 
+  function parseBulkText(text: string) {
+    const lines = text.split('\n').filter(l => l.trim())
+    const parsed: Array<{ item_code: string; width: number | null; length: number | null; used_for: string | null }> = []
+
+    for (const line of lines) {
+      const cols = line.split('\t').map(c => c.trim())
+      if (cols.length < 4) continue
+
+      const item_code = cols[0]
+      const used_for = cols[1] || null
+      // cols[2] is thickness — skipped
+      const width = cols[3] ? parseFloat(cols[3]) : null
+      const length = cols[4] ? parseFloat(cols[4]) : null
+
+      if (!item_code) continue
+      parsed.push({ item_code, width: isNaN(width as number) ? null : width, length: isNaN(length as number) ? null : length, used_for })
+    }
+
+    return parsed
+  }
+
+  async function handleBulkImport() {
+    const parsed = parseBulkText(bulkText)
+    if (parsed.length === 0) {
+      toast.error('No valid rows found. Expected tab-separated: Part#, Used For, Thickness, Width, Length')
+      return
+    }
+
+    setIsBulkImporting(true)
+    try {
+      const res = await fetch('/api/archbold-parts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parts: parsed }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to import')
+      }
+
+      const result = await res.json()
+      if (result.created > 0) {
+        toast.success(`Created ${result.created} part(s)${result.skipped > 0 ? `, skipped ${result.skipped} duplicate(s)` : ''}`)
+      } else {
+        toast.info(`All ${result.skipped} part(s) already exist — nothing to import`)
+      }
+
+      setIsBulkDialogOpen(false)
+      setBulkText('')
+      onPartsChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to import parts')
+    } finally {
+      setIsBulkImporting(false)
+    }
+  }
+
+  const bulkPreview = bulkText ? parseBulkText(bulkText) : []
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -136,9 +200,14 @@ export function ArchboldPartsManager({ parts, onPartsChanged }: ArchboldPartsMan
             </button>
           )}
         </div>
-        <Button size="sm" onClick={handleOpenCreate} className="ml-3 gap-1.5 h-8">
-          <Plus className="h-3.5 w-3.5" /> Add Part
-        </Button>
+        <div className="flex items-center gap-2 ml-3">
+          <Button size="sm" variant="outline" onClick={() => setIsBulkDialogOpen(true)} className="gap-1.5 h-8">
+            <ClipboardPaste className="h-3.5 w-3.5" /> Paste Import
+          </Button>
+          <Button size="sm" onClick={handleOpenCreate} className="gap-1.5 h-8">
+            <Plus className="h-3.5 w-3.5" /> Add Part
+          </Button>
+        </div>
       </div>
 
       <div className="border rounded-lg overflow-hidden">
@@ -245,6 +314,70 @@ export function ArchboldPartsManager({ parts, onPartsChanged }: ArchboldPartsMan
               </Button>
               <Button onClick={handleSave} disabled={isSaving}>
                 {isSaving ? 'Saving...' : editingPart ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Bulk Import Parts</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <p className="text-sm text-gray-500">
+              Paste tab-separated data. Expected columns: <strong>Part #</strong>, <strong>Used For</strong>, <strong>Thickness</strong> (ignored), <strong>Width</strong>, <strong>Length</strong>. Duplicates will be skipped automatically.
+            </p>
+            <Textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder={"400061430200\tSide\t0.75\t16.5\t28.75\n400065320200\tSide\t0.75\t20.5\t29"}
+              className="min-h-[160px] font-mono text-xs"
+            />
+            {bulkPreview.length > 0 && (
+              <div className="border rounded-lg overflow-hidden max-h-[200px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b sticky top-0">
+                      <th className="px-2 py-1.5 text-left font-medium text-gray-500">Item Code</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-gray-500">Used For</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-gray-500">Width</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-gray-500">Length</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkPreview.map((p, i) => {
+                      const isDuplicate = parts.some(existing => existing.item_code.toLowerCase() === p.item_code.toLowerCase())
+                      return (
+                        <tr key={i} className={`border-b border-gray-100 ${isDuplicate ? 'bg-yellow-50 text-yellow-700' : ''}`}>
+                          <td className="px-2 py-1 font-medium">
+                            {p.item_code}
+                            {isDuplicate && <span className="ml-1.5 text-[10px] text-yellow-600 font-normal">(exists)</span>}
+                          </td>
+                          <td className="px-2 py-1">{p.used_for || '—'}</td>
+                          <td className="px-2 py-1 text-right">{p.width ?? '—'}</td>
+                          <td className="px-2 py-1 text-right">{p.length ?? '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <div className="px-2 py-1.5 bg-gray-50 border-t text-xs text-gray-500">
+                  {bulkPreview.length} row(s) parsed
+                  {(() => {
+                    const dupes = bulkPreview.filter(p => parts.some(e => e.item_code.toLowerCase() === p.item_code.toLowerCase())).length
+                    return dupes > 0 ? ` · ${dupes} duplicate(s) will be skipped` : ''
+                  })()}
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setIsBulkDialogOpen(false); setBulkText('') }} disabled={isBulkImporting}>
+                Cancel
+              </Button>
+              <Button onClick={handleBulkImport} disabled={isBulkImporting || bulkPreview.length === 0}>
+                {isBulkImporting ? 'Importing...' : `Import ${bulkPreview.length} Part(s)`}
               </Button>
             </div>
           </div>

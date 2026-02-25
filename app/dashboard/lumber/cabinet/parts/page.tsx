@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Copy, Check, Plus, Trash2, RotateCcw, ArrowRightLeft, CopyPlus } from 'lucide-react'
+import { Copy, Check, Plus, Trash2, RotateCcw, ArrowRightLeft, CopyPlus, X, Settings2, ChevronDown, ChevronUp } from 'lucide-react'
 
 const STORAGE_KEY = 'partBuilder_state'
 
@@ -612,6 +612,322 @@ function LinearCalculator({ config, state, setState }: {
 
 // ===== Main Page =====
 
+// ===== Reference Pricing Types =====
+
+interface RefCustomer { id: number; name: string }
+interface RefSpecies { id: number; name: string }
+interface RefPart {
+  id: number; tab_id: string; part_name: string; price_per_bf: string
+  customer_id: number; customer_name: string
+  species_id: number; species_name: string
+}
+
+// ===== Reference Pricing Component =====
+
+function PartReferenceList({ tabId, tabLabel }: { tabId: string; tabLabel: string }) {
+  const [parts, setParts] = useState<RefPart[]>([])
+  const [customers, setCustomers] = useState<RefCustomer[]>([])
+  const [species, setSpecies] = useState<RefSpecies[]>([])
+  const [isOpen, setIsOpen] = useState(false)
+  const [showManage, setShowManage] = useState(false)
+
+  const [newCustomer, setNewCustomer] = useState('')
+  const [newSpecies, setNewSpecies] = useState('')
+
+  const [addCustomerId, setAddCustomerId] = useState('')
+  const [addSpeciesId, setAddSpeciesId] = useState('')
+  const [addPartName, setAddPartName] = useState('')
+  const [addPrice, setAddPrice] = useState('')
+
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editPrice, setEditPrice] = useState('')
+
+  const [filterCustomer, setFilterCustomer] = useState('')
+  const [filterSpecies, setFilterSpecies] = useState('')
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const [pRes, cRes, sRes] = await Promise.all([
+        fetch(`/api/lumber/cabinet/part-builder/parts?tab_id=${tabId}`),
+        fetch('/api/lumber/cabinet/part-builder/customers'),
+        fetch('/api/lumber/cabinet/part-builder/species'),
+      ])
+      if (pRes.ok) setParts(await pRes.json())
+      if (cRes.ok) setCustomers(await cRes.json())
+      if (sRes.ok) setSpecies(await sRes.json())
+    } catch { /* fetch failed */ }
+  }, [tabId])
+
+  useEffect(() => {
+    if (isOpen) fetchAll()
+  }, [isOpen, fetchAll])
+
+  async function handleAddCustomer() {
+    if (!newCustomer.trim()) return
+    const res = await fetch('/api/lumber/cabinet/part-builder/customers', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newCustomer.trim() }),
+    })
+    if (res.ok) {
+      setNewCustomer('')
+      const cRes = await fetch('/api/lumber/cabinet/part-builder/customers')
+      if (cRes.ok) setCustomers(await cRes.json())
+    }
+  }
+
+  async function handleDeleteCustomer(id: number) {
+    await fetch(`/api/lumber/cabinet/part-builder/customers?id=${id}`, { method: 'DELETE' })
+    fetchAll()
+  }
+
+  async function handleAddSpecies() {
+    if (!newSpecies.trim()) return
+    const res = await fetch('/api/lumber/cabinet/part-builder/species', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newSpecies.trim() }),
+    })
+    if (res.ok) {
+      setNewSpecies('')
+      const sRes = await fetch('/api/lumber/cabinet/part-builder/species')
+      if (sRes.ok) setSpecies(await sRes.json())
+    }
+  }
+
+  async function handleDeleteSpecies(id: number) {
+    await fetch(`/api/lumber/cabinet/part-builder/species?id=${id}`, { method: 'DELETE' })
+    fetchAll()
+  }
+
+  async function handleAddPart() {
+    if (!addCustomerId || !addSpeciesId || !addPartName.trim() || !addPrice) return
+    const res = await fetch('/api/lumber/cabinet/part-builder/parts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tab_id: tabId, customer_id: parseInt(addCustomerId),
+        species_id: parseInt(addSpeciesId), part_name: addPartName.trim(),
+        price_per_bf: parseFloat(addPrice),
+      }),
+    })
+    if (res.ok) {
+      setAddPartName('')
+      setAddPrice('')
+      const pRes = await fetch(`/api/lumber/cabinet/part-builder/parts?tab_id=${tabId}`)
+      if (pRes.ok) setParts(await pRes.json())
+    }
+  }
+
+  async function handleUpdatePrice(id: number) {
+    const val = parseFloat(editPrice)
+    if (isNaN(val)) return
+    await fetch('/api/lumber/cabinet/part-builder/parts', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, price_per_bf: val }),
+    })
+    setEditingId(null)
+    const pRes = await fetch(`/api/lumber/cabinet/part-builder/parts?tab_id=${tabId}`)
+    if (pRes.ok) setParts(await pRes.json())
+  }
+
+  async function handleDeletePart(id: number) {
+    await fetch(`/api/lumber/cabinet/part-builder/parts?id=${id}`, { method: 'DELETE' })
+    const pRes = await fetch(`/api/lumber/cabinet/part-builder/parts?tab_id=${tabId}`)
+    if (pRes.ok) setParts(await pRes.json())
+  }
+
+  const filtered = parts.filter(p => {
+    if (filterCustomer && p.customer_id !== parseInt(filterCustomer)) return false
+    if (filterSpecies && p.species_id !== parseInt(filterSpecies)) return false
+    return true
+  })
+
+  const grouped: Record<string, RefPart[]> = {}
+  for (const p of filtered) {
+    if (!grouped[p.customer_name]) grouped[p.customer_name] = []
+    grouped[p.customer_name].push(p)
+  }
+
+  return (
+    <div className="mt-3 bg-white rounded-lg border overflow-hidden">
+      <button onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 py-2 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors">
+        <span className="text-xs font-semibold text-gray-700">
+          Reference Pricing — {tabLabel}
+          {parts.length > 0 && <span className="ml-1.5 text-gray-400 font-normal">({parts.length} parts)</span>}
+        </span>
+        {isOpen ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+      </button>
+
+      {isOpen && (
+        <div className="p-3 space-y-3">
+          {/* Manage Customers & Species */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <select className="text-xs border rounded px-2 py-1 bg-white" value={filterCustomer} onChange={(e) => setFilterCustomer(e.target.value)}>
+                <option value="">All Customers</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select className="text-xs border rounded px-2 py-1 bg-white" value={filterSpecies} onChange={(e) => setFilterSpecies(e.target.value)}>
+                <option value="">All Species</option>
+                {species.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <button onClick={() => setShowManage(!showManage)}
+              className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${showManage ? 'bg-gray-200 text-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+              <Settings2 size={12} /> Manage
+            </button>
+          </div>
+
+          {/* Management Panel */}
+          {showManage && (
+            <div className="bg-gray-50 rounded-lg p-3 border space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Customers */}
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">Customers</div>
+                  <div className="flex gap-1 mb-2">
+                    <input className="flex-1 text-xs border rounded px-2 py-1 focus:border-emerald-500 focus:outline-none"
+                      placeholder="New customer name" value={newCustomer}
+                      onChange={(e) => setNewCustomer(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddCustomer()} />
+                    <button onClick={handleAddCustomer} className="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700">
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                  <div className="max-h-32 overflow-y-auto space-y-0.5">
+                    {customers.map(c => (
+                      <div key={c.id} className="flex items-center justify-between text-xs px-2 py-0.5 rounded hover:bg-white group">
+                        <span>{c.name}</span>
+                        <button onClick={() => handleDeleteCustomer(c.id)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 transition-all">
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))}
+                    {customers.length === 0 && <div className="text-[10px] text-gray-400 px-2">No customers yet</div>}
+                  </div>
+                </div>
+                {/* Species */}
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">Species</div>
+                  <div className="flex gap-1 mb-2">
+                    <input className="flex-1 text-xs border rounded px-2 py-1 focus:border-emerald-500 focus:outline-none"
+                      placeholder="New species name" value={newSpecies}
+                      onChange={(e) => setNewSpecies(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddSpecies()} />
+                    <button onClick={handleAddSpecies} className="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700">
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                  <div className="max-h-32 overflow-y-auto space-y-0.5">
+                    {species.map(s => (
+                      <div key={s.id} className="flex items-center justify-between text-xs px-2 py-0.5 rounded hover:bg-white group">
+                        <span>{s.name}</span>
+                        <button onClick={() => handleDeleteSpecies(s.id)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 transition-all">
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))}
+                    {species.length === 0 && <div className="text-[10px] text-gray-400 px-2">No species yet</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Add Part Row */}
+          <div className="flex gap-1.5 items-end">
+            <div className="flex-1">
+              <label className="block text-[10px] text-gray-500 mb-0.5">Customer</label>
+              <select className="w-full text-xs border rounded px-2 py-1 bg-white" value={addCustomerId} onChange={(e) => setAddCustomerId(e.target.value)}>
+                <option value="">Select...</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-[10px] text-gray-500 mb-0.5">Part Name</label>
+              <input className="w-full text-xs border rounded px-2 py-1 focus:border-emerald-500 focus:outline-none"
+                placeholder="Part name" value={addPartName} onChange={(e) => setAddPartName(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[10px] text-gray-500 mb-0.5">Species</label>
+              <select className="w-full text-xs border rounded px-2 py-1 bg-white" value={addSpeciesId} onChange={(e) => setAddSpeciesId(e.target.value)}>
+                <option value="">Select...</option>
+                {species.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="w-24">
+              <label className="block text-[10px] text-gray-500 mb-0.5">$/BF</label>
+              <input type="number" step="0.01" className="w-full text-xs border rounded px-2 py-1 focus:border-emerald-500 focus:outline-none"
+                placeholder="0.00" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} />
+            </div>
+            <button onClick={handleAddPart}
+              disabled={!addCustomerId || !addSpeciesId || !addPartName.trim() || !addPrice}
+              className="px-3 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">
+              <Plus size={12} className="inline -mt-0.5" /> Add
+            </button>
+          </div>
+
+          {/* Parts List */}
+          {filtered.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="px-2 py-1 text-left text-gray-500">Customer</th>
+                    <th className="px-2 py-1 text-left text-gray-500">Part</th>
+                    <th className="px-2 py-1 text-left text-gray-500">Species</th>
+                    <th className="px-2 py-1 text-right text-gray-500">$/BF</th>
+                    <th className="w-8" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(grouped).map(([customerName, customerParts]) => (
+                    customerParts.map((p, i) => (
+                      <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-2 py-1 font-medium text-gray-700">
+                          {i === 0 ? customerName : ''}
+                        </td>
+                        <td className="px-2 py-1">{p.part_name}</td>
+                        <td className="px-2 py-1 text-gray-600">{p.species_name}</td>
+                        <td className="px-2 py-1 text-right">
+                          {editingId === p.id ? (
+                            <input type="number" step="0.01" autoFocus
+                              className="w-20 text-xs border rounded px-1.5 py-0.5 text-right focus:border-emerald-500 focus:outline-none"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              onBlur={() => handleUpdatePrice(p.id)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleUpdatePrice(p.id)} />
+                          ) : (
+                            <button onClick={() => { setEditingId(p.id); setEditPrice(p.price_per_bf) }}
+                              className="font-mono font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer">
+                              ${parseFloat(p.price_per_bf).toFixed(4)}
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-1 py-1">
+                          <button onClick={() => handleDeletePart(p.id)}
+                            className="p-0.5 text-gray-300 hover:text-red-500 transition-colors">
+                            <Trash2 size={11} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-xs text-gray-400">
+              {parts.length === 0 ? 'No parts added yet for this tab' : 'No parts match the selected filters'}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getDefaultPanelStates(): Record<string, PanelState> {
   const s: Record<string, PanelState> = {}
   for (const tab of TABS) {
@@ -743,6 +1059,9 @@ export default function PartBuilderPage() {
           setState={(fn) => setLinearStates(prev => ({ ...prev, [activeTab.id]: fn(prev[activeTab.id]) }))}
         />
       )}
+
+      {/* Reference Pricing */}
+      <PartReferenceList tabId={activeTabId} tabLabel={activeTab.shortLabel} />
     </div>
   )
 }
