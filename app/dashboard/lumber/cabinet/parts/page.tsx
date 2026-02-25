@@ -92,34 +92,29 @@ interface LinearRow {
   qty: string
 }
 
-interface PanelMeta {
-  description: string
-  subItem: string
-  customer: string
-  specie: string
-  product: string
-  profile: string
-  thickness: string
-  itemClass: string
+interface PanelReverseRow {
+  width: string
+  length: string
+  price: string
+}
+
+interface LinearReverseRow {
+  length: string
+  price: string
 }
 
 interface PanelState {
   rate: string
   globalThickness: string
-  meta: PanelMeta
   rows: PanelRow[]
-  reverseWidth: string
-  reverseLength: string
-  reversePrice: string
+  reverseRows: PanelReverseRow[]
 }
 
 interface LinearState {
   rate: string
   globalWidth: string
-  meta: PanelMeta
   rows: LinearRow[]
-  reverseLength: string
-  reversePrice: string
+  reverseRows: LinearReverseRow[]
 }
 
 // ===== Tab Configs =====
@@ -194,17 +189,20 @@ const TABS: TabConfig[] = [
   },
 ]
 
-const EMPTY_META: PanelMeta = {
-  description: '', subItem: '', customer: '', specie: '',
-  product: '', profile: '', thickness: '', itemClass: '',
-}
-
 function makePanelRows(count: number): PanelRow[] {
   return Array.from({ length: count }, () => ({ width: '', length: '', qty: '' }))
 }
 
 function makeLinearRows(count: number): LinearRow[] {
   return Array.from({ length: count }, () => ({ length: '', qty: '' }))
+}
+
+function makePanelReverseRows(): PanelReverseRow[] {
+  return Array.from({ length: 3 }, () => ({ width: '', length: '', price: '' }))
+}
+
+function makeLinearReverseRows(): LinearReverseRow[] {
+  return Array.from({ length: 3 }, () => ({ length: '', price: '' }))
 }
 
 // ===== Copy Button =====
@@ -225,23 +223,6 @@ function CopyBtn({ value }: { value: string }) {
     }`}>
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
-  )
-}
-
-// ===== Labeled Input with Copy =====
-
-function MetaField({ label, value, onChange }: {
-  label: string; value: string; onChange: (v: string) => void
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <label className="text-xs font-medium text-gray-500 w-20 shrink-0 text-right">{label}</label>
-      <input
-        className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-200"
-        value={value} onChange={(e) => onChange(e.target.value)}
-      />
-      <CopyBtn value={value} />
-    </div>
   )
 }
 
@@ -291,15 +272,13 @@ function PanelCalculator({ config, state, setState }: {
     setState(prev => ({ ...prev, rows: prev.rows.filter((_, i) => i !== idx) }))
   }
 
-  function updateMeta(field: keyof PanelMeta, value: string) {
-    setState(prev => ({ ...prev, meta: { ...prev.meta, [field]: value } }))
+  function updateReverseRow(idx: number, field: keyof PanelReverseRow, value: string) {
+    setState(prev => {
+      const reverseRows = [...prev.reverseRows]
+      reverseRows[idx] = { ...reverseRows[idx], [field]: value }
+      return { ...prev, reverseRows }
+    })
   }
-
-  const revW = parseFloat(state.reverseWidth) || 0
-  const revL = parseFloat(state.reverseLength) || 0
-  const revP = parseFloat(state.reversePrice) || 0
-  const revBf = revW > 0 && revL > 0 ? ((revW * revL) / 144) * config.bfMultiplier : 0
-  const revRate = revBf > 0 && revP > 0 ? revP / revBf : 0
 
   return (
     <div className="space-y-4">
@@ -309,7 +288,7 @@ function PanelCalculator({ config, state, setState }: {
           <label className="block text-xs font-medium text-gray-500 mb-1">Thickness</label>
           <input type="number" step="0.001" className="w-28 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
             value={state.globalThickness}
-            onChange={(e) => setState(prev => ({ ...prev, globalThickness: e.target.value, meta: { ...prev.meta, thickness: e.target.value } }))}
+            onChange={(e) => setState(prev => ({ ...prev, globalThickness: e.target.value }))}
           />
         </div>
         <div>
@@ -318,39 +297,59 @@ function PanelCalculator({ config, state, setState }: {
             value={state.rate} onChange={(e) => setState(prev => ({ ...prev, rate: e.target.value }))}
           />
         </div>
-        <div className="ml-auto flex items-end gap-2">
-          <div className="bg-white border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-3">
-            <ArrowRightLeft size={14} className="text-blue-500" />
-            <span className="text-xs font-medium text-blue-600">Reverse $/BF:</span>
-            <input type="number" step="0.01" placeholder="W" className="w-16 border rounded px-1.5 py-1 text-xs text-center"
-              value={state.reverseWidth} onChange={(e) => setState(prev => ({ ...prev, reverseWidth: e.target.value }))} />
-            <span className="text-gray-400">×</span>
-            <input type="number" step="0.01" placeholder="L" className="w-16 border rounded px-1.5 py-1 text-xs text-center"
-              value={state.reverseLength} onChange={(e) => setState(prev => ({ ...prev, reverseLength: e.target.value }))} />
-            <span className="text-gray-400">@</span>
-            <input type="number" step="0.01" placeholder="Price" className="w-20 border rounded px-1.5 py-1 text-xs text-center"
-              value={state.reversePrice} onChange={(e) => setState(prev => ({ ...prev, reversePrice: e.target.value }))} />
-            <span className="text-sm font-bold text-blue-800">
-              {revRate > 0 ? `$${revRate.toFixed(4)}/BF` : '—'}
-            </span>
-            {revRate > 0 && <CopyBtn value={revRate.toFixed(4)} />}
-          </div>
-        </div>
       </div>
 
-      {/* QB Metadata */}
-      <div className="bg-white rounded-lg border p-4">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">QuickBooks Fields</div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-          <MetaField label="Description" value={state.meta.description} onChange={(v) => updateMeta('description', v)} />
-          <MetaField label="Sub Item" value={state.meta.subItem} onChange={(v) => updateMeta('subItem', v)} />
-          <MetaField label="Customer" value={state.meta.customer} onChange={(v) => updateMeta('customer', v)} />
-          <MetaField label="Specie" value={state.meta.specie} onChange={(v) => updateMeta('specie', v)} />
-          <MetaField label="Product" value={state.meta.product} onChange={(v) => updateMeta('product', v)} />
-          <MetaField label="Profile" value={state.meta.profile} onChange={(v) => updateMeta('profile', v)} />
-          <MetaField label="Thickness" value={state.meta.thickness} onChange={(v) => updateMeta('thickness', v)} />
-          <MetaField label="Item Class" value={state.meta.itemClass} onChange={(v) => updateMeta('itemClass', v)} />
+      {/* Reverse $/BF */}
+      <div className="bg-white border border-blue-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-2">
+          <ArrowRightLeft size={14} className="text-blue-500" />
+          <span className="text-xs font-semibold text-blue-700">Reverse $/BF</span>
         </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-xs">
+              <th className="px-3 py-1.5 text-center text-gray-400 w-8">#</th>
+              <th className="px-3 py-1.5 text-left text-gray-600">Width</th>
+              <th className="px-3 py-1.5 text-left text-gray-600">Length</th>
+              <th className="px-3 py-1.5 text-left text-gray-600">Price</th>
+              <th className="px-3 py-1.5 text-right text-gray-600">BF</th>
+              <th className="px-3 py-1.5 text-right text-blue-600 font-semibold">$/BF</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.reverseRows.map((rr, idx) => {
+              const rW = parseFloat(rr.width) || 0
+              const rL = parseFloat(rr.length) || 0
+              const rP = parseFloat(rr.price) || 0
+              const rBf = rW > 0 && rL > 0 ? ((rW * rL) / 144) * config.bfMultiplier : 0
+              const rRate = rBf > 0 && rP > 0 ? rP / rBf : 0
+              return (
+                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-1 text-center text-xs text-gray-400">{idx + 1}</td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" placeholder="W" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                      value={rr.width} onChange={(e) => updateReverseRow(idx, 'width', e.target.value)} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" placeholder="L" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                      value={rr.length} onChange={(e) => updateReverseRow(idx, 'length', e.target.value)} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" placeholder="$" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                      value={rr.price} onChange={(e) => updateReverseRow(idx, 'price', e.target.value)} />
+                  </td>
+                  <td className="px-3 py-1 text-right text-xs text-gray-500">{rBf > 0 ? rBf.toFixed(4) : '—'}</td>
+                  <td className="px-3 py-1 text-right">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-sm font-bold text-blue-800">{rRate > 0 ? `$${rRate.toFixed(4)}` : '—'}</span>
+                      {rRate > 0 && <CopyBtn value={rRate.toFixed(4)} />}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Size Calculator Table */}
@@ -450,15 +449,13 @@ function LinearCalculator({ config, state, setState }: {
     setState(prev => ({ ...prev, rows: prev.rows.filter((_, i) => i !== idx) }))
   }
 
-  function updateMeta(field: keyof PanelMeta, value: string) {
-    setState(prev => ({ ...prev, meta: { ...prev.meta, [field]: value } }))
+  function updateReverseRow(idx: number, field: keyof LinearReverseRow, value: string) {
+    setState(prev => {
+      const reverseRows = [...prev.reverseRows]
+      reverseRows[idx] = { ...reverseRows[idx], [field]: value }
+      return { ...prev, reverseRows }
+    })
   }
-
-  const revL = parseFloat(state.reverseLength) || 0
-  const revP = parseFloat(state.reversePrice) || 0
-  const revLf = revL > 0 ? revL / 12 : 0
-  const basePrice = revP - config.copeAdder
-  const revRate = revLf > 0 && basePrice > 0 ? basePrice / revLf : 0
 
   const hasCope = config.copeAdder > 0
 
@@ -484,36 +481,54 @@ function LinearCalculator({ config, state, setState }: {
             {config.centerRailAdder > 0 && <span className="ml-3">Center rail: +${config.centerRailAdder.toFixed(2)}/pc</span>}
           </div>
         )}
-        <div className="ml-auto flex items-end gap-2">
-          <div className="bg-white border border-blue-200 rounded-lg px-4 py-2 flex items-center gap-3">
-            <ArrowRightLeft size={14} className="text-blue-500" />
-            <span className="text-xs font-medium text-blue-600">Reverse {config.rateLabel}:</span>
-            <input type="number" step="0.01" placeholder="Length" className="w-20 border rounded px-1.5 py-1 text-xs text-center"
-              value={state.reverseLength} onChange={(e) => setState(prev => ({ ...prev, reverseLength: e.target.value }))} />
-            <span className="text-gray-400">@</span>
-            <input type="number" step="0.01" placeholder="Price" className="w-20 border rounded px-1.5 py-1 text-xs text-center"
-              value={state.reversePrice} onChange={(e) => setState(prev => ({ ...prev, reversePrice: e.target.value }))} />
-            <span className="text-sm font-bold text-blue-800">
-              {revRate > 0 ? `$${revRate.toFixed(4)}${config.rateLabel}` : '—'}
-            </span>
-            {revRate > 0 && <CopyBtn value={revRate.toFixed(4)} />}
-          </div>
-        </div>
       </div>
 
-      {/* QB Metadata */}
-      <div className="bg-white rounded-lg border p-4">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">QuickBooks Fields</div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-          <MetaField label="Description" value={state.meta.description} onChange={(v) => updateMeta('description', v)} />
-          <MetaField label="Sub Item" value={state.meta.subItem} onChange={(v) => updateMeta('subItem', v)} />
-          <MetaField label="Customer" value={state.meta.customer} onChange={(v) => updateMeta('customer', v)} />
-          <MetaField label="Specie" value={state.meta.specie} onChange={(v) => updateMeta('specie', v)} />
-          <MetaField label="Product" value={state.meta.product} onChange={(v) => updateMeta('product', v)} />
-          <MetaField label="Profile" value={state.meta.profile} onChange={(v) => updateMeta('profile', v)} />
-          <MetaField label="Thickness" value={state.meta.thickness} onChange={(v) => updateMeta('thickness', v)} />
-          <MetaField label="Item Class" value={state.meta.itemClass} onChange={(v) => updateMeta('itemClass', v)} />
+      {/* Reverse $/LF */}
+      <div className="bg-white border border-blue-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-2">
+          <ArrowRightLeft size={14} className="text-blue-500" />
+          <span className="text-xs font-semibold text-blue-700">Reverse {config.rateLabel}</span>
         </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-xs">
+              <th className="px-3 py-1.5 text-center text-gray-400 w-8">#</th>
+              <th className="px-3 py-1.5 text-left text-gray-600">Length</th>
+              <th className="px-3 py-1.5 text-left text-gray-600">Price</th>
+              <th className="px-3 py-1.5 text-right text-gray-600">LF</th>
+              <th className="px-3 py-1.5 text-right text-blue-600 font-semibold">{config.rateLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.reverseRows.map((rr, idx) => {
+              const rL = parseFloat(rr.length) || 0
+              const rP = parseFloat(rr.price) || 0
+              const rLf = rL > 0 ? rL / 12 : 0
+              const rBase = rP - config.copeAdder
+              const rRate = rLf > 0 && rBase > 0 ? rBase / rLf : 0
+              return (
+                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-1 text-center text-xs text-gray-400">{idx + 1}</td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" placeholder="Length" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                      value={rr.length} onChange={(e) => updateReverseRow(idx, 'length', e.target.value)} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" placeholder="$" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                      value={rr.price} onChange={(e) => updateReverseRow(idx, 'price', e.target.value)} />
+                  </td>
+                  <td className="px-3 py-1 text-right text-xs text-gray-500">{rLf > 0 ? rLf.toFixed(4) : '—'}</td>
+                  <td className="px-3 py-1 text-right">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-sm font-bold text-blue-800">{rRate > 0 ? `$${rRate.toFixed(4)}` : '—'}</span>
+                      {rRate > 0 && <CopyBtn value={rRate.toFixed(4)} />}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Size Calculator Table */}
@@ -594,9 +609,8 @@ export default function PartBuilderPage() {
         s[tab.id] = {
           rate: tab.defaultRate,
           globalThickness: tab.defaultThickness,
-          meta: { ...EMPTY_META, thickness: tab.defaultThickness },
           rows: makePanelRows(12),
-          reverseWidth: '', reverseLength: '', reversePrice: '',
+          reverseRows: makePanelReverseRows(),
         }
       }
     }
@@ -610,9 +624,8 @@ export default function PartBuilderPage() {
         s[tab.id] = {
           rate: tab.defaultRate,
           globalWidth: tab.defaultWidth,
-          meta: { ...EMPTY_META },
           rows: makeLinearRows(12),
-          reverseLength: '', reversePrice: '',
+          reverseRows: makeLinearReverseRows(),
         }
       }
     }
@@ -628,8 +641,7 @@ export default function PartBuilderPage() {
         ...prev,
         [cfg.id]: {
           rate: cfg.defaultRate, globalThickness: cfg.defaultThickness,
-          meta: { ...EMPTY_META, thickness: cfg.defaultThickness },
-          rows: makePanelRows(12), reverseWidth: '', reverseLength: '', reversePrice: '',
+          rows: makePanelRows(12), reverseRows: makePanelReverseRows(),
         },
       }))
     } else {
@@ -638,8 +650,7 @@ export default function PartBuilderPage() {
         ...prev,
         [cfg.id]: {
           rate: cfg.defaultRate, globalWidth: cfg.defaultWidth,
-          meta: { ...EMPTY_META },
-          rows: makeLinearRows(12), reverseLength: '', reversePrice: '',
+          rows: makeLinearRows(12), reverseRows: makeLinearReverseRows(),
         },
       }))
     }
