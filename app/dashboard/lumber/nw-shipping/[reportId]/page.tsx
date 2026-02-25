@@ -23,6 +23,7 @@ interface ReportData {
   id: number
   northwest_po: string | null
   archbold_po: string | null
+  delivery_date: string | null
   items: Array<{
     id: number
     pallet_number: string | null
@@ -72,6 +73,7 @@ export default function NWShippingReportDetailPage() {
 
   const [northwestPo, setNorthwestPo] = useState('')
   const [archboldPo, setArchboldPo] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [items, setItems] = useState<ReportLineItem[]>([])
   const [parts, setParts] = useState<ArchboldPart[]>([])
 
@@ -89,6 +91,7 @@ export default function NWShippingReportDetailPage() {
       const data: ReportData = await res.json()
       setNorthwestPo(data.northwest_po || '')
       setArchboldPo(data.archbold_po || '')
+      setDeliveryDate(data.delivery_date || '')
       setItems(data.items.map(apiItemToLocal))
     } catch {
       toast.error('Failed to load report')
@@ -119,6 +122,7 @@ export default function NWShippingReportDetailPage() {
       const payload = {
         northwest_po: northwestPo || null,
         archbold_po: archboldPo || null,
+        delivery_date: deliveryDate || null,
         items: items.map(item => ({
           pallet_number: item.pallet_number || null,
           pallet_tag: item.pallet_tag || null,
@@ -277,7 +281,7 @@ export default function NWShippingReportDetailPage() {
 
       {/* PO Number Inputs */}
       <div className="bg-white rounded-lg border p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label className="text-sm font-medium">Northwest PO #</Label>
             <Input
@@ -296,6 +300,15 @@ export default function NWShippingReportDetailPage() {
               className="mt-1"
             />
           </div>
+          <div>
+            <Label className="text-sm font-medium">Delivery Date</Label>
+            <Input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              className="mt-1"
+            />
+          </div>
         </div>
       </div>
 
@@ -303,7 +316,7 @@ export default function NWShippingReportDetailPage() {
       {viewMode === 'edit' ? (
         <ReportEditor items={items} parts={parts} archboldPo={archboldPo} onChange={setItems} />
       ) : (
-        <GroupedView ref={printRef} items={items} northwestPo={northwestPo} archboldPo={archboldPo} />
+        <GroupedView ref={printRef} items={items} northwestPo={northwestPo} archboldPo={archboldPo} deliveryDate={deliveryDate} />
       )}
     </div>
   )

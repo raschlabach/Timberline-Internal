@@ -11,7 +11,7 @@ export async function GET() {
     }
 
     const result = await query(
-      `SELECT r.id, r.northwest_po, r.archbold_po, r.created_at, r.updated_at,
+      `SELECT r.id, r.northwest_po, r.archbold_po, r.delivery_date, r.created_at, r.updated_at,
               COUNT(i.id)::int AS item_count,
               COALESCE(SUM(i.qty_per_skid), 0)::int AS total_qty
        FROM nw_shipping_reports r
@@ -37,10 +37,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     const result = await query(
-      `INSERT INTO nw_shipping_reports (northwest_po, archbold_po, created_by)
-       VALUES ($1, $2, $3)
-       RETURNING id, northwest_po, archbold_po, created_at, updated_at`,
-      [body.northwest_po || null, body.archbold_po || null, (session.user as unknown as { id?: number }).id || null]
+      `INSERT INTO nw_shipping_reports (northwest_po, archbold_po, delivery_date, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, northwest_po, archbold_po, delivery_date, created_at, updated_at`,
+      [body.northwest_po || null, body.archbold_po || null, body.delivery_date || null, (session.user as unknown as { id?: number }).id || null]
     )
 
     return NextResponse.json(result.rows[0], { status: 201 })

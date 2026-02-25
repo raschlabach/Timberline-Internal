@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const reportResult = await query(
-      `SELECT id, northwest_po, archbold_po, created_at, updated_at
+      `SELECT id, northwest_po, archbold_po, delivery_date, created_at, updated_at
        FROM nw_shipping_reports WHERE id = $1`,
       [id]
     )
@@ -66,9 +66,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     await client.query(
       `UPDATE nw_shipping_reports
-       SET northwest_po = $1, archbold_po = $2, updated_at = NOW()
-       WHERE id = $3`,
-      [body.northwest_po || null, body.archbold_po || null, id]
+       SET northwest_po = $1, archbold_po = $2, delivery_date = $3, updated_at = NOW()
+       WHERE id = $4`,
+      [body.northwest_po || null, body.archbold_po || null, body.delivery_date || null, id]
     )
 
     if (Array.isArray(body.items)) {
@@ -100,7 +100,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     await client.query('COMMIT')
 
     const reportResult = await query(
-      `SELECT id, northwest_po, archbold_po, created_at, updated_at
+      `SELECT id, northwest_po, archbold_po, delivery_date, created_at, updated_at
        FROM nw_shipping_reports WHERE id = $1`,
       [id]
     )

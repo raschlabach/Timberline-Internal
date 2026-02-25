@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS nw_shipping_reports (
   id SERIAL PRIMARY KEY,
   northwest_po VARCHAR(100),
   archbold_po VARCHAR(100),
+  delivery_date DATE,
   created_by INTEGER REFERENCES users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

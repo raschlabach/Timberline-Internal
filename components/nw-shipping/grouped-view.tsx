@@ -7,6 +7,7 @@ interface GroupedViewProps {
   items: ReportLineItem[]
   northwestPo?: string
   archboldPo?: string
+  deliveryDate?: string
 }
 
 interface GroupedItemCode {
@@ -70,10 +71,11 @@ function buildGroups(items: ReportLineItem[]): GroupedItemCode[] {
   return groups
 }
 
-function GroupContent({ groups, northwestPo, archboldPo, showHeader }: {
+function GroupContent({ groups, northwestPo, archboldPo, deliveryDate, showHeader }: {
   groups: GroupedItemCode[]
   northwestPo?: string
   archboldPo?: string
+  deliveryDate?: string
   showHeader?: boolean
 }) {
   const headerCls = "px-2 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-300"
@@ -82,15 +84,19 @@ function GroupContent({ groups, northwestPo, archboldPo, showHeader }: {
 
   return (
     <>
-      {showHeader && (northwestPo || archboldPo) && (
+      {showHeader && (
         <div className="mb-4 pb-3 border-b-2 border-gray-300">
           <h2 className="text-lg font-bold">Northwest Shipping Report</h2>
-          <div className="flex gap-6 mt-1 text-sm">
-            {northwestPo && <span><strong>NW PO #:</strong> {northwestPo}</span>}
-            {archboldPo && <span><strong>Archbold PO #:</strong> {archboldPo}</span>}
+          <div className="flex gap-6 mt-1.5 text-sm">
+            <span><strong>NW PO #:</strong> {northwestPo || '—'}</span>
+            <span><strong>Archbold PO #:</strong> {archboldPo || '—'}</span>
+            <span><strong>Delivery Date:</strong> {deliveryDate
+              ? new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+              : '—'
+            }</span>
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            Printed {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
         </div>
       )}
@@ -157,7 +163,7 @@ function GroupContent({ groups, northwestPo, archboldPo, showHeader }: {
 }
 
 export const GroupedView = forwardRef<HTMLDivElement, GroupedViewProps>(
-  function GroupedView({ items, northwestPo, archboldPo }, ref) {
+  function GroupedView({ items, northwestPo, archboldPo, deliveryDate }, ref) {
     const groups = buildGroups(items)
 
     if (groups.length === 0) {
@@ -178,7 +184,7 @@ export const GroupedView = forwardRef<HTMLDivElement, GroupedViewProps>(
         {/* Hidden printable version with header */}
         <div className="hidden">
           <div ref={ref} className="p-6 bg-white" style={{ fontFamily: 'Arial, sans-serif' }}>
-            <GroupContent groups={groups} northwestPo={northwestPo} archboldPo={archboldPo} showHeader />
+            <GroupContent groups={groups} northwestPo={northwestPo} archboldPo={archboldPo} deliveryDate={deliveryDate} showHeader />
           </div>
         </div>
       </div>
