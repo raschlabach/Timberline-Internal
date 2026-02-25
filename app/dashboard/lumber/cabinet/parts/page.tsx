@@ -216,10 +216,10 @@ function CopyBtn({ value }: { value: string }) {
   }, [value])
 
   return (
-    <button onClick={handleCopy} title="Copy" className={`p-1 rounded transition-colors ${
-      copied ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+    <button onClick={handleCopy} title="Copy" className={`p-0.5 rounded transition-colors ${
+      copied ? 'text-emerald-500' : 'text-gray-300 hover:text-gray-500'
     }`}>
-      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>
   )
 }
@@ -230,15 +230,15 @@ function OutCell({ value, decimals = 4, highlight, className, checkWidth }: {
   value: number | null; decimals?: number; highlight?: boolean; className?: string; checkWidth?: boolean
 }) {
   if (value === null && !checkWidth) {
-    return <td className={`px-2 py-1.5 text-right text-gray-300 ${className || ''}`}>—</td>
+    return <td className={`px-1.5 py-0.5 text-right text-xs text-gray-300 ${className || ''}`}>—</td>
   }
   if (value === null && checkWidth) {
-    return <td className={`px-2 py-1.5 text-right text-amber-500 text-xs italic ${className || ''}`}>Check Width</td>
+    return <td className={`px-1.5 py-0.5 text-right text-amber-500 text-[11px] italic ${className || ''}`}>Check Width</td>
   }
   const display = parseFloat(value!.toFixed(decimals)).toString()
   return (
-    <td className={`px-2 py-1.5 text-right whitespace-nowrap ${highlight ? 'bg-blue-50 font-medium text-blue-800' : ''} ${className || ''}`}>
-      <span className="inline-flex items-center gap-1">
+    <td className={`px-1.5 py-0.5 text-right whitespace-nowrap text-xs font-mono ${highlight ? 'bg-blue-50 font-semibold text-blue-800' : 'text-gray-700'} ${className || ''}`}>
+      <span className="inline-flex items-center gap-0.5">
         {display}
         <CopyBtn value={display} />
       </span>
@@ -278,20 +278,23 @@ function PanelCalculator({ config, state, setState }: {
     })
   }
 
+  const inputCls = "w-[72px] bg-emerald-50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-center font-medium focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+  const reverseInputCls = "w-[72px] bg-blue-50 border border-blue-300 rounded px-1.5 py-0.5 text-xs text-center font-medium focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Settings row */}
-      <div className="bg-gray-50 rounded-lg p-4 flex flex-wrap gap-6 items-end">
+      <div className="bg-gray-50 rounded-lg px-3 py-2 flex flex-wrap gap-4 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Thickness</label>
-          <input type="number" step="0.001" className="w-28 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Thickness</label>
+          <input type="number" step="0.001" className="w-24 bg-emerald-50 border border-emerald-300 rounded px-2 py-1 text-sm font-medium focus:border-emerald-500 focus:outline-none"
             value={state.globalThickness}
             onChange={(e) => setState(prev => ({ ...prev, globalThickness: e.target.value }))}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">$/BF Rate</label>
-          <input type="number" step="0.01" className="w-28 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">$/BF Rate</label>
+          <input type="number" step="0.01" className="w-24 bg-emerald-50 border border-emerald-300 rounded px-2 py-1 text-sm font-medium focus:border-emerald-500 focus:outline-none"
             value={state.rate} onChange={(e) => setState(prev => ({ ...prev, rate: e.target.value }))}
           />
         </div>
@@ -299,19 +302,19 @@ function PanelCalculator({ config, state, setState }: {
 
       {/* Reverse $/BF */}
       <div className="bg-white border border-blue-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-2">
-          <ArrowRightLeft size={14} className="text-blue-500" />
-          <span className="text-xs font-semibold text-blue-700">Reverse $/BF</span>
+        <div className="px-3 py-1 bg-blue-50 border-b border-blue-200 flex items-center gap-1.5">
+          <ArrowRightLeft size={12} className="text-blue-500" />
+          <span className="text-[11px] font-semibold text-blue-700">Reverse $/BF</span>
         </div>
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="border-b text-xs">
-              <th className="px-3 py-1.5 text-center text-gray-400 w-8">#</th>
-              <th className="px-3 py-1.5 text-left text-gray-600">Width</th>
-              <th className="px-3 py-1.5 text-left text-gray-600">Length</th>
-              <th className="px-3 py-1.5 text-left text-gray-600">Price</th>
-              <th className="px-3 py-1.5 text-right text-gray-600">BF</th>
-              <th className="px-3 py-1.5 text-right text-blue-600 font-semibold">$/BF</th>
+            <tr className="border-b">
+              <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
+              <th className="px-1.5 py-1 text-left text-gray-500">Width</th>
+              <th className="px-1.5 py-1 text-left text-gray-500">Length</th>
+              <th className="px-1.5 py-1 text-left text-gray-500">Price</th>
+              <th className="px-1.5 py-1 text-right text-gray-500">BF</th>
+              <th className="px-1.5 py-1 text-right text-blue-600 font-semibold">$/BF</th>
             </tr>
           </thead>
           <tbody>
@@ -322,24 +325,24 @@ function PanelCalculator({ config, state, setState }: {
               const rBf = rW > 0 && rL > 0 ? ((rW * rL) / 144) * config.bfMultiplier : 0
               const rRate = rBf > 0 && rP > 0 ? rP / rBf : 0
               return (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-3 py-1 text-center text-xs text-gray-400">{idx + 1}</td>
-                  <td className="px-2 py-1">
-                    <input type="number" step="0.01" placeholder="W" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                <tr key={idx} className="border-b border-gray-100">
+                  <td className="px-1.5 py-0.5 text-center text-[10px] text-gray-400">{idx + 1}</td>
+                  <td className="px-1 py-0.5">
+                    <input type="number" step="0.01" placeholder="W" className={reverseInputCls}
                       value={rr.width} onChange={(e) => updateReverseRow(idx, 'width', e.target.value)} />
                   </td>
-                  <td className="px-2 py-1">
-                    <input type="number" step="0.01" placeholder="L" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                  <td className="px-1 py-0.5">
+                    <input type="number" step="0.01" placeholder="L" className={reverseInputCls}
                       value={rr.length} onChange={(e) => updateReverseRow(idx, 'length', e.target.value)} />
                   </td>
-                  <td className="px-2 py-1">
-                    <input type="number" step="0.01" placeholder="$" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                  <td className="px-1 py-0.5">
+                    <input type="number" step="0.01" placeholder="$" className={reverseInputCls}
                       value={rr.price} onChange={(e) => updateReverseRow(idx, 'price', e.target.value)} />
                   </td>
-                  <td className="px-3 py-1 text-right text-xs text-gray-500">{rBf > 0 ? rBf.toFixed(4) : '—'}</td>
-                  <td className="px-3 py-1 text-right">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="text-sm font-bold text-blue-800">{rRate > 0 ? `$${rRate.toFixed(4)}` : '—'}</span>
+                  <td className="px-1.5 py-0.5 text-right text-[11px] font-mono text-gray-500">{rBf > 0 ? rBf.toFixed(4) : '—'}</td>
+                  <td className="px-1.5 py-0.5 text-right">
+                    <span className="inline-flex items-center gap-0.5">
+                      <span className="text-xs font-bold text-blue-800">{rRate > 0 ? `$${rRate.toFixed(4)}` : '—'}</span>
                       {rRate > 0 && <CopyBtn value={rRate.toFixed(4)} />}
                     </span>
                   </td>
@@ -353,18 +356,18 @@ function PanelCalculator({ config, state, setState }: {
       {/* Size Calculator Table */}
       <div className="bg-white rounded-lg border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b text-xs">
-                <th className="px-2 py-2 text-center text-gray-400 w-8">#</th>
-                <th className="px-2 py-2 text-left text-gray-600">{config.widthLabel}</th>
-                <th className="px-2 py-2 text-left text-gray-600">{config.lengthLabel}</th>
-                <th className="px-2 py-2 text-right text-gray-600">BF</th>
-                <th className="px-2 py-2 text-right text-blue-600 bg-blue-50">Cost</th>
-                <th className="px-2 py-2 text-right text-gray-600">Layup W</th>
-                <th className="px-2 py-2 text-right text-gray-600">Layup L</th>
-                <th className="px-2 py-2 text-right text-gray-600">PCS</th>
-                <th className="w-8" />
+              <tr className="bg-gray-50 border-b">
+                <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
+                <th className="px-1.5 py-1 text-left text-gray-500">{config.widthLabel}</th>
+                <th className="px-1.5 py-1 text-left text-gray-500">{config.lengthLabel}</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">BF</th>
+                <th className="px-1.5 py-1 text-right text-blue-600 bg-blue-50">Cost</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">Layup W</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">Layup L</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">PCS</th>
+                <th className="w-6" />
               </tr>
             </thead>
             <tbody>
@@ -378,14 +381,14 @@ function PanelCalculator({ config, state, setState }: {
                 const pcs = w > 0 ? config.pcsLayupFn(w) : null
 
                 return (
-                  <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-2 py-1.5 text-center text-xs text-gray-400">{idx + 1}</td>
-                    <td className="px-1 py-1">
-                      <input type="number" step="0.01" className="w-20 border rounded px-1.5 py-1 text-sm text-center focus:border-emerald-500 focus:outline-none"
+                  <tr key={idx} className="border-b border-gray-100">
+                    <td className="px-1.5 py-0.5 text-center text-[10px] text-gray-400">{idx + 1}</td>
+                    <td className="px-1 py-0.5">
+                      <input type="number" step="0.01" className={inputCls}
                         value={row.width} onChange={(e) => updateRow(idx, 'width', e.target.value)} placeholder="—" />
                     </td>
-                    <td className="px-1 py-1">
-                      <input type="number" step="0.01" className="w-20 border rounded px-1.5 py-1 text-sm text-center focus:border-emerald-500 focus:outline-none"
+                    <td className="px-1 py-0.5">
+                      <input type="number" step="0.01" className={inputCls}
                         value={row.length} onChange={(e) => updateRow(idx, 'length', e.target.value)} placeholder="—" />
                     </td>
                     <OutCell value={bf > 0 ? bf : null} decimals={4} />
@@ -393,9 +396,9 @@ function PanelCalculator({ config, state, setState }: {
                     <OutCell value={w > 0 ? layW : null} decimals={4} checkWidth={w > 0 && layW === null} />
                     <OutCell value={layL} decimals={1} />
                     <OutCell value={w > 0 ? pcs : null} decimals={0} checkWidth={w > 0 && pcs === null} />
-                    <td className="px-1 py-1">
-                      <button onClick={() => removeRow(idx)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
-                        <Trash2 size={13} />
+                    <td className="px-0.5 py-0.5">
+                      <button onClick={() => removeRow(idx)} className="p-0.5 text-gray-300 hover:text-red-500 transition-colors">
+                        <Trash2 size={12} />
                       </button>
                     </td>
                   </tr>
@@ -404,9 +407,9 @@ function PanelCalculator({ config, state, setState }: {
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2 border-t bg-gray-50">
-          <button onClick={addRow} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
-            <Plus size={14} /> Add Row
+        <div className="px-3 py-1.5 border-t bg-gray-50">
+          <button onClick={addRow} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
+            <Plus size={12} /> Add Row
           </button>
         </div>
       </div>
@@ -446,46 +449,48 @@ function LinearCalculator({ config, state, setState }: {
     })
   }
 
+  const inputCls = "w-[72px] bg-emerald-50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-center font-medium focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+  const reverseInputCls = "w-[72px] bg-blue-50 border border-blue-300 rounded px-1.5 py-0.5 text-xs text-center font-medium focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
   const hasCope = config.copeAdder > 0
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Settings row */}
-      <div className="bg-gray-50 rounded-lg p-4 flex flex-wrap gap-6 items-end">
+      <div className="bg-gray-50 rounded-lg px-3 py-2 flex flex-wrap gap-4 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Width (all rows)</label>
-          <input type="number" step="0.01" className="w-28 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Width (all rows)</label>
+          <input type="number" step="0.01" className="w-24 bg-emerald-50 border border-emerald-300 rounded px-2 py-1 text-sm font-medium focus:border-emerald-500 focus:outline-none"
             value={state.globalWidth} onChange={(e) => setState(prev => ({ ...prev, globalWidth: e.target.value }))}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">{config.rateLabel} Rate</label>
-          <input type="number" step="0.01" className="w-28 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">{config.rateLabel} Rate</label>
+          <input type="number" step="0.01" className="w-24 bg-emerald-50 border border-emerald-300 rounded px-2 py-1 text-sm font-medium focus:border-emerald-500 focus:outline-none"
             value={state.rate} onChange={(e) => setState(prev => ({ ...prev, rate: e.target.value }))}
           />
         </div>
         {hasCope && (
-          <div className="text-xs text-gray-500 bg-white border rounded px-3 py-2">
+          <div className="text-[10px] text-gray-500 bg-white border rounded px-2 py-1.5">
             Cope adder: +${config.copeAdder.toFixed(2)}/pc
-            {config.centerRailAdder > 0 && <span className="ml-3">Center rail: +${config.centerRailAdder.toFixed(2)}/pc</span>}
+            {config.centerRailAdder > 0 && <span className="ml-2">Center rail: +${config.centerRailAdder.toFixed(2)}/pc</span>}
           </div>
         )}
       </div>
 
       {/* Reverse $/LF */}
       <div className="bg-white border border-blue-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-2">
-          <ArrowRightLeft size={14} className="text-blue-500" />
-          <span className="text-xs font-semibold text-blue-700">Reverse {config.rateLabel}</span>
+        <div className="px-3 py-1 bg-blue-50 border-b border-blue-200 flex items-center gap-1.5">
+          <ArrowRightLeft size={12} className="text-blue-500" />
+          <span className="text-[11px] font-semibold text-blue-700">Reverse {config.rateLabel}</span>
         </div>
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="border-b text-xs">
-              <th className="px-3 py-1.5 text-center text-gray-400 w-8">#</th>
-              <th className="px-3 py-1.5 text-left text-gray-600">Length</th>
-              <th className="px-3 py-1.5 text-left text-gray-600">Price</th>
-              <th className="px-3 py-1.5 text-right text-gray-600">LF</th>
-              <th className="px-3 py-1.5 text-right text-blue-600 font-semibold">{config.rateLabel}</th>
+            <tr className="border-b">
+              <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
+              <th className="px-1.5 py-1 text-left text-gray-500">Length</th>
+              <th className="px-1.5 py-1 text-left text-gray-500">Price</th>
+              <th className="px-1.5 py-1 text-right text-gray-500">LF</th>
+              <th className="px-1.5 py-1 text-right text-blue-600 font-semibold">{config.rateLabel}</th>
             </tr>
           </thead>
           <tbody>
@@ -496,20 +501,20 @@ function LinearCalculator({ config, state, setState }: {
               const rBase = rP - config.copeAdder
               const rRate = rLf > 0 && rBase > 0 ? rBase / rLf : 0
               return (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-3 py-1 text-center text-xs text-gray-400">{idx + 1}</td>
-                  <td className="px-2 py-1">
-                    <input type="number" step="0.01" placeholder="Length" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                <tr key={idx} className="border-b border-gray-100">
+                  <td className="px-1.5 py-0.5 text-center text-[10px] text-gray-400">{idx + 1}</td>
+                  <td className="px-1 py-0.5">
+                    <input type="number" step="0.01" placeholder="Length" className={reverseInputCls}
                       value={rr.length} onChange={(e) => updateReverseRow(idx, 'length', e.target.value)} />
                   </td>
-                  <td className="px-2 py-1">
-                    <input type="number" step="0.01" placeholder="$" className="w-20 border rounded px-1.5 py-1 text-xs text-center focus:border-blue-500 focus:outline-none"
+                  <td className="px-1 py-0.5">
+                    <input type="number" step="0.01" placeholder="$" className={reverseInputCls}
                       value={rr.price} onChange={(e) => updateReverseRow(idx, 'price', e.target.value)} />
                   </td>
-                  <td className="px-3 py-1 text-right text-xs text-gray-500">{rLf > 0 ? rLf.toFixed(4) : '—'}</td>
-                  <td className="px-3 py-1 text-right">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="text-sm font-bold text-blue-800">{rRate > 0 ? `$${rRate.toFixed(4)}` : '—'}</span>
+                  <td className="px-1.5 py-0.5 text-right text-[11px] font-mono text-gray-500">{rLf > 0 ? rLf.toFixed(4) : '—'}</td>
+                  <td className="px-1.5 py-0.5 text-right">
+                    <span className="inline-flex items-center gap-0.5">
+                      <span className="text-xs font-bold text-blue-800">{rRate > 0 ? `$${rRate.toFixed(4)}` : '—'}</span>
                       {rRate > 0 && <CopyBtn value={rRate.toFixed(4)} />}
                     </span>
                   </td>
@@ -523,17 +528,17 @@ function LinearCalculator({ config, state, setState }: {
       {/* Size Calculator Table */}
       <div className="bg-white rounded-lg border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b text-xs">
-                <th className="px-2 py-2 text-center text-gray-400 w-8">#</th>
-                <th className="px-2 py-2 text-right text-gray-600">Width</th>
-                <th className="px-2 py-2 text-left text-gray-600">Length</th>
-                <th className="px-2 py-2 text-right text-gray-600">LF</th>
-                <th className="px-2 py-2 text-right text-gray-600">BF</th>
-                <th className="px-2 py-2 text-right text-blue-600 bg-blue-50">Cost</th>
-                {hasCope && <th className="px-2 py-2 text-right text-blue-600 bg-blue-50">Center Rail</th>}
-                <th className="w-8" />
+              <tr className="bg-gray-50 border-b">
+                <th className="px-1.5 py-1 text-center text-gray-400 w-6">#</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">Width</th>
+                <th className="px-1.5 py-1 text-left text-gray-500">Length</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">LF</th>
+                <th className="px-1.5 py-1 text-right text-gray-500">BF</th>
+                <th className="px-1.5 py-1 text-right text-blue-600 bg-blue-50">Cost</th>
+                {hasCope && <th className="px-1.5 py-1 text-right text-blue-600 bg-blue-50">Center Rail</th>}
+                <th className="w-6" />
               </tr>
             </thead>
             <tbody>
@@ -545,20 +550,20 @@ function LinearCalculator({ config, state, setState }: {
                 const centerRailCost = config.centerRailAdder > 0 && cost > 0 ? cost + config.centerRailAdder : 0
 
                 return (
-                  <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-2 py-1.5 text-center text-xs text-gray-400">{idx + 1}</td>
-                    <td className="px-2 py-1.5 text-right text-gray-500 font-mono text-xs">{globalWidth || '—'}</td>
-                    <td className="px-1 py-1">
-                      <input type="number" step="0.01" className="w-20 border rounded px-1.5 py-1 text-sm text-center focus:border-emerald-500 focus:outline-none"
+                  <tr key={idx} className="border-b border-gray-100">
+                    <td className="px-1.5 py-0.5 text-center text-[10px] text-gray-400">{idx + 1}</td>
+                    <td className="px-1.5 py-0.5 text-right text-gray-500 font-mono text-[11px]">{globalWidth || '—'}</td>
+                    <td className="px-1 py-0.5">
+                      <input type="number" step="0.01" className={inputCls}
                         value={row.length} onChange={(e) => updateRow(idx, 'length', e.target.value)} placeholder="—" />
                     </td>
                     <OutCell value={lf > 0 ? lf : null} decimals={4} />
                     <OutCell value={bf > 0 ? bf : null} decimals={6} />
                     <OutCell value={cost > 0 ? cost : null} decimals={2} highlight />
                     {hasCope && <OutCell value={centerRailCost > 0 ? centerRailCost : null} decimals={2} highlight />}
-                    <td className="px-1 py-1">
-                      <button onClick={() => removeRow(idx)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
-                        <Trash2 size={13} />
+                    <td className="px-0.5 py-0.5">
+                      <button onClick={() => removeRow(idx)} className="p-0.5 text-gray-300 hover:text-red-500 transition-colors">
+                        <Trash2 size={12} />
                       </button>
                     </td>
                   </tr>
@@ -567,9 +572,9 @@ function LinearCalculator({ config, state, setState }: {
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2 border-t bg-gray-50">
-          <button onClick={addRow} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
-            <Plus size={14} /> Add Row
+        <div className="px-3 py-1.5 border-t bg-gray-50">
+          <button onClick={addRow} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
+            <Plus size={12} /> Add Row
           </button>
         </div>
       </div>
@@ -639,33 +644,33 @@ export default function PartBuilderPage() {
   return (
     <div className="max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Part Builder</h1>
-          <p className="text-sm text-gray-500 mt-1">Calculate BF, cost, and layup dimensions for new parts</p>
+          <h1 className="text-xl font-bold text-gray-900">Part Builder</h1>
+          <p className="text-xs text-gray-500">Calculate BF, cost, and layup dimensions for new parts</p>
         </div>
-        <Button variant="outline" onClick={resetActiveTab} className="gap-2">
-          <RotateCcw className="h-4 w-4" /> Reset Tab
+        <Button variant="outline" size="sm" onClick={resetActiveTab} className="gap-1.5 text-xs h-7">
+          <RotateCcw className="h-3.5 w-3.5" /> Reset Tab
         </Button>
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 mb-6 overflow-x-auto pb-2">
+      <div className="flex gap-1 mb-3 overflow-x-auto pb-1">
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTabId(tab.id)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
               tab.id === activeTabId
                 ? 'bg-emerald-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-100 border'
             }`}>
             {tab.shortLabel}
-            <span className="ml-1 text-xs opacity-60">({tab.type === 'panel' ? 'BF' : 'LF'})</span>
+            <span className="ml-1 text-[10px] opacity-60">({tab.type === 'panel' ? 'BF' : 'LF'})</span>
           </button>
         ))}
       </div>
 
       {/* Active tab title */}
-      <div className="text-sm font-medium text-gray-400 mb-3">{activeTab.label}</div>
+      <div className="text-xs font-medium text-gray-400 mb-2">{activeTab.label}</div>
 
       {/* Calculator */}
       {activeTab.type === 'panel' && (
