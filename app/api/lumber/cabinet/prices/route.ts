@@ -11,12 +11,12 @@ export async function GET() {
     }
 
     const result = await query(
-      'SELECT part_number, our_price FROM cabinet_part_prices ORDER BY part_number'
+      'SELECT profile, species, price_per_bf FROM cabinet_category_prices ORDER BY profile, species'
     )
 
     return NextResponse.json(result.rows)
   } catch (error) {
-    console.error('Error fetching cabinet prices:', error)
+    console.error('Error fetching cabinet category prices:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -30,24 +30,24 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    if (!body.part_number || body.our_price === undefined) {
+    if (!body.profile || !body.species || body.price_per_bf === undefined) {
       return NextResponse.json(
-        { error: 'part_number and our_price are required' },
+        { error: 'profile, species, and price_per_bf are required' },
         { status: 400 }
       )
     }
 
     const result = await query(
-      `INSERT INTO cabinet_part_prices (part_number, our_price, updated_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (part_number) DO UPDATE SET our_price = $2, updated_at = NOW()
-       RETURNING part_number, our_price`,
-      [body.part_number, body.our_price]
+      `INSERT INTO cabinet_category_prices (profile, species, price_per_bf, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (profile, species) DO UPDATE SET price_per_bf = $3, updated_at = NOW()
+       RETURNING profile, species, price_per_bf`,
+      [body.profile, body.species, body.price_per_bf]
     )
 
     return NextResponse.json(result.rows[0])
   } catch (error) {
-    console.error('Error saving cabinet price:', error)
+    console.error('Error saving cabinet category price:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, Fragment } from 'react'
 import * as XLSX from 'xlsx'
 import { Button } from '@/components/ui/button'
-import { Printer, FileSpreadsheet, RotateCcw } from 'lucide-react'
+import { Printer, FileSpreadsheet, RotateCcw, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
 
 // ===== Types =====
 
@@ -11,6 +11,7 @@ type CellValue = string | number | null
 
 interface SheetSection {
   rows: CellValue[][]
+  rowExtPrices: number[]
   qtyTotal: number
   extPriceTotal: number
 }
@@ -25,8 +26,10 @@ interface ProcessedSheet {
   grandExtTotal: number
   extPriceDisplayIdx: number
   partNumDisplayIdx: number
-  priceDisplayIdx: number
   missingPartCount: number
+  tabProfile: string
+  widthDisplayIdx: number
+  speciesDisplayIdx: number
 }
 
 interface SpecialRow {
@@ -83,7 +86,7 @@ const SPECIE_MAP: Record<string, string> = {
   'Pine': 'Pine', 'Walnut': 'Walnut',
 }
 
-const RIP_HEADERS = ['PO#', 'Part#', 'Qty', 'Rip Width', 'Specie', 'Thick', 'Width', 'Profile', 'Grade', 'Board Ft']
+const RIP_HEADERS = ['PO#', 'Part#', 'Qty', 'Rip Width', 'Specie', 'Thick', 'Width', 'Profile', 'Grade', 'Board Ft', '$/BF', 'Our $']
 const MOULD_HEADERS = ['PO#', 'Part#', 'Qty', 'Width', 'Profile', 'Thickness', 'Specie', 'Grade', 'Sort Order']
 
 // ===== Column Hiding =====
@@ -133,6 +136,31 @@ function getHiddenColumns(sheetName: string, headerRow: CellValue[], dataRows: C
   }
 
   return hidden
+}
+
+// ===== Tab Profile Mapping =====
+
+function getTabProfile(sheetName: string): string {
+  const n = sheetName.trim().toUpperCase()
+  if (n.includes('ISP') && /ISP[-\s]?0?1/i.test(n)) return 'ISP01'
+  if (n.includes('SLANT')) return 'Slant Shaker'
+  if (n.includes('BLANK PANEL')) {
+    if (n.includes('.600') || n.includes('600')) return 'Blank Panel .600'
+    if (n.includes('.800') || n.includes('800')) return 'Blank Panel .800'
+    return 'Blank Panel'
+  }
+  if (n.includes('DR FRONT')) return 'Dr Fronts'
+  if (n.includes('SILLS') || n.includes('SILL')) return 'Sills'
+  if (n.includes('SHKR')) return 'SHKR Dr Fr'
+  if (n.includes('PINE')) return 'Pine'
+  if (n.includes('DOOR FRAME') || n.includes('R&R S4S') || n.includes('MOULDING')) return ''
+  return sheetName.trim()
+}
+
+// ===== Price Key =====
+
+function priceKey(profile: string, species: string): string {
+  return `${profile}::${species}`
 }
 
 // ===== Helpers =====
@@ -423,6 +451,12 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
     const headerRow = rows[headerRowIdx] || []
     const lastColIdx = findLastUsefulColumn(headerRow)
 
+    let rawExtPriceCol = -1
+    for (let i = START_COL; i <= 15; i++) {
+      const h = String(headerRow[i] ?? '').toUpperCase()
+      if (h.startsWith('EXT')) rawExtPriceCol = i
+    }
+
     const hiddenCols = getHiddenColumns(name, headerRow, rows)
     const visibleCols: number[] = []
     for (let i = START_COL; i <= lastColIdx; i++) {
@@ -449,10 +483,12 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
 
     const extPriceDisplayIdx = displayHeaders.findIndex(h => h.toUpperCase().includes('EXT'))
     const partNumDisplayIdx = displayHeaders.findIndex(h => h.toUpperCase().includes('PART'))
-    const priceDisplayIdx = displayHeaders.findIndex(h => {
+    const widthDisplayIdx = displayHeaders.findIndex(h => h.toUpperCase() === 'WIDTH')
+    const speciesDisplayIdx = displayHeaders.findIndex(h => {
       const u = h.toUpperCase()
-      return (u.includes('PRICE') || u.includes('PRICING')) && !u.includes('EXT')
+      return u === 'PRODUCT' || u === 'SPECIES'
     })
+    const tabProfile = getTabProfile(name)
 
     const dataStartIdx = headerRowIdx + 1
     const sections: SheetSection[] = []
@@ -464,11 +500,9 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
       if (filtered.length > 0) {
         const qtyTotal = filtered.reduce((sum, r) => sum + (Number(r[START_COL]) || 0), 0)
         const slicedRows = filtered.map(r => visibleCols.map(col => r[col] ?? null))
-        let extPriceTotal = 0
-        if (extPriceDisplayIdx >= 0) {
-          extPriceTotal = slicedRows.reduce((sum, r) => sum + (Number(r[extPriceDisplayIdx]) || 0), 0)
-        }
-        sections.push({ rows: slicedRows, qtyTotal, extPriceTotal })
+        const rowExtPrices = filtered.map(r => rawExtPriceCol >= 0 ? Number(r[rawExtPriceCol]) || 0 : 0)
+        const extPriceTotal = rowExtPrices.reduce((sum, v) => sum + v, 0)
+        sections.push({ rows: slicedRows, rowExtPrices, qtyTotal, extPriceTotal })
       }
       currentGroup = []
     }
@@ -493,11 +527,48 @@ function processWorkbook(workbook: XLSX.WorkBook): ProcessedSheet[] {
       name, poNumber, dueDate, displayHeaders, sections,
       grandQtyTotal: sections.reduce((sum, s) => sum + s.qtyTotal, 0),
       grandExtTotal: sections.reduce((sum, s) => sum + s.extPriceTotal, 0),
-      extPriceDisplayIdx, partNumDisplayIdx, priceDisplayIdx, missingPartCount,
+      extPriceDisplayIdx, partNumDisplayIdx, missingPartCount,
+      tabProfile, widthDisplayIdx, speciesDisplayIdx,
     })
   }
 
   return results
+}
+
+// ===== Collect Upload Combos =====
+
+function collectUploadCombos(
+  sheets: ProcessedSheet[],
+  specialResults: SpecialTabResult[]
+): { profile: string; species: string }[] {
+  const seen = new Set<string>()
+  const combos: { profile: string; species: string }[] = []
+
+  const add = (profile: string, rawSpecies: string) => {
+    if (!profile || !rawSpecies) return
+    const sp = normalizeSpecie(rawSpecies)
+    if (!sp) return
+    const k = priceKey(profile, sp)
+    if (seen.has(k)) return
+    seen.add(k)
+    combos.push({ profile, species: sp })
+  }
+
+  for (const sheet of sheets) {
+    if (!sheet.tabProfile || sheet.speciesDisplayIdx < 0) continue
+    for (const section of sheet.sections) {
+      for (const row of section.rows) {
+        const species = String(row[sheet.speciesDisplayIdx] ?? '').trim()
+        if (species) add(sheet.tabProfile, species)
+      }
+    }
+  }
+
+  for (const sr of specialResults) {
+    for (const row of sr.ripRows) add(row.profile, row.specie)
+  }
+
+  return combos.sort((a, b) => a.profile.localeCompare(b.profile) || a.species.localeCompare(b.species))
 }
 
 // ===== Formatting =====
@@ -517,15 +588,33 @@ function formatNum(val: number, decimals = 3): string {
   return parseFloat(val.toFixed(decimals)).toString()
 }
 
-// ===== Rip/Mould Table Renderers =====
+function formatDollar(val: number): string {
+  return val.toFixed(2)
+}
 
-function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
-  rows: SpecialRow[]; speciesTotals: { specie: string; boardFt: number }[]
-  totalBoardFt: number; compact?: boolean
+// ===== Rip Table =====
+
+function RipTable({ rows, speciesTotals, totalBoardFt, compact, categoryPrices }: {
+  rows: SpecialRow[]
+  speciesTotals: { specie: string; boardFt: number }[]
+  totalBoardFt: number
+  compact?: boolean
+  categoryPrices?: Record<string, number>
 }) {
   const p = compact ? '2px 6px' : undefined
   const bs = compact ? '1px solid #ccc' : undefined
   const hb = compact ? '1px solid #999' : undefined
+
+  const speciesOurTotals: Record<string, number> = {}
+  let grandOurTotal = 0
+  for (const r of rows) {
+    const rate = categoryPrices?.[priceKey(r.profile, r.specie)]
+    if (rate) {
+      const ourPrice = r.boardFt * rate
+      speciesOurTotals[r.specie] = (speciesOurTotals[r.specie] || 0) + ourPrice
+      grandOurTotal += ourPrice
+    }
+  }
 
   return (
     <table className={compact ? undefined : 'w-full text-sm'} style={compact ? {
@@ -534,8 +623,8 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
       <thead>
         <tr className={compact ? undefined : 'bg-gray-50 border-b'}>
           {RIP_HEADERS.map((h, i) => (
-            <th key={i} className={compact ? undefined : 'px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap'}
-              style={compact ? { border: hb, padding: p, textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0', whiteSpace: 'nowrap' } : undefined}>
+            <th key={i} className={compact ? undefined : `px-3 py-2 text-left font-medium whitespace-nowrap ${i >= 10 ? 'text-blue-600 bg-blue-50' : 'text-gray-600'}`}
+              style={compact ? { border: hb, padding: p, textAlign: 'left', fontWeight: 600, backgroundColor: i >= 10 ? '#dbeafe' : '#f0f0f0', whiteSpace: 'nowrap' } : undefined}>
               {h}
             </th>
           ))}
@@ -544,8 +633,11 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
       <tbody>
         {rows.map((r, i) => {
           const missing = isPartMissing(r.partNum)
-          const Td = ({ children }: { children: React.ReactNode }) => (
-            <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: bs, padding: p } : undefined}>{children}</td>
+          const rate = categoryPrices?.[priceKey(r.profile, r.specie)]
+          const ourPrice = rate ? r.boardFt * rate : undefined
+          const Td = ({ children, blue }: { children: React.ReactNode; blue?: boolean }) => (
+            <td className={compact ? undefined : `px-3 py-1.5 ${blue ? 'bg-blue-50/50' : ''}`}
+              style={compact ? { border: bs, padding: p, backgroundColor: blue ? '#eff6ff' : undefined } : undefined}>{children}</td>
           )
           return (
             <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
@@ -560,11 +652,13 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
               <Td>{r.profile}</Td>
               <Td>{r.grade}</Td>
               <Td>{formatNum(r.boardFt, 2)}</Td>
+              <Td blue>{rate !== undefined ? rate.toFixed(4) : '—'}</Td>
+              <Td blue>{ourPrice !== undefined ? formatDollar(ourPrice) : '—'}</Td>
             </tr>
           )
         })}
         <tr className={compact ? undefined : 'border-t-2 border-gray-300'}>
-          <td colSpan={10} className={compact ? undefined : 'py-2'} style={compact ? { padding: '6px' } : undefined} />
+          <td colSpan={12} className={compact ? undefined : 'py-2'} style={compact ? { padding: '6px' } : undefined} />
         </tr>
         {speciesTotals.map((st, i) => (
           <tr key={`st-${i}`} className={compact ? undefined : 'bg-emerald-50 font-semibold text-emerald-800'}>
@@ -572,6 +666,10 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
             <td className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>{st.specie}</td>
             <td colSpan={4} className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p } : undefined} />
             <td className={compact ? undefined : 'px-3 py-1'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>{formatNum(st.boardFt, 2)}</td>
+            <td className={compact ? undefined : 'px-3 py-1 bg-blue-50/50'} style={compact ? { border: hb, padding: p } : undefined} />
+            <td className={compact ? undefined : 'px-3 py-1 bg-blue-50/50 font-bold text-blue-700'} style={compact ? { border: hb, padding: p, fontWeight: 'bold', color: '#1d4ed8' } : undefined}>
+              {speciesOurTotals[st.specie] !== undefined ? formatDollar(speciesOurTotals[st.specie]) : '—'}
+            </td>
           </tr>
         ))}
         <tr className={compact ? undefined : 'bg-emerald-100 font-bold text-emerald-900'}>
@@ -579,11 +677,17 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact }: {
           <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>TOTAL</td>
           <td colSpan={4} className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p } : undefined} />
           <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: hb, padding: p, fontWeight: 'bold' } : undefined}>{formatNum(totalBoardFt, 2)}</td>
+          <td className={compact ? undefined : 'px-3 py-1.5 bg-blue-50/50'} style={compact ? { border: hb, padding: p } : undefined} />
+          <td className={compact ? undefined : 'px-3 py-1.5 bg-blue-100 font-bold text-blue-800'} style={compact ? { border: hb, padding: p, fontWeight: 'bold', color: '#1e40af' } : undefined}>
+            {grandOurTotal > 0 ? formatDollar(grandOurTotal) : '—'}
+          </td>
         </tr>
       </tbody>
     </table>
   )
 }
+
+// ===== Mould Table =====
 
 function MouldTable({ rows, compact }: { rows: SpecialRow[]; compact?: boolean }) {
   const p = compact ? '2px 6px' : undefined
@@ -641,32 +745,37 @@ export default function CabinetOrderPage() {
   const [fileName, setFileName] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [priceMap, setPriceMap] = useState<Record<string, number>>({})
+
+  const [categoryPrices, setCategoryPrices] = useState<Record<string, number>>({})
   const [priceEdits, setPriceEdits] = useState<Record<string, string>>({})
+  const [showPriceManager, setShowPriceManager] = useState(false)
+  const [uploadCombos, setUploadCombos] = useState<{ profile: string; species: string }[]>([])
 
   const fetchPrices = useCallback(async () => {
     try {
       const res = await fetch('/api/lumber/cabinet/prices')
       if (res.ok) {
-        const data: { part_number: string; our_price: string }[] = await res.json()
+        const data: { profile: string; species: string; price_per_bf: string }[] = await res.json()
         const map: Record<string, number> = {}
-        for (const row of data) map[row.part_number] = parseFloat(row.our_price)
-        setPriceMap(map)
+        for (const row of data) {
+          map[priceKey(row.profile, row.species)] = parseFloat(row.price_per_bf)
+        }
+        setCategoryPrices(map)
       }
-    } catch { /* prices unavailable - continue without */ }
+    } catch { /* prices unavailable */ }
   }, [])
 
-  const savePrice = useCallback(async (partNum: string, price: number) => {
+  const savePrice = useCallback(async (profile: string, species: string, priceBf: number) => {
     try {
       const res = await fetch('/api/lumber/cabinet/prices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ part_number: partNum, our_price: price }),
+        body: JSON.stringify({ profile, species, price_per_bf: priceBf }),
       })
       if (res.ok) {
-        setPriceMap(prev => ({ ...prev, [partNum]: price }))
+        setCategoryPrices(prev => ({ ...prev, [priceKey(profile, species)]: priceBf }))
       }
-    } catch { /* save failed silently */ }
+    } catch { /* save failed */ }
   }, [])
 
   const processFile = useCallback((file: File) => {
@@ -679,8 +788,11 @@ export default function CabinetOrderPage() {
     reader.onload = (e) => {
       const data = new Uint8Array(e.target?.result as ArrayBuffer)
       const workbook = XLSX.read(data, { type: 'array' })
-      setSheets(processWorkbook(workbook))
-      setSpecialResults(processSpecialTabs(workbook))
+      const processedSheets = processWorkbook(workbook)
+      const specialTabResults = processSpecialTabs(workbook)
+      setSheets(processedSheets)
+      setSpecialResults(specialTabResults)
+      setUploadCombos(collectUploadCombos(processedSheets, specialTabResults))
       setActiveTab(0)
       setActiveSpecialIdx(null)
       fetchPrices()
@@ -703,20 +815,21 @@ export default function CabinetOrderPage() {
   function handleReset() {
     setSheets([]); setSpecialResults([]); setFileName('')
     setActiveTab(0); setActiveSpecialIdx(null)
-    setPriceMap({}); setPriceEdits({})
+    setCategoryPrices({}); setPriceEdits({}); setUploadCombos([])
+    setShowPriceManager(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  function handlePriceBlur(partNum: string) {
-    const raw = priceEdits[partNum]
+  function handlePriceEditBlur(key: string, profile: string, species: string) {
+    const raw = priceEdits[key]
     if (raw === undefined) return
     const val = parseFloat(raw)
     if (!isNaN(val) && val >= 0) {
-      savePrice(partNum, val)
+      savePrice(profile, species, val)
     }
     setPriceEdits(prev => {
       const next = { ...prev }
-      delete next[partNum]
+      delete next[key]
       return next
     })
   }
@@ -730,7 +843,27 @@ export default function CabinetOrderPage() {
 
   const totalPrintPages = sheetsWithOrders.length + specialResults.length * 2
 
-  const hasPriceCol = (sheet: ProcessedSheet) => sheet.priceDisplayIdx >= 0 && sheet.partNumDisplayIdx >= 0
+  const hasPricing = (sheet: ProcessedSheet) =>
+    sheet.tabProfile !== '' && sheet.widthDisplayIdx >= 0 && sheet.speciesDisplayIdx >= 0
+
+  const missingRateCount = uploadCombos.filter(c => {
+    const rate = categoryPrices[priceKey(c.profile, c.species)]
+    return rate === undefined || rate <= 0
+  }).length
+
+  function calcRowBf(sheet: ProcessedSheet, row: CellValue[]): number {
+    if (sheet.widthDisplayIdx < 0) return 0
+    const qty = Number(row[0]) || 0
+    const width = Number(row[sheet.widthDisplayIdx]) || 0
+    return qty * (width + 0.125) / 12
+  }
+
+  function getRowRate(sheet: ProcessedSheet, row: CellValue[]): number | undefined {
+    if (!hasPricing(sheet)) return undefined
+    const species = normalizeSpecie(String(row[sheet.speciesDisplayIdx] ?? '').trim())
+    if (!species) return undefined
+    return categoryPrices[priceKey(sheet.tabProfile, species)]
+  }
 
   // ===== Upload Screen =====
   if (sheets.length === 0) {
@@ -759,7 +892,7 @@ export default function CabinetOrderPage() {
             <li>Removes rows with no quantity ordered</li>
             <li>Totals quantity per section on each tab</li>
             <li>Processes S4S, Door Frame &amp; Moulding into Rip and Mould views</li>
-            <li>Compares NB pricing against your stored prices</li>
+            <li>Compares NB pricing against your $/BF rates by profile &amp; species</li>
             <li>Flags parts missing a Part Number</li>
             <li>Prints all tabs with one click</li>
           </ul>
@@ -789,6 +922,13 @@ export default function CabinetOrderPage() {
             <p className="text-sm text-gray-500 mt-1">{fileName}</p>
           </div>
           <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowPriceManager(!showPriceManager)}
+              className={`gap-2 ${showPriceManager ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}>
+              <DollarSign className="h-4 w-4" />
+              Price Rates
+              {missingRateCount > 0 && <span className="ml-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full">{missingRateCount}</span>}
+              {showPriceManager ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </Button>
             <Button variant="outline" onClick={handleReset} className="gap-2">
               <RotateCcw className="h-4 w-4" /> New File
             </Button>
@@ -797,6 +937,86 @@ export default function CabinetOrderPage() {
             </Button>
           </div>
         </div>
+
+        {/* Price Manager Panel */}
+        {showPriceManager && (
+          <div className="bg-white rounded-lg border border-blue-200 overflow-hidden mb-4">
+            <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-blue-800">Price Rates ($/BF by Profile + Species)</span>
+                <span className="text-sm text-blue-600 ml-3">{uploadCombos.length} combinations found in order</span>
+              </div>
+              {missingRateCount > 0 && (
+                <span className="text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                  {missingRateCount} need pricing
+                </span>
+              )}
+            </div>
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0">
+                  <tr className="bg-gray-50 border-b">
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">Profile</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">Species</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">$/BF</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600 w-24">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const allKeys = new Set<string>()
+                    const allCombos: { profile: string; species: string; key: string }[] = []
+                    for (const c of uploadCombos) {
+                      const k = priceKey(c.profile, c.species)
+                      if (!allKeys.has(k)) { allKeys.add(k); allCombos.push({ ...c, key: k }) }
+                    }
+                    for (const [k] of Object.entries(categoryPrices)) {
+                      if (!allKeys.has(k)) {
+                        const parts = k.split('::')
+                        allKeys.add(k)
+                        allCombos.push({ profile: parts[0], species: parts[1], key: k })
+                      }
+                    }
+                    allCombos.sort((a, b) => a.profile.localeCompare(b.profile) || a.species.localeCompare(b.species))
+
+                    let lastProfile = ''
+                    return allCombos.map((c) => {
+                      const stored = categoryPrices[c.key]
+                      const editing = priceEdits[c.key]
+                      const hasRate = stored !== undefined && stored > 0
+                      const showProfile = c.profile !== lastProfile
+                      lastProfile = c.profile
+
+                      return (
+                        <tr key={c.key} className={`border-b ${hasRate ? 'bg-white hover:bg-gray-50' : 'bg-amber-50'}`}>
+                          <td className="px-3 py-1.5 font-medium text-gray-800">
+                            {showProfile ? c.profile : ''}
+                          </td>
+                          <td className="px-3 py-1.5">{c.species}</td>
+                          <td className="px-2 py-1">
+                            <input
+                              type="number" step="0.0001" min="0"
+                              className="w-28 text-right border border-gray-300 rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                              value={editing ?? (stored !== undefined ? stored.toFixed(4) : '')}
+                              placeholder="0.0000"
+                              onChange={(e) => setPriceEdits(prev => ({ ...prev, [c.key]: e.target.value }))}
+                              onBlur={() => handlePriceEditBlur(c.key, c.profile, c.species)}
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 text-sm">
+                            {hasRate
+                              ? <span className="text-emerald-600 font-medium">✓</span>
+                              : <span className="text-amber-500">⚠ Set price</span>}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Summary */}
         <div className="grid grid-cols-4 gap-4 mb-6">
@@ -860,6 +1080,7 @@ export default function CabinetOrderPage() {
                 <span className="font-semibold text-gray-900">{activeSheet.name.trim()}</span>
                 <span className="text-sm text-gray-500 ml-3">PO# {activeSheet.poNumber}</span>
                 <span className="text-sm text-gray-500 ml-3">Due: {activeSheet.dueDate}</span>
+                {activeSheet.tabProfile && <span className="text-xs text-blue-600 ml-3 bg-blue-50 px-2 py-0.5 rounded">{activeSheet.tabProfile}</span>}
               </div>
               <div className="flex items-center gap-3">
                 {activeSheet.missingPartCount > 0 && (
@@ -885,83 +1106,131 @@ export default function CabinetOrderPage() {
                       {activeSheet.displayHeaders.map((h, i) => (
                         <th key={i} className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap">{h}</th>
                       ))}
-                      {hasPriceCol(activeSheet) && (
+                      {hasPricing(activeSheet) && (
                         <>
-                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">Our Price</th>
-                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">Diff</th>
+                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">Our $</th>
+                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">NB $</th>
+                          <th className="px-3 py-2 text-left font-medium text-blue-600 whitespace-nowrap bg-blue-50">+/−</th>
                         </>
                       )}
                     </tr>
                   </thead>
                   <tbody>
-                    {activeSheet.sections.map((section, sIdx) => (
-                      <Fragment key={sIdx}>
-                        {sIdx > 0 && (
-                          <tr><td colSpan={activeSheet.displayHeaders.length + (hasPriceCol(activeSheet) ? 2 : 0)} className="py-2 border-b" /></tr>
-                        )}
-                        {section.rows.map((row, rIdx) => {
-                          const isMissingPart = activeSheet.partNumDisplayIdx >= 0 &&
-                            (row[activeSheet.partNumDisplayIdx] === null ||
-                             row[activeSheet.partNumDisplayIdx] === undefined ||
-                             String(row[activeSheet.partNumDisplayIdx]).trim() === '')
-                          const partNum = activeSheet.partNumDisplayIdx >= 0 ? String(row[activeSheet.partNumDisplayIdx] ?? '').trim() : ''
-                          const theirPrice = activeSheet.priceDisplayIdx >= 0 ? Number(row[activeSheet.priceDisplayIdx]) || 0 : 0
-                          const ourPrice = partNum ? priceMap[partNum] : undefined
-                          const editVal = partNum ? priceEdits[partNum] : undefined
-                          const diff = ourPrice !== undefined ? (theirPrice - ourPrice) : undefined
+                    {activeSheet.sections.map((section, sIdx) => {
+                      let sectionOurTotal = 0
+                      let sectionHasRate = false
+                      const sectionRows = section.rows.map((row, rIdx) => {
+                        const isMissingPart = activeSheet.partNumDisplayIdx >= 0 &&
+                          (row[activeSheet.partNumDisplayIdx] === null ||
+                           row[activeSheet.partNumDisplayIdx] === undefined ||
+                           String(row[activeSheet.partNumDisplayIdx]).trim() === '')
+                        const bf = calcRowBf(activeSheet, row)
+                        const rate = getRowRate(activeSheet, row)
+                        const ourPrice = rate !== undefined ? bf * rate : undefined
+                        const nbPrice = section.rowExtPrices[rIdx] || 0
+                        const diff = ourPrice !== undefined ? nbPrice - ourPrice : undefined
+                        if (ourPrice !== undefined) { sectionOurTotal += ourPrice; sectionHasRate = true }
 
-                          return (
-                            <tr key={rIdx} className={`border-b border-gray-100 ${isMissingPart ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
-                              {row.map((cell, cIdx) => (
-                                <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
-                                  {cIdx === activeSheet.partNumDisplayIdx && isMissingPart
-                                    ? <span className="text-amber-500 font-medium text-xs">⚠ MISSING</span>
-                                    : formatCell(cell, cIdx, activeSheet.displayHeaders)}
+                        return (
+                          <tr key={rIdx} className={`border-b border-gray-100 ${isMissingPart ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
+                            {row.map((cell, cIdx) => (
+                              <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
+                                {cIdx === activeSheet.partNumDisplayIdx && isMissingPart
+                                  ? <span className="text-amber-500 font-medium text-xs">⚠ MISSING</span>
+                                  : formatCell(cell, cIdx, activeSheet.displayHeaders)}
+                              </td>
+                            ))}
+                            {hasPricing(activeSheet) && (
+                              <>
+                                <td className="px-3 py-1.5 bg-blue-50/50 text-right font-mono text-xs">
+                                  {ourPrice !== undefined ? formatDollar(ourPrice) : '—'}
                                 </td>
-                              ))}
-                              {hasPriceCol(activeSheet) && partNum && !isMissingPart && (
-                                <>
-                                  <td className="px-2 py-1 bg-blue-50/50">
-                                    <input
-                                      type="number" step="0.01" min="0"
-                                      className="w-20 text-right border border-gray-300 rounded px-1.5 py-0.5 text-sm focus:border-blue-500 focus:outline-none"
-                                      value={editVal ?? (ourPrice !== undefined ? ourPrice.toFixed(2) : '')}
-                                      placeholder="—"
-                                      onChange={(e) => setPriceEdits(prev => ({ ...prev, [partNum]: e.target.value }))}
-                                      onBlur={() => handlePriceBlur(partNum)}
-                                    />
-                                  </td>
-                                  <td className={`px-3 py-1.5 font-medium text-sm ${
-                                    diff === undefined ? 'text-gray-300'
-                                      : Math.abs(diff) < 0.005 ? 'text-emerald-600'
-                                        : diff > 0 ? 'text-red-600' : 'text-amber-600'
-                                  }`}>
-                                    {diff === undefined ? '—' : diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
-                                  </td>
-                                </>
-                              )}
-                              {hasPriceCol(activeSheet) && (!partNum || isMissingPart) && (
-                                <>
-                                  <td className="px-2 py-1 bg-blue-50/50" />
-                                  <td className="px-3 py-1.5" />
-                                </>
-                              )}
-                            </tr>
-                          )
-                        })}
-                        <tr className="bg-emerald-50 border-b-2 border-emerald-200 font-semibold text-emerald-800">
-                          <td className="px-3 py-1.5">{section.qtyTotal}</td>
-                          {activeSheet.displayHeaders.slice(1).map((_, cIdx) => (
-                            <td key={cIdx} className="px-3 py-1.5">
-                              {cIdx + 1 === activeSheet.extPriceDisplayIdx ? `$${section.extPriceTotal.toFixed(2)}` : ''}
-                            </td>
-                          ))}
-                          {hasPriceCol(activeSheet) && <><td /><td /></>}
-                        </tr>
-                      </Fragment>
-                    ))}
+                                <td className="px-3 py-1.5 bg-blue-50/50 text-right font-mono text-xs">
+                                  {formatDollar(nbPrice)}
+                                </td>
+                                <td className={`px-3 py-1.5 bg-blue-50/50 text-right font-mono text-xs font-medium ${
+                                  diff === undefined ? 'text-gray-300'
+                                    : Math.abs(diff) < 0.5 ? 'text-emerald-600'
+                                      : diff > 0 ? 'text-red-600' : 'text-amber-600'
+                                }`}>
+                                  {diff === undefined ? '—' : diff > 0 ? `+${formatDollar(diff)}` : formatDollar(diff)}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        )
+                      })
+
+                      return (
+                        <Fragment key={sIdx}>
+                          {sIdx > 0 && (
+                            <tr><td colSpan={activeSheet.displayHeaders.length + (hasPricing(activeSheet) ? 3 : 0)} className="py-2 border-b" /></tr>
+                          )}
+                          {sectionRows}
+                          <tr className="bg-emerald-50 border-b-2 border-emerald-200 font-semibold text-emerald-800">
+                            <td className="px-3 py-1.5">{section.qtyTotal}</td>
+                            {activeSheet.displayHeaders.slice(1).map((_, cIdx) => (
+                              <td key={cIdx} className="px-3 py-1.5">
+                                {cIdx + 1 === activeSheet.extPriceDisplayIdx ? `$${section.extPriceTotal.toFixed(2)}` : ''}
+                              </td>
+                            ))}
+                            {hasPricing(activeSheet) && (
+                              <>
+                                <td className="px-3 py-1.5 bg-blue-50/50 text-right font-mono text-xs font-bold text-blue-700">
+                                  {sectionHasRate ? formatDollar(sectionOurTotal) : '—'}
+                                </td>
+                                <td className="px-3 py-1.5 bg-blue-50/50 text-right font-mono text-xs font-bold">
+                                  {formatDollar(section.extPriceTotal)}
+                                </td>
+                                <td className={`px-3 py-1.5 bg-blue-50/50 text-right font-mono text-xs font-bold ${
+                                  !sectionHasRate ? 'text-gray-300'
+                                    : Math.abs(section.extPriceTotal - sectionOurTotal) < 0.5 ? 'text-emerald-600'
+                                      : (section.extPriceTotal - sectionOurTotal) > 0 ? 'text-red-600' : 'text-amber-600'
+                                }`}>
+                                  {!sectionHasRate ? '—' : (section.extPriceTotal - sectionOurTotal) > 0
+                                    ? `+${formatDollar(section.extPriceTotal - sectionOurTotal)}`
+                                    : formatDollar(section.extPriceTotal - sectionOurTotal)}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
+
+                {/* Page grand total comparison */}
+                {hasPricing(activeSheet) && activeSheet.sections.length > 0 && (() => {
+                  let grandOur = 0
+                  let grandHasRate = false
+                  for (const section of activeSheet.sections) {
+                    for (let i = 0; i < section.rows.length; i++) {
+                      const rate = getRowRate(activeSheet, section.rows[i])
+                      if (rate !== undefined) {
+                        grandOur += calcRowBf(activeSheet, section.rows[i]) * rate
+                        grandHasRate = true
+                      }
+                    }
+                  }
+                  const grandNb = activeSheet.grandExtTotal
+                  const grandDiff = grandNb - grandOur
+                  return (
+                    <div className="px-4 py-3 bg-gray-50 border-t flex items-center justify-end gap-6 text-sm">
+                      <span className="text-gray-600">Page Totals:</span>
+                      <span className="font-semibold text-blue-700">Our: ${grandHasRate ? formatDollar(grandOur) : '—'}</span>
+                      <span className="font-semibold text-gray-700">NB: ${formatDollar(grandNb)}</span>
+                      <span className={`font-bold px-3 py-1 rounded-full ${
+                        !grandHasRate ? 'text-gray-400 bg-gray-100'
+                          : Math.abs(grandDiff) < 1 ? 'text-emerald-700 bg-emerald-100'
+                            : grandDiff > 0 ? 'text-red-700 bg-red-100' : 'text-amber-700 bg-amber-100'
+                      }`}>
+                        {!grandHasRate ? 'Set rates to compare'
+                          : grandDiff > 0 ? `NB +$${formatDollar(grandDiff)}` : `NB $${formatDollar(grandDiff)}`}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
@@ -1003,7 +1272,7 @@ export default function CabinetOrderPage() {
             </div>
             <div className="overflow-x-auto">
               {specialView === 'rip'
-                ? <RipTable rows={activeSpecial.ripRows} speciesTotals={activeSpecial.speciesTotals} totalBoardFt={activeSpecial.totalBoardFt} />
+                ? <RipTable rows={activeSpecial.ripRows} speciesTotals={activeSpecial.speciesTotals} totalBoardFt={activeSpecial.totalBoardFt} categoryPrices={categoryPrices} />
                 : <MouldTable rows={activeSpecial.mouldRows} />}
             </div>
           </div>
@@ -1012,94 +1281,122 @@ export default function CabinetOrderPage() {
 
       {/* ===== Print Layout ===== */}
       <div className="cabinet-print-area hidden print:block">
-        {sheetsWithOrders.map((sheet, sheetIdx) => (
-          <div key={sheet.name} className={sheetIdx > 0 ? 'cabinet-page-break' : ''}>
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Nature&apos;s Blend Wood Products</div>
-              <div style={{ fontSize: '11px', display: 'flex', gap: '24px' }}>
-                <span>PO# {sheet.poNumber}</span>
-                <span>Due Date: {sheet.dueDate}</span>
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '8px', borderBottom: '2px solid #333', paddingBottom: '4px' }}>
-                {sheet.name.trim()}
-                {sheet.missingPartCount > 0 && (
-                  <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>({sheet.missingPartCount} missing part #)</span>
-                )}
-              </div>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif' }}>
-              <thead>
-                <tr>
-                  {sheet.displayHeaders.map((h, i) => (
-                    <th key={i} style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                  {hasPriceCol(sheet) && (
-                    <>
-                      <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>Our Price</th>
-                      <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>Diff</th>
-                    </>
+        {sheetsWithOrders.map((sheet, sheetIdx) => {
+          const pricing = hasPricing(sheet)
+          return (
+            <div key={sheet.name} className={sheetIdx > 0 ? 'cabinet-page-break' : ''}>
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Nature&apos;s Blend Wood Products</div>
+                <div style={{ fontSize: '11px', display: 'flex', gap: '24px' }}>
+                  <span>PO# {sheet.poNumber}</span>
+                  <span>Due Date: {sheet.dueDate}</span>
+                  {sheet.tabProfile && <span>Profile: {sheet.tabProfile}</span>}
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '8px', borderBottom: '2px solid #333', paddingBottom: '4px' }}>
+                  {sheet.name.trim()}
+                  {sheet.missingPartCount > 0 && (
+                    <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>({sheet.missingPartCount} missing part #)</span>
                   )}
-                </tr>
-              </thead>
-              <tbody>
-                {sheet.sections.map((section, sIdx) => (
-                  <Fragment key={sIdx}>
-                    {sIdx > 0 && <tr><td colSpan={sheet.displayHeaders.length + (hasPriceCol(sheet) ? 2 : 0)} style={{ padding: '4px' }} /></tr>}
-                    {section.rows.map((row, rIdx) => {
-                      const isMissing = sheet.partNumDisplayIdx >= 0 &&
-                        (row[sheet.partNumDisplayIdx] === null || row[sheet.partNumDisplayIdx] === undefined || String(row[sheet.partNumDisplayIdx]).trim() === '')
-                      const partNum = sheet.partNumDisplayIdx >= 0 ? String(row[sheet.partNumDisplayIdx] ?? '').trim() : ''
-                      const theirPrice = sheet.priceDisplayIdx >= 0 ? Number(row[sheet.priceDisplayIdx]) || 0 : 0
-                      const ourPrice = partNum ? priceMap[partNum] : undefined
-                      const diff = ourPrice !== undefined ? (theirPrice - ourPrice) : undefined
-                      return (
-                        <tr key={rIdx} style={isMissing ? { backgroundColor: '#fffbeb' } : undefined}>
-                          {row.map((cell, cIdx) => (
-                            <td key={cIdx} style={{ border: '1px solid #ccc', padding: '2px 6px', whiteSpace: 'nowrap' }}>
-                              {cIdx === sheet.partNumDisplayIdx && isMissing ? '⚠' : formatCell(cell, cIdx, sheet.displayHeaders)}
+                </div>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif' }}>
+                <thead>
+                  <tr>
+                    {sheet.displayHeaders.map((h, i) => (
+                      <th key={i} style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'left', fontWeight: 600, backgroundColor: '#f0f0f0', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                    {pricing && (
+                      <>
+                        <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'right', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>Our $</th>
+                        <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'right', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>NB $</th>
+                        <th style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'right', fontWeight: 600, backgroundColor: '#dbeafe', whiteSpace: 'nowrap' }}>+/−</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sheet.sections.map((section, sIdx) => {
+                    let sectionOurTotal = 0
+                    let sectionHasRate = false
+                    return (
+                      <Fragment key={sIdx}>
+                        {sIdx > 0 && <tr><td colSpan={sheet.displayHeaders.length + (pricing ? 3 : 0)} style={{ padding: '4px' }} /></tr>}
+                        {section.rows.map((row, rIdx) => {
+                          const isMissing = sheet.partNumDisplayIdx >= 0 &&
+                            (row[sheet.partNumDisplayIdx] === null || row[sheet.partNumDisplayIdx] === undefined || String(row[sheet.partNumDisplayIdx]).trim() === '')
+                          const bf = calcRowBf(sheet, row)
+                          const rate = getRowRate(sheet, row)
+                          const ourPrice = rate !== undefined ? bf * rate : undefined
+                          const nbPrice = section.rowExtPrices[rIdx] || 0
+                          const diff = ourPrice !== undefined ? nbPrice - ourPrice : undefined
+                          if (ourPrice !== undefined) { sectionOurTotal += ourPrice; sectionHasRate = true }
+                          return (
+                            <tr key={rIdx} style={isMissing ? { backgroundColor: '#fffbeb' } : undefined}>
+                              {row.map((cell, cIdx) => (
+                                <td key={cIdx} style={{ border: '1px solid #ccc', padding: '2px 6px', whiteSpace: 'nowrap' }}>
+                                  {cIdx === sheet.partNumDisplayIdx && isMissing ? '⚠' : formatCell(cell, cIdx, sheet.displayHeaders)}
+                                </td>
+                              ))}
+                              {pricing && (
+                                <>
+                                  <td style={{ border: '1px solid #ccc', padding: '2px 6px', textAlign: 'right', backgroundColor: '#eff6ff' }}>
+                                    {ourPrice !== undefined ? formatDollar(ourPrice) : ''}
+                                  </td>
+                                  <td style={{ border: '1px solid #ccc', padding: '2px 6px', textAlign: 'right', backgroundColor: '#eff6ff' }}>
+                                    {formatDollar(nbPrice)}
+                                  </td>
+                                  <td style={{
+                                    border: '1px solid #ccc', padding: '2px 6px', textAlign: 'right', fontWeight: 'bold',
+                                    color: diff === undefined ? '#ccc' : Math.abs(diff) < 0.5 ? '#059669' : diff > 0 ? '#dc2626' : '#d97706',
+                                  }}>
+                                    {diff === undefined ? '' : diff > 0 ? `+${formatDollar(diff)}` : formatDollar(diff)}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          )
+                        })}
+                        <tr>
+                          <td style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>{section.qtyTotal}</td>
+                          {sheet.displayHeaders.slice(1).map((_, cIdx) => (
+                            <td key={cIdx} style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>
+                              {cIdx + 1 === sheet.extPriceDisplayIdx ? `$${section.extPriceTotal.toFixed(2)}` : ''}
                             </td>
                           ))}
-                          {hasPriceCol(sheet) && (
+                          {pricing && (
                             <>
-                              <td style={{ border: '1px solid #ccc', padding: '2px 6px', backgroundColor: '#eff6ff' }}>
-                                {ourPrice !== undefined ? ourPrice.toFixed(2) : ''}
+                              <td style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'right', fontWeight: 'bold', backgroundColor: '#dbeafe' }}>
+                                {sectionHasRate ? formatDollar(sectionOurTotal) : ''}
+                              </td>
+                              <td style={{ border: '1px solid #999', padding: '3px 6px', textAlign: 'right', fontWeight: 'bold' }}>
+                                {formatDollar(section.extPriceTotal)}
                               </td>
                               <td style={{
-                                border: '1px solid #ccc', padding: '2px 6px', fontWeight: 'bold',
-                                color: diff === undefined ? '#ccc' : Math.abs(diff) < 0.005 ? '#059669' : '#dc2626',
+                                border: '1px solid #999', padding: '3px 6px', textAlign: 'right', fontWeight: 'bold',
+                                color: !sectionHasRate ? '#ccc' : Math.abs(section.extPriceTotal - sectionOurTotal) < 0.5 ? '#059669' : (section.extPriceTotal - sectionOurTotal) > 0 ? '#dc2626' : '#d97706',
                               }}>
-                                {diff === undefined ? '' : diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
+                                {sectionHasRate ? ((section.extPriceTotal - sectionOurTotal) > 0 ? `+${formatDollar(section.extPriceTotal - sectionOurTotal)}` : formatDollar(section.extPriceTotal - sectionOurTotal)) : ''}
                               </td>
                             </>
                           )}
                         </tr>
-                      )
-                    })}
-                    <tr>
-                      <td style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>{section.qtyTotal}</td>
-                      {sheet.displayHeaders.slice(1).map((_, cIdx) => (
-                        <td key={cIdx} style={{ border: '1px solid #999', padding: '3px 6px', fontWeight: 'bold' }}>
-                          {cIdx + 1 === sheet.extPriceDisplayIdx ? `$${section.extPriceTotal.toFixed(2)}` : ''}
-                        </td>
-                      ))}
-                      {hasPriceCol(sheet) && <><td style={{ border: '1px solid #999' }} /><td style={{ border: '1px solid #999' }} /></>}
-                    </tr>
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
 
-            {sheet.sections.length > 1 && (
-              <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
-                Grand Total Qty: {sheet.grandQtyTotal}
-                {sheet.grandExtTotal > 0 && <span style={{ marginLeft: '24px' }}>Grand Total: ${sheet.grandExtTotal.toFixed(2)}</span>}
-              </div>
-            )}
-          </div>
-        ))}
+              {sheet.sections.length > 1 && (
+                <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
+                  Grand Total Qty: {sheet.grandQtyTotal}
+                  {sheet.grandExtTotal > 0 && <span style={{ marginLeft: '24px' }}>NB Grand Total: ${sheet.grandExtTotal.toFixed(2)}</span>}
+                </div>
+              )}
+            </div>
+          )
+        })}
 
-        {/* Special tabs Rip + Mould print pages */}
         {specialResults.map((sr) => (
           <Fragment key={sr.label}>
             <div className="cabinet-page-break">
@@ -1114,7 +1411,7 @@ export default function CabinetOrderPage() {
                   {sr.missingPartCount > 0 && <span style={{ marginLeft: '12px', color: '#d97706', fontSize: '11px' }}>({sr.missingPartCount} missing part #)</span>}
                 </div>
               </div>
-              <RipTable rows={sr.ripRows} speciesTotals={sr.speciesTotals} totalBoardFt={sr.totalBoardFt} compact />
+              <RipTable rows={sr.ripRows} speciesTotals={sr.speciesTotals} totalBoardFt={sr.totalBoardFt} compact categoryPrices={categoryPrices} />
             </div>
             <div className="cabinet-page-break">
               <div style={{ marginBottom: '12px' }}>
