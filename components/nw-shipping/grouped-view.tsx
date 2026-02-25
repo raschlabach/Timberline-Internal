@@ -1,9 +1,12 @@
 'use client'
 
+import { forwardRef } from 'react'
 import { ReportLineItem } from './report-editor'
 
 interface GroupedViewProps {
   items: ReportLineItem[]
+  northwestPo?: string
+  archboldPo?: string
 }
 
 interface GroupedItemCode {
@@ -15,7 +18,7 @@ interface GroupedItemCode {
   totalQty: number
 }
 
-export function GroupedView({ items }: GroupedViewProps) {
+function buildGroups(items: ReportLineItem[]): GroupedItemCode[] {
   const groups: GroupedItemCode[] = []
   const itemsByCode: Record<string, ReportLineItem[]> = {}
   const unassigned: ReportLineItem[] = []
@@ -64,22 +67,36 @@ export function GroupedView({ items }: GroupedViewProps) {
     })
   }
 
-  if (groups.length === 0) {
-    return (
-      <div className="text-center py-12 text-gray-400">
-        No items to display. Add items in the edit view first.
-      </div>
-    )
-  }
+  return groups
+}
 
-  const headerCls = "px-2 py-1.5 text-xs font-medium text-gray-500"
+function GroupContent({ groups, northwestPo, archboldPo, showHeader }: {
+  groups: GroupedItemCode[]
+  northwestPo?: string
+  archboldPo?: string
+  showHeader?: boolean
+}) {
+  const headerCls = "px-2 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-300"
   const cellCls = "px-2 py-1.5 text-xs"
+  const grandTotal = groups.reduce((sum, g) => sum + g.totalQty, 0)
 
   return (
-    <div className="space-y-4">
+    <>
+      {showHeader && (northwestPo || archboldPo) && (
+        <div className="mb-4 pb-3 border-b-2 border-gray-300">
+          <h2 className="text-lg font-bold">Northwest Shipping Report</h2>
+          <div className="flex gap-6 mt-1 text-sm">
+            {northwestPo && <span><strong>NW PO #:</strong> {northwestPo}</span>}
+            {archboldPo && <span><strong>Archbold PO #:</strong> {archboldPo}</span>}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+        </div>
+      )}
       {groups.map((group, gIdx) => (
-        <div key={gIdx} className="bg-white rounded-lg border overflow-hidden">
-          <div className="bg-blue-50 border-b border-blue-100 px-3 py-2 flex items-center justify-between">
+        <div key={gIdx} className="mb-4 break-inside-avoid">
+          <div className="bg-blue-50 border border-blue-200 px-3 py-1.5 flex items-center justify-between rounded-t-lg">
             <div className="flex items-center gap-3">
               <span className="font-semibold text-sm text-blue-800">{group.item_code}</span>
               {group.part_width != null && group.part_length != null && (
@@ -93,9 +110,9 @@ export function GroupedView({ items }: GroupedViewProps) {
               Total Qty: {group.totalQty}
             </div>
           </div>
-          <table className="w-full">
+          <table className="w-full border border-t-0 border-gray-200">
             <thead>
-              <tr className="bg-gray-50 border-b">
+              <tr className="bg-gray-50">
                 <th className={headerCls + ' text-left w-20'}>Pallet #</th>
                 <th className={headerCls + ' text-left w-24'}>Pallet Tag</th>
                 <th className={headerCls + ' text-right w-20'}>Qty/Skid</th>
@@ -130,6 +147,41 @@ export function GroupedView({ items }: GroupedViewProps) {
           </table>
         </div>
       ))}
-    </div>
+      {showHeader && groups.length > 1 && (
+        <div className="mt-2 pt-2 border-t-2 border-gray-300 flex justify-end">
+          <span className="text-sm font-bold">Grand Total Qty: {grandTotal}</span>
+        </div>
+      )}
+    </>
   )
 }
+
+export const GroupedView = forwardRef<HTMLDivElement, GroupedViewProps>(
+  function GroupedView({ items, northwestPo, archboldPo }, ref) {
+    const groups = buildGroups(items)
+
+    if (groups.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-400">
+          No items to display. Add items in the edit view first.
+        </div>
+      )
+    }
+
+    return (
+      <div>
+        {/* On-screen view */}
+        <div className="space-y-4">
+          <GroupContent groups={groups} />
+        </div>
+
+        {/* Hidden printable version with header */}
+        <div className="hidden">
+          <div ref={ref} className="p-6 bg-white" style={{ fontFamily: 'Arial, sans-serif' }}>
+            <GroupContent groups={groups} northwestPo={northwestPo} archboldPo={archboldPo} showHeader />
+          </div>
+        </div>
+      </div>
+    )
+  }
+)

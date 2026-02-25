@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useReactToPrint } from 'react-to-print'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ReportEditor, ReportLineItem } from '@/components/nw-shipping/report-editor'
 import { GroupedView } from '@/components/nw-shipping/grouped-view'
-import { ArrowLeft, Save, Loader2, Eye, Pencil } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Eye, Pencil, Printer, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ArchboldPart {
@@ -65,7 +66,9 @@ export default function NWShippingReportDetailPage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [viewMode, setViewMode] = useState<'edit' | 'grouped'>('edit')
+  const printRef = useRef<HTMLDivElement>(null)
 
   const [northwestPo, setNorthwestPo] = useState('')
   const [archboldPo, setArchboldPo] = useState('')
@@ -146,6 +149,60 @@ export default function NWShippingReportDetailPage() {
     }
   }
 
+  const handlePrint = useReactToPrint({
+    documentTitle: `NW-Shipping-Report-${northwestPo || reportId}`,
+    contentRef: printRef,
+    pageStyle: `
+      @page { size: letter landscape; margin: 0.4in; }
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    `,
+  })
+
+  async function handleDownloadPdf() {
+    if (!printRef.current) return
+    setIsDownloading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const jsPDF = (await import('jspdf')).default
+
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+      } as Parameters<typeof html2canvas>[1] & { scale?: number })
+
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('l', 'in', 'letter')
+
+      const imgWidth = 10
+      const pageHeight = 7.5
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, 'PNG', 0.5, 0.5, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft > 0) {
+        position -= pageHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0.5, position + 0.5, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      const filename = `NW-Shipping-Report-${northwestPo || reportId}.pdf`
+      pdf.save(filename)
+      toast.success('PDF downloaded')
+    } catch {
+      toast.error('Failed to generate PDF')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -200,6 +257,17 @@ export default function NWShippingReportDetailPage() {
               <Eye className="h-3.5 w-3.5" /> Grouped View
             </button>
           </div>
+          {viewMode === 'grouped' && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-1.5">
+                <Printer className="h-4 w-4" /> Print
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={isDownloading} className="gap-1.5">
+                {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                PDF
+              </Button>
+            </>
+          )}
           <Button onClick={handleSave} disabled={isSaving} className="gap-1.5">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save
@@ -235,7 +303,7 @@ export default function NWShippingReportDetailPage() {
       {viewMode === 'edit' ? (
         <ReportEditor items={items} parts={parts} archboldPo={archboldPo} onChange={setItems} />
       ) : (
-        <GroupedView items={items} />
+        <GroupedView ref={printRef} items={items} northwestPo={northwestPo} archboldPo={archboldPo} />
       )}
     </div>
   )
