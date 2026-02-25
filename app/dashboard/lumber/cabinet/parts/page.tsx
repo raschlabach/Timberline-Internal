@@ -84,12 +84,10 @@ function pcsLayup_DF(h: number): number | null {
 interface PanelRow {
   width: string
   length: string
-  qty: string
 }
 
 interface LinearRow {
   length: string
-  qty: string
 }
 
 interface PanelReverseRow {
@@ -190,11 +188,11 @@ const TABS: TabConfig[] = [
 ]
 
 function makePanelRows(count: number): PanelRow[] {
-  return Array.from({ length: count }, () => ({ width: '', length: '', qty: '' }))
+  return Array.from({ length: count }, () => ({ width: '', length: '' }))
 }
 
 function makeLinearRows(count: number): LinearRow[] {
-  return Array.from({ length: count }, () => ({ length: '', qty: '' }))
+  return Array.from({ length: count }, () => ({ length: '' }))
 }
 
 function makePanelReverseRows(): PanelReverseRow[] {
@@ -265,7 +263,7 @@ function PanelCalculator({ config, state, setState }: {
   }
 
   function addRow() {
-    setState(prev => ({ ...prev, rows: [...prev.rows, { width: '', length: '', qty: '' }] }))
+    setState(prev => ({ ...prev, rows: [...prev.rows, { width: '', length: '' }] }))
   }
 
   function removeRow(idx: number) {
@@ -366,8 +364,6 @@ function PanelCalculator({ config, state, setState }: {
                 <th className="px-2 py-2 text-right text-gray-600">Layup W</th>
                 <th className="px-2 py-2 text-right text-gray-600">Layup L</th>
                 <th className="px-2 py-2 text-right text-gray-600">PCS</th>
-                <th className="px-2 py-2 text-left text-gray-600">Qty</th>
-                <th className="px-2 py-2 text-right text-gray-600">Total BF</th>
                 <th className="w-8" />
               </tr>
             </thead>
@@ -375,13 +371,11 @@ function PanelCalculator({ config, state, setState }: {
               {state.rows.map((row, idx) => {
                 const w = parseFloat(row.width) || 0
                 const l = parseFloat(row.length) || 0
-                const qty = parseFloat(row.qty) || 0
                 const bf = w > 0 && l > 0 ? ((w * l) / 144) * config.bfMultiplier : 0
                 const cost = bf * rate
                 const layW = w > 0 ? config.layupWidthFn(w) : null
                 const layL = l > 0 ? l + 1 : null
                 const pcs = w > 0 ? config.pcsLayupFn(w) : null
-                const totalBf = bf * qty
 
                 return (
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
@@ -399,11 +393,6 @@ function PanelCalculator({ config, state, setState }: {
                     <OutCell value={w > 0 ? layW : null} decimals={4} checkWidth={w > 0 && layW === null} />
                     <OutCell value={layL} decimals={1} />
                     <OutCell value={w > 0 ? pcs : null} decimals={0} checkWidth={w > 0 && pcs === null} />
-                    <td className="px-1 py-1">
-                      <input type="number" step="1" className="w-16 border rounded px-1.5 py-1 text-sm text-center focus:border-emerald-500 focus:outline-none"
-                        value={row.qty} onChange={(e) => updateRow(idx, 'qty', e.target.value)} placeholder="—" />
-                    </td>
-                    <OutCell value={totalBf > 0 ? totalBf : null} decimals={4} />
                     <td className="px-1 py-1">
                       <button onClick={() => removeRow(idx)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
                         <Trash2 size={13} />
@@ -442,7 +431,7 @@ function LinearCalculator({ config, state, setState }: {
   }
 
   function addRow() {
-    setState(prev => ({ ...prev, rows: [...prev.rows, { length: '', qty: '' }] }))
+    setState(prev => ({ ...prev, rows: [...prev.rows, { length: '' }] }))
   }
 
   function removeRow(idx: number) {
@@ -544,20 +533,16 @@ function LinearCalculator({ config, state, setState }: {
                 <th className="px-2 py-2 text-right text-gray-600">BF</th>
                 <th className="px-2 py-2 text-right text-blue-600 bg-blue-50">Cost</th>
                 {hasCope && <th className="px-2 py-2 text-right text-blue-600 bg-blue-50">Center Rail</th>}
-                <th className="px-2 py-2 text-left text-gray-600">Qty</th>
-                <th className="px-2 py-2 text-right text-gray-600">Total BF</th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody>
               {state.rows.map((row, idx) => {
                 const l = parseFloat(row.length) || 0
-                const qty = parseFloat(row.qty) || 0
                 const lf = l > 0 ? l / 12 : 0
                 const bf = globalWidth > 0 && l > 0 ? (globalWidth * l) / 144 : 0
                 const cost = lf > 0 ? (lf * rate) + config.copeAdder : 0
                 const centerRailCost = config.centerRailAdder > 0 && cost > 0 ? cost + config.centerRailAdder : 0
-                const totalBf = bf * qty
 
                 return (
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
@@ -571,11 +556,6 @@ function LinearCalculator({ config, state, setState }: {
                     <OutCell value={bf > 0 ? bf : null} decimals={6} />
                     <OutCell value={cost > 0 ? cost : null} decimals={2} highlight />
                     {hasCope && <OutCell value={centerRailCost > 0 ? centerRailCost : null} decimals={2} highlight />}
-                    <td className="px-1 py-1">
-                      <input type="number" step="1" className="w-16 border rounded px-1.5 py-1 text-sm text-center focus:border-emerald-500 focus:outline-none"
-                        value={row.qty} onChange={(e) => updateRow(idx, 'qty', e.target.value)} placeholder="—" />
-                    </td>
-                    <OutCell value={totalBf > 0 ? totalBf : null} decimals={6} />
                     <td className="px-1 py-1">
                       <button onClick={() => removeRow(idx)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
                         <Trash2 size={13} />
