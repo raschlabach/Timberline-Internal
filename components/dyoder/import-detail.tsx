@@ -617,7 +617,7 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                       />
 
                       <td className="px-3 py-2.5 text-right font-mono text-gray-500">
-                        {item.lineal_trailer_ft > 0 ? item.lineal_trailer_ft.toFixed(2) : '—'}
+                        {Number(item.lineal_trailer_ft) > 0 ? Number(item.lineal_trailer_ft).toFixed(2) : '—'}
                       </td>
 
                       <EditableCell
