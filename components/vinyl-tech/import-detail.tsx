@@ -46,6 +46,7 @@ interface ImportItem {
   customer_matched: boolean
   matched_customer_id: number | null
   matched_customer_name: string | null
+  freight_quote: number
   status: string
   order_id: number | null
   truckload_id: number | null
@@ -88,7 +89,7 @@ interface ImportDetailProps {
 
 interface EditingState {
   itemId: number
-  field: 'skid_16ft' | 'skid_12ft' | 'skid_4x8' | 'misc' | 'weight' | 'notes_on_skids'
+  field: 'skid_16ft' | 'skid_12ft' | 'skid_4x8' | 'misc' | 'weight' | 'notes_on_skids' | 'freight_quote'
   value: string
 }
 
@@ -170,12 +171,12 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
     setSelectedItems(next)
   }
 
-  async function handleConvert() {
+  async function handleConvert(assignToTruck: boolean) {
     if (selectedItems.size === 0) {
       toast.error('No items selected')
       return
     }
-    if (!selectedTruckloadId) {
+    if (assignToTruck && !selectedTruckloadId) {
       toast.error('Please select a truckload')
       return
     }
@@ -183,14 +184,18 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
     setIsConverting(true)
     try {
       const pickupDate = importData?.week_date || new Date().toISOString().split('T')[0]
+      const payload: Record<string, unknown> = {
+        itemIds: Array.from(selectedItems),
+        pickupDate,
+      }
+      if (assignToTruck) {
+        payload.truckloadId = parseInt(selectedTruckloadId)
+      }
+
       const res = await fetch('/api/vinyl-tech/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemIds: Array.from(selectedItems),
-          truckloadId: parseInt(selectedTruckloadId),
-          pickupDate,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
@@ -259,7 +264,9 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
     setIsSaving(true)
     try {
       const isNumericField = editing.field !== 'notes_on_skids'
-      const newValue = isNumericField ? parseInt(editing.value) || 0 : editing.value
+      const newValue = isNumericField
+        ? (editing.field === 'freight_quote' ? parseFloat(editing.value) || 0 : parseInt(editing.value) || 0)
+        : editing.value
 
       const updatedItem = {
         skid_16ft: item.skid_16ft,
@@ -268,6 +275,7 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
         misc: item.misc,
         weight: item.weight,
         notes_on_skids: item.notes_on_skids,
+        freight_quote: item.freight_quote,
         [editing.field]: newValue,
       }
 
@@ -398,6 +406,22 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                 <span>{selectedItems.size} of {pendingFreightItems.length} items selected</span>
               </div>
 
+              <Button
+                variant="outline"
+                onClick={() => handleConvert(false)}
+                disabled={selectedItems.size === 0 || isConverting}
+                className="gap-1.5"
+              >
+                {isConverting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Package className="h-4 w-4" />
+                )}
+                Create Orders
+              </Button>
+
+              <div className="h-6 w-px bg-gray-300" />
+
               <Select value={selectedTruckloadId} onValueChange={setSelectedTruckloadId}>
                 <SelectTrigger className="w-[280px] bg-white">
                   <SelectValue placeholder="Select a truckload..." />
@@ -424,7 +448,7 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
               </Select>
 
               <Button
-                onClick={handleConvert}
+                onClick={() => handleConvert(true)}
                 disabled={selectedItems.size === 0 || !selectedTruckloadId || isConverting}
                 className="gap-1.5"
               >
@@ -433,7 +457,7 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                 ) : (
                   <Truck className="h-4 w-4" />
                 )}
-                Create Orders & Assign
+                Create & Assign
               </Button>
             </div>
           </CardContent>
@@ -487,6 +511,7 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                   <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-20">VT Code</th>
                   <th className="px-3 py-2.5 text-left font-medium text-gray-500">Ship To</th>
                   <th className="px-3 py-2.5 text-left font-medium text-gray-500">Matched Customer</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-20">Quote</th>
                   <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-16">16&apos;</th>
                   <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-16">12&apos;</th>
                   <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-16">4x8</th>
@@ -569,6 +594,21 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                         )}
                       </td>
 
+                      <EditableCell
+                        itemId={item.id}
+                        field="freight_quote"
+                        value={item.freight_quote}
+                        editing={editing}
+                        isEditable={isEditable}
+                        isSaving={isSaving}
+                        onStartEdit={startEditing}
+                        onSave={saveEdit}
+                        onCancel={cancelEdit}
+                        onKeyDown={handleEditKeyDown}
+                        onChange={(val) => setEditing(prev => prev ? { ...prev, value: val } : null)}
+                        type="number"
+                        prefix="$"
+                      />
                       <EditableCell
                         itemId={item.id}
                         field="skid_16ft"
@@ -739,6 +779,7 @@ interface EditableCellProps {
   onChange: (value: string) => void
   type: 'number' | 'text'
   displayFormatter?: (value: number | string) => string
+  prefix?: string
   className?: string
 }
 
@@ -756,6 +797,7 @@ function EditableCell({
   onChange,
   type,
   displayFormatter,
+  prefix,
   className = '',
 }: EditableCellProps) {
   const isCurrentlyEditing = editing?.itemId === itemId && editing?.field === field
@@ -781,7 +823,8 @@ function EditableCell({
     )
   }
 
-  const displayValue = displayFormatter ? displayFormatter(value) : (isNumber ? (value || '') : value)
+  const rawDisplay = displayFormatter ? displayFormatter(value) : (isNumber ? (value || '') : value)
+  const displayValue = prefix && rawDisplay ? `${prefix}${rawDisplay}` : rawDisplay
   const isEmpty = !value || (isNumber && value === 0)
 
   return (

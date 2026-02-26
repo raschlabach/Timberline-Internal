@@ -16,18 +16,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { itemIds, truckloadId, pickupDate } = body as {
       itemIds: number[]
-      truckloadId: number
+      truckloadId?: number
       pickupDate: string
     }
 
     if (!itemIds?.length) {
       client.release()
       return NextResponse.json({ error: 'No items selected' }, { status: 400 })
-    }
-
-    if (!truckloadId) {
-      client.release()
-      return NextResponse.json({ error: 'No truckload selected' }, { status: 400 })
     }
 
     // Find Vinyl Tech as the pickup customer
@@ -45,18 +40,19 @@ export async function POST(request: NextRequest) {
 
     const pickupCustomerId = vinylTechResult.rows[0].id
 
-    // Verify the truckload exists and is not completed
-    const truckloadResult = await client.query(
-      `SELECT id FROM truckloads WHERE id = $1 AND is_completed = false`,
-      [truckloadId]
-    )
-
-    if (truckloadResult.rows.length === 0) {
-      client.release()
-      return NextResponse.json(
-        { error: 'Truckload not found or already completed' },
-        { status: 400 }
+    if (truckloadId) {
+      const truckloadResult = await client.query(
+        `SELECT id FROM truckloads WHERE id = $1 AND is_completed = false`,
+        [truckloadId]
       )
+
+      if (truckloadResult.rows.length === 0) {
+        client.release()
+        return NextResponse.json(
+          { error: 'Truckload not found or already completed' },
+          { status: 400 }
+        )
+      }
     }
 
     // Fetch the selected items
@@ -95,17 +91,19 @@ export async function POST(request: NextRequest) {
 
     const createdOrders: { orderId: number; itemId: number; customerName: string }[] = []
 
-    // Get next sequence number for truckload assignments
-    const seqResult = await client.query(
-      `SELECT COALESCE(MAX(sequence_number), 0) as max_seq
-       FROM truckload_order_assignments
-       WHERE truckload_id = $1`,
-      [truckloadId]
-    )
-    let nextSequence = seqResult.rows[0].max_seq + 1
+    let nextSequence = 1
+    if (truckloadId) {
+      const seqResult = await client.query(
+        `SELECT COALESCE(MAX(sequence_number), 0) as max_seq
+         FROM truckload_order_assignments
+         WHERE truckload_id = $1`,
+        [truckloadId]
+      )
+      nextSequence = seqResult.rows[0].max_seq + 1
+    }
 
-    // Use the provided pickup date, or fallback to the import's week_date
     const orderDate = pickupDate || new Date().toISOString().split('T')[0]
+    const orderStatus = truckloadId ? 'delivery_assigned' : 'pending'
 
     for (const item of itemsResult.rows) {
       // Create the order: pickup = Vinyl Tech, delivery = matched customer
@@ -114,26 +112,27 @@ export async function POST(request: NextRequest) {
           pickup_customer_id,
           delivery_customer_id,
           pickup_date,
+          freight_quote,
           comments,
           status,
           created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id`,
         [
           pickupCustomerId,
           item.matched_customer_id,
           orderDate,
+          item.freight_quote || null,
           [item.notes_on_skids, item.additional_notes, item.schedule_notes]
             .filter(Boolean)
             .join(' | ') || null,
-          'delivery_assigned',
+          orderStatus,
           session.user.id,
         ]
       )
 
       const orderId = orderResult.rows[0].id
 
-      // Create vinyl records for each skid type
       if (item.skid_16ft > 0) {
         for (let i = 0; i < item.skid_16ft; i++) {
           await client.query(
@@ -164,16 +163,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Create the truckload assignment as delivery
-      await client.query(
-        `INSERT INTO truckload_order_assignments (
-          truckload_id, order_id, assignment_type, sequence_number
-        ) VALUES ($1, $2, $3, $4)`,
-        [truckloadId, orderId, 'delivery', nextSequence]
-      )
-      nextSequence++
+      if (truckloadId) {
+        await client.query(
+          `INSERT INTO truckload_order_assignments (
+            truckload_id, order_id, assignment_type, sequence_number
+          ) VALUES ($1, $2, $3, $4)`,
+          [truckloadId, orderId, 'delivery', nextSequence]
+        )
+        nextSequence++
+      }
 
-      // Update the import item to mark as converted
       await client.query(
         `UPDATE vinyl_tech_import_items
          SET status = 'converted',
@@ -181,7 +180,7 @@ export async function POST(request: NextRequest) {
              truckload_id = $2,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`,
-        [orderId, truckloadId, item.id]
+        [orderId, truckloadId || null, item.id]
       )
 
       createdOrders.push({
@@ -213,11 +212,15 @@ export async function POST(request: NextRequest) {
 
     await client.query('COMMIT')
 
+    const message = truckloadId
+      ? `Created ${createdOrders.length} orders and assigned to truckload #${truckloadId}`
+      : `Created ${createdOrders.length} orders`
+
     return NextResponse.json({
       success: true,
       ordersCreated: createdOrders.length,
       orders: createdOrders,
-      message: `Created ${createdOrders.length} orders and assigned to truckload #${truckloadId}`,
+      message,
     })
   } catch (error) {
     try { await client.query('ROLLBACK') } catch {}

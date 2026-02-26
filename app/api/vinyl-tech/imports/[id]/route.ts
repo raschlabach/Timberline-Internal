@@ -58,6 +58,7 @@ export async function GET(
         item.has_freight,
         item.customer_matched,
         item.matched_customer_id,
+        item.freight_quote,
         item.status,
         item.order_id,
         item.truckload_id,

@@ -19,7 +19,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { skid_16ft, skid_12ft, skid_4x8, misc, weight, notes_on_skids } = body
+    const { skid_16ft, skid_12ft, skid_4x8, misc, weight, notes_on_skids, freight_quote } = body
 
     const hasFreight = (skid_16ft || 0) + (skid_12ft || 0) + (skid_4x8 || 0) + (misc || 0) > 0
 
@@ -32,9 +32,10 @@ export async function PATCH(
            weight = $5,
            notes_on_skids = $6,
            has_freight = $7,
+           freight_quote = $8,
            status = CASE WHEN $7 = false THEN 'skipped' ELSE status END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8 AND status != 'converted'`,
+       WHERE id = $9 AND status != 'converted'`,
       [
         skid_16ft ?? 0,
         skid_12ft ?? 0,
@@ -43,6 +44,7 @@ export async function PATCH(
         weight ?? 0,
         notes_on_skids ?? '',
         hasFreight,
+        freight_quote ?? 0,
         itemId,
       ]
     )

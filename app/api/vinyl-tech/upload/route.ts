@@ -241,13 +241,22 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Auto-calculate freight quote: 1 vinyl = $100, 2+ vinyls = $75 each
+        const totalVinyl = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc
+        let freightQuote = 0
+        if (totalVinyl === 1) {
+          freightQuote = 100
+        } else if (totalVinyl >= 2) {
+          freightQuote = totalVinyl * 75
+        }
+
         await client.query(
           `INSERT INTO vinyl_tech_import_items (
             import_id, vt_code, ship_to_name,
             skid_16ft, skid_12ft, skid_4x8, misc,
             weight, notes_on_skids, additional_notes, schedule_notes,
-            has_freight, customer_matched, matched_customer_id, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            has_freight, customer_matched, matched_customer_id, freight_quote, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
           [
             importId,
             row.vtCode,
@@ -263,6 +272,7 @@ export async function POST(request: NextRequest) {
             hasFreight,
             customerMatched,
             matchedCustomerId,
+            freightQuote,
             hasFreight ? 'pending' : 'skipped',
           ]
         )

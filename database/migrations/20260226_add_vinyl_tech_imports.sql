@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS vinyl_tech_import_items (
     customer_matched BOOLEAN DEFAULT FALSE,
     matched_customer_id INTEGER REFERENCES customers(id),
     status VARCHAR(20) DEFAULT 'pending',
+    freight_quote DECIMAL(10,2) DEFAULT 0,
     order_id INTEGER REFERENCES orders(id),
     truckload_id INTEGER REFERENCES truckloads(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
