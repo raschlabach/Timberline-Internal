@@ -296,6 +296,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveSubRoute('/dashboard/vinyl-tech')}
                   theme="blue"
                 />
+                <NavItem
+                  href="/dashboard/dyoder"
+                  icon={<FileSpreadsheet size={20} />}
+                  label="D. Yoder"
+                  isActive={isActiveSubRoute('/dashboard/dyoder')}
+                  theme="blue"
+                />
               </>
             )}
 
