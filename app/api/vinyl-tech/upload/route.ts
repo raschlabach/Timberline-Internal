@@ -41,7 +41,6 @@ function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
   let weekDate: Date | null = null
   let sheetStatus = ''
 
-  // Row 6 (index 5) has the date serial and status
   if (data[5]) {
     const dateVal = data[5][5]
     if (typeof dateVal === 'number') {
@@ -56,7 +55,6 @@ function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
   const rows: ParsedRow[] = []
   let totalWeight = 0
 
-  // Data rows start at row 13 (index 12) and go until we hit a "Total" row
   for (let i = 12; i < data.length; i++) {
     const row = data[i]
     if (!row) continue
@@ -101,6 +99,15 @@ function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
   return { weekLabel, weekDate, sheetStatus, rows, totalWeight }
 }
 
+function cleanNameForMatching(name: string): string {
+  return name
+    .replace(/\*+/g, '')
+    .replace(/\*?NEW\*?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
 export async function POST(request: NextRequest) {
   const client = await getClient()
 
@@ -122,20 +129,44 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     const wb = XLSX.read(buffer, { type: 'buffer' })
 
-    // Get all customers for name matching
+    // Check which week_labels already exist so we can skip them
+    const existingLabelsResult = await client.query(
+      `SELECT DISTINCT week_label FROM vinyl_tech_imports`
+    )
+    const existingLabels = new Set(
+      existingLabelsResult.rows.map((r: { week_label: string }) => r.week_label.trim().toLowerCase())
+    )
+
+    // Load saved VT code → customer mappings
+    const vtMapResult = await client.query(
+      `SELECT vt_code, customer_id FROM vinyl_tech_customer_map`
+    )
+    const vtCodeMap = new Map<string, number>()
+    for (const m of vtMapResult.rows) {
+      vtCodeMap.set(m.vt_code.trim().toUpperCase(), m.customer_id)
+    }
+
+    // Load all customers for name matching
     const customersResult = await client.query(
       `SELECT id, customer_name FROM customers`
     )
-    const customerMap = new Map<string, number>()
+    const customerNameMap = new Map<string, number>()
     for (const c of customersResult.rows) {
-      customerMap.set(c.customer_name.toLowerCase().trim(), c.id)
+      customerNameMap.set(c.customer_name.toLowerCase().trim(), c.id)
     }
 
     const importResults: { importId: number; weekLabel: string; itemCount: number }[] = []
+    const skippedSheets: string[] = []
 
     await client.query('BEGIN')
 
     for (const sheetName of wb.SheetNames) {
+      // Skip sheets that have already been imported
+      if (existingLabels.has(sheetName.trim().toLowerCase())) {
+        skippedSheets.push(sheetName)
+        continue
+      }
+
       const ws = wb.Sheets[sheetName]
       const parsed = parseSheet(ws, sheetName)
 
@@ -166,44 +197,45 @@ export async function POST(request: NextRequest) {
       for (const row of parsed.rows) {
         const hasFreight = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc > 0
 
-        // Try exact name match first, then fuzzy
         let matchedCustomerId: number | null = null
         let customerMatched = false
 
-        // Clean the ship-to name for matching: remove *, NEW, trailing whitespace, etc.
-        const cleanName = row.shipToName
-          .replace(/\*+/g, '')
-          .replace(/\*?NEW\*?/gi, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .toLowerCase()
+        // Priority 1: Check saved VT code mapping
+        if (row.vtCode) {
+          const vtKey = row.vtCode.trim().toUpperCase()
+          if (vtCodeMap.has(vtKey)) {
+            matchedCustomerId = vtCodeMap.get(vtKey) || null
+            customerMatched = true
+          }
+        }
 
-        // Try exact match
-        if (customerMap.has(cleanName)) {
-          matchedCustomerId = customerMap.get(cleanName) || null
-          customerMatched = true
-        } else {
-          // Try partial/fuzzy: check if any customer name starts with the same first word(s)
-          const shipWords = cleanName.split(' ').filter((w: string) => w.length > 1)
-          const entries = Array.from(customerMap.entries())
-          for (let ci = 0; ci < entries.length; ci++) {
-            const custName = entries[ci][0]
-            const custId = entries[ci][1]
-            // Exact substring match in either direction
-            if (custName.includes(cleanName) || cleanName.includes(custName)) {
-              matchedCustomerId = custId
-              customerMatched = true
-              break
-            }
-            // Match first two significant words
-            if (shipWords.length >= 2) {
-              const custWords = custName.split(' ').filter((w: string) => w.length > 1)
-              if (custWords.length >= 2 &&
-                  custWords[0] === shipWords[0] &&
-                  custWords[1] === shipWords[1]) {
+        // Priority 2: Fuzzy name matching
+        if (!customerMatched) {
+          const cleanName = cleanNameForMatching(row.shipToName)
+
+          if (customerNameMap.has(cleanName)) {
+            matchedCustomerId = customerNameMap.get(cleanName) || null
+            customerMatched = true
+          } else {
+            const shipWords = cleanName.split(' ').filter((w: string) => w.length > 1)
+            const entries = Array.from(customerNameMap.entries())
+            for (let ci = 0; ci < entries.length; ci++) {
+              const custName = entries[ci][0]
+              const custId = entries[ci][1]
+              if (custName.includes(cleanName) || cleanName.includes(custName)) {
                 matchedCustomerId = custId
                 customerMatched = true
                 break
+              }
+              if (shipWords.length >= 2) {
+                const custWords = custName.split(' ').filter((w: string) => w.length > 1)
+                if (custWords.length >= 2 &&
+                    custWords[0] === shipWords[0] &&
+                    custWords[1] === shipWords[1]) {
+                  matchedCustomerId = custId
+                  customerMatched = true
+                  break
+                }
               }
             }
           }
@@ -245,10 +277,22 @@ export async function POST(request: NextRequest) {
 
     await client.query('COMMIT')
 
+    const parts: string[] = []
+    if (importResults.length > 0) {
+      parts.push(`Imported ${importResults.length} new week(s) with ${importResults.reduce((s, i) => s + i.itemCount, 0)} items`)
+    }
+    if (skippedSheets.length > 0) {
+      parts.push(`Skipped ${skippedSheets.length} already-imported sheet(s)`)
+    }
+    if (importResults.length === 0 && skippedSheets.length > 0) {
+      parts.push('All sheets in this file have already been imported')
+    }
+
     return NextResponse.json({
       success: true,
       imports: importResults,
-      message: `Uploaded ${importResults.length} week(s) with ${importResults.reduce((s, i) => s + i.itemCount, 0)} total items`,
+      skippedSheets,
+      message: parts.join('. '),
     })
   } catch (error) {
     try { await client.query('ROLLBACK') } catch {}

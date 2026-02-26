@@ -49,8 +49,23 @@ CREATE INDEX IF NOT EXISTS idx_vt_items_status ON vinyl_tech_import_items(status
 CREATE INDEX IF NOT EXISTS idx_vt_items_customer ON vinyl_tech_import_items(matched_customer_id);
 CREATE INDEX IF NOT EXISTS idx_vt_items_has_freight ON vinyl_tech_import_items(has_freight);
 
+-- Persistent VT code → customer mapping so manual matches carry to future imports
+CREATE TABLE IF NOT EXISTS vinyl_tech_customer_map (
+    id SERIAL PRIMARY KEY,
+    vt_code VARCHAR(30) NOT NULL UNIQUE,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    ship_to_name TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_vt_customer_map_code ON vinyl_tech_customer_map(vt_code);
+
 DROP TRIGGER IF EXISTS update_timestamp ON vinyl_tech_imports;
 CREATE TRIGGER update_timestamp BEFORE UPDATE ON vinyl_tech_imports FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 DROP TRIGGER IF EXISTS update_timestamp ON vinyl_tech_import_items;
 CREATE TRIGGER update_timestamp BEFORE UPDATE ON vinyl_tech_import_items FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+DROP TRIGGER IF EXISTS update_timestamp ON vinyl_tech_customer_map;
+CREATE TRIGGER update_timestamp BEFORE UPDATE ON vinyl_tech_customer_map FOR EACH ROW EXECUTE FUNCTION update_timestamp();

@@ -543,8 +543,17 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                       </td>
                       <td className="px-3 py-2.5 font-medium">{item.ship_to_name}</td>
                       <td className="px-3 py-2.5">
-                        {item.customer_matched ? (
+                        {isConverted ? (
                           <span className="text-green-700 text-xs">{item.matched_customer_name}</span>
+                        ) : item.customer_matched ? (
+                          <button
+                            className="text-green-700 text-xs hover:bg-green-50 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 group/cust"
+                            onClick={() => openMatchDialog(item.id)}
+                            title="Click to change customer"
+                          >
+                            {item.matched_customer_name}
+                            <Pencil className="h-3 w-3 text-gray-300 opacity-0 group-hover/cust:opacity-100 transition-opacity" />
+                          </button>
                         ) : item.has_freight ? (
                           <Button
                             variant="outline"
