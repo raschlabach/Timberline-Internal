@@ -49,6 +49,8 @@ export default function VinylTechPage() {
   const [selectedImports, setSelectedImports] = useState<Set<number>>(new Set())
   const [isBulkUpdating, setIsBulkUpdating] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragCounterRef = useRef(0)
 
   const fetchImports = useCallback(async () => {
     try {
@@ -67,10 +69,7 @@ export default function VinylTechPage() {
     fetchImports()
   }, [fetchImports])
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  async function uploadFile(file: File) {
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
       toast.error('Please upload an Excel file (.xlsx or .xls)')
       return
@@ -103,6 +102,44 @@ export default function VinylTechPage() {
         fileInputRef.current.value = ''
       }
     }
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) uploadFile(file)
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current++
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true)
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false)
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    dragCounterRef.current = 0
+
+    const file = e.dataTransfer.files?.[0]
+    if (file) uploadFile(file)
   }
 
   async function handleDelete(id: number, e: React.MouseEvent) {
@@ -183,34 +220,61 @@ export default function VinylTechPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vinyl Tech Imports</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Upload weekly pickup confirmations from Vinyl Tech and convert them into delivery orders
-          </p>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Vinyl Tech Imports</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Upload weekly pickup confirmations from Vinyl Tech and convert them into delivery orders
+            </p>
+          </div>
         </div>
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleUpload}
-            className="hidden"
-            id="vinyl-tech-upload"
-          />
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="gap-2"
-          >
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={handleFileInput}
+          className="hidden"
+          id="vinyl-tech-upload"
+        />
+        <div
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClick={() => !isUploading && fileInputRef.current?.click()}
+          className={`
+            relative border-2 border-dashed rounded-lg px-6 py-5 cursor-pointer
+            transition-all duration-200
+            ${isDragging
+              ? 'border-blue-500 bg-blue-50/70 scale-[1.01]'
+              : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50/50'
+            }
+            ${isUploading ? 'pointer-events-none opacity-60' : ''}
+          `}
+        >
+          <div className="flex items-center justify-center gap-3">
             {isUploading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
             ) : (
-              <Upload className="h-4 w-4" />
+              <Upload className={`h-5 w-5 ${isDragging ? 'text-blue-500' : 'text-gray-400'}`} />
             )}
-            Upload Excel
-          </Button>
+            <div className="text-sm">
+              {isUploading ? (
+                <span className="text-gray-500 font-medium">Uploading...</span>
+              ) : isDragging ? (
+                <span className="text-blue-600 font-medium">Drop Excel file here</span>
+              ) : (
+                <>
+                  <span className="text-gray-700 font-medium">Drag & drop an Excel file here</span>
+                  <span className="text-gray-400 mx-1.5">or</span>
+                  <span className="text-blue-600 font-medium hover:underline">browse</span>
+                </>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 text-center mt-1">.xlsx or .xls files</p>
         </div>
       </div>
 
