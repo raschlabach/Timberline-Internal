@@ -1,0 +1,263 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getClient } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import * as XLSX from 'xlsx'
+
+interface ParsedRow {
+  vtCode: string
+  shipToName: string
+  skid16ft: number
+  skid12ft: number
+  skid4x8: number
+  misc: number
+  weight: number
+  notesOnSkids: string
+  additionalNotes: string
+  scheduleNotes: string
+}
+
+interface ParsedSheet {
+  weekLabel: string
+  weekDate: Date | null
+  sheetStatus: string
+  rows: ParsedRow[]
+  totalWeight: number
+}
+
+function excelDateToJSDate(serial: number): Date | null {
+  if (!serial || typeof serial !== 'number') return null
+  const utcDays = Math.floor(serial - 25569)
+  return new Date(utcDays * 86400 * 1000)
+}
+
+function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
+  const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: null,
+  })
+
+  const weekLabel = sheetName
+  let weekDate: Date | null = null
+  let sheetStatus = ''
+
+  // Row 6 (index 5) has the date serial and status
+  if (data[5]) {
+    const dateVal = data[5][5]
+    if (typeof dateVal === 'number') {
+      weekDate = excelDateToJSDate(dateVal)
+    }
+    const statusVal = data[5][8]
+    if (typeof statusVal === 'string') {
+      sheetStatus = statusVal.trim()
+    }
+  }
+
+  const rows: ParsedRow[] = []
+  let totalWeight = 0
+
+  // Data rows start at row 13 (index 12) and go until we hit a "Total" row
+  for (let i = 12; i < data.length; i++) {
+    const row = data[i]
+    if (!row) continue
+
+    const colC = row[2]
+    if (typeof colC === 'string' && colC.trim().toLowerCase() === 'total') break
+
+    const vtCode = row[1]
+    const shipToName = row[2]
+
+    if (!shipToName || typeof shipToName !== 'string' || !shipToName.trim()) continue
+
+    const skid16ft = typeof row[3] === 'number' ? row[3] : 0
+    const skid12ft = typeof row[4] === 'number' ? row[4] : 0
+    const skid4x8 = typeof row[5] === 'number' ? row[5] : 0
+    const misc = typeof row[6] === 'number' ? row[6] : 0
+    const weight = typeof row[7] === 'number' ? row[7] : 0
+    const notesOnSkids = typeof row[8] === 'string' ? row[8].trim() : ''
+    const additionalNotes = typeof row[9] === 'string' ? row[9].trim() : ''
+
+    const schedParts: string[] = []
+    if (typeof row[10] === 'string' && row[10].trim()) schedParts.push(row[10].trim())
+    if (typeof row[11] === 'string' && row[11].trim()) schedParts.push(row[11].trim())
+    const scheduleNotes = schedParts.join(', ')
+
+    totalWeight += weight
+
+    rows.push({
+      vtCode: typeof vtCode === 'string' ? vtCode.trim() : '',
+      shipToName: shipToName.trim(),
+      skid16ft,
+      skid12ft,
+      skid4x8,
+      misc,
+      weight,
+      notesOnSkids,
+      additionalNotes,
+      scheduleNotes,
+    })
+  }
+
+  return { weekLabel, weekDate, sheetStatus, rows, totalWeight }
+}
+
+export async function POST(request: NextRequest) {
+  const client = await getClient()
+
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      client.release()
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const formData = await request.formData()
+    const file = formData.get('file') as File | null
+
+    if (!file) {
+      client.release()
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const wb = XLSX.read(buffer, { type: 'buffer' })
+
+    // Get all customers for name matching
+    const customersResult = await client.query(
+      `SELECT id, customer_name FROM customers`
+    )
+    const customerMap = new Map<string, number>()
+    for (const c of customersResult.rows) {
+      customerMap.set(c.customer_name.toLowerCase().trim(), c.id)
+    }
+
+    const importResults: { importId: number; weekLabel: string; itemCount: number }[] = []
+
+    await client.query('BEGIN')
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName]
+      const parsed = parseSheet(ws, sheetName)
+
+      if (parsed.rows.length === 0) continue
+
+      const importResult = await client.query(
+        `INSERT INTO vinyl_tech_imports (
+          file_name, week_label, week_date, sheet_status,
+          total_items, items_with_freight, total_weight,
+          status, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id`,
+        [
+          file.name,
+          parsed.weekLabel,
+          parsed.weekDate,
+          parsed.sheetStatus,
+          parsed.rows.length,
+          parsed.rows.filter(r => r.skid16ft + r.skid12ft + r.skid4x8 + r.misc > 0).length,
+          parsed.totalWeight,
+          'active',
+          session.user.id,
+        ]
+      )
+
+      const importId = importResult.rows[0].id
+
+      for (const row of parsed.rows) {
+        const hasFreight = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc > 0
+
+        // Try exact name match first, then fuzzy
+        let matchedCustomerId: number | null = null
+        let customerMatched = false
+
+        // Clean the ship-to name for matching: remove *, NEW, trailing whitespace, etc.
+        const cleanName = row.shipToName
+          .replace(/\*+/g, '')
+          .replace(/\*?NEW\*?/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase()
+
+        // Try exact match
+        if (customerMap.has(cleanName)) {
+          matchedCustomerId = customerMap.get(cleanName) || null
+          customerMatched = true
+        } else {
+          // Try partial/fuzzy: check if any customer name starts with the same first word(s)
+          const shipWords = cleanName.split(' ').filter((w: string) => w.length > 1)
+          const entries = Array.from(customerMap.entries())
+          for (let ci = 0; ci < entries.length; ci++) {
+            const custName = entries[ci][0]
+            const custId = entries[ci][1]
+            // Exact substring match in either direction
+            if (custName.includes(cleanName) || cleanName.includes(custName)) {
+              matchedCustomerId = custId
+              customerMatched = true
+              break
+            }
+            // Match first two significant words
+            if (shipWords.length >= 2) {
+              const custWords = custName.split(' ').filter((w: string) => w.length > 1)
+              if (custWords.length >= 2 &&
+                  custWords[0] === shipWords[0] &&
+                  custWords[1] === shipWords[1]) {
+                matchedCustomerId = custId
+                customerMatched = true
+                break
+              }
+            }
+          }
+        }
+
+        await client.query(
+          `INSERT INTO vinyl_tech_import_items (
+            import_id, vt_code, ship_to_name,
+            skid_16ft, skid_12ft, skid_4x8, misc,
+            weight, notes_on_skids, additional_notes, schedule_notes,
+            has_freight, customer_matched, matched_customer_id, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+          [
+            importId,
+            row.vtCode,
+            row.shipToName,
+            row.skid16ft,
+            row.skid12ft,
+            row.skid4x8,
+            row.misc,
+            row.weight,
+            row.notesOnSkids,
+            row.additionalNotes,
+            row.scheduleNotes,
+            hasFreight,
+            customerMatched,
+            matchedCustomerId,
+            hasFreight ? 'pending' : 'skipped',
+          ]
+        )
+      }
+
+      importResults.push({
+        importId,
+        weekLabel: parsed.weekLabel,
+        itemCount: parsed.rows.length,
+      })
+    }
+
+    await client.query('COMMIT')
+
+    return NextResponse.json({
+      success: true,
+      imports: importResults,
+      message: `Uploaded ${importResults.length} week(s) with ${importResults.reduce((s, i) => s + i.itemCount, 0)} total items`,
+    })
+  } catch (error) {
+    try { await client.query('ROLLBACK') } catch {}
+    console.error('Error uploading vinyl tech file:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to process upload' },
+      { status: 500 }
+    )
+  } finally {
+    client.release()
+  }
+}

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -285,6 +285,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<Calculator size={20} />}
                   label="Pricing Notes"
                   isActive={isActiveSubRoute('/dashboard/pricing-notes')}
+                  theme="blue"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/vinyl-tech"
+                  icon={<FileSpreadsheet size={20} />}
+                  label="Vinyl Tech"
+                  isActive={isActiveSubRoute('/dashboard/vinyl-tech')}
                   theme="blue"
                 />
               </>

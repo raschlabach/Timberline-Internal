@@ -1,0 +1,364 @@
+'use client'
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import { toast } from 'sonner'
+import { format } from 'date-fns'
+import {
+  Upload,
+  FileSpreadsheet,
+  Loader2,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Package,
+  Clock,
+} from 'lucide-react'
+import { ImportDetail } from '@/components/vinyl-tech/import-detail'
+
+interface VinylTechImport {
+  id: number
+  file_name: string
+  week_label: string
+  week_date: string | null
+  sheet_status: string
+  total_items: number
+  items_with_freight: number
+  total_weight: number
+  status: string
+  notes: string | null
+  created_at: string
+  created_by_name: string
+  pending_items: string
+  converted_items: string
+  unmatched_items: string
+}
+
+export default function VinylTechPage() {
+  const [imports, setImports] = useState<VinylTechImport[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isUploading, setIsUploading] = useState(false)
+  const [selectedImportId, setSelectedImportId] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState('active')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const fetchImports = useCallback(async () => {
+    try {
+      const res = await fetch('/api/vinyl-tech/imports')
+      if (!res.ok) throw new Error('Failed to fetch')
+      const data = await res.json()
+      setImports(data)
+    } catch {
+      toast.error('Failed to load imports')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchImports()
+  }, [fetchImports])
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error('Please upload an Excel file (.xlsx or .xls)')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/vinyl-tech/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+
+      toast.success(data.message)
+      await fetchImports()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Upload failed')
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  async function handleDelete(id: number, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm('Delete this import? This cannot be undone.')) return
+
+    try {
+      const res = await fetch(`/api/vinyl-tech/imports/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete')
+      toast.success('Import deleted')
+      setImports(prev => prev.filter(i => i.id !== id))
+      if (selectedImportId === id) {
+        setSelectedImportId(null)
+      }
+    } catch {
+      toast.error('Failed to delete import')
+    }
+  }
+
+  // Show detail view when an import is selected
+  if (selectedImportId) {
+    return (
+      <div className="max-w-[1400px] mx-auto">
+        <ImportDetail
+          importId={selectedImportId}
+          onBack={() => {
+            setSelectedImportId(null)
+            fetchImports()
+          }}
+        />
+      </div>
+    )
+  }
+
+  const activeImports = imports.filter(i => i.status === 'active')
+  const pastImports = imports.filter(i => i.status === 'completed')
+
+  return (
+    <div className="max-w-[1400px] mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Vinyl Tech Imports</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Upload weekly pickup confirmations from Vinyl Tech and convert them into delivery orders
+          </p>
+        </div>
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleUpload}
+            className="hidden"
+            id="vinyl-tech-upload"
+          />
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="gap-2"
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Upload Excel
+          </Button>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="active" className="gap-1.5">
+            <Package className="h-4 w-4" />
+            Active ({activeImports.length})
+          </TabsTrigger>
+          <TabsTrigger value="past" className="gap-1.5">
+            <Clock className="h-4 w-4" />
+            Past ({pastImports.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active">
+          <ImportsList
+            imports={activeImports}
+            isLoading={isLoading}
+            onSelect={setSelectedImportId}
+            onDelete={handleDelete}
+            onUpload={() => fileInputRef.current?.click()}
+            isUploading={isUploading}
+            emptyMessage="No active imports"
+            emptyDescription="Upload a Vinyl Tech Excel file to get started"
+          />
+        </TabsContent>
+
+        <TabsContent value="past">
+          <ImportsList
+            imports={pastImports}
+            isLoading={isLoading}
+            onSelect={setSelectedImportId}
+            onDelete={handleDelete}
+            onUpload={() => fileInputRef.current?.click()}
+            isUploading={isUploading}
+            emptyMessage="No past imports"
+            emptyDescription="Imports move here once all items are assigned to truckloads"
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+interface ImportsListProps {
+  imports: VinylTechImport[]
+  isLoading: boolean
+  onSelect: (id: number) => void
+  onDelete: (id: number, e: React.MouseEvent) => void
+  onUpload: () => void
+  isUploading: boolean
+  emptyMessage: string
+  emptyDescription: string
+}
+
+function ImportsList({
+  imports,
+  isLoading,
+  onSelect,
+  onDelete,
+  onUpload,
+  isUploading,
+  emptyMessage,
+  emptyDescription,
+}: ImportsListProps) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <span className="ml-2 text-sm text-gray-500">Loading imports...</span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (imports.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="text-center">
+            <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+            <p className="font-medium text-gray-500">{emptyMessage}</p>
+            <p className="text-sm text-gray-400 mt-1">{emptyDescription}</p>
+            <Button onClick={onUpload} disabled={isUploading} variant="outline" className="mt-4 gap-1.5">
+              <Upload className="h-4 w-4" /> Upload Excel
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b">
+                <th className="px-4 py-2.5 text-left font-medium text-gray-500 w-12">Status</th>
+                <th className="px-4 py-2.5 text-left font-medium text-gray-500">Week</th>
+                <th className="px-4 py-2.5 text-left font-medium text-gray-500">Date</th>
+                <th className="px-4 py-2.5 text-left font-medium text-gray-500">File</th>
+                <th className="px-4 py-2.5 text-right font-medium text-gray-500">Items</th>
+                <th className="px-4 py-2.5 text-right font-medium text-gray-500">Pending</th>
+                <th className="px-4 py-2.5 text-right font-medium text-gray-500">Converted</th>
+                <th className="px-4 py-2.5 text-right font-medium text-gray-500">Unmatched</th>
+                <th className="px-4 py-2.5 text-right font-medium text-gray-500">Weight</th>
+                <th className="px-4 py-2.5 text-left font-medium text-gray-500">Uploaded</th>
+                <th className="px-4 py-2.5 w-12" />
+              </tr>
+            </thead>
+            <tbody>
+              {imports.map(imp => {
+                const pendingCount = parseInt(imp.pending_items) || 0
+                const convertedCount = parseInt(imp.converted_items) || 0
+                const unmatchedCount = parseInt(imp.unmatched_items) || 0
+
+                return (
+                  <tr
+                    key={imp.id}
+                    className={`border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors ${
+                      imp.status === 'completed' ? 'opacity-60' : ''
+                    }`}
+                    onClick={() => onSelect(imp.id)}
+                  >
+                    <td className="px-4 py-3">
+                      {imp.status === 'completed' ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : unmatchedCount > 0 ? (
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      ) : (
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-medium">{imp.week_label}</td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {imp.week_date
+                        ? format(new Date(imp.week_date + 'T00:00:00'), 'MMM d, yyyy')
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px] truncate">
+                      {imp.file_name}
+                    </td>
+                    <td className="px-4 py-3 text-right">{imp.items_with_freight}</td>
+                    <td className="px-4 py-3 text-right">
+                      {pendingCount > 0 ? (
+                        <Badge variant="outline" className="text-amber-600 border-amber-200 font-mono">
+                          {pendingCount}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-300">0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {convertedCount > 0 ? (
+                        <Badge variant="outline" className="text-green-600 border-green-200 font-mono">
+                          {convertedCount}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-300">0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {unmatchedCount > 0 ? (
+                        <Badge variant="outline" className="text-red-600 border-red-200 font-mono">
+                          {unmatchedCount}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-300">0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-500">
+                      {imp.total_weight ? imp.total_weight.toLocaleString() : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {format(new Date(imp.created_at), 'MMM d, yyyy h:mm a')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={(e) => onDelete(imp.id, e)}
+                        className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                        title="Delete import"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
