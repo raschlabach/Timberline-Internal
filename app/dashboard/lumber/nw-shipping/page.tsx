@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ArchboldPartsManager } from '@/components/nw-shipping/archbold-parts-manager'
-import { Plus, FileText, Trash2, Loader2, Package } from 'lucide-react'
+import { Plus, FileText, Trash2, Loader2, Package, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -22,6 +22,7 @@ interface ShippingReport {
   id: number
   northwest_po: string | null
   archbold_po: string | null
+  is_done: boolean
   item_count: number
   total_qty: number
   created_at: string
@@ -146,6 +147,7 @@ export default function NWShippingPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 border-y">
+                        <th className="px-4 py-2.5 text-left font-medium text-gray-500 w-16">Status</th>
                         <th className="px-4 py-2.5 text-left font-medium text-gray-500">NW PO #</th>
                         <th className="px-4 py-2.5 text-left font-medium text-gray-500">Archbold PO #</th>
                         <th className="px-4 py-2.5 text-right font-medium text-gray-500">Items</th>
@@ -159,9 +161,18 @@ export default function NWShippingPage() {
                       {reports.map(report => (
                         <tr
                           key={report.id}
-                          className="border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors"
+                          className={`border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors ${
+                            report.is_done ? 'opacity-60' : ''
+                          }`}
                           onClick={() => router.push(`/dashboard/lumber/nw-shipping/${report.id}`)}
                         >
+                          <td className="px-4 py-3">
+                            {report.is_done ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />
+                            )}
+                          </td>
                           <td className="px-4 py-3 font-medium">
                             {report.northwest_po || <span className="text-gray-300">—</span>}
                           </td>

@@ -11,13 +11,14 @@ export async function GET() {
     }
 
     const result = await query(
-      `SELECT r.id, r.northwest_po, r.archbold_po, r.delivery_date, r.created_at, r.updated_at,
+      `SELECT r.id, r.northwest_po, r.archbold_po, r.delivery_date, r.is_done,
+              r.created_at, r.updated_at,
               COUNT(i.id)::int AS item_count,
               COALESCE(SUM(i.qty_per_skid), 0)::int AS total_qty
        FROM nw_shipping_reports r
        LEFT JOIN nw_shipping_report_items i ON i.report_id = r.id
        GROUP BY r.id
-       ORDER BY r.updated_at DESC`
+       ORDER BY r.is_done ASC, r.updated_at DESC`
     )
 
     return NextResponse.json(result.rows)

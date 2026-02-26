@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS nw_shipping_reports (
   northwest_po VARCHAR(100),
   archbold_po VARCHAR(100),
   delivery_date DATE,
+  is_done BOOLEAN NOT NULL DEFAULT FALSE,
   created_by INTEGER REFERENCES users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -56,5 +57,16 @@ BEGIN
     WHERE table_name = 'nw_shipping_reports' AND column_name = 'delivery_date'
   ) THEN
     ALTER TABLE nw_shipping_reports ADD COLUMN delivery_date DATE;
+  END IF;
+END $$;
+
+-- Add is_done flag if table already exists without it
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'nw_shipping_reports' AND column_name = 'is_done'
+  ) THEN
+    ALTER TABLE nw_shipping_reports ADD COLUMN is_done BOOLEAN NOT NULL DEFAULT FALSE;
   END IF;
 END $$;

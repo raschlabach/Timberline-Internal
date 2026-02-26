@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ReportEditor, ReportLineItem } from '@/components/nw-shipping/report-editor'
 import { GroupedView } from '@/components/nw-shipping/grouped-view'
-import { ArrowLeft, Save, Loader2, Eye, Pencil, Printer, Download } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Eye, Pencil, Printer, Download, CheckCircle2, Circle } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ArchboldPart {
@@ -24,6 +24,7 @@ interface ReportData {
   northwest_po: string | null
   archbold_po: string | null
   delivery_date: string | null
+  is_done: boolean
   items: Array<{
     id: number
     pallet_number: string | null
@@ -74,6 +75,7 @@ export default function NWShippingReportDetailPage() {
   const [northwestPo, setNorthwestPo] = useState('')
   const [archboldPo, setArchboldPo] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
+  const [isDone, setIsDone] = useState(false)
   const [items, setItems] = useState<ReportLineItem[]>([])
   const [parts, setParts] = useState<ArchboldPart[]>([])
 
@@ -91,7 +93,8 @@ export default function NWShippingReportDetailPage() {
       const data: ReportData = await res.json()
       setNorthwestPo(data.northwest_po || '')
       setArchboldPo(data.archbold_po || '')
-      setDeliveryDate(data.delivery_date || '')
+      setDeliveryDate(data.delivery_date ? data.delivery_date.substring(0, 10) : '')
+      setIsDone(data.is_done ?? false)
       setItems(data.items.map(apiItemToLocal))
     } catch {
       toast.error('Failed to load report')
@@ -123,6 +126,7 @@ export default function NWShippingReportDetailPage() {
         northwest_po: northwestPo || null,
         archbold_po: archboldPo || null,
         delivery_date: deliveryDate || null,
+        is_done: isDone,
         items: items.map(item => ({
           pallet_number: item.pallet_number || null,
           pallet_tag: item.pallet_tag || null,
@@ -150,6 +154,38 @@ export default function NWShippingReportDetailPage() {
       toast.error('Failed to save report')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleToggleDone() {
+    const newValue = !isDone
+    setIsDone(newValue)
+    try {
+      const res = await fetch(`/api/nw-shipping-reports/${reportId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          northwest_po: northwestPo || null,
+          archbold_po: archboldPo || null,
+          delivery_date: deliveryDate || null,
+          is_done: newValue,
+          items: items.map(item => ({
+            pallet_number: item.pallet_number || null,
+            pallet_tag: item.pallet_tag || null,
+            archbold_part_id: item.archbold_part_id || null,
+            qty_per_skid: item.qty_per_skid ? parseInt(item.qty_per_skid) : null,
+            skid_width: item.skid_width ? parseFloat(item.skid_width) : null,
+            skid_length: item.skid_length ? parseFloat(item.skid_length) : null,
+            skid_height: item.skid_height ? parseFloat(item.skid_height) : null,
+            skid_weight: item.skid_weight ? parseFloat(item.skid_weight) : null,
+          })),
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to update')
+      toast.success(newValue ? 'Report marked as done' : 'Report marked as active')
+    } catch {
+      setIsDone(!newValue)
+      toast.error('Failed to update status')
     }
   }
 
@@ -272,6 +308,15 @@ export default function NWShippingReportDetailPage() {
               </Button>
             </>
           )}
+          <Button
+            variant={isDone ? 'default' : 'outline'}
+            size="sm"
+            onClick={handleToggleDone}
+            className={`gap-1.5 ${isDone ? 'bg-green-600 hover:bg-green-700' : ''}`}
+          >
+            {isDone ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+            {isDone ? 'Done' : 'Mark Done'}
+          </Button>
           <Button onClick={handleSave} disabled={isSaving} className="gap-1.5">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save
