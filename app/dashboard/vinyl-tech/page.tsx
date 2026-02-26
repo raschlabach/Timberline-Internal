@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
@@ -16,6 +17,8 @@ import {
   AlertTriangle,
   Package,
   Clock,
+  EyeOff,
+  Eye,
 } from 'lucide-react'
 import { ImportDetail } from '@/components/vinyl-tech/import-detail'
 
@@ -43,6 +46,8 @@ export default function VinylTechPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [selectedImportId, setSelectedImportId] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState('active')
+  const [selectedImports, setSelectedImports] = useState<Set<number>>(new Set())
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchImports = useCallback(async () => {
@@ -109,6 +114,11 @@ export default function VinylTechPage() {
       if (!res.ok) throw new Error('Failed to delete')
       toast.success('Import deleted')
       setImports(prev => prev.filter(i => i.id !== id))
+      setSelectedImports(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
       if (selectedImportId === id) {
         setSelectedImportId(null)
       }
@@ -117,7 +127,33 @@ export default function VinylTechPage() {
     }
   }
 
-  // Show detail view when an import is selected
+  async function handleBulkStatusUpdate(status: 'hidden' | 'active') {
+    if (selectedImports.size === 0) return
+
+    setIsBulkUpdating(true)
+    try {
+      const res = await fetch('/api/vinyl-tech/imports/bulk-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          importIds: Array.from(selectedImports),
+          status,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update')
+
+      toast.success(data.message)
+      setSelectedImports(new Set())
+      await fetchImports()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update imports')
+    } finally {
+      setIsBulkUpdating(false)
+    }
+  }
+
   if (selectedImportId) {
     return (
       <div className="max-w-[1400px] mx-auto">
@@ -134,6 +170,16 @@ export default function VinylTechPage() {
 
   const activeImports = imports.filter(i => i.status === 'active')
   const pastImports = imports.filter(i => i.status === 'completed')
+  const hiddenImports = imports.filter(i => i.status === 'hidden')
+
+  const currentTabImports =
+    activeTab === 'active' ? activeImports :
+    activeTab === 'past' ? pastImports :
+    hiddenImports
+
+  const selectedInCurrentTab = Array.from(selectedImports).filter(id =>
+    currentTabImports.some(i => i.id === id)
+  )
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -168,7 +214,47 @@ export default function VinylTechPage() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      {/* Bulk action bar */}
+      {selectedInCurrentTab.length > 0 && (
+        <div className="mb-4 flex items-center gap-3 bg-gray-50 border rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium text-gray-700">
+            {selectedInCurrentTab.length} selected
+          </span>
+          {activeTab === 'hidden' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => handleBulkStatusUpdate('active')}
+              disabled={isBulkUpdating}
+            >
+              {isBulkUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+              Unhide Selected
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => handleBulkStatusUpdate('hidden')}
+              disabled={isBulkUpdating}
+            >
+              {isBulkUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />}
+              Hide Selected
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-gray-500"
+            onClick={() => setSelectedImports(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setSelectedImports(new Set()) }}>
         <TabsList className="mb-4">
           <TabsTrigger value="active" className="gap-1.5">
             <Package className="h-4 w-4" />
@@ -178,6 +264,12 @@ export default function VinylTechPage() {
             <Clock className="h-4 w-4" />
             Past ({pastImports.length})
           </TabsTrigger>
+          {hiddenImports.length > 0 && (
+            <TabsTrigger value="hidden" className="gap-1.5">
+              <EyeOff className="h-4 w-4" />
+              Hidden ({hiddenImports.length})
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="active">
@@ -190,6 +282,21 @@ export default function VinylTechPage() {
             isUploading={isUploading}
             emptyMessage="No active imports"
             emptyDescription="Upload a Vinyl Tech Excel file to get started"
+            selectedImports={selectedImports}
+            onToggleSelect={(id, checked) => {
+              setSelectedImports(prev => {
+                const next = new Set(prev)
+                if (checked) { next.add(id) } else { next.delete(id) }
+                return next
+              })
+            }}
+            onSelectAll={(ids, checked) => {
+              setSelectedImports(prev => {
+                const next = new Set(prev)
+                if (checked) { ids.forEach(id => next.add(id)) } else { ids.forEach(id => next.delete(id)) }
+                return next
+              })
+            }}
           />
         </TabsContent>
 
@@ -203,6 +310,49 @@ export default function VinylTechPage() {
             isUploading={isUploading}
             emptyMessage="No past imports"
             emptyDescription="Imports move here once all items are assigned to truckloads"
+            selectedImports={selectedImports}
+            onToggleSelect={(id, checked) => {
+              setSelectedImports(prev => {
+                const next = new Set(prev)
+                if (checked) { next.add(id) } else { next.delete(id) }
+                return next
+              })
+            }}
+            onSelectAll={(ids, checked) => {
+              setSelectedImports(prev => {
+                const next = new Set(prev)
+                if (checked) { ids.forEach(id => next.add(id)) } else { ids.forEach(id => next.delete(id)) }
+                return next
+              })
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="hidden">
+          <ImportsList
+            imports={hiddenImports}
+            isLoading={isLoading}
+            onSelect={setSelectedImportId}
+            onDelete={handleDelete}
+            onUpload={() => fileInputRef.current?.click()}
+            isUploading={isUploading}
+            emptyMessage="No hidden imports"
+            emptyDescription="Hidden imports will appear here"
+            selectedImports={selectedImports}
+            onToggleSelect={(id, checked) => {
+              setSelectedImports(prev => {
+                const next = new Set(prev)
+                if (checked) { next.add(id) } else { next.delete(id) }
+                return next
+              })
+            }}
+            onSelectAll={(ids, checked) => {
+              setSelectedImports(prev => {
+                const next = new Set(prev)
+                if (checked) { ids.forEach(id => next.add(id)) } else { ids.forEach(id => next.delete(id)) }
+                return next
+              })
+            }}
           />
         </TabsContent>
       </Tabs>
@@ -219,6 +369,9 @@ interface ImportsListProps {
   isUploading: boolean
   emptyMessage: string
   emptyDescription: string
+  selectedImports: Set<number>
+  onToggleSelect: (id: number, checked: boolean) => void
+  onSelectAll: (ids: number[], checked: boolean) => void
 }
 
 function ImportsList({
@@ -230,6 +383,9 @@ function ImportsList({
   isUploading,
   emptyMessage,
   emptyDescription,
+  selectedImports,
+  onToggleSelect,
+  onSelectAll,
 }: ImportsListProps) {
   if (isLoading) {
     return (
@@ -261,6 +417,9 @@ function ImportsList({
     )
   }
 
+  const allIds = imports.map(i => i.id)
+  const allSelected = allIds.length > 0 && allIds.every(id => selectedImports.has(id))
+
   return (
     <Card>
       <CardContent className="p-0">
@@ -268,10 +427,15 @@ function ImportsList({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b">
+                <th className="px-3 py-2.5 w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(checked) => onSelectAll(allIds, checked as boolean)}
+                  />
+                </th>
                 <th className="px-4 py-2.5 text-left font-medium text-gray-500 w-12">Status</th>
                 <th className="px-4 py-2.5 text-left font-medium text-gray-500">Week</th>
                 <th className="px-4 py-2.5 text-left font-medium text-gray-500">Date</th>
-                <th className="px-4 py-2.5 text-left font-medium text-gray-500">File</th>
                 <th className="px-4 py-2.5 text-right font-medium text-gray-500">Items</th>
                 <th className="px-4 py-2.5 text-right font-medium text-gray-500">Pending</th>
                 <th className="px-4 py-2.5 text-right font-medium text-gray-500">Converted</th>
@@ -286,18 +450,27 @@ function ImportsList({
                 const pendingCount = parseInt(imp.pending_items) || 0
                 const convertedCount = parseInt(imp.converted_items) || 0
                 const unmatchedCount = parseInt(imp.unmatched_items) || 0
+                const isChecked = selectedImports.has(imp.id)
 
                 return (
                   <tr
                     key={imp.id}
-                    className={`border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors ${
-                      imp.status === 'completed' ? 'opacity-60' : ''
-                    }`}
+                    className={`border-b border-gray-100 transition-colors ${
+                      isChecked ? 'bg-blue-50/50' : 'hover:bg-blue-50/30'
+                    } ${imp.status === 'completed' ? 'opacity-60' : ''} cursor-pointer`}
                     onClick={() => onSelect(imp.id)}
                   >
+                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(checked) => onToggleSelect(imp.id, checked as boolean)}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       {imp.status === 'completed' ? (
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : imp.status === 'hidden' ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
                       ) : unmatchedCount > 0 ? (
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                       ) : (
@@ -309,9 +482,6 @@ function ImportsList({
                       {imp.week_date
                         ? format(new Date(imp.week_date + 'T00:00:00'), 'MMM d, yyyy')
                         : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs max-w-[200px] truncate">
-                      {imp.file_name}
                     </td>
                     <td className="px-4 py-3 text-right">{imp.items_with_freight}</td>
                     <td className="px-4 py-3 text-right">
@@ -347,7 +517,7 @@ function ImportsList({
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {format(new Date(imp.created_at), 'MMM d, yyyy h:mm a')}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => onDelete(imp.id, e)}
                         className="p-1 text-gray-300 hover:text-red-500 transition-colors"

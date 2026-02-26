@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
       whereClause = "WHERE i.status = 'active'"
     } else if (status === 'past') {
       whereClause = "WHERE i.status = 'completed'"
+    } else if (status === 'hidden') {
+      whereClause = "WHERE i.status = 'hidden'"
+    } else {
+      whereClause = "WHERE i.status IN ('active', 'completed', 'hidden')"
     }
 
     const result = await query(`
