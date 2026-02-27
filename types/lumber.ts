@@ -106,6 +106,7 @@ export interface LumberLoad {
   // Invoice tracking
   entered_in_quickbooks: boolean
   is_paid: boolean
+  paid_at: string | null
   
   // Rip tracking
   load_quality: number | null

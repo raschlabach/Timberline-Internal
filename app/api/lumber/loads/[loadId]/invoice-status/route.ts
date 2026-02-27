@@ -21,6 +21,7 @@ export async function PATCH(
        SET 
          entered_in_quickbooks = $1,
          is_paid = $2,
+         paid_at = CASE WHEN $2 = TRUE THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE NULL END,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $3
        RETURNING *`,

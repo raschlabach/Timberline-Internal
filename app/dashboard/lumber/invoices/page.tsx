@@ -911,20 +911,21 @@ export default function InvoicesPage() {
                 <th className="px-2 py-1 text-left text-xs font-medium uppercase">Arrival</th>
                 <th className="px-2 py-1 text-left text-xs font-medium uppercase">Inv Date</th>
                 <th className="px-2 py-1 text-left text-xs font-medium uppercase">Inv Entry</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase text-red-400">Paid Date</th>
                 <th className="px-2 py-1 text-left text-xs font-medium uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {isPaidLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={10} className="px-3 py-8 text-center text-sm text-gray-500">
                     <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                     Loading paid invoices...
                   </td>
                 </tr>
               ) : paidLoads.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={10} className="px-3 py-8 text-center text-sm text-gray-500">
                     {paidSearch ? 'No paid invoices match your search' : 'No paid invoices yet'}
                   </td>
                 </tr>
@@ -986,6 +987,13 @@ export default function InvoicesPage() {
                           : load.items?.[0]?.actual_footage
                             ? 'N/A'
                             : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs font-semibold text-red-600">
+                        {load.paid_at
+                          ? new Date(load.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '-'}
                       </span>
                     </td>
                     <td className="px-2 py-1">
