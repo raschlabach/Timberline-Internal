@@ -614,7 +614,7 @@ function PickupTable({
                 const isUnmatched = !load.customer_matched
                 const isReady = load.is_ready
 
-                const speciesList = [...new Set(load.items.map(i => i.species))].join(', ')
+                const speciesList = Array.from(new Set(load.items.map(i => i.species))).join(', ')
 
                 return (
                   <tr
