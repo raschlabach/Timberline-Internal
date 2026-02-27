@@ -303,6 +303,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveSubRoute('/dashboard/dyoder')}
                   theme="blue"
                 />
+                <NavItem
+                  href="/dashboard/bentwood"
+                  icon={<FileSpreadsheet size={20} />}
+                  label="Bentwood"
+                  isActive={isActiveSubRoute('/dashboard/bentwood')}
+                  theme="blue"
+                />
               </>
             )}
 
