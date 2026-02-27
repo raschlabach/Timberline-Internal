@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { LumberLoadWithDetails } from '@/types/lumber'
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FileText, ExternalLink, Search, X, ArrowUpDown, ArrowUp, ArrowDown, Info } from 'lucide-react'
+import { FileText, ExternalLink, Search, X, ArrowUpDown, ArrowUp, ArrowDown, Info, Undo2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function InvoicesPage() {
@@ -52,6 +52,85 @@ export default function InvoicesPage() {
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [species, setSpecies] = useState<string[]>([])
   const [speciesColors, setSpeciesColors] = useState<Record<string, string>>({})
+
+  // Previously Paid Loads state
+  const [paidLoads, setPaidLoads] = useState<LumberLoadWithDetails[]>([])
+  const [paidTotal, setPaidTotal] = useState(0)
+  const [paidSearch, setPaidSearch] = useState('')
+  const [isPaidLoading, setIsPaidLoading] = useState(false)
+  const [isUnpaying, setIsUnpaying] = useState<number | null>(null)
+  const [paidDialogLoad, setPaidDialogLoad] = useState<LumberLoadWithDetails | null>(null)
+  const [isPaidDialogOpen, setIsPaidDialogOpen] = useState(false)
+  const [paidDialogQB, setPaidDialogQB] = useState(false)
+  const paidSearchTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  const fetchPaidLoads = useCallback(async (search = '') => {
+    setIsPaidLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: '50', offset: '0' })
+      if (search.trim()) params.set('search', search.trim())
+      const res = await fetch(`/api/lumber/loads/paid?${params.toString()}`)
+      if (!res.ok) throw new Error('Failed to fetch paid loads')
+      const data = await res.json()
+      setPaidLoads(data.loads || [])
+      setPaidTotal(data.total || 0)
+    } catch {
+      toast.error('Failed to load paid invoices')
+    } finally {
+      setIsPaidLoading(false)
+    }
+  }, [])
+
+  async function handleUnpay(loadId: number) {
+    if (!confirm('Are you sure you want to mark this load as unpaid?')) return
+    setIsUnpaying(loadId)
+    try {
+      const res = await fetch(`/api/lumber/loads/${loadId}/invoice-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entered_in_quickbooks: true, is_paid: false }),
+      })
+      if (!res.ok) throw new Error('Failed to unpay')
+      toast.success('Load marked as unpaid')
+      fetchPaidLoads(paidSearch)
+      fetchLoads()
+    } catch {
+      toast.error('Failed to mark load as unpaid')
+    } finally {
+      setIsUnpaying(null)
+    }
+  }
+
+  function handlePaidSearch(value: string) {
+    setPaidSearch(value)
+    if (paidSearchTimeout.current) clearTimeout(paidSearchTimeout.current)
+    paidSearchTimeout.current = setTimeout(() => {
+      fetchPaidLoads(value)
+    }, 400)
+  }
+
+  function handleOpenPaidDialog(load: LumberLoadWithDetails) {
+    setPaidDialogLoad(load)
+    setPaidDialogQB(load.entered_in_quickbooks || false)
+    setIsPaidDialogOpen(true)
+  }
+
+  async function handleSavePaidDialog() {
+    if (!paidDialogLoad) return
+    try {
+      const res = await fetch(`/api/lumber/loads/${paidDialogLoad.id}/invoice-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entered_in_quickbooks: paidDialogQB, is_paid: true }),
+      })
+      if (!res.ok) throw new Error('Failed to update')
+      toast.success('Invoice status updated')
+      setIsPaidDialogOpen(false)
+      fetchPaidLoads(paidSearch)
+    } catch {
+      toast.error('Failed to update invoice status')
+    }
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -107,8 +186,9 @@ export default function InvoicesPage() {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchLoads()
+      fetchPaidLoads()
     }
-  }, [status])
+  }, [status, fetchPaidLoads])
 
   // Filter and sort effect
   useEffect(() => {
@@ -248,6 +328,7 @@ export default function InvoicesPage() {
         toast.success('Invoice status updated')
         setIsDialogOpen(false)
         fetchLoads()
+        fetchPaidLoads(paidSearch)
       } else {
         throw new Error('Failed to update invoice status')
       }
@@ -763,6 +844,311 @@ export default function InvoicesPage() {
                             <div className="flex items-center justify-center h-full text-gray-500 text-sm">
                               <FileText className="h-12 w-12 mr-3" />
                               Preview not available - Click "Open in New Tab" to view
+                            </div>
+                          )
+                        }
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <FileText className="h-16 w-16 mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">No documents attached</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ================================================================ */}
+      {/* Previously Paid Loads */}
+      {/* ================================================================ */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Previously Paid</h2>
+            <p className="text-gray-500 text-sm mt-0.5">
+              Showing {paidLoads.length} of {paidTotal} paid invoices
+              {paidSearch && ' (filtered)'}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search by load ID, supplier, species, invoice #, or total..."
+              value={paidSearch}
+              onChange={(e) => handlePaidSearch(e.target.value)}
+              className="pl-10 h-9 text-sm"
+            />
+            {paidSearch && (
+              <button
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => handlePaidSearch('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-800 text-white sticky top-0">
+              <tr>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Load ID</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Supplier</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Species</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Invoice #</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Inv Total</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Arrival</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Inv Date</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Inv Entry</th>
+                <th className="px-2 py-1 text-left text-xs font-medium uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {isPaidLoading ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-500">
+                    <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
+                    Loading paid invoices...
+                  </td>
+                </tr>
+              ) : paidLoads.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-500">
+                    {paidSearch ? 'No paid invoices match your search' : 'No paid invoices yet'}
+                  </td>
+                </tr>
+              ) : (
+                paidLoads.map((load) => (
+                  <tr
+                    key={load.id}
+                    className="transition-colors bg-gray-50 hover:bg-gray-100"
+                  >
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs font-semibold text-gray-900">{load.load_id}</span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs font-medium text-gray-900">{load.supplier_name}</span>
+                    </td>
+                    <td className="px-2 py-1">
+                      <div className="text-xs flex flex-wrap gap-x-2 gap-y-0.5">
+                        {load.items && load.items.map((item, idx) => (
+                          <span key={idx} className="whitespace-nowrap flex items-center gap-1">
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: speciesColors[item.species] || '#6B7280' }}
+                            />
+                            <span className="font-medium">{item.species}</span>
+                            <span className="text-gray-500">{item.grade}</span>
+                            <span className="text-[10px] bg-gray-200 px-1 rounded">{item.thickness}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs text-gray-900">{load.invoice_number || '-'}</span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs font-medium text-gray-900">
+                        {load.invoice_total
+                          ? `$${Number(load.invoice_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.actual_arrival_date
+                          ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+                          : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.invoice_date
+                          ? new Date(load.invoice_date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+                          : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="text-xs">
+                        {load.items?.[0]?.actual_footage_entered_at
+                          ? new Date(load.items[0].actual_footage_entered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          : load.items?.[0]?.actual_footage
+                            ? 'N/A'
+                            : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-1.5"
+                          onClick={() => handleOpenPaidDialog(load)}
+                        >
+                          <FileText className="h-3 w-3 mr-0.5" />
+                          Manage
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-1.5 text-orange-600 border-orange-300 hover:bg-orange-50"
+                          onClick={() => handleUnpay(load.id)}
+                          disabled={isUnpaying === load.id}
+                        >
+                          {isUnpaying === load.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Undo2 className="h-3 w-3 mr-0.5" />
+                          )}
+                          Unpay
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={() => router.push(`/dashboard/lumber/load/${load.id}`)}
+                        >
+                          <Info className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Paid Load Manage Dialog */}
+      <Dialog open={isPaidDialogOpen} onOpenChange={setIsPaidDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Manage Invoice - {paidDialogLoad?.load_id}</DialogTitle>
+          </DialogHeader>
+
+          {paidDialogLoad && (
+            <div className="flex gap-4 h-[70vh]">
+              <div className="w-[280px] flex-shrink-0 flex flex-col">
+                <div className="space-y-3 p-3 bg-gray-50 rounded text-sm">
+                  <div>
+                    <Label className="text-xs text-gray-500">Supplier</Label>
+                    <div className="font-medium">{paidDialogLoad.supplier_name}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Number</Label>
+                    <div className="font-medium">{paidDialogLoad.invoice_number || '-'}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Total</Label>
+                    <div className="font-medium">
+                      {paidDialogLoad.invoice_total
+                        ? `$${Number(paidDialogLoad.invoice_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Invoice Date</Label>
+                    <div className="font-medium">
+                      {paidDialogLoad.invoice_date
+                        ? new Date(paidDialogLoad.invoice_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
+                        : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Arrival Date</Label>
+                    <div className="font-medium">
+                      {paidDialogLoad.actual_arrival_date
+                        ? new Date(paidDialogLoad.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
+                        : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Species</Label>
+                    <div className="font-medium">
+                      {paidDialogLoad.items?.map(i => i.species).join(', ') || '-'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4 mt-4 border-t">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="paid-dialog-qb"
+                      checked={paidDialogQB}
+                      onCheckedChange={(checked) => setPaidDialogQB(checked as boolean)}
+                    />
+                    <Label htmlFor="paid-dialog-qb" className="cursor-pointer text-sm">
+                      Entered in QuickBooks
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 opacity-60">
+                    <Checkbox id="paid-dialog-paid" checked={true} disabled />
+                    <Label htmlFor="paid-dialog-paid" className="text-sm">Paid</Label>
+                  </div>
+                </div>
+
+                <div className="mt-auto pt-4 flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsPaidDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSavePaidDialog}>
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex-1 border rounded overflow-hidden flex flex-col min-w-0">
+                {paidDialogLoad.documents && paidDialogLoad.documents.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-100 border-b flex-shrink-0">
+                      <div className="flex items-center gap-2 text-sm">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium truncate">{paidDialogLoad.documents[0].file_name}</span>
+                        {paidDialogLoad.documents.length > 1 && (
+                          <span className="text-xs text-gray-500">+{paidDialogLoad.documents.length - 1} more</span>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => window.open(paidDialogLoad.documents[0].file_path, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open in New Tab
+                      </Button>
+                    </div>
+                    <div className="flex-1 bg-gray-50 overflow-auto">
+                      {(() => {
+                        const doc = paidDialogLoad.documents[0]
+                        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_name)
+                        const isPdf = /\.pdf$/i.test(doc.file_name)
+
+                        if (isImage) {
+                          return (
+                            <img src={doc.file_path} alt={doc.file_name} className="w-full h-full object-contain" />
+                          )
+                        } else if (isPdf) {
+                          return (
+                            <iframe src={doc.file_path} className="w-full h-full" title={doc.file_name} />
+                          )
+                        } else {
+                          return (
+                            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                              <FileText className="h-12 w-12 mr-3" />
+                              Preview not available - Click &quot;Open in New Tab&quot; to view
                             </div>
                           )
                         }
