@@ -78,18 +78,23 @@ export async function POST(request: NextRequest) {
         ll.id,
         ll.load_id,
         ll.supplier_id,
+        ll.plant_id,
         ll.pickup_number,
         ll.comments,
         ll.timberline_order_id,
-        rscm.customer_id as pickup_customer_id,
+        COALESCE(rscm_plant.customer_id, rscm_default.customer_id) as pickup_customer_id,
         COALESCE(SUM(lli.estimated_footage), 0) as total_estimated_footage
       FROM lumber_loads ll
-      LEFT JOIN rnr_supplier_customer_map rscm ON rscm.supplier_id = ll.supplier_id
+      LEFT JOIN rnr_supplier_customer_map rscm_plant
+        ON rscm_plant.supplier_id = ll.supplier_id AND rscm_plant.plant_id = ll.plant_id AND ll.plant_id IS NOT NULL
+      LEFT JOIN rnr_supplier_customer_map rscm_default
+        ON rscm_default.supplier_id = ll.supplier_id AND rscm_default.plant_id IS NULL
       LEFT JOIN lumber_load_items lli ON lli.load_id = ll.id
       WHERE ll.id = ANY($1)
         AND ll.pickup_or_delivery = 'pickup'
         AND ll.timberline_order_id IS NULL
-      GROUP BY ll.id, ll.load_id, ll.supplier_id, ll.pickup_number, ll.comments, ll.timberline_order_id, rscm.customer_id`,
+      GROUP BY ll.id, ll.load_id, ll.supplier_id, ll.plant_id, ll.pickup_number, ll.comments,
+               ll.timberline_order_id, rscm_plant.customer_id, rscm_default.customer_id`,
       [loadIds]
     )
 

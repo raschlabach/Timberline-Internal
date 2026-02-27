@@ -6,8 +6,21 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Upload, FileText, X, Trash2 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ArrowLeft, Upload, FileText, X, Trash2, Plus, Settings, Pencil, Check } from 'lucide-react'
 import { toast } from 'sonner'
+
+interface SupplierPlant {
+  id: number
+  supplier_id: number
+  plant_name: string
+}
 
 interface UploadedDocument {
   id: number
@@ -32,6 +45,14 @@ export default function DataEntryPage() {
   const [arrivalDate, setArrivalDate] = useState('')
   const [pickupNumber, setPickupNumber] = useState('')
   const [plant, setPlant] = useState('')
+  const [plantId, setPlantId] = useState<string>('')
+  const [supplierPlants, setSupplierPlants] = useState<SupplierPlant[]>([])
+  const [isAddingPlant, setIsAddingPlant] = useState(false)
+  const [newPlantName, setNewPlantName] = useState('')
+  const [isManagePlantsOpen, setIsManagePlantsOpen] = useState(false)
+  const [managePlantNewName, setManagePlantNewName] = useState('')
+  const [editingPlantId, setEditingPlantId] = useState<number | null>(null)
+  const [editingPlantName, setEditingPlantName] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceTotal, setInvoiceTotal] = useState('')
   const [invoiceDate, setInvoiceDate] = useState('')
@@ -60,7 +81,18 @@ export default function DataEntryPage() {
           if (data.actual_arrival_date) setArrivalDate(data.actual_arrival_date)
           if (data.pickup_number) setPickupNumber(data.pickup_number)
           if (data.plant) setPlant(data.plant)
+          if (data.plant_id) setPlantId(data.plant_id.toString())
           if (data.invoice_number) setInvoiceNumber(data.invoice_number)
+
+          if (data.supplier_id) {
+            try {
+              const plantsRes = await fetch(`/api/lumber/suppliers/plants?supplierId=${data.supplier_id}`)
+              if (plantsRes.ok) {
+                const plantsData = await plantsRes.json()
+                setSupplierPlants(plantsData.plants || [])
+              }
+            } catch {}
+          }
           if (data.invoice_total) setInvoiceTotal(data.invoice_total.toString())
           if (data.invoice_date) setInvoiceDate(data.invoice_date)
           
@@ -180,6 +212,86 @@ export default function DataEntryPage() {
     handleFileUpload(files)
   }, [load?.load_id])
 
+  async function refreshPlants() {
+    if (!load?.supplier_id) return
+    try {
+      const res = await fetch(`/api/lumber/suppliers/plants?supplierId=${load.supplier_id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSupplierPlants(data.plants || [])
+      }
+    } catch {}
+  }
+
+  async function handleAddPlantFromDialog() {
+    if (!managePlantNewName.trim() || !load?.supplier_id) return
+    try {
+      const res = await fetch('/api/lumber/suppliers/plants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplierId: load.supplier_id, plantName: managePlantNewName.trim() }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        if (data.existed) {
+          toast.info('Plant already exists')
+        } else {
+          toast.success('Plant added')
+        }
+        setManagePlantNewName('')
+        await refreshPlants()
+      }
+    } catch {
+      toast.error('Failed to add plant')
+    }
+  }
+
+  async function handleRenamePlant(id: number) {
+    if (!editingPlantName.trim()) return
+    try {
+      const res = await fetch('/api/lumber/suppliers/plants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantId: id, plantName: editingPlantName.trim() }),
+      })
+      if (res.ok) {
+        toast.success('Plant renamed')
+        setEditingPlantId(null)
+        setEditingPlantName('')
+        await refreshPlants()
+        const updated = supplierPlants.find(p => p.id === id)
+        if (updated && plantId === id.toString()) {
+          setPlant(editingPlantName.trim())
+        }
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Failed to rename')
+      }
+    } catch {
+      toast.error('Failed to rename plant')
+    }
+  }
+
+  async function handleDeletePlant(id: number) {
+    if (!confirm('Delete this plant? This only works if no loads are using it.')) return
+    try {
+      const res = await fetch(`/api/lumber/suppliers/plants?plantId=${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Plant deleted')
+        if (plantId === id.toString()) {
+          setPlantId('')
+          setPlant('')
+        }
+        await refreshPlants()
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Failed to delete')
+      }
+    } catch {
+      toast.error('Failed to delete plant')
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setIsSaving(true)
@@ -193,6 +305,7 @@ export default function DataEntryPage() {
           actual_arrival_date: arrivalDate || null,
           pickup_number: pickupNumber || null,
           plant: plant || null,
+          plant_id: plantId ? parseInt(plantId) : null,
           invoice_number: invoiceNumber || null,
           invoice_total: invoiceTotal ? parseFloat(invoiceTotal) : null,
           invoice_date: invoiceDate || null
@@ -300,12 +413,87 @@ export default function DataEntryPage() {
             </div>
             <div>
               <Label htmlFor="plant">Plant</Label>
-              <Input
-                id="plant"
-                value={plant}
-                onChange={(e) => setPlant(e.target.value)}
-                placeholder="Plant name"
-              />
+              {isAddingPlant ? (
+                <div className="flex gap-1.5 mt-1">
+                  <Input
+                    value={newPlantName}
+                    onChange={(e) => setNewPlantName(e.target.value)}
+                    placeholder="New plant name"
+                    className="flex-1"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setIsAddingPlant(false)
+                        setNewPlantName('')
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newPlantName.trim()}
+                    onClick={async () => {
+                      if (!newPlantName.trim() || !load?.supplier_id) return
+                      try {
+                        const res = await fetch('/api/lumber/suppliers/plants', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ supplierId: load.supplier_id, plantName: newPlantName.trim() }),
+                        })
+                        const data = await res.json()
+                        if (data.success) {
+                          const newPlant = data.plant
+                          setSupplierPlants(prev => [...prev, newPlant].sort((a, b) => a.plant_name.localeCompare(b.plant_name)))
+                          setPlantId(newPlant.id.toString())
+                          setPlant(newPlant.plant_name)
+                          setIsAddingPlant(false)
+                          setNewPlantName('')
+                          toast.success('Plant added')
+                        }
+                      } catch {
+                        toast.error('Failed to add plant')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => { setIsAddingPlant(false); setNewPlantName('') }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5 mt-1">
+                  <Select
+                    value={plantId || 'none'}
+                    onValueChange={(val) => {
+                      if (val === 'none') {
+                        setPlantId('')
+                        setPlant('')
+                      } else {
+                        setPlantId(val)
+                        const selected = supplierPlants.find(p => p.id.toString() === val)
+                        if (selected) setPlant(selected.plant_name)
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select plant..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {supplierPlants.map(p => (
+                        <SelectItem key={p.id} value={p.id.toString()}>{p.plant_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" size="icon" variant="outline" onClick={() => setIsAddingPlant(true)} title="Add new plant">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <Button type="button" size="icon" variant="outline" onClick={() => setIsManagePlantsOpen(true)} title="Manage plants">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -449,6 +637,107 @@ export default function DataEntryPage() {
           </Button>
         </div>
       </form>
+
+      {/* Manage Plants Dialog */}
+      <Dialog open={isManagePlantsOpen} onOpenChange={setIsManagePlantsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Plants — {load?.supplier_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Add new plant */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="New plant name..."
+                value={managePlantNewName}
+                onChange={(e) => setManagePlantNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPlantFromDialog() } }}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!managePlantNewName.trim()}
+                onClick={handleAddPlantFromDialog}
+                className="gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </Button>
+            </div>
+
+            {/* Plant list */}
+            <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
+              {supplierPlants.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-400">
+                  No plants yet for this supplier
+                </div>
+              ) : (
+                supplierPlants.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-2.5">
+                    {editingPlantId === p.id ? (
+                      <>
+                        <Input
+                          value={editingPlantName}
+                          onChange={(e) => setEditingPlantName(e.target.value)}
+                          className="flex-1 h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); handleRenamePlant(p.id) }
+                            if (e.key === 'Escape') { setEditingPlantId(null); setEditingPlantName('') }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-green-600"
+                          onClick={() => handleRenamePlant(p.id)}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => { setEditingPlantId(null); setEditingPlantName('') }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm">{p.plant_name}</span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-gray-400 hover:text-gray-600"
+                          onClick={() => { setEditingPlantId(p.id); setEditingPlantName(p.plant_name) }}
+                          title="Rename"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-gray-400 hover:text-red-600"
+                          onClick={() => handleDeletePlant(p.id)}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -57,6 +57,9 @@ interface LumberPickupLoad {
   matched_customer_name: string | null
   customer_lat: number | null
   customer_lng: number | null
+  plant: string | null
+  plant_id: number | null
+  plant_name: string | null
   supplier_address: string | null
   supplier_city: string | null
   supplier_state: string | null
@@ -135,6 +138,8 @@ export function RnrLumberPickups() {
   const [isMatchDialogOpen, setIsMatchDialogOpen] = useState(false)
   const [matchingSupplierId, setMatchingSupplierId] = useState<number | null>(null)
   const [matchingSupplierName, setMatchingSupplierName] = useState<string>('')
+  const [matchingPlantId, setMatchingPlantId] = useState<number | null>(null)
+  const [matchingPlantName, setMatchingPlantName] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
@@ -249,9 +254,11 @@ export function RnrLumberPickups() {
     }
   }
 
-  async function openMatchDialog(supplierId: number, supplierName: string) {
+  async function openMatchDialog(supplierId: number, supplierName: string, plantId?: number | null, plantName?: string | null) {
     setMatchingSupplierId(supplierId)
     setMatchingSupplierName(supplierName)
+    setMatchingPlantId(plantId ?? null)
+    setMatchingPlantName(plantName ?? null)
     setIsMatchDialogOpen(true)
     setCustomerSearch('')
 
@@ -277,11 +284,15 @@ export function RnrLumberPickups() {
       const res = await fetch('/api/rnr-lumber-pickups/match-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supplierId: matchingSupplierId, customerId }),
+        body: JSON.stringify({
+          supplierId: matchingSupplierId,
+          customerId,
+          plantId: matchingPlantId,
+        }),
       })
 
       if (!res.ok) throw new Error('Failed to match')
-      toast.success('Customer linked to supplier')
+      toast.success(matchingPlantName ? `Customer linked to ${matchingPlantName}` : 'Customer linked to supplier')
       setIsMatchDialogOpen(false)
       await fetchLoads()
     } catch {
@@ -468,9 +479,14 @@ export function RnrLumberPickups() {
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
               RNR Supplier: <span className="font-medium text-gray-900">{matchingSupplierName}</span>
+              {matchingPlantName && (
+                <span className="ml-1 text-blue-600">({matchingPlantName})</span>
+              )}
             </p>
             <p className="text-xs text-gray-400">
-              This mapping will be saved and applied to all loads from this supplier.
+              {matchingPlantName
+                ? `This mapping will apply to loads from ${matchingSupplierName} at the ${matchingPlantName} plant.`
+                : 'This mapping will be the default for all loads from this supplier without a plant-specific mapping.'}
             </p>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -576,7 +592,7 @@ interface PickupTableProps {
   selectedLoads: Set<number>
   onSelectAll: (checked: boolean) => void
   onSelectLoad: (loadId: number, checked: boolean) => void
-  onMatchCustomer: (supplierId: number, supplierName: string) => void
+  onMatchCustomer: (supplierId: number, supplierName: string, plantId?: number | null, plantName?: string | null) => void
 }
 
 function PickupTable({
@@ -628,6 +644,7 @@ function PickupTable({
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-12">Status</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-28">Load ID</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500">Supplier (Pickup From)</th>
+                <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-28">Plant</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500">Matched Customer</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-28">Pickup #</th>
                 <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-28">Est. Footage</th>
@@ -692,6 +709,9 @@ function PickupTable({
                     <td className="px-3 py-2.5 font-medium text-red-700">
                       {load.supplier_name}
                     </td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500">
+                      {load.plant_name || load.plant || '—'}
+                    </td>
                     <td className="px-3 py-2.5">
                       {load.is_past ? (
                         <span className="text-green-700 text-xs">
@@ -700,7 +720,7 @@ function PickupTable({
                       ) : load.customer_matched ? (
                         <button
                           className="text-green-700 text-xs hover:bg-green-50 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 group/cust"
-                          onClick={() => onMatchCustomer(load.supplier_id, load.supplier_name)}
+                          onClick={() => onMatchCustomer(load.supplier_id, load.supplier_name, load.plant_id, load.plant_name)}
                           title="Click to change customer"
                         >
                           {load.matched_customer_name}
@@ -711,7 +731,7 @@ function PickupTable({
                           variant="outline"
                           size="sm"
                           className="h-6 text-xs gap-1 text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => onMatchCustomer(load.supplier_id, load.supplier_name)}
+                          onClick={() => onMatchCustomer(load.supplier_id, load.supplier_name, load.plant_id, load.plant_name)}
                         >
                           <LinkIcon className="h-3 w-3" />
                           Link Customer

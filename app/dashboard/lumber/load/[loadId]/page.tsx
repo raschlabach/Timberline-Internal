@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -14,9 +14,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, Save, FileText, Trash2, Plus, CheckCircle2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ArrowLeft, Save, FileText, Trash2, Plus, CheckCircle2, X, Settings, Pencil, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui/checkbox'
+
+interface SupplierPlant {
+  id: number
+  supplier_id: number
+  plant_name: string
+}
 
 interface LoadItem {
   id: number
@@ -49,6 +61,14 @@ export default function LoadInfoPage() {
   const [actualArrivalDate, setActualArrivalDate] = useState('')
   const [pickupNumber, setPickupNumber] = useState('')
   const [plant, setPlant] = useState('')
+  const [plantId, setPlantId] = useState<string>('')
+  const [supplierPlants, setSupplierPlants] = useState<SupplierPlant[]>([])
+  const [isAddingPlant, setIsAddingPlant] = useState(false)
+  const [newPlantName, setNewPlantName] = useState('')
+  const [isManagePlantsOpen, setIsManagePlantsOpen] = useState(false)
+  const [managePlantNewName, setManagePlantNewName] = useState('')
+  const [editingPlantId, setEditingPlantId] = useState<number | null>(null)
+  const [editingPlantName, setEditingPlantName] = useState('')
   const [truckDriver, setTruckDriver] = useState('')
   const [pickupDate, setPickupDate] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
@@ -98,7 +118,18 @@ export default function LoadInfoPage() {
           setActualArrivalDate(loadData.actual_arrival_date?.split('T')[0] || '')
           setPickupNumber(loadData.pickup_number || '')
           setPlant(loadData.plant || '')
+          setPlantId(loadData.plant_id?.toString() || '')
           setTruckDriver(loadData.driver_id?.toString() || '')
+
+          if (loadData.supplier_id) {
+            try {
+              const plantsRes = await fetch(`/api/lumber/suppliers/plants?supplierId=${loadData.supplier_id}`)
+              if (plantsRes.ok) {
+                const plantsData = await plantsRes.json()
+                setSupplierPlants(plantsData.plants || [])
+              }
+            } catch {}
+          }
           setPickupDate(loadData.pickup_date?.split('T')[0] || '')
           setInvoiceNumber(loadData.invoice_number || '')
           setInvoiceTotal(loadData.invoice_total?.toString() || '')
@@ -125,6 +156,92 @@ export default function LoadInfoPage() {
     }
   }, [status, loadId])
 
+  const fetchPlants = useCallback(async (sid: string) => {
+    if (!sid) {
+      setSupplierPlants([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/lumber/suppliers/plants?supplierId=${sid}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSupplierPlants(data.plants || [])
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (supplierId) fetchPlants(supplierId)
+  }, [supplierId, fetchPlants])
+
+  async function handleAddPlantFromDialog() {
+    if (!managePlantNewName.trim() || !supplierId) return
+    try {
+      const res = await fetch('/api/lumber/suppliers/plants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplierId: parseInt(supplierId), plantName: managePlantNewName.trim() }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        if (data.existed) {
+          toast.info('Plant already exists')
+        } else {
+          toast.success('Plant added')
+        }
+        setManagePlantNewName('')
+        await fetchPlants(supplierId)
+      }
+    } catch {
+      toast.error('Failed to add plant')
+    }
+  }
+
+  async function handleRenamePlant(id: number) {
+    if (!editingPlantName.trim()) return
+    try {
+      const res = await fetch('/api/lumber/suppliers/plants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plantId: id, plantName: editingPlantName.trim() }),
+      })
+      if (res.ok) {
+        toast.success('Plant renamed')
+        setEditingPlantId(null)
+        setEditingPlantName('')
+        await fetchPlants(supplierId)
+        if (plantId === id.toString()) {
+          setPlant(editingPlantName.trim())
+        }
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Failed to rename')
+      }
+    } catch {
+      toast.error('Failed to rename plant')
+    }
+  }
+
+  async function handleDeletePlant(id: number) {
+    if (!confirm('Delete this plant? This only works if no loads are using it.')) return
+    try {
+      const res = await fetch(`/api/lumber/suppliers/plants?plantId=${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Plant deleted')
+        if (plantId === id.toString()) {
+          setPlantId('')
+          setPlant('')
+        }
+        await fetchPlants(supplierId)
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Failed to delete')
+      }
+    } catch {
+      toast.error('Failed to delete plant')
+    }
+  }
+
   async function handleSave() {
     setIsSaving(true)
     try {
@@ -142,6 +259,7 @@ export default function LoadInfoPage() {
           actual_arrival_date: actualArrivalDate || null,
           pickup_number: pickupNumber || null,
           plant: plant || null,
+          plant_id: plantId ? parseInt(plantId) : null,
           truck_driver_id: truckDriver && truckDriver !== 'none' ? parseInt(truckDriver) : null,
           pickup_date: pickupDate || null,
           invoice_number: invoiceNumber || null,
@@ -476,12 +594,87 @@ export default function LoadInfoPage() {
             </div>
             <div>
               <Label htmlFor="plant">Plant</Label>
-              <Input
-                id="plant"
-                value={plant}
-                onChange={(e) => setPlant(e.target.value)}
-                className="mt-1"
-              />
+              {isAddingPlant ? (
+                <div className="flex gap-1.5 mt-1">
+                  <Input
+                    value={newPlantName}
+                    onChange={(e) => setNewPlantName(e.target.value)}
+                    placeholder="New plant name"
+                    className="flex-1"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setIsAddingPlant(false)
+                        setNewPlantName('')
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newPlantName.trim()}
+                    onClick={async () => {
+                      if (!newPlantName.trim() || !supplierId) return
+                      try {
+                        const res = await fetch('/api/lumber/suppliers/plants', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ supplierId: parseInt(supplierId), plantName: newPlantName.trim() }),
+                        })
+                        const data = await res.json()
+                        if (data.success) {
+                          const np = data.plant
+                          setSupplierPlants(prev => [...prev, np].sort((a, b) => a.plant_name.localeCompare(b.plant_name)))
+                          setPlantId(np.id.toString())
+                          setPlant(np.plant_name)
+                          setIsAddingPlant(false)
+                          setNewPlantName('')
+                          toast.success('Plant added')
+                        }
+                      } catch {
+                        toast.error('Failed to add plant')
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => { setIsAddingPlant(false); setNewPlantName('') }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5 mt-1">
+                  <Select
+                    value={plantId || 'none'}
+                    onValueChange={(val) => {
+                      if (val === 'none') {
+                        setPlantId('')
+                        setPlant('')
+                      } else {
+                        setPlantId(val)
+                        const selected = supplierPlants.find(p => p.id.toString() === val)
+                        if (selected) setPlant(selected.plant_name)
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select plant..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {supplierPlants.map(p => (
+                        <SelectItem key={p.id} value={p.id.toString()}>{p.plant_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" size="icon" variant="outline" onClick={() => setIsAddingPlant(true)} title="Add new plant">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <Button type="button" size="icon" variant="outline" onClick={() => setIsManagePlantsOpen(true)} title="Manage plants">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div>
               <Label htmlFor="truck_driver">Truck Driver</Label>
@@ -627,6 +820,105 @@ export default function LoadInfoPage() {
           </div>
         </div>
       </div>
+
+      {/* Manage Plants Dialog */}
+      <Dialog open={isManagePlantsOpen} onOpenChange={setIsManagePlantsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Plants — {suppliers.find(s => s.id?.toString() === supplierId)?.name || 'Supplier'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New plant name..."
+                value={managePlantNewName}
+                onChange={(e) => setManagePlantNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPlantFromDialog() } }}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!managePlantNewName.trim()}
+                onClick={handleAddPlantFromDialog}
+                className="gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </Button>
+            </div>
+
+            <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
+              {supplierPlants.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-400">
+                  No plants yet for this supplier
+                </div>
+              ) : (
+                supplierPlants.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-2.5">
+                    {editingPlantId === p.id ? (
+                      <>
+                        <Input
+                          value={editingPlantName}
+                          onChange={(e) => setEditingPlantName(e.target.value)}
+                          className="flex-1 h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); handleRenamePlant(p.id) }
+                            if (e.key === 'Escape') { setEditingPlantId(null); setEditingPlantName('') }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-green-600"
+                          onClick={() => handleRenamePlant(p.id)}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => { setEditingPlantId(null); setEditingPlantName('') }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm">{p.plant_name}</span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-gray-400 hover:text-gray-600"
+                          onClick={() => { setEditingPlantId(p.id); setEditingPlantName(p.plant_name) }}
+                          title="Rename"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-gray-400 hover:text-red-600"
+                          onClick={() => handleDeletePlant(p.id)}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

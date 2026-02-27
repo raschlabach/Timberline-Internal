@@ -14,9 +14,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { supplierId, customerId } = body as {
+    const { supplierId, customerId, plantId } = body as {
       supplierId: number
       customerId: number
+      plantId?: number | null
     }
 
     if (!supplierId || !customerId) {
@@ -27,13 +28,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await client.query(
-      `INSERT INTO rnr_supplier_customer_map (supplier_id, customer_id)
-       VALUES ($1, $2)
-       ON CONFLICT (supplier_id)
-       DO UPDATE SET customer_id = $2, updated_at = CURRENT_TIMESTAMP`,
-      [supplierId, customerId]
+    const existingResult = await client.query(
+      plantId
+        ? `SELECT id FROM rnr_supplier_customer_map WHERE supplier_id = $1 AND plant_id = $2`
+        : `SELECT id FROM rnr_supplier_customer_map WHERE supplier_id = $1 AND plant_id IS NULL`,
+      plantId ? [supplierId, plantId] : [supplierId]
     )
+
+    if (existingResult.rows.length > 0) {
+      await client.query(
+        `UPDATE rnr_supplier_customer_map SET customer_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [customerId, existingResult.rows[0].id]
+      )
+    } else {
+      await client.query(
+        `INSERT INTO rnr_supplier_customer_map (supplier_id, customer_id, plant_id) VALUES ($1, $2, $3)`,
+        [supplierId, customerId, plantId || null]
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
