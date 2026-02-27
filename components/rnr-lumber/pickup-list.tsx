@@ -647,6 +647,7 @@ function PickupTable({
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-28">Plant</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500">Matched Customer</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-28">Pickup #</th>
+                <th className="px-3 py-2.5 text-left font-medium text-gray-500">Comments</th>
                 <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-28">Est. Footage</th>
                 <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-28">Actual Footage</th>
                 <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-20">Species</th>
@@ -746,6 +747,9 @@ function PickupTable({
                       ) : (
                         <span className="text-gray-300">&mdash;</span>
                       )}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[200px] truncate" title={load.comments || ''}>
+                      {load.comments || '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-gray-600">
                       {load.total_estimated_footage
