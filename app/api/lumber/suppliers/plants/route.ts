@@ -122,6 +122,7 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const plantId = searchParams.get('plantId')
+    const mergeIntoId = searchParams.get('mergeIntoId')
 
     if (!plantId) {
       return NextResponse.json({ error: 'Plant ID is required' }, { status: 400 })
@@ -131,18 +132,34 @@ export async function DELETE(request: NextRequest) {
       `SELECT COUNT(*) as count FROM lumber_loads WHERE plant_id = $1`,
       [plantId]
     )
+    const loadCount = parseInt(usageCheck.rows[0].count)
 
-    if (parseInt(usageCheck.rows[0].count) > 0) {
+    if (loadCount > 0 && !mergeIntoId) {
       return NextResponse.json(
-        { error: `This plant is used by ${usageCheck.rows[0].count} load(s). Remove those references first.` },
-        { status: 400 }
+        { error: `This plant is used by ${loadCount} load(s). Choose a plant to merge into.`, loadCount },
+        { status: 409 }
+      )
+    }
+
+    if (loadCount > 0 && mergeIntoId) {
+      const targetPlant = await query(
+        `SELECT id, plant_name FROM lumber_supplier_plants WHERE id = $1`,
+        [mergeIntoId]
+      )
+      if (targetPlant.rows.length === 0) {
+        return NextResponse.json({ error: 'Target plant not found' }, { status: 400 })
+      }
+
+      await query(
+        `UPDATE lumber_loads SET plant_id = $1, plant = $2 WHERE plant_id = $3`,
+        [mergeIntoId, targetPlant.rows[0].plant_name, plantId]
       )
     }
 
     await query(`DELETE FROM rnr_supplier_customer_map WHERE plant_id = $1`, [plantId])
     await query(`DELETE FROM lumber_supplier_plants WHERE id = $1`, [plantId])
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, merged: loadCount > 0 ? loadCount : 0 })
   } catch (error) {
     console.error('Error deleting supplier plant:', error)
     return NextResponse.json({ error: 'Failed to delete plant' }, { status: 500 })

@@ -53,6 +53,8 @@ export default function DataEntryPage() {
   const [managePlantNewName, setManagePlantNewName] = useState('')
   const [editingPlantId, setEditingPlantId] = useState<number | null>(null)
   const [editingPlantName, setEditingPlantName] = useState('')
+  const [mergingPlantId, setMergingPlantId] = useState<number | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState<string>('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceTotal, setInvoiceTotal] = useState('')
   const [invoiceDate, setInvoiceDate] = useState('')
@@ -272,17 +274,31 @@ export default function DataEntryPage() {
     }
   }
 
-  async function handleDeletePlant(id: number) {
-    if (!confirm('Delete this plant? This only works if no loads are using it.')) return
+  async function handleDeletePlant(id: number, mergeIntoId?: string) {
     try {
-      const res = await fetch(`/api/lumber/suppliers/plants?plantId=${id}`, { method: 'DELETE' })
+      const url = mergeIntoId
+        ? `/api/lumber/suppliers/plants?plantId=${id}&mergeIntoId=${mergeIntoId}`
+        : `/api/lumber/suppliers/plants?plantId=${id}`
+      const res = await fetch(url, { method: 'DELETE' })
+
       if (res.ok) {
-        toast.success('Plant deleted')
-        if (plantId === id.toString()) {
-          setPlantId('')
-          setPlant('')
+        const data = await res.json()
+        if (data.merged > 0) {
+          toast.success(`Merged ${data.merged} load(s) and deleted plant`)
+        } else {
+          toast.success('Plant deleted')
         }
+        if (plantId === id.toString()) {
+          setPlantId(mergeIntoId || '')
+          const target = supplierPlants.find(p => p.id.toString() === mergeIntoId)
+          setPlant(target?.plant_name || '')
+        }
+        setMergingPlantId(null)
+        setMergeTargetId('')
         await refreshPlants()
+      } else if (res.status === 409) {
+        setMergingPlantId(id)
+        setMergeTargetId('')
       } else {
         const data = await res.json()
         toast.error(data.error || 'Failed to delete')
@@ -667,16 +683,16 @@ export default function DataEntryPage() {
             </div>
 
             {/* Plant list */}
-            <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
+            <div className="border rounded-md divide-y max-h-[350px] overflow-y-auto">
               {supplierPlants.length === 0 ? (
                 <div className="text-center py-8 text-sm text-gray-400">
                   No plants yet for this supplier
                 </div>
               ) : (
                 supplierPlants.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 px-3 py-2.5">
+                  <div key={p.id} className="px-3 py-2.5">
                     {editingPlantId === p.id ? (
-                      <>
+                      <div className="flex items-center gap-2">
                         <Input
                           value={editingPlantName}
                           onChange={(e) => setEditingPlantName(e.target.value)}
@@ -705,9 +721,47 @@ export default function DataEntryPage() {
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
-                      </>
+                      </div>
+                    ) : mergingPlantId === p.id ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="flex-1 text-sm font-medium text-red-700">{p.plant_name}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={() => { setMergingPlantId(null); setMergeTargetId('') }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">This plant has loads linked to it. Merge them into:</p>
+                        <div className="flex gap-2">
+                          <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
+                            <SelectTrigger className="flex-1 h-8 text-sm">
+                              <SelectValue placeholder="Pick a plant to merge into..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {supplierPlants.filter(sp => sp.id !== p.id).map(sp => (
+                                <SelectItem key={sp.id} value={sp.id.toString()}>{sp.plant_name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={!mergeTargetId}
+                            className="h-8 text-xs"
+                            onClick={() => handleDeletePlant(p.id, mergeTargetId)}
+                          >
+                            Merge & Delete
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
-                      <>
+                      <div className="flex items-center gap-2">
                         <span className="flex-1 text-sm">{p.plant_name}</span>
                         <Button
                           type="button"
@@ -729,7 +783,7 @@ export default function DataEntryPage() {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </>
+                      </div>
                     )}
                   </div>
                 ))
