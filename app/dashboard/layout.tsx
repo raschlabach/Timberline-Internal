@@ -310,6 +310,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveSubRoute('/dashboard/bentwood')}
                   theme="blue"
                 />
+                <NavItem
+                  href="/dashboard/rnr-lumber"
+                  icon={<Trees size={20} />}
+                  label="RNR Lumber"
+                  isActive={isActiveSubRoute('/dashboard/rnr-lumber')}
+                  theme="blue"
+                />
               </>
             )}
 
