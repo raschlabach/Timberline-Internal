@@ -31,6 +31,12 @@ export async function GET() {
         ll.timberline_order_id,
         rscm.customer_id as matched_customer_id,
         c.customer_name as matched_customer_name,
+        loc.latitude as customer_lat,
+        loc.longitude as customer_lng,
+        lsl.address as supplier_address,
+        lsl.city as supplier_city,
+        lsl.state as supplier_state,
+        lsl.zip_code as supplier_zip,
         COALESCE(
           json_agg(
             json_build_object(
@@ -55,12 +61,15 @@ export async function GET() {
       FROM lumber_loads ll
       JOIN lumber_suppliers ls ON ll.supplier_id = ls.id
       LEFT JOIN lumber_load_items lli ON lli.load_id = ll.id
+      LEFT JOIN lumber_supplier_locations lsl ON lsl.id = ll.supplier_location_id
       LEFT JOIN rnr_supplier_customer_map rscm ON rscm.supplier_id = ll.supplier_id
       LEFT JOIN customers c ON c.id = rscm.customer_id
+      LEFT JOIN locations loc ON loc.id = c.location_id
       LEFT JOIN orders o ON o.id = ll.timberline_order_id
       LEFT JOIN truckload_order_assignments toa ON toa.order_id = ll.timberline_order_id
       WHERE ll.pickup_or_delivery = 'pickup'
-      GROUP BY ll.id, ls.name, rscm.customer_id, c.customer_name, o.status, toa.id
+      GROUP BY ll.id, ls.name, rscm.customer_id, c.customer_name, loc.latitude, loc.longitude,
+               lsl.address, lsl.city, lsl.state, lsl.zip_code, o.status, toa.id
       ORDER BY ll.created_at DESC
     `)
 

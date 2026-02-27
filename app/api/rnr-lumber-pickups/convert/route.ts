@@ -47,9 +47,15 @@ export async function POST(request: NextRequest) {
 
     const deliveryCustomerId = rnrResult.rows[0].id
 
+    let truckloadDriverName: string | null = null
+    let truckloadEndDate: string | null = null
+
     if (truckloadId) {
       const truckloadResult = await client.query(
-        `SELECT id FROM truckloads WHERE id = $1 AND is_completed = false`,
+        `SELECT t.id, t.end_date, u.full_name as driver_name
+         FROM truckloads t
+         LEFT JOIN users u ON t.driver_id = u.id
+         WHERE t.id = $1 AND t.is_completed = false`,
         [truckloadId]
       )
 
@@ -60,6 +66,11 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+
+      truckloadDriverName = truckloadResult.rows[0].driver_name
+      truckloadEndDate = truckloadResult.rows[0].end_date
+        ? new Date(truckloadResult.rows[0].end_date).toISOString().split('T')[0]
+        : null
     }
 
     const loadsResult = await client.query(
@@ -101,6 +112,24 @@ export async function POST(request: NextRequest) {
     }
 
     await client.query('BEGIN')
+
+    let lumberDriverId: number | null = null
+    if (truckloadId && truckloadDriverName) {
+      const existingDriver = await client.query(
+        `SELECT id FROM lumber_drivers WHERE LOWER(name) = LOWER($1) AND is_active = true LIMIT 1`,
+        [truckloadDriverName]
+      )
+
+      if (existingDriver.rows.length > 0) {
+        lumberDriverId = existingDriver.rows[0].id
+      } else {
+        const newDriver = await client.query(
+          `INSERT INTO lumber_drivers (name, is_active) VALUES ($1, true) RETURNING id`,
+          [truckloadDriverName]
+        )
+        lumberDriverId = newDriver.rows[0].id
+      }
+    }
 
     const createdOrders: { orderId: number; loadId: number; loadCode: string }[] = []
 
@@ -185,12 +214,24 @@ export async function POST(request: NextRequest) {
         nextSequence++
       }
 
-      await client.query(
-        `UPDATE lumber_loads
-         SET timberline_order_id = $1, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [orderId, load.id]
-      )
+      if (truckloadId && lumberDriverId && truckloadEndDate) {
+        await client.query(
+          `UPDATE lumber_loads
+           SET timberline_order_id = $1,
+               driver_id = $2,
+               assigned_pickup_date = $3,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $4`,
+          [orderId, lumberDriverId, truckloadEndDate, load.id]
+        )
+      } else {
+        await client.query(
+          `UPDATE lumber_loads
+           SET timberline_order_id = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [orderId, load.id]
+        )
+      }
 
       createdOrders.push({
         orderId,

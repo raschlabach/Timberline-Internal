@@ -27,7 +27,9 @@ import {
   Clock,
   TreePine,
   Hash,
+  MapPin,
 } from 'lucide-react'
+import { RnrLumberPickupMap } from './pickup-map'
 
 interface LumberLoadItem {
   id: number
@@ -53,6 +55,12 @@ interface LumberPickupLoad {
   timberline_order_id: number | null
   matched_customer_id: number | null
   matched_customer_name: string | null
+  customer_lat: number | null
+  customer_lng: number | null
+  supplier_address: string | null
+  supplier_city: string | null
+  supplier_state: string | null
+  supplier_zip: string | null
   items: LumberLoadItem[]
   total_estimated_footage: number
   total_actual_footage: number
@@ -114,6 +122,7 @@ export function RnrLumberPickups() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('active')
   const [selectedLoads, setSelectedLoads] = useState<Set<number>>(new Set())
+  const [showMapPast, setShowMapPast] = useState(false)
 
   const [truckloads, setTruckloads] = useState<Truckload[]>([])
   const [selectedTruckloadId, setSelectedTruckloadId] = useState<string>('')
@@ -426,6 +435,29 @@ export function RnrLumberPickups() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Map */}
+      {loads.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b bg-gray-50">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <MapPin className="h-4 w-4" />
+              Pickup Locations
+            </div>
+            <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+              <Checkbox
+                checked={showMapPast}
+                onCheckedChange={(checked) => setShowMapPast(checked as boolean)}
+                className="h-3.5 w-3.5"
+              />
+              Show past loads
+            </label>
+          </div>
+          <div className="h-[400px]">
+            <RnrLumberPickupMap loads={loads} showPast={showMapPast} />
+          </div>
+        </Card>
+      )}
 
       {/* Customer Match Dialog */}
       <Dialog open={isMatchDialogOpen} onOpenChange={setIsMatchDialogOpen}>
