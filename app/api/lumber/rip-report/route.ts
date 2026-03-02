@@ -80,9 +80,9 @@ export async function GET(request: NextRequest) {
       `SELECT 
          mp.id,
          mp.pack_id,
-         mp.species,
-         mp.grade,
-         mp.thickness,
+         mo.species,
+         mo.grade,
+         mo.thickness,
          mp.actual_board_feet,
          mp.is_finished,
          mp.finished_at,
@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
          lo_s4.name as stacker_4_name,
          DATE(mp.finished_at) as finished_date
        FROM misc_rip_packs mp
+       JOIN misc_rip_orders mo ON mp.misc_order_id = mo.id
        LEFT JOIN lumber_operators lo_op ON mp.operator_id = lo_op.id
        LEFT JOIN lumber_operators lo_s1 ON mp.stacker_1_id = lo_s1.id
        LEFT JOIN lumber_operators lo_s2 ON mp.stacker_2_id = lo_s2.id
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
        WHERE mp.is_finished = TRUE
          AND mp.finished_at >= $1
          AND mp.finished_at < $2
-       ORDER BY mp.thickness, mp.species, mp.grade, mp.finished_at`,
+       ORDER BY mo.thickness, mo.species, mo.grade, mp.finished_at`,
         [startDate, endDateStr]
       )
     } catch (err) {
