@@ -20,9 +20,9 @@ interface SkidEditorProps {
   onChange: (skids: FreightSkid[]) => void
 }
 
-function emptySkid(index: number, mainPo: string): FreightSkid {
+function emptySkid(mainPo: string): FreightSkid {
   return {
-    skid_number: String(index + 1),
+    skid_number: '',
     po_number: mainPo,
     width: '',
     length: '',
@@ -42,7 +42,7 @@ export function SkidEditor({ skids, mainPo, onChange }: SkidEditorProps) {
   }
 
   function addSkid() {
-    onChange([...skids, emptySkid(skids.length, mainPo)])
+    onChange([...skids, emptySkid(mainPo)])
   }
 
   function removeSkid(idx: number) {
@@ -68,7 +68,7 @@ export function SkidEditor({ skids, mainPo, onChange }: SkidEditorProps) {
         focusCell(nextRow, col)
       } else {
         pendingFocusRef.current = { row: nextRow, col }
-        onChange([...skids, emptySkid(skids.length, mainPo)])
+        onChange([...skids, emptySkid(mainPo)])
       }
     }
   }, [skids, onChange, focusCell, mainPo])

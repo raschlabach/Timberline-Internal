@@ -66,7 +66,7 @@ export const FreightPrintView = forwardRef<HTMLDivElement, FreightPrintViewProps
         <div className="hidden">
           <div ref={ref} className="p-8 bg-white" style={{ fontFamily: 'Arial, sans-serif' }}>
             <div className="mb-6 pb-4 border-b-2 border-gray-400">
-              <h1 className="text-xl font-bold mb-3">Freight Shipping Report</h1>
+              <h1 className="text-xl font-bold mb-3">RNR Shipping Report</h1>
               <div className="flex gap-8 text-sm">
                 <span><strong>Customer:</strong> {customer || '—'}</span>
                 <span><strong>PO #:</strong> {poNumber || '—'}</span>
