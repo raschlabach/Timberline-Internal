@@ -28,6 +28,7 @@ const SHIPPING_STATION_ALLOWED_PATHS = [
   '/dashboard/lumber/incoming',
   '/dashboard/lumber/trucking',
   '/dashboard/lumber/nw-shipping',
+  '/dashboard/lumber/freight',
 ]
 
 /**
