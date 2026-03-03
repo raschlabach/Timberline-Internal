@@ -890,19 +890,41 @@ interface WeeklySummaryProps {
 function WeeklySummary({ importData, items }: WeeklySummaryProps) {
   const freightItems = items.filter(i => i.has_freight)
 
-  function buildCsvContent(): string {
+  async function handleDownloadPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    await import('jspdf-autotable')
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' })
+
+    const title = `Vinyl Tech Pickup Confirmation - ${importData.week_label}`
+    const subtitle = importData.week_date
+      ? `Week of ${format(new Date(importData.week_date + 'T00:00:00'), 'MMMM d, yyyy')}`
+      : ''
+
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text(title, 40, 35)
+
+    if (subtitle) {
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(100)
+      doc.text(subtitle, 40, 50)
+      doc.setTextColor(0)
+    }
+
     const headers = [
       'Customer',
       'VT Code',
-      "16' Skids",
-      "12' Skids",
-      '4x8 Skids',
+      "16'",
+      "12'",
+      '4x8',
       'Misc',
-      'Weight (lbs)',
+      'Weight',
       'Quote',
       'Pickup Date',
       'Pickup Driver',
-      'Delivery Driver',
+      'Del. Driver',
       'Delivery Dates',
       'Notes',
     ]
@@ -910,7 +932,7 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
     const rows = freightItems.map(item => {
       let deliveryDates = ''
       if (item.truckload_start_date && item.truckload_end_date) {
-        deliveryDates = `${format(new Date(item.truckload_start_date + 'T00:00:00'), 'M/d/yyyy')} - ${format(new Date(item.truckload_end_date + 'T00:00:00'), 'M/d/yyyy')}`
+        deliveryDates = `${format(new Date(item.truckload_start_date + 'T00:00:00'), 'M/d')} - ${format(new Date(item.truckload_end_date + 'T00:00:00'), 'M/d')}`
       }
 
       return [
@@ -920,9 +942,9 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
         item.skid_12ft || '',
         item.skid_4x8 || '',
         item.misc || '',
-        item.weight || '',
+        item.weight ? item.weight.toLocaleString() : '',
         item.freight_quote ? `$${item.freight_quote}` : '',
-        item.pickup_date ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yyyy') : '',
+        item.pickup_date ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yy') : '',
         item.pickup_driver || '',
         item.driver_name || '',
         deliveryDates,
@@ -930,32 +952,32 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
       ]
     })
 
-    const escape = (val: string | number) => {
-      const str = String(val)
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`
-      }
-      return str
-    }
+    ;(doc as any).autoTable({
+      head: [headers],
+      body: rows,
+      startY: subtitle ? 60 : 48,
+      margin: { left: 40, right: 40 },
+      styles: { fontSize: 7.5, cellPadding: 3 },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 110 },
+        1: { cellWidth: 38 },
+        2: { cellWidth: 24, halign: 'right' as const },
+        3: { cellWidth: 24, halign: 'right' as const },
+        4: { cellWidth: 24, halign: 'right' as const },
+        5: { cellWidth: 28, halign: 'right' as const },
+        6: { cellWidth: 38, halign: 'right' as const },
+        7: { cellWidth: 36, halign: 'right' as const },
+        8: { cellWidth: 48 },
+        9: { cellWidth: 62 },
+        10: { cellWidth: 62 },
+        11: { cellWidth: 60 },
+        12: { cellWidth: 'auto' },
+      },
+    })
 
-    return [
-      `Vinyl Tech Pickup Confirmation - ${importData.week_label}`,
-      importData.week_date ? `Week of ${format(new Date(importData.week_date + 'T00:00:00'), 'MMMM d, yyyy')}` : '',
-      '',
-      headers.map(escape).join(','),
-      ...rows.map(row => row.map(escape).join(',')),
-    ].join('\n')
-  }
-
-  function handleDownload() {
-    const csv = buildCsvContent()
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Vinyl Tech - ${importData.week_label}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    doc.save(`Vinyl Tech - ${importData.week_label}.pdf`)
   }
 
   const assignedItems = freightItems.filter(i => i.truckload_id)
@@ -983,9 +1005,9 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
             </Badge>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5">
+        <Button variant="outline" size="sm" onClick={handleDownloadPdf} className="gap-1.5">
           <Download className="h-4 w-4" />
-          Download CSV
+          Download PDF
         </Button>
       </div>
 
