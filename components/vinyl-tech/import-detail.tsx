@@ -326,7 +326,13 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
         if (i.id !== editing.itemId) return i
         const updated = { ...i, [editing.field]: newValue }
         const hasFreight = (updated.skid_16ft || 0) + (updated.skid_12ft || 0) + (updated.skid_4x8 || 0) + (updated.misc || 0) > 0
-        return { ...updated, has_freight: hasFreight, status: hasFreight ? i.status : 'skipped' }
+        let newStatus = i.status
+        if (!hasFreight) {
+          newStatus = 'skipped'
+        } else if (hasFreight && i.status === 'skipped') {
+          newStatus = 'pending'
+        }
+        return { ...updated, has_freight: hasFreight, status: newStatus }
       }))
 
       setEditing(null)

@@ -52,7 +52,11 @@ export async function PATCH(
            notes_on_skids = $6,
            has_freight = $7,
            freight_quote = $8,
-           status = CASE WHEN $7 = false THEN 'skipped' ELSE status END,
+           status = CASE
+             WHEN $7 = false THEN 'skipped'
+             WHEN $7 = true AND status = 'skipped' THEN 'pending'
+             ELSE status
+           END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $9 AND status != 'converted'`,
       [
@@ -68,7 +72,7 @@ export async function PATCH(
       ]
     )
 
-    // Recalculate parent import totals
+    // Recalculate parent import totals and promote back to active if needed
     await query(
       `UPDATE vinyl_tech_imports
        SET items_with_freight = (
@@ -79,6 +83,14 @@ export async function PATCH(
              SELECT COALESCE(SUM(weight), 0) FROM vinyl_tech_import_items
              WHERE import_id = vinyl_tech_imports.id
            ),
+           status = CASE
+             WHEN status = 'completed' AND EXISTS (
+               SELECT 1 FROM vinyl_tech_import_items
+               WHERE import_id = vinyl_tech_imports.id
+                 AND status = 'pending' AND has_freight = true
+             ) THEN 'active'
+             ELSE status
+           END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = (SELECT import_id FROM vinyl_tech_import_items WHERE id = $1)`,
       [itemId]
