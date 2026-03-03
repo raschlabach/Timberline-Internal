@@ -14,7 +14,16 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("Fetching orders from database...");
-    
+
+    await query(`
+      UPDATE orders
+      SET status = 'unassigned', updated_at = CURRENT_TIMESTAMP
+      WHERE status IN ('delivery_assigned', 'pickup_assigned')
+      AND NOT EXISTS (
+        SELECT 1 FROM truckload_order_assignments WHERE order_id = orders.id
+      )
+    `);
+
     const sqlQuery = `
       WITH skids_summary AS (
         SELECT 

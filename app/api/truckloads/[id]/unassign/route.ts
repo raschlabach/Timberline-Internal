@@ -66,20 +66,27 @@ export async function POST(
 
     const isTransfer = totalCount === 2 && distinctTruckloads === 1
 
+    const newStatus = totalCount === 0 ? 'unassigned' : (
+      pickupCount > 0 ? 'pickup_assigned' : 'delivery_assigned'
+    )
+
     await client.query(
       `UPDATE orders
        SET status = $1,
            is_transfer_order = $2,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $3`,
-      [
-        totalCount === 0 ? 'unassigned' : (
-          pickupCount > 0 ? 'pickup_assigned' : 'delivery_assigned'
-        ),
-        isTransfer,
-        orderId
-      ]
+      [newStatus, isTransfer, orderId]
     )
+
+    if (totalCount === 0) {
+      await client.query(
+        `UPDATE vinyl_tech_import_items
+         SET truckload_id = NULL, updated_at = CURRENT_TIMESTAMP
+         WHERE order_id = $1`,
+        [orderId]
+      )
+    }
 
     // Commit transaction
     await client.query('COMMIT')
