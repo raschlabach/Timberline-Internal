@@ -950,7 +950,7 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
       startY: subtitle ? 60 : 48,
       margin: { left: 40, right: 40 },
       styles: { fontSize: 9, cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, halign: 'left' as const },
-      headStyles: { fillColor: [55, 65, 81], textColor: 255, fontSize: 8.5, fontStyle: 'bold' },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255, fontSize: 8, fontStyle: 'bold', halign: 'left' as const },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 'auto' },
@@ -960,8 +960,8 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
         4: { cellWidth: 32, halign: 'center' as const },
         5: { cellWidth: 35, halign: 'center' as const },
         6: { cellWidth: 50, halign: 'center' as const },
-        7: { cellWidth: 70, halign: 'center' as const },
-        8: { cellWidth: 90 },
+        7: { cellWidth: 70 },
+        8: { cellWidth: 'auto' },
       },
     })
 
