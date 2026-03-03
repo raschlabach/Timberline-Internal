@@ -928,59 +928,40 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
       '4x8',
       'Misc',
       'Weight',
-      'Quote',
       'Pickup Date',
       'Pickup Driver',
-      'Del. Driver',
-      'Delivery Dates',
-      'Notes',
     ]
 
-    const rows = freightItems.map(item => {
-      let deliveryDates = ''
-      if (item.truckload_start_date && item.truckload_end_date) {
-        deliveryDates = `${format(new Date(item.truckload_start_date + 'T00:00:00'), 'M/d')} - ${format(new Date(item.truckload_end_date + 'T00:00:00'), 'M/d')}`
-      }
-
-      return [
-        item.matched_customer_name || item.ship_to_name,
-        item.vt_code || '',
-        item.skid_16ft || '',
-        item.skid_12ft || '',
-        item.skid_4x8 || '',
-        item.misc || '',
-        item.weight ? item.weight.toLocaleString() : '',
-        item.freight_quote ? `$${item.freight_quote}` : '',
-        item.pickup_date ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yy') : '',
-        item.pickup_driver || '',
-        item.driver_name || '',
-        deliveryDates,
-        [item.notes_on_skids, item.additional_notes].filter(Boolean).join('; '),
-      ]
-    })
+    const rows = freightItems.map(item => [
+      item.matched_customer_name || item.ship_to_name,
+      item.vt_code || '',
+      item.skid_16ft || '',
+      item.skid_12ft || '',
+      item.skid_4x8 || '',
+      item.misc || '',
+      item.weight ? item.weight.toLocaleString() : '',
+      item.pickup_date ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yy') : '',
+      item.pickup_driver || '',
+    ])
 
     ;(doc as any).autoTable({
       head: [headers],
       body: rows,
       startY: subtitle ? 60 : 48,
       margin: { left: 40, right: 40 },
-      styles: { fontSize: 7.5, cellPadding: 3 },
-      headStyles: { fillColor: [55, 65, 81], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255, fontSize: 8, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
-        0: { cellWidth: 110 },
-        1: { cellWidth: 38 },
-        2: { cellWidth: 24, halign: 'right' as const },
-        3: { cellWidth: 24, halign: 'right' as const },
-        4: { cellWidth: 24, halign: 'right' as const },
-        5: { cellWidth: 28, halign: 'right' as const },
-        6: { cellWidth: 38, halign: 'right' as const },
-        7: { cellWidth: 36, halign: 'right' as const },
-        8: { cellWidth: 48 },
-        9: { cellWidth: 62 },
-        10: { cellWidth: 62 },
-        11: { cellWidth: 60 },
-        12: { cellWidth: 'auto' },
+        0: { cellWidth: 'auto' },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 30, halign: 'right' as const },
+        3: { cellWidth: 30, halign: 'right' as const },
+        4: { cellWidth: 30, halign: 'right' as const },
+        5: { cellWidth: 35, halign: 'right' as const },
+        6: { cellWidth: 50, halign: 'right' as const },
+        7: { cellWidth: 70 },
+        8: { cellWidth: 90 },
       },
     })
 
