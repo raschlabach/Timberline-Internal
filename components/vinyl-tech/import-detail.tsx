@@ -898,7 +898,8 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
 
   async function handleDownloadPdf() {
     const { default: jsPDF } = await import('jspdf')
-    await import('jspdf-autotable')
+    const { applyPlugin } = await import('jspdf-autotable')
+    applyPlugin(jsPDF)
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' })
 
