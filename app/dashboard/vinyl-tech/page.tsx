@@ -19,6 +19,7 @@ import {
   Clock,
   EyeOff,
   Eye,
+  RotateCcw,
 } from 'lucide-react'
 import { ImportDetail } from '@/components/vinyl-tech/import-detail'
 
@@ -188,6 +189,23 @@ export default function VinylTechPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to update imports')
     } finally {
       setIsBulkUpdating(false)
+    }
+  }
+
+  async function handleSingleStatusUpdate(id: number, status: 'active' | 'hidden' | 'completed', e: React.MouseEvent) {
+    e.stopPropagation()
+    try {
+      const res = await fetch('/api/vinyl-tech/imports/bulk-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ importIds: [id], status }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update')
+      toast.success(`Import moved to ${status === 'active' ? 'Active' : status === 'hidden' ? 'Hidden' : 'Past'}`)
+      await fetchImports()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update')
     }
   }
 
@@ -375,6 +393,7 @@ export default function VinylTechPage() {
             emptyMessage="No past imports"
             emptyDescription="Imports move here once all items are assigned to truckloads"
             selectedImports={selectedImports}
+            onStatusChange={handleSingleStatusUpdate}
             onToggleSelect={(id, checked) => {
               setSelectedImports(prev => {
                 const next = new Set(prev)
@@ -403,6 +422,7 @@ export default function VinylTechPage() {
             emptyMessage="No hidden imports"
             emptyDescription="Hidden imports will appear here"
             selectedImports={selectedImports}
+            onStatusChange={handleSingleStatusUpdate}
             onToggleSelect={(id, checked) => {
               setSelectedImports(prev => {
                 const next = new Set(prev)
@@ -436,6 +456,7 @@ interface ImportsListProps {
   selectedImports: Set<number>
   onToggleSelect: (id: number, checked: boolean) => void
   onSelectAll: (ids: number[], checked: boolean) => void
+  onStatusChange?: (id: number, status: 'active' | 'hidden' | 'completed', e: React.MouseEvent) => void
 }
 
 function ImportsList({
@@ -450,6 +471,7 @@ function ImportsList({
   selectedImports,
   onToggleSelect,
   onSelectAll,
+  onStatusChange,
 }: ImportsListProps) {
   if (isLoading) {
     return (
@@ -582,13 +604,24 @@ function ImportsList({
                       {format(new Date(imp.created_at), 'MMM d, yyyy h:mm a')}
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={(e) => onDelete(imp.id, e)}
-                        className="p-1 text-gray-300 hover:text-red-500 transition-colors"
-                        title="Delete import"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {onStatusChange && (imp.status === 'completed' || imp.status === 'hidden') && (
+                          <button
+                            onClick={(e) => onStatusChange(imp.id, 'active', e)}
+                            className="p-1 text-gray-300 hover:text-blue-500 transition-colors"
+                            title="Move to Active"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => onDelete(imp.id, e)}
+                          className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                          title="Delete import"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
