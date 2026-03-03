@@ -59,19 +59,13 @@ export async function POST(
       [orderId]
     )
 
-    const { 
-      total_count, 
-      pickup_count,
-      delivery_count,
-      distinct_truckloads 
-    } = remainingAssignments.rows[0]
+    const totalCount = parseInt(remainingAssignments.rows[0].total_count)
+    const pickupCount = parseInt(remainingAssignments.rows[0].pickup_count)
+    const deliveryCount = parseInt(remainingAssignments.rows[0].delivery_count)
+    const distinctTruckloads = parseInt(remainingAssignments.rows[0].distinct_truckloads)
 
-    // An order is a transfer only if:
-    // 1. Both pickup and delivery are assigned (pickup_count = 1 and delivery_count = 1)
-    // 2. They are assigned to the same truckload (distinct_truckloads = 1)
-    const isTransfer = total_count === 2 && distinct_truckloads === 1
+    const isTransfer = totalCount === 2 && distinctTruckloads === 1
 
-    // Update order status and transfer flag
     await client.query(
       `UPDATE orders
        SET status = $1,
@@ -79,8 +73,8 @@ export async function POST(
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $3`,
       [
-        total_count === 0 ? 'unassigned' : (
-          pickup_count > 0 ? 'pickup_assigned' : 'delivery_assigned'
+        totalCount === 0 ? 'unassigned' : (
+          pickupCount > 0 ? 'pickup_assigned' : 'delivery_assigned'
         ),
         isTransfer,
         orderId

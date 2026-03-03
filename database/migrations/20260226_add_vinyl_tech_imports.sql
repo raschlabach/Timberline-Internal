@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS vinyl_tech_import_items (
     matched_customer_id INTEGER REFERENCES customers(id),
     status VARCHAR(20) DEFAULT 'pending',
     freight_quote DECIMAL(10,2) DEFAULT 0,
+    pickup_date DATE,
+    pickup_driver TEXT,
     order_id INTEGER REFERENCES orders(id),
     truckload_id INTEGER REFERENCES truckloads(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

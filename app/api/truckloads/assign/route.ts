@@ -274,19 +274,13 @@ export async function DELETE(request: Request) {
         [orderId]
       )
 
-      const { 
-        total_count, 
-        pickup_count,
-        delivery_count,
-        distinct_truckloads 
-      } = remainingAssignments.rows[0]
+      const totalCount = parseInt(remainingAssignments.rows[0].total_count)
+      const pickupCount = parseInt(remainingAssignments.rows[0].pickup_count)
+      const deliveryCount = parseInt(remainingAssignments.rows[0].delivery_count)
+      const distinctTruckloads = parseInt(remainingAssignments.rows[0].distinct_truckloads)
 
-      // An order is a transfer only if:
-      // 1. Both pickup and delivery are assigned (pickup_count = 1 and delivery_count = 1)
-      // 2. They are assigned to the same truckload (distinct_truckloads = 1)
-      const isTransfer = total_count === 2 && distinct_truckloads === 1
+      const isTransfer = totalCount === 2 && distinctTruckloads === 1
 
-      // Update order status and transfer flag
       await client.query(
         `UPDATE orders
          SET status = $1,
@@ -294,8 +288,8 @@ export async function DELETE(request: Request) {
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`,
         [
-          total_count === 0 ? 'unassigned' : (
-            pickup_count > 0 ? 'pickup_assigned' : 'delivery_assigned'
+          totalCount === 0 ? 'unassigned' : (
+            pickupCount > 0 ? 'pickup_assigned' : 'delivery_assigned'
           ),
           isTransfer,
           orderId
@@ -310,12 +304,12 @@ export async function DELETE(request: Request) {
       if (splitLoadCheck.rows.length > 0) {
         const splitLoadId = splitLoadCheck.rows[0].id
 
-        if (total_count === 0) {
+        if (totalCount === 0) {
           // Both assignments deleted - delete split_loads record (cascade will clean deductions)
           await client.query(`
             DELETE FROM split_loads WHERE id = $1
           `, [splitLoadId])
-        } else if (total_count === 1) {
+        } else if (totalCount === 1) {
           // Only one assignment remains - clear assignment_quote but keep split_loads config
           await client.query(`
             UPDATE truckload_order_assignments

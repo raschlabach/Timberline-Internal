@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     const orderDate = pickupDate || new Date().toISOString().split('T')[0]
-    const orderStatus = truckloadId ? 'delivery_assigned' : 'pending'
+    const orderStatus = truckloadId ? 'delivery_assigned' : 'unassigned'
 
     for (const item of itemsResult.rows) {
       // Create the order: pickup = Vinyl Tech, delivery = matched customer

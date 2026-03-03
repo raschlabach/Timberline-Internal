@@ -108,6 +108,52 @@ function cleanNameForMatching(name: string): string {
     .toLowerCase()
 }
 
+function matchCustomer(
+  row: ParsedRow,
+  vtCodeMap: Map<string, number>,
+  customerNameMap: Map<string, number>
+): { matchedCustomerId: number | null; customerMatched: boolean } {
+  if (row.vtCode) {
+    const vtKey = row.vtCode.trim().toUpperCase()
+    if (vtCodeMap.has(vtKey)) {
+      return { matchedCustomerId: vtCodeMap.get(vtKey) || null, customerMatched: true }
+    }
+  }
+
+  const cleanName = cleanNameForMatching(row.shipToName)
+
+  if (customerNameMap.has(cleanName)) {
+    return { matchedCustomerId: customerNameMap.get(cleanName) || null, customerMatched: true }
+  }
+
+  const shipWords = cleanName.split(' ').filter((w: string) => w.length > 1)
+  const entries = Array.from(customerNameMap.entries())
+  for (let ci = 0; ci < entries.length; ci++) {
+    const custName = entries[ci][0]
+    const custId = entries[ci][1]
+    if (custName.includes(cleanName) || cleanName.includes(custName)) {
+      return { matchedCustomerId: custId, customerMatched: true }
+    }
+    if (shipWords.length >= 2) {
+      const custWords = custName.split(' ').filter((w: string) => w.length > 1)
+      if (custWords.length >= 2 &&
+          custWords[0] === shipWords[0] &&
+          custWords[1] === shipWords[1]) {
+        return { matchedCustomerId: custId, customerMatched: true }
+      }
+    }
+  }
+
+  return { matchedCustomerId: null, customerMatched: false }
+}
+
+function calcFreightQuote(row: ParsedRow): number {
+  const totalVinyl = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc
+  if (totalVinyl === 1) return 100
+  if (totalVinyl >= 2) return totalVinyl * 75
+  return 0
+}
+
 export async function POST(request: NextRequest) {
   const client = await getClient()
 
@@ -129,13 +175,14 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     const wb = XLSX.read(buffer, { type: 'buffer' })
 
-    // Check which week_labels already exist so we can skip them
-    const existingLabelsResult = await client.query(
-      `SELECT DISTINCT week_label FROM vinyl_tech_imports`
+    // Check which week_labels already exist so we can detect new rows
+    const existingImportsResult = await client.query(
+      `SELECT id, week_label, status FROM vinyl_tech_imports`
     )
-    const existingLabels = new Set(
-      existingLabelsResult.rows.map((r: { week_label: string }) => r.week_label.trim().toLowerCase())
-    )
+    const existingImportsByLabel = new Map<string, { id: number; status: string }>()
+    for (const r of existingImportsResult.rows) {
+      existingImportsByLabel.set(r.week_label.trim().toLowerCase(), { id: r.id, status: r.status })
+    }
 
     // Load saved VT code → customer mappings
     const vtMapResult = await client.query(
@@ -156,133 +203,134 @@ export async function POST(request: NextRequest) {
     }
 
     const importResults: { importId: number; weekLabel: string; itemCount: number }[] = []
+    const updatedResults: { importId: number; weekLabel: string; newItemCount: number }[] = []
     const skippedSheets: string[] = []
 
     await client.query('BEGIN')
 
     for (const sheetName of wb.SheetNames) {
-      // Skip sheets that have already been imported
-      if (existingLabels.has(sheetName.trim().toLowerCase())) {
-        skippedSheets.push(sheetName)
-        continue
-      }
-
       const ws = wb.Sheets[sheetName]
       const parsed = parseSheet(ws, sheetName)
 
       if (parsed.rows.length === 0) continue
 
-      const importResult = await client.query(
-        `INSERT INTO vinyl_tech_imports (
-          file_name, week_label, week_date, sheet_status,
-          total_items, items_with_freight, total_weight,
-          status, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id`,
-        [
-          file.name,
-          parsed.weekLabel,
-          parsed.weekDate,
-          parsed.sheetStatus,
-          parsed.rows.length,
-          parsed.rows.filter(r => r.skid16ft + r.skid12ft + r.skid4x8 + r.misc > 0).length,
-          parsed.totalWeight,
-          'active',
-          session.user.id,
-        ]
-      )
+      const labelKey = sheetName.trim().toLowerCase()
+      const existing = existingImportsByLabel.get(labelKey)
 
-      const importId = importResult.rows[0].id
+      if (existing) {
+        // Sheet already imported — check for new rows to add
+        const existingItemsResult = await client.query(
+          `SELECT LOWER(TRIM(vt_code)) as vt_code, LOWER(TRIM(ship_to_name)) as ship_to_name
+           FROM vinyl_tech_import_items WHERE import_id = $1`,
+          [existing.id]
+        )
+        const existingKeys = new Set(
+          existingItemsResult.rows.map((r: any) => `${r.vt_code || ''}||${r.ship_to_name}`)
+        )
 
-      for (const row of parsed.rows) {
-        const hasFreight = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc > 0
+        const newRows = parsed.rows.filter(row => {
+          const key = `${(row.vtCode || '').trim().toLowerCase()}||${row.shipToName.trim().toLowerCase()}`
+          return !existingKeys.has(key)
+        })
 
-        let matchedCustomerId: number | null = null
-        let customerMatched = false
-
-        // Priority 1: Check saved VT code mapping
-        if (row.vtCode) {
-          const vtKey = row.vtCode.trim().toUpperCase()
-          if (vtCodeMap.has(vtKey)) {
-            matchedCustomerId = vtCodeMap.get(vtKey) || null
-            customerMatched = true
-          }
+        if (newRows.length === 0) {
+          skippedSheets.push(sheetName)
+          continue
         }
 
-        // Priority 2: Fuzzy name matching
-        if (!customerMatched) {
-          const cleanName = cleanNameForMatching(row.shipToName)
+        for (const row of newRows) {
+          const { matchedCustomerId, customerMatched } = matchCustomer(row, vtCodeMap, customerNameMap)
+          const hasFreight = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc > 0
+          const freightQuote = calcFreightQuote(row)
 
-          if (customerNameMap.has(cleanName)) {
-            matchedCustomerId = customerNameMap.get(cleanName) || null
-            customerMatched = true
-          } else {
-            const shipWords = cleanName.split(' ').filter((w: string) => w.length > 1)
-            const entries = Array.from(customerNameMap.entries())
-            for (let ci = 0; ci < entries.length; ci++) {
-              const custName = entries[ci][0]
-              const custId = entries[ci][1]
-              if (custName.includes(cleanName) || cleanName.includes(custName)) {
-                matchedCustomerId = custId
-                customerMatched = true
-                break
-              }
-              if (shipWords.length >= 2) {
-                const custWords = custName.split(' ').filter((w: string) => w.length > 1)
-                if (custWords.length >= 2 &&
-                    custWords[0] === shipWords[0] &&
-                    custWords[1] === shipWords[1]) {
-                  matchedCustomerId = custId
-                  customerMatched = true
-                  break
-                }
-              }
-            }
-          }
+          await client.query(
+            `INSERT INTO vinyl_tech_import_items (
+              import_id, vt_code, ship_to_name,
+              skid_16ft, skid_12ft, skid_4x8, misc,
+              weight, notes_on_skids, additional_notes, schedule_notes,
+              has_freight, customer_matched, matched_customer_id, freight_quote, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+            [
+              existing.id,
+              row.vtCode, row.shipToName,
+              row.skid16ft, row.skid12ft, row.skid4x8, row.misc,
+              row.weight, row.notesOnSkids, row.additionalNotes, row.scheduleNotes,
+              hasFreight, customerMatched, matchedCustomerId, freightQuote,
+              hasFreight ? 'pending' : 'skipped',
+            ]
+          )
         }
 
-        // Auto-calculate freight quote: 1 vinyl = $100, 2+ vinyls = $75 each
-        const totalVinyl = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc
-        let freightQuote = 0
-        if (totalVinyl === 1) {
-          freightQuote = 100
-        } else if (totalVinyl >= 2) {
-          freightQuote = totalVinyl * 75
-        }
-
+        // Recalculate totals for the existing import
         await client.query(
-          `INSERT INTO vinyl_tech_import_items (
-            import_id, vt_code, ship_to_name,
-            skid_16ft, skid_12ft, skid_4x8, misc,
-            weight, notes_on_skids, additional_notes, schedule_notes,
-            has_freight, customer_matched, matched_customer_id, freight_quote, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+          `UPDATE vinyl_tech_imports
+           SET total_items = (SELECT COUNT(*) FROM vinyl_tech_import_items WHERE import_id = $1),
+               items_with_freight = (SELECT COUNT(*) FROM vinyl_tech_import_items WHERE import_id = $1 AND has_freight = true),
+               total_weight = (SELECT COALESCE(SUM(weight), 0) FROM vinyl_tech_import_items WHERE import_id = $1),
+               status = CASE WHEN status = 'completed' THEN 'active' ELSE status END,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [existing.id]
+        )
+
+        updatedResults.push({
+          importId: existing.id,
+          weekLabel: sheetName,
+          newItemCount: newRows.length,
+        })
+      } else {
+        // Brand-new sheet
+        const importResult = await client.query(
+          `INSERT INTO vinyl_tech_imports (
+            file_name, week_label, week_date, sheet_status,
+            total_items, items_with_freight, total_weight,
+            status, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING id`,
           [
-            importId,
-            row.vtCode,
-            row.shipToName,
-            row.skid16ft,
-            row.skid12ft,
-            row.skid4x8,
-            row.misc,
-            row.weight,
-            row.notesOnSkids,
-            row.additionalNotes,
-            row.scheduleNotes,
-            hasFreight,
-            customerMatched,
-            matchedCustomerId,
-            freightQuote,
-            hasFreight ? 'pending' : 'skipped',
+            file.name,
+            parsed.weekLabel,
+            parsed.weekDate,
+            parsed.sheetStatus,
+            parsed.rows.length,
+            parsed.rows.filter(r => r.skid16ft + r.skid12ft + r.skid4x8 + r.misc > 0).length,
+            parsed.totalWeight,
+            'active',
+            session.user.id,
           ]
         )
-      }
 
-      importResults.push({
-        importId,
-        weekLabel: parsed.weekLabel,
-        itemCount: parsed.rows.length,
-      })
+        const importId = importResult.rows[0].id
+
+        for (const row of parsed.rows) {
+          const { matchedCustomerId, customerMatched } = matchCustomer(row, vtCodeMap, customerNameMap)
+          const hasFreight = row.skid16ft + row.skid12ft + row.skid4x8 + row.misc > 0
+          const freightQuote = calcFreightQuote(row)
+
+          await client.query(
+            `INSERT INTO vinyl_tech_import_items (
+              import_id, vt_code, ship_to_name,
+              skid_16ft, skid_12ft, skid_4x8, misc,
+              weight, notes_on_skids, additional_notes, schedule_notes,
+              has_freight, customer_matched, matched_customer_id, freight_quote, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+            [
+              importId,
+              row.vtCode, row.shipToName,
+              row.skid16ft, row.skid12ft, row.skid4x8, row.misc,
+              row.weight, row.notesOnSkids, row.additionalNotes, row.scheduleNotes,
+              hasFreight, customerMatched, matchedCustomerId, freightQuote,
+              hasFreight ? 'pending' : 'skipped',
+            ]
+          )
+        }
+
+        importResults.push({
+          importId,
+          weekLabel: parsed.weekLabel,
+          itemCount: parsed.rows.length,
+        })
+      }
     }
 
     await client.query('COMMIT')
@@ -291,16 +339,20 @@ export async function POST(request: NextRequest) {
     if (importResults.length > 0) {
       parts.push(`Imported ${importResults.length} new week(s) with ${importResults.reduce((s, i) => s + i.itemCount, 0)} items`)
     }
-    if (skippedSheets.length > 0) {
-      parts.push(`Skipped ${skippedSheets.length} already-imported sheet(s)`)
+    if (updatedResults.length > 0) {
+      parts.push(`Added ${updatedResults.reduce((s, u) => s + u.newItemCount, 0)} new item(s) to ${updatedResults.length} existing week(s)`)
     }
-    if (importResults.length === 0 && skippedSheets.length > 0) {
-      parts.push('All sheets in this file have already been imported')
+    if (skippedSheets.length > 0) {
+      parts.push(`Skipped ${skippedSheets.length} unchanged sheet(s)`)
+    }
+    if (importResults.length === 0 && updatedResults.length === 0 && skippedSheets.length > 0) {
+      parts.push('All sheets in this file have already been imported with no new items')
     }
 
     return NextResponse.json({
       success: true,
       imports: importResults,
+      updatedImports: updatedResults,
       skippedSheets,
       message: parts.join('. '),
     })

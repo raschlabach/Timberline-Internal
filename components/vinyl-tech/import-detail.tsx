@@ -28,6 +28,9 @@ import {
   Pencil,
   Check,
   X,
+  Download,
+  FileText,
+  List,
 } from 'lucide-react'
 
 interface ImportItem {
@@ -47,9 +50,16 @@ interface ImportItem {
   matched_customer_id: number | null
   matched_customer_name: string | null
   freight_quote: number
+  pickup_date: string | null
+  pickup_driver: string | null
   status: string
   order_id: number | null
   truckload_id: number | null
+  driver_name: string | null
+  driver_color: string | null
+  trailer_number: string | null
+  truckload_start_date: string | null
+  truckload_end_date: string | null
 }
 
 interface ImportData {
@@ -82,6 +92,12 @@ interface Customer {
   customer_name: string
 }
 
+interface Driver {
+  id: number
+  full_name: string
+  color: string
+}
+
 interface ImportDetailProps {
   importId: number
   onBack: () => void
@@ -102,10 +118,14 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
   const [selectedTruckloadId, setSelectedTruckloadId] = useState<string>('')
   const [isConverting, setIsConverting] = useState(false)
   const [showOnlyFreight, setShowOnlyFreight] = useState(true)
+  const [viewMode, setViewMode] = useState<'edit' | 'summary'>('edit')
 
   // Inline editing state
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+
+  // Drivers list for pickup driver dropdown
+  const [drivers, setDrivers] = useState<Driver[]>([])
 
   // Customer matching dialog state
   const [isMatchDialogOpen, setIsMatchDialogOpen] = useState(false)
@@ -141,10 +161,24 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
     }
   }, [])
 
+  const fetchDrivers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/drivers')
+      if (!res.ok) throw new Error('Failed to fetch')
+      const data = await res.json()
+      if (data.success) {
+        setDrivers(data.drivers || [])
+      }
+    } catch {
+      // silent fail — driver list is non-critical
+    }
+  }, [])
+
   useEffect(() => {
     fetchImport()
     fetchTruckloads()
-  }, [fetchImport, fetchTruckloads])
+    fetchDrivers()
+  }, [fetchImport, fetchTruckloads, fetchDrivers])
 
   const pendingFreightItems = items.filter(i => i.has_freight && i.status === 'pending')
   const convertedItems = items.filter(i => i.status === 'converted')
@@ -346,6 +380,34 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
     }
   }
 
+  async function handlePickupFieldChange(itemId: number, field: 'pickup_date' | 'pickup_driver', value: string) {
+    const item = items.find(i => i.id === itemId)
+    if (!item) return
+
+    // Optimistic update
+    setItems(prev => prev.map(i =>
+      i.id === itemId ? { ...i, [field]: value || null } : i
+    ))
+
+    try {
+      const res = await fetch(`/api/vinyl-tech/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pickup_date: field === 'pickup_date' ? (value || null) : item.pickup_date,
+          pickup_driver: field === 'pickup_driver' ? (value || null) : item.pickup_driver,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+    } catch {
+      // Revert on failure
+      setItems(prev => prev.map(i =>
+        i.id === itemId ? { ...i, [field]: item[field] } : i
+      ))
+      toast.error('Failed to save pickup info')
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -390,12 +452,39 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
           </div>
         </div>
 
-        <div className="text-right text-sm text-gray-500">
-          <div>{importData.items_with_freight} items with freight</div>
-          <div>{importData.total_weight.toLocaleString()} lbs total</div>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-gray-100 rounded-md p-0.5">
+            <button
+              onClick={() => setViewMode('edit')}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                viewMode === 'edit' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              Manage
+            </button>
+            <button
+              onClick={() => setViewMode('summary')}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                viewMode === 'summary' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Summary
+            </button>
+          </div>
+          <div className="text-right text-sm text-gray-500">
+            <div>{importData.items_with_freight} items with freight</div>
+            <div>{importData.total_weight.toLocaleString()} lbs total</div>
+          </div>
         </div>
       </div>
 
+      {viewMode === 'summary' && (
+        <WeeklySummary importData={importData} items={items} />
+      )}
+
+      {viewMode === 'edit' && <>
       {/* Action Bar */}
       {pendingFreightItems.length > 0 && (
         <Card className="border-blue-200 bg-blue-50/50">
@@ -518,6 +607,8 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                   <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-16">Misc</th>
                   <th className="px-3 py-2.5 text-right font-medium text-gray-500 w-20">Weight</th>
                   <th className="px-3 py-2.5 text-left font-medium text-gray-500">Notes</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-32">Pickup Date</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-gray-500 w-36">Pickup Driver</th>
                   <th className="px-3 py-2.5 w-10" />
                 </tr>
               </thead>
@@ -696,6 +787,30 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                         className="text-left text-xs text-gray-500 max-w-[200px]"
                       />
 
+                      <td className="px-2 py-1.5">
+                        {item.has_freight && (
+                          <Input
+                            type="date"
+                            value={item.pickup_date || ''}
+                            onChange={(e) => handlePickupFieldChange(item.id, 'pickup_date', e.target.value)}
+                            className="h-7 text-xs w-[120px]"
+                          />
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {item.has_freight && (
+                          <select
+                            value={item.pickup_driver || ''}
+                            onChange={(e) => handlePickupFieldChange(item.id, 'pickup_driver', e.target.value)}
+                            className="h-7 text-xs w-[130px] rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
+                          >
+                            <option value="">—</option>
+                            {drivers.map(d => (
+                              <option key={d.id} value={d.full_name}>{d.full_name}</option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">
                         {isEditable && (
                           <button
@@ -715,6 +830,8 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
           </div>
         </CardContent>
       </Card>
+
+      </>}
 
       {/* Customer Match Dialog */}
       <Dialog open={isMatchDialogOpen} onOpenChange={setIsMatchDialogOpen}>
@@ -761,6 +878,220 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+interface WeeklySummaryProps {
+  importData: ImportData
+  items: ImportItem[]
+}
+
+function WeeklySummary({ importData, items }: WeeklySummaryProps) {
+  const freightItems = items.filter(i => i.has_freight)
+
+  function buildCsvContent(): string {
+    const headers = [
+      'Customer',
+      'VT Code',
+      "16' Skids",
+      "12' Skids",
+      '4x8 Skids',
+      'Misc',
+      'Weight (lbs)',
+      'Quote',
+      'Pickup Date',
+      'Pickup Driver',
+      'Delivery Driver',
+      'Delivery Dates',
+      'Notes',
+    ]
+
+    const rows = freightItems.map(item => {
+      let deliveryDates = ''
+      if (item.truckload_start_date && item.truckload_end_date) {
+        deliveryDates = `${format(new Date(item.truckload_start_date + 'T00:00:00'), 'M/d/yyyy')} - ${format(new Date(item.truckload_end_date + 'T00:00:00'), 'M/d/yyyy')}`
+      }
+
+      return [
+        item.matched_customer_name || item.ship_to_name,
+        item.vt_code || '',
+        item.skid_16ft || '',
+        item.skid_12ft || '',
+        item.skid_4x8 || '',
+        item.misc || '',
+        item.weight || '',
+        item.freight_quote ? `$${item.freight_quote}` : '',
+        item.pickup_date ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yyyy') : '',
+        item.pickup_driver || '',
+        item.driver_name || '',
+        deliveryDates,
+        [item.notes_on_skids, item.additional_notes].filter(Boolean).join('; '),
+      ]
+    })
+
+    const escape = (val: string | number) => {
+      const str = String(val)
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }
+
+    return [
+      `Vinyl Tech Pickup Confirmation - ${importData.week_label}`,
+      importData.week_date ? `Week of ${format(new Date(importData.week_date + 'T00:00:00'), 'MMMM d, yyyy')}` : '',
+      '',
+      headers.map(escape).join(','),
+      ...rows.map(row => row.map(escape).join(',')),
+    ].join('\n')
+  }
+
+  function handleDownload() {
+    const csv = buildCsvContent()
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Vinyl Tech - ${importData.week_label}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const assignedItems = freightItems.filter(i => i.truckload_id)
+  const unassignedConverted = freightItems.filter(i => i.status === 'converted' && !i.truckload_id)
+  const pendingItems = freightItems.filter(i => i.status === 'pending')
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2 text-xs">
+          <Badge variant="outline" className="gap-1">
+            <Truck className="h-3 w-3 text-green-500" />
+            {assignedItems.length} assigned
+          </Badge>
+          {unassignedConverted.length > 0 && (
+            <Badge variant="outline" className="gap-1">
+              <Package className="h-3 w-3 text-blue-500" />
+              {unassignedConverted.length} orders (unassigned)
+            </Badge>
+          )}
+          {pendingItems.length > 0 && (
+            <Badge variant="outline" className="gap-1">
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              {pendingItems.length} pending
+            </Badge>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5">
+          <Download className="h-4 w-4" />
+          Download CSV
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Customer</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500 w-20">VT Code</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-gray-500 w-14">Qty</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-gray-500 w-20">Weight</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-gray-500 w-20">Quote</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Pickup Date</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Pickup Driver</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Delivery Driver</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Delivery Dates</th>
+                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {freightItems.map(item => {
+                  const totalVinyl = item.skid_16ft + item.skid_12ft + item.skid_4x8 + item.misc
+                  const isAssigned = !!item.truckload_id
+                  const isOrderCreated = item.status === 'converted' && !item.truckload_id
+                  const isPending = item.status === 'pending'
+
+                  const skidParts: string[] = []
+                  if (item.skid_16ft > 0) skidParts.push(`${item.skid_16ft}x 16'`)
+                  if (item.skid_12ft > 0) skidParts.push(`${item.skid_12ft}x 12'`)
+                  if (item.skid_4x8 > 0) skidParts.push(`${item.skid_4x8}x 4x8`)
+                  if (item.misc > 0) skidParts.push(`${item.misc}x misc`)
+
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`border-b border-gray-100 ${
+                        isAssigned ? 'bg-green-50/30' : isOrderCreated ? 'bg-blue-50/30' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        {item.matched_customer_name || item.ship_to_name}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 font-mono">
+                        {item.vt_code || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono" title={skidParts.join(', ')}>
+                        {totalVinyl}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-600 font-mono">
+                        {item.weight ? item.weight.toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono">
+                        {item.freight_quote ? `$${item.freight_quote}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {item.pickup_date ? (
+                          format(new Date(item.pickup_date + 'T00:00:00'), 'MMM d, yyyy')
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {item.pickup_driver || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isAssigned && item.driver_name ? (
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: item.driver_color || '#999' }}
+                            />
+                            <span className="text-sm">{item.driver_name}</span>
+                            {item.trailer_number && (
+                              <span className="text-xs text-gray-400">#{item.trailer_number}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {isAssigned && item.truckload_start_date && item.truckload_end_date ? (
+                          <span>
+                            {format(new Date(item.truckload_start_date + 'T00:00:00'), 'MMM d')}
+                            {' – '}
+                            {format(new Date(item.truckload_end_date + 'T00:00:00'), 'MMM d, yyyy')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate" title={
+                        [item.notes_on_skids, item.additional_notes].filter(Boolean).join(' | ')
+                      }>
+                        {[item.notes_on_skids, item.additional_notes].filter(Boolean).join(' | ') || '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

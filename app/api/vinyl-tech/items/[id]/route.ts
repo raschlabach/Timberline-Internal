@@ -19,6 +19,25 @@ export async function PATCH(
     }
 
     const body = await request.json()
+
+    // Pickup-only update (date and driver display fields for Vinyl Tech)
+    if ('pickup_date' in body || 'pickup_driver' in body) {
+      await query(
+        `UPDATE vinyl_tech_import_items
+         SET pickup_date = $1,
+             pickup_driver = $2,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [
+          body.pickup_date || null,
+          body.pickup_driver || null,
+          itemId,
+        ]
+      )
+      return NextResponse.json({ success: true })
+    }
+
+    // Freight field update
     const { skid_16ft, skid_12ft, skid_4x8, misc, weight, notes_on_skids, freight_quote } = body
 
     const hasFreight = (skid_16ft || 0) + (skid_12ft || 0) + (skid_4x8 || 0) + (misc || 0) > 0

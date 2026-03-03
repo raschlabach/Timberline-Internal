@@ -88,7 +88,7 @@ export default function VinylTechPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
 
-      if (data.imports?.length > 0) {
+      if (data.imports?.length > 0 || data.updatedImports?.length > 0) {
         toast.success(data.message)
       } else {
         toast.info(data.message)

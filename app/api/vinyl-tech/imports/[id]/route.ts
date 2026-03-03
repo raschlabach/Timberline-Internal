@@ -59,12 +59,22 @@ export async function GET(
         item.customer_matched,
         item.matched_customer_id,
         item.freight_quote,
+        TO_CHAR(item.pickup_date, 'YYYY-MM-DD') as pickup_date,
+        item.pickup_driver,
         item.status,
         item.order_id,
         item.truckload_id,
-        c.customer_name as matched_customer_name
+        c.customer_name as matched_customer_name,
+        u.full_name as driver_name,
+        d.color as driver_color,
+        t.trailer_number,
+        TO_CHAR(t.start_date, 'YYYY-MM-DD') as truckload_start_date,
+        TO_CHAR(t.end_date, 'YYYY-MM-DD') as truckload_end_date
       FROM vinyl_tech_import_items item
       LEFT JOIN customers c ON item.matched_customer_id = c.id
+      LEFT JOIN truckloads t ON item.truckload_id = t.id
+      LEFT JOIN drivers d ON t.driver_id = d.user_id
+      LEFT JOIN users u ON d.user_id = u.id
       WHERE item.import_id = $1
       ORDER BY item.id ASC`,
       [importId]
