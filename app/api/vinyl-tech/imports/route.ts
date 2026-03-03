@@ -10,6 +10,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Auto-promote completed imports back to active if they have pending freight items
+    await query(`
+      UPDATE vinyl_tech_imports
+      SET status = 'active', updated_at = CURRENT_TIMESTAMP
+      WHERE status = 'completed'
+        AND id IN (
+          SELECT import_id FROM vinyl_tech_import_items
+          WHERE status = 'pending' AND has_freight = true
+        )
+    `)
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'all'
 
