@@ -15,7 +15,12 @@ export async function GET(
 
     const orderResult = await query(
       `SELECT
-        o.*, c.customer_name
+        o.id, o.order_number, o.po_number, o.order_date, o.due_date,
+        o.status, o.is_rush, o.notes, o.total_price, o.source, o.quote_id,
+        o.in_quickbooks, o.in_quickbooks_at, o.sent_to_shop, o.sent_to_shop_at,
+        o.original_file_url, o.original_file_name,
+        o.customer_id, o.created_at, o.updated_at,
+        c.customer_name
       FROM rnr_orders o
       LEFT JOIN customers c ON c.id = o.customer_id
       WHERE o.id = $1`,
@@ -66,7 +71,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { customer_id, po_number, order_date, due_date, status, is_rush, notes, total_price, items } = body
+    const { customer_id, po_number, order_date, due_date, status, is_rush, notes, total_price, items, in_quickbooks, sent_to_shop } = body
 
     const orderResult = await query(
       `UPDATE rnr_orders SET
@@ -78,10 +83,14 @@ export async function PUT(
         is_rush = COALESCE($6, is_rush),
         notes = $7,
         total_price = COALESCE($8, total_price),
+        in_quickbooks = COALESCE($10, in_quickbooks),
+        in_quickbooks_at = CASE WHEN $10 = true AND in_quickbooks = false THEN NOW() ELSE in_quickbooks_at END,
+        sent_to_shop = COALESCE($11, sent_to_shop),
+        sent_to_shop_at = CASE WHEN $11 = true AND sent_to_shop = false THEN NOW() ELSE sent_to_shop_at END,
         updated_at = NOW()
       WHERE id = $9
       RETURNING *`,
-      [customer_id, po_number || null, order_date, due_date || null, status, is_rush, notes || null, total_price, params.id]
+      [customer_id, po_number || null, order_date, due_date || null, status, is_rush, notes || null, total_price, params.id, in_quickbooks, sent_to_shop]
     )
 
     if (orderResult.rows.length === 0) {
