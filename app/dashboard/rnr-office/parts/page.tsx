@@ -472,6 +472,18 @@ export default function PartsListPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" className="text-xs text-gray-500"
+            onClick={async () => {
+              if (!confirm('Remove "AF-" prefix from all Archbold part numbers?')) return
+              try {
+                const res = await fetch('/api/admin/fix-archbold-parts', { method: 'POST' })
+                const data = await res.json()
+                if (res.ok) {
+                  toast.success(`Fixed ${data.rnr_part_numbers_fixed || 0} RNR part #s and ${data.customer_part_numbers_fixed || 0} customer part #s`)
+                  fetchParts()
+                } else { toast.error(data.error || 'Failed') }
+              } catch { toast.error('Failed') }
+            }}>Fix Archbold AF-</Button>
           <Link href="/dashboard/rnr-office/parts/import">
             <Button variant="outline" className="gap-2"><Upload size={16} />Import CSV</Button>
           </Link>
