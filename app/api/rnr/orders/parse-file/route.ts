@@ -406,7 +406,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       temperature: 0.1,
-      max_tokens: 4000,
+      max_tokens: 16000,
     })
 
     const aiText = parseResponse.choices[0]?.message?.content || ''
