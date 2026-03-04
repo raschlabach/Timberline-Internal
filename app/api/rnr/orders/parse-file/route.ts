@@ -77,10 +77,16 @@ export async function POST(request: NextRequest) {
 
     let extractedText = ''
 
-    if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+    if (file.type === 'application/pdf') {
+      const buffer = Buffer.from(await file.arrayBuffer())
+      // Use internal module path to avoid pdf-parse's test file loading issue on serverless
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
+      const pdfData = await pdfParse(buffer)
+      extractedText = pdfData.text
+    } else if (file.type.startsWith('image/')) {
       const buffer = Buffer.from(await file.arrayBuffer())
       const base64 = buffer.toString('base64')
-      const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
       const visionResponse = await getOpenAI().chat.completions.create({
         model: 'gpt-4o',
@@ -94,7 +100,7 @@ export async function POST(request: NextRequest) {
             content: [
               {
                 type: 'image_url',
-                image_url: { url: `data:${mimeType};base64,${base64}` },
+                image_url: { url: `data:${file.type};base64,${base64}` },
               },
             ],
           },
