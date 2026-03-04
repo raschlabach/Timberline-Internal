@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
         `SELECT id, rnr_part_number, customer_part_number, description, price
          FROM rnr_parts
          WHERE customer_part_number IN (${placeholders}) OR rnr_part_number IN (${placeholders})`,
-        [...partNumbers, ...partNumbers]
+        partNumbers
       )
 
       for (const p of partsResult.rows) {
