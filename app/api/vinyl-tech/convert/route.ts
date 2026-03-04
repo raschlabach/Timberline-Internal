@@ -115,8 +115,9 @@ export async function POST(request: NextRequest) {
           freight_quote,
           comments,
           status,
+          oh_to_in,
           created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id`,
         [
           pickupCustomerId,
@@ -127,6 +128,7 @@ export async function POST(request: NextRequest) {
             .filter(Boolean)
             .join(' | ') || null,
           orderStatus,
+          true,
           session.user.id,
         ]
       )
