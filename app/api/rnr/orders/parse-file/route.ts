@@ -8,6 +8,43 @@ function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 }
 
+function getDocumentAIClient() {
+  const creds = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  if (!creds) return null
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
+  const location = process.env.GOOGLE_CLOUD_LOCATION || 'us'
+  const processorId = process.env.GOOGLE_DOCUMENT_AI_PROCESSOR_ID
+  if (!projectId || !processorId) return null
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { DocumentProcessorServiceClient } = require('@google-cloud/documentai').v1
+  const credentials = JSON.parse(creds)
+  const client = new DocumentProcessorServiceClient({
+    credentials,
+    apiEndpoint: `${location}-documentai.googleapis.com`,
+  })
+  const processorName = `projects/${projectId}/locations/${location}/processors/${processorId}`
+  return { client, processorName }
+}
+
+async function ocrWithDocumentAI(buffer: Buffer, mimeType: string): Promise<string | null> {
+  const dai = getDocumentAIClient()
+  if (!dai) return null
+
+  try {
+    const encodedContent = buffer.toString('base64')
+    const request = {
+      name: dai.processorName,
+      rawDocument: { content: encodedContent, mimeType },
+    }
+    const [result] = await dai.client.processDocument(request)
+    return result?.document?.text || null
+  } catch (err) {
+    console.error('Document AI OCR error:', err)
+    return null
+  }
+}
+
 const SYSTEM_PROMPT = `You are an order-parsing assistant for RNR Manufacturing, a wood products manufacturer.
 You will receive text extracted from a customer purchase order (PDF, image, or text).
 Your job is to extract all order data into a structured JSON format.
@@ -71,7 +108,10 @@ async function extractTextFromFile(
     const text = pdfData.text?.trim() || ''
     if (text.length > 20) return text
 
-    // Scanned/image PDF: fall back to OpenAI Responses API which handles PDFs natively
+    // Scanned/image PDF: try Google Document AI first (purpose-built OCR), fall back to OpenAI
+    const daiText = await ocrWithDocumentAI(buffer, 'application/pdf')
+    if (daiText && daiText.trim().length > 20) return daiText
+
     const base64 = buffer.toString('base64')
     const response = await getOpenAI().responses.create({
       model: 'gpt-4o',
@@ -84,8 +124,8 @@ async function extractTextFromFile(
             file_data: `data:application/pdf;base64,${base64}`,
           },
           {
-                  type: 'input_text',
-                  text: 'Extract ALL text from this purchase order document. Include every single line item, part number, quantity, price, date, and detail. CRITICAL: Part numbers must be copied EXACTLY digit-by-digit — do not transpose, swap, or guess any digits. Return only the extracted text, nothing else.',
+            type: 'input_text',
+            text: 'Extract ALL text from this purchase order document. Include every single line item, part number, quantity, price, date, and detail. CRITICAL: Part numbers must be copied EXACTLY digit-by-digit — do not transpose, swap, or guess any digits. Return only the extracted text, nothing else.',
           },
         ],
       }],
@@ -94,6 +134,10 @@ async function extractTextFromFile(
   }
 
   if (file.type.startsWith('image/')) {
+    // Try Google Document AI first for images too
+    const daiText = await ocrWithDocumentAI(buffer, file.type)
+    if (daiText && daiText.trim().length > 20) return daiText
+
     const base64 = buffer.toString('base64')
     const visionResponse = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
@@ -316,13 +360,38 @@ export async function POST(request: NextRequest) {
       systemPrompt += `\n\nADDITIONAL USER INSTRUCTIONS:\n${userHint}`
     }
 
+    // Fetch known part numbers for this customer so the AI can match against real data
+    let knownPartsContext = ''
+    if (preMatchedCustomerId) {
+      try {
+        const knownPartsResult = await query(
+          `SELECT customer_part_number, rnr_part_number, description
+           FROM rnr_parts
+           WHERE customer_id = $1 AND is_active = true
+           ORDER BY customer_part_number
+           LIMIT 500`,
+          [preMatchedCustomerId],
+        )
+        if (knownPartsResult.rows.length > 0) {
+          const partsList = knownPartsResult.rows
+            .map((p: { customer_part_number: string | null; rnr_part_number: string | null; description: string | null }) =>
+              `${p.customer_part_number || p.rnr_part_number || '?'} — ${p.description || 'no description'}`)
+            .join('\n')
+          knownPartsContext = `\n\nKNOWN PART NUMBERS FOR THIS CUSTOMER (reference list):\n${partsList}`
+          systemPrompt += `\n\nIMPORTANT: A list of known part numbers for this customer is provided below the order text. Use this list ONLY to help you read ambiguous or blurry characters — for example, if you can't tell whether a digit is a 0 or an 8, check the known list to see which makes sense. However, ALWAYS output exactly what the document says. Do NOT silently replace a part number with a known one. If the document clearly shows a part number that is not in the known list, output it as-is — it may be a genuinely new part.`
+        }
+      } catch {
+        // ignore if query fails
+      }
+    }
+
     const parseResponse = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         {
           role: 'user',
-          content: `Here are the known customers in our system: ${customerList}\n\nPlease match the customer name to one of these if possible.\n\nHere is the order text to parse:\n\n${extractedText}`,
+          content: `Here are the known customers in our system: ${customerList}\n\nPlease match the customer name to one of these if possible.\n\nHere is the order text to parse:\n\n${extractedText}${knownPartsContext}`,
         },
       ],
       temperature: 0.1,
