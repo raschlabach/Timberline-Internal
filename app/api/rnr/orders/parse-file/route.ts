@@ -28,6 +28,7 @@ Extract the following fields:
 
 CRITICAL rules:
 - Part numbers are STRINGS, never numbers. Preserve them EXACTLY as written.
+- PART NUMBER ACCURACY IS THE #1 PRIORITY. Copy each part number character-by-character, digit-by-digit. Do NOT rearrange, swap, transpose, or guess ANY digits. A part number like "400061100105" must be EXACTLY "400061100105" — not "400061101005" or any other variation. If you cannot read a character clearly, use "?" as a placeholder rather than guessing. Getting a part number wrong is worse than leaving it blank.
 - Extract ALL line items, don't skip any
 - If no part number column exists but items are described by dimensions (like "3/4 x 1 1/4 x 23 1/2"), construct a dimension key like "0.75x1.25x23.5" for the part_number field
 - If a field is not found, use null
@@ -83,8 +84,8 @@ async function extractTextFromFile(
             file_data: `data:application/pdf;base64,${base64}`,
           },
           {
-            type: 'input_text',
-            text: 'Extract ALL text from this purchase order document. Include every single line item, part number, quantity, price, date, and detail. Return only the extracted text, nothing else.',
+                  type: 'input_text',
+                  text: 'Extract ALL text from this purchase order document. Include every single line item, part number, quantity, price, date, and detail. CRITICAL: Part numbers must be copied EXACTLY digit-by-digit — do not transpose, swap, or guess any digits. Return only the extracted text, nothing else.',
           },
         ],
       }],
@@ -99,7 +100,7 @@ async function extractTextFromFile(
       messages: [
         {
           role: 'system',
-          content: 'Extract ALL text from this purchase order document. Include every line item, part number, quantity, price, date, and detail you can see. Return only the extracted text, nothing else.',
+          content: 'Extract ALL text from this purchase order document. Include every line item, part number, quantity, price, date, and detail you can see. CRITICAL: Part numbers must be copied EXACTLY digit-by-digit — do not transpose, swap, or guess any digits. Return only the extracted text, nothing else.',
         },
         {
           role: 'user',
@@ -133,6 +134,83 @@ interface MatchedPart {
   thickness: number | null
   width: number | null
   length: number | null
+}
+
+interface FuzzySuggestion {
+  part_id: number
+  part_number: string
+  customer_part_number: string | null
+  description: string | null
+  price: number | null
+  distance: number
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+    }
+  }
+  return dp[m][n]
+}
+
+async function findFuzzySuggestions(
+  unmatchedNumbers: string[],
+  customerId: number | null,
+): Promise<Record<string, FuzzySuggestion>> {
+  if (unmatchedNumbers.length === 0) return {}
+
+  const candidatesResult = await query(
+    `SELECT id, rnr_part_number, customer_part_number, description, price
+     FROM rnr_parts WHERE is_active = true${customerId ? ' AND (customer_id = $1 OR customer_id IS NULL)' : ''}`,
+    customerId ? [customerId] : [],
+  )
+  const candidates = candidatesResult.rows as {
+    id: number; rnr_part_number: string | null; customer_part_number: string | null;
+    description: string | null; price: number | null
+  }[]
+
+  const suggestions: Record<string, FuzzySuggestion> = {}
+  const maxDistance = 3
+
+  for (const pn of unmatchedNumbers) {
+    const pnLower = pn.toLowerCase()
+    let bestMatch: FuzzySuggestion | null = null
+    let bestDist = maxDistance + 1
+
+    for (const c of candidates) {
+      for (const candidatePn of [c.customer_part_number, c.rnr_part_number]) {
+        if (!candidatePn) continue
+        if (Math.abs(candidatePn.length - pn.length) > maxDistance) continue
+        const dist = levenshtein(pnLower, candidatePn.toLowerCase())
+        if (dist > 0 && dist < bestDist) {
+          bestDist = dist
+          bestMatch = {
+            part_id: c.id,
+            part_number: c.rnr_part_number || candidatePn,
+            customer_part_number: c.customer_part_number,
+            description: c.description,
+            price: c.price,
+            distance: dist,
+          }
+        }
+      }
+    }
+
+    if (bestMatch) {
+      suggestions[pn] = bestMatch
+    }
+  }
+
+  return suggestions
 }
 
 async function matchPartsByDimensions(
@@ -320,8 +398,15 @@ export async function POST(request: NextRequest) {
     // Dimension-based part matching for items without part numbers
     matchedParts = await matchPartsByDimensions(parsed.items || [], matchedParts)
 
+    // Fuzzy matching for unmatched part numbers
+    const unmatchedNumbers = (parsed.items || [])
+      .map((i: ParsedItem) => i.part_number)
+      .filter((pn): pn is string => !!pn && !matchedParts[pn]) as string[]
+    const fuzzySuggestions = await findFuzzySuggestions(unmatchedNumbers, matchedCustomerId)
+
     const enrichedItems = (parsed.items || []).map((item: ParsedItem) => {
       const matched = item.part_number ? (matchedParts[item.part_number] || null) : null
+      const suggestion = (!matched && item.part_number) ? (fuzzySuggestions[item.part_number] || null) : null
       return {
         part_number: item.part_number || null,
         description: item.description || matched?.description || null,
@@ -330,7 +415,15 @@ export async function POST(request: NextRequest) {
         unit: item.unit || 'PC',
         matched_part_id: matched?.id || null,
         matched_part_number: matched?.rnr_part_number || matched?.customer_part_number || null,
-        is_new_part: !matched,
+        is_new_part: !matched && !suggestion,
+        suggested_part: suggestion ? {
+          part_id: suggestion.part_id,
+          part_number: suggestion.part_number,
+          customer_part_number: suggestion.customer_part_number,
+          description: suggestion.description,
+          price: suggestion.price,
+          distance: suggestion.distance,
+        } : null,
       }
     })
 

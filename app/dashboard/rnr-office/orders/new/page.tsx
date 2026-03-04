@@ -52,6 +52,15 @@ interface PartResult {
   profile_name: string | null
 }
 
+interface SuggestedPart {
+  part_id: number
+  part_number: string
+  customer_part_number: string | null
+  description: string | null
+  price: number | null
+  distance: number
+}
+
 interface LineItem {
   key: string
   part_id: number | null
@@ -68,6 +77,7 @@ interface LineItem {
   line_total: string
   is_new_part: boolean
   notes: string
+  suggested_part: SuggestedPart | null
 }
 
 function newLineItem(): LineItem {
@@ -76,6 +86,7 @@ function newLineItem(): LineItem {
     isSearching: false, showDropdown: false, selectedPart: null,
     customer_part_number: '', description: '', quantity_ordered: '',
     price_per_unit: '', price_unit: 'BF', line_total: '', is_new_part: false, notes: '',
+    suggested_part: null,
   }
 }
 
@@ -219,6 +230,7 @@ export default function NewOrderPage() {
           part_number?: string; description?: string; quantity?: number;
           price?: number; unit?: string; matched_part_id?: number | null;
           matched_part_number?: string | null; is_new_part?: boolean;
+          suggested_part?: SuggestedPart | null;
         }) => ({
           key: crypto.randomUUID(),
           part_id: item.matched_part_id || null,
@@ -235,14 +247,16 @@ export default function NewOrderPage() {
           line_total: (item.quantity && item.price) ? (item.quantity * item.price).toFixed(2) : '',
           is_new_part: item.is_new_part || false,
           notes: '',
+          suggested_part: item.suggested_part || null,
         }))
         setItems(parsedItems)
       }
 
       const newCount = (data.items || []).filter((i: { is_new_part?: boolean }) => i.is_new_part).length
-      const matchedCount = (data.items || []).length - newCount
+      const suggestedCount = (data.items || []).filter((i: { suggested_part?: SuggestedPart | null }) => i.suggested_part).length
+      const matchedCount = (data.items || []).length - newCount - suggestedCount
       toast.success(
-        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched, ${newCount} new parts)`,
+        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched${suggestedCount > 0 ? `, ${suggestedCount} close matches` : ''}, ${newCount} new parts)`,
         { duration: 5000 }
       )
     } catch (err) {
@@ -678,7 +692,7 @@ export default function NewOrderPage() {
                 </thead>
                 <tbody>
                   {items.map((item, idx) => (
-                    <tr key={item.key} className={`border-b border-gray-100 ${item.is_new_part ? 'bg-amber-50' : ''}`}>
+                    <tr key={item.key} className={`border-b border-gray-100 ${item.is_new_part ? 'bg-amber-50' : item.suggested_part ? 'bg-blue-50' : ''}`}>
                       <td className="px-3 py-2 relative">
                         <div className="relative">
                           <Input
@@ -687,13 +701,45 @@ export default function NewOrderPage() {
                             onFocus={() => { if (item.partResults.length > 0) updateItem(idx, { showDropdown: true }) }}
                             onBlur={() => setTimeout(() => updateItem(idx, { showDropdown: false }), 200)}
                             placeholder="Search parts..."
-                            className={`font-mono text-xs pr-8 ${item.is_new_part ? 'border-amber-400' : ''}`}
+                            className={`font-mono text-xs pr-8 ${item.is_new_part ? 'border-amber-400' : item.suggested_part ? 'border-blue-400' : ''}`}
                           />
                           {item.isSearching && <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
                           {item.is_new_part && (
                             <span className="absolute -top-1.5 -right-1.5 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-medium">NEW</span>
                           )}
+                          {item.suggested_part && (
+                            <span className="absolute -top-1.5 -right-1.5 text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-medium">CHECK</span>
+                          )}
                         </div>
+                        {item.suggested_part && (
+                          <div className="mt-1 p-1.5 bg-blue-50 border border-blue-200 rounded text-xs">
+                            <span className="text-blue-700">Did you mean </span>
+                            <button type="button"
+                              className="font-mono font-semibold text-blue-800 underline hover:text-blue-900"
+                              onClick={() => {
+                                const s = item.suggested_part!
+                                updateItem(idx, {
+                                  part_id: s.part_id,
+                                  partSearch: s.customer_part_number || s.part_number,
+                                  customer_part_number: s.customer_part_number || s.part_number,
+                                  description: s.description || item.description,
+                                  price_per_unit: s.price?.toString() || item.price_per_unit,
+                                  line_total: calcLineTotal(item.quantity_ordered, s.price?.toString() || item.price_per_unit),
+                                  is_new_part: false,
+                                  suggested_part: null,
+                                })
+                                toast.success(`Accepted: ${s.customer_part_number || s.part_number}`)
+                              }}>
+                              {item.suggested_part.customer_part_number || item.suggested_part.part_number}
+                            </button>
+                            <span className="text-blue-500 ml-1">({item.suggested_part.description || 'no desc'})?</span>
+                            <button type="button" className="ml-2 text-gray-400 hover:text-gray-600"
+                              onClick={() => updateItem(idx, { suggested_part: null, is_new_part: true })}
+                              title="Dismiss suggestion">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        )}
                         {item.showDropdown && item.partResults.length > 0 && (
                           <div className="absolute z-50 mt-1 left-3 right-3 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
                             {item.partResults.map(p => (
