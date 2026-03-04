@@ -110,6 +110,9 @@ export default function NewOrderPage() {
   const dragCounterRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [isParsing, setIsParsing] = useState(false)
+  const [parseError, setParseError] = useState<string | null>(null)
+
   const [isNewPartOpen, setIsNewPartOpen] = useState(false)
   const [newPartLineIdx, setNewPartLineIdx] = useState<number | null>(null)
   const [newPartForm, setNewPartForm] = useState({
@@ -179,7 +182,65 @@ export default function NewOrderPage() {
       setFilePreviewUrl(url)
       setIsShowingPreview(true)
     }
-    toast.success(`File "${file.name}" attached`)
+    parseFileWithAI(file)
+  }
+
+  async function parseFileWithAI(file: File) {
+    setIsParsing(true)
+    setParseError(null)
+    toast.info('Reading order file with AI...')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/rnr/orders/parse-file', { method: 'POST', body: formData })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setParseError(data.error || 'Failed to parse')
+        toast.error(data.error || 'Could not parse order file')
+        return
+      }
+
+      if (data.customer_id) setCustomerId(data.customer_id.toString())
+      if (data.po_number) setPoNumber(data.po_number)
+      if (data.order_date) setOrderDate(data.order_date)
+      if (data.due_date) setDueDate(data.due_date)
+      if (data.is_rush) setIsRush(true)
+      if (data.notes) setNotes(data.notes)
+
+      if (data.items && data.items.length > 0) {
+        const parsedItems: LineItem[] = data.items.map((item: {
+          part_number?: string; description?: string; quantity?: number;
+          price?: number; unit?: string; matched_part_id?: number | null;
+          matched_part_number?: string | null; is_new_part?: boolean;
+        }) => ({
+          key: crypto.randomUUID(),
+          part_id: item.matched_part_id || null,
+          partSearch: item.matched_part_number || item.part_number || '',
+          partResults: [],
+          isSearching: false,
+          showDropdown: false,
+          selectedPart: null,
+          customer_part_number: item.part_number || '',
+          description: item.description || '',
+          quantity_ordered: item.quantity?.toString() || '',
+          price_per_unit: item.price?.toString() || '',
+          price_unit: item.unit || 'PC',
+          line_total: (item.quantity && item.price) ? (item.quantity * item.price).toFixed(2) : '',
+          is_new_part: item.is_new_part || false,
+          notes: '',
+        }))
+        setItems(parsedItems)
+      }
+
+      const newCount = (data.items || []).filter((i: { is_new_part?: boolean }) => i.is_new_part).length
+      const matchedCount = (data.items || []).length - newCount
+      toast.success(
+        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched, ${newCount} new parts)`,
+        { duration: 5000 }
+      )
+    } catch { toast.error('Failed to parse order file') }
+    finally { setIsParsing(false) }
   }
   function removeFile() {
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
@@ -403,27 +464,39 @@ export default function NewOrderPage() {
         >
           <FileUp className="h-10 w-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-700">Drag & drop an order file here, or click to browse</p>
-          <p className="text-xs text-gray-400 mt-1">Supports PDF, images, and spreadsheets</p>
+          <p className="text-xs text-gray-400 mt-1">AI will automatically read and fill in the order · Supports PDF, images, and spreadsheets</p>
         </div>
       )}
 
-      {/* File Attached Banner */}
+      {/* File Attached Banner + AI Status */}
       {uploadedFile && (
-        <div className="bg-amber-50 rounded-xl border border-amber-200 px-4 py-3 flex items-center justify-between">
+        <div className={`rounded-xl border px-4 py-3 flex items-center justify-between ${isParsing ? 'bg-blue-50 border-blue-200' : parseError ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
           <div className="flex items-center gap-3">
-            <FileText className="h-5 w-5 text-amber-600" />
+            {isParsing ? (
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+            ) : (
+              <FileText className={`h-5 w-5 ${parseError ? 'text-red-600' : 'text-amber-600'}`} />
+            )}
             <div>
-              <p className="text-sm font-medium text-amber-800">{uploadedFile.name}</p>
-              <p className="text-xs text-amber-600">{(uploadedFile.size / 1024).toFixed(0)} KB · Will be attached to order on save</p>
+              <p className={`text-sm font-medium ${isParsing ? 'text-blue-800' : parseError ? 'text-red-800' : 'text-amber-800'}`}>
+                {uploadedFile.name}
+              </p>
+              <p className={`text-xs ${isParsing ? 'text-blue-600' : parseError ? 'text-red-600' : 'text-amber-600'}`}>
+                {isParsing ? 'AI is reading the order...' : parseError ? parseError : `${(uploadedFile.size / 1024).toFixed(0)} KB · AI parsed · Review below and save`}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700" onClick={() => fileInputRef.current?.click()}>
-              Replace
-            </Button>
-            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-red-500" onClick={removeFile}>
-              <X size={14} />
-            </Button>
+            {!isParsing && (
+              <>
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700" onClick={() => fileInputRef.current?.click()}>
+                  Replace
+                </Button>
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-red-500" onClick={removeFile}>
+                  <X size={14} />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}
