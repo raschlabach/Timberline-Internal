@@ -15,7 +15,7 @@ import {
 import {
   ArrowLeft, Pencil, Save, Loader2, AlertTriangle, Printer,
   Play, CheckCircle, Truck, FileText, Trash2, ClipboardList, X,
-  Download, FileUp, ExternalLink, CheckSquare, Square
+  Download, FileUp, ExternalLink, CheckSquare, Square, Copy, Check
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -114,7 +114,15 @@ export default function OrderDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const [isUploading, setIsUploading] = useState(false)
+  const [copiedCell, setCopiedCell] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function copyToClipboard(text: string, cellKey: string) {
+    navigator.clipboard.writeText(text)
+    setCopiedCell(cellKey)
+    toast.success(`Copied: ${text}`, { duration: 1500 })
+    setTimeout(() => setCopiedCell(null), 1500)
+  }
 
   async function fetchOrder() {
     setIsLoading(true)
@@ -397,6 +405,13 @@ export default function OrderDetailPage() {
                       <span className="flex items-center gap-1">
                         {item.rnr_part_number || item.customer_part_number || '-'}
                         {item.is_new_part && <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full print:bg-gray-800">NEW</span>}
+                        {(item.rnr_part_number || item.customer_part_number) && (
+                          <button onClick={() => copyToClipboard((item.rnr_part_number || item.customer_part_number)!, `part-${item.id}`)}
+                            className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                            title="Copy part number">
+                            {copiedCell === `part-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                          </button>
+                        )}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-gray-600 max-w-[200px] truncate">{item.description || '-'}</td>
@@ -412,7 +427,18 @@ export default function OrderDetailPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{item.price_per_unit ? `$${Number(item.price_per_unit).toFixed(4)}` : '-'}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        {item.price_per_unit ? `$${Number(item.price_per_unit).toFixed(4)}` : '-'}
+                        {item.price_per_unit && (
+                          <button onClick={() => copyToClipboard(Number(item.price_per_unit).toFixed(4), `price-${item.id}`)}
+                            className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                            title="Copy price">
+                            {copiedCell === `price-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                          </button>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-center text-xs text-gray-500">{item.price_unit || '-'}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs font-medium">{item.line_total ? `$${Number(item.line_total).toFixed(2)}` : '-'}</td>
                   </tr>

@@ -23,7 +23,8 @@ import {
 } from '@/components/ui/dialog'
 import {
   ArrowLeft, Plus, Trash2, Loader2, AlertTriangle, Save,
-  ClipboardList, Sparkles, FileUp, FileText, X, Eye, EyeOff
+  ClipboardList, Sparkles, FileUp, FileText, X, Eye, EyeOff,
+  RefreshCw, BookmarkPlus, MessageSquare
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -112,6 +113,9 @@ export default function NewOrderPage() {
 
   const [isParsing, setIsParsing] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [userHint, setUserHint] = useState('')
+  const [isHintOpen, setIsHintOpen] = useState(false)
+  const [isSavingHint, setIsSavingHint] = useState(false)
 
   const [isNewPartOpen, setIsNewPartOpen] = useState(false)
   const [newPartLineIdx, setNewPartLineIdx] = useState<number | null>(null)
@@ -185,13 +189,14 @@ export default function NewOrderPage() {
     parseFileWithAI(file)
   }
 
-  async function parseFileWithAI(file: File) {
+  async function parseFileWithAI(file: File, hint?: string) {
     setIsParsing(true)
     setParseError(null)
-    toast.info('Reading order file with AI...')
+    toast.info(hint ? 'Re-parsing with your instructions...' : 'Reading order file with AI...')
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (hint) formData.append('user_hint', hint)
       const res = await fetch('/api/rnr/orders/parse-file', { method: 'POST', body: formData })
       const data = await res.json()
 
@@ -247,11 +252,40 @@ export default function NewOrderPage() {
     }
     finally { setIsParsing(false) }
   }
+  function reparseWithHint() {
+    if (!uploadedFile || !userHint.trim()) return
+    parseFileWithAI(uploadedFile, userHint.trim())
+  }
+
+  async function saveHintForCustomer() {
+    if (!customerId || !userHint.trim()) {
+      toast.error('Select a customer and enter parsing instructions first')
+      return
+    }
+    setIsSavingHint(true)
+    try {
+      const res = await fetch('/api/rnr/customer-parse-hints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_id: parseInt(customerId), hint_text: userHint.trim() }),
+      })
+      if (res.ok) {
+        const customerName = customers.find(c => c.id.toString() === customerId)?.customer_name || 'customer'
+        toast.success(`Parsing hints saved for ${customerName}. Future orders will use these automatically.`, { duration: 5000 })
+      } else {
+        toast.error('Failed to save hint')
+      }
+    } catch { toast.error('Failed to save hint') }
+    finally { setIsSavingHint(false) }
+  }
+
   function removeFile() {
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl)
     setUploadedFile(null)
     setFilePreviewUrl(null)
     setIsShowingPreview(false)
+    setUserHint('')
+    setIsHintOpen(false)
   }
 
   // --- Line Item Logic ---
@@ -503,6 +537,62 @@ export default function NewOrderPage() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Re-parse with instructions (shown after parse error or on demand) */}
+      {uploadedFile && !isParsing && (
+        <div className="space-y-2">
+          {!isHintOpen ? (
+            <button
+              onClick={() => setIsHintOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-600 transition-colors"
+            >
+              <MessageSquare size={13} />
+              AI didn&apos;t get it right? Add parsing instructions and retry
+            </button>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5">
+                  <MessageSquare size={13} className="text-amber-600" />
+                  Parsing Instructions
+                </label>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400" onClick={() => setIsHintOpen(false)}>
+                  <X size={12} />
+                </Button>
+              </div>
+              <Textarea
+                value={userHint}
+                onChange={e => setUserHint(e.target.value)}
+                rows={3}
+                placeholder='Tell the AI how to read this order format. Examples:&#10;"The part numbers are in the Vendor Item # column"&#10;"Each item spans 3 lines, combine them"&#10;"No part numbers - items are defined by dimensions only"'
+                className="text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm" className="gap-1.5 bg-amber-600 hover:bg-amber-700"
+                  onClick={reparseWithHint}
+                  disabled={isParsing || !userHint.trim()}
+                >
+                  <RefreshCw size={13} />Re-parse with Instructions
+                </Button>
+                {customerId && userHint.trim() && (
+                  <Button
+                    variant="outline" size="sm" className="gap-1.5 text-amber-600 border-amber-300"
+                    onClick={saveHintForCustomer}
+                    disabled={isSavingHint}
+                  >
+                    {isSavingHint ? <Loader2 size={13} className="animate-spin" /> : <BookmarkPlus size={13} />}
+                    Save for {customers.find(c => c.id.toString() === customerId)?.customer_name || 'customer'}
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Saved hints are automatically used for future orders from this customer.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
