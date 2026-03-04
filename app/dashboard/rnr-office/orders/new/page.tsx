@@ -260,6 +260,9 @@ export default function NewOrderPage() {
         `Parsed ${data.items?.length || 0} line items (${matchedCount} matched${suggestedCount > 0 ? `, ${suggestedCount} close matches` : ''}, ${newCount} new parts) — via ${sourceLabel}`,
         { duration: 8000 }
       )
+      if (data.document_ai_error && data.extraction_source !== 'document-ai') {
+        toast.error(`Google OCR failed: ${data.document_ai_error}`, { duration: 10000 })
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse order file'
       setParseError(msg)

@@ -27,9 +27,15 @@ function getDocumentAIClient() {
   return { client, processorName }
 }
 
+let lastDocAIError: string | null = null
+
 async function ocrWithDocumentAI(buffer: Buffer, mimeType: string): Promise<string | null> {
+  lastDocAIError = null
   const dai = getDocumentAIClient()
-  if (!dai) return null
+  if (!dai) {
+    lastDocAIError = 'Document AI not configured (missing env vars)'
+    return null
+  }
 
   try {
     const encodedContent = buffer.toString('base64')
@@ -40,7 +46,9 @@ async function ocrWithDocumentAI(buffer: Buffer, mimeType: string): Promise<stri
     const [result] = await dai.client.processDocument(request)
     return result?.document?.text || null
   } catch (err) {
-    console.error('Document AI OCR error:', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    lastDocAIError = msg
+    console.error('Document AI OCR error:', msg)
     return null
   }
 }
@@ -512,6 +520,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       extraction_source: extractionSource,
+      document_ai_error: lastDocAIError,
       customer_name: parsed.customer_name || null,
       customer_id: matchedCustomerId,
       po_number: parsed.po_number || null,
