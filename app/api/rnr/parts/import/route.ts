@@ -164,8 +164,8 @@ export async function POST(request: NextRequest) {
     for (const custName of uniqueCustomers) {
       const displayName = custName.replace(/_/g, ' ')
       const existing = await query(
-        `SELECT id FROM customers WHERE LOWER(REPLACE(name, ' ', '_')) = LOWER($1)
-         OR LOWER(name) = LOWER($2)
+        `SELECT id FROM customers WHERE LOWER(REPLACE(customer_name, ' ', '_')) = LOWER($1)
+         OR LOWER(customer_name) = LOWER($2)
          LIMIT 1`,
         [custName, displayName]
       )

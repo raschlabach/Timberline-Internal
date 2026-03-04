@@ -63,7 +63,7 @@ interface ProductType {
 
 interface Customer {
   id: number
-  name: string
+  customer_name: string
 }
 
 export default function PartsListPage() {
@@ -215,7 +215,7 @@ export default function PartsListPage() {
             <SelectContent>
               <SelectItem value="all">All Customers</SelectItem>
               {customers.map(c => (
-                <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

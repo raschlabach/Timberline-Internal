@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         p.item_class, p.qb_item_code, p.price, p.is_active,
         p.created_at, p.updated_at,
         p.customer_id, p.species_id, p.product_type_id, p.profile_id,
-        c.name as customer_name,
+        c.customer_name as customer_name,
         s.name as species_name,
         pt.name as product_type_name,
         pr.name as profile_name
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN rnr_product_types pt ON pt.id = p.product_type_id
       LEFT JOIN rnr_profiles pr ON pr.id = p.profile_id
       ${whereClause}
-      ORDER BY c.name ASC, p.rnr_part_number ASC
+      ORDER BY c.customer_name ASC, p.rnr_part_number ASC
       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       [...params, limit, offset]
     )
