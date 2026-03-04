@@ -158,6 +158,12 @@ export default function PartsListPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalParts, setTotalParts] = useState(0)
 
+  // Filter options derived from parts data (only values that exist in parts)
+  const [filterCustomers, setFilterCustomers] = useState<Customer[]>([])
+  const [filterSpeciesList, setFilterSpeciesList] = useState<Species[]>([])
+  const [filterProductTypesList, setFilterProductTypesList] = useState<ProductType[]>([])
+
+  // Full reference lists for edit/new part forms
   const [species, setSpecies] = useState<Species[]>([])
   const [productTypes, setProductTypes] = useState<ProductType[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -200,6 +206,11 @@ export default function PartsListPage() {
         setParts(data.parts)
         setTotalPages(data.totalPages)
         setTotalParts(data.total)
+        if (data.filters) {
+          setFilterCustomers(data.filters.customers || [])
+          setFilterSpeciesList(data.filters.species || [])
+          setFilterProductTypesList(data.filters.product_types || [])
+        }
       }
     } catch { /* ignore */ } finally { setIsLoading(false) }
   }, [page, debouncedSearch, filterCustomer, filterSpecies, filterProductType, filterActive])
@@ -207,7 +218,7 @@ export default function PartsListPage() {
   useEffect(() => { fetchParts() }, [fetchParts])
 
   useEffect(() => {
-    async function fetchFilters() {
+    async function fetchFormRefs() {
       try {
         const [sRes, ptRes, prRes, cRes] = await Promise.all([
           fetch('/api/rnr/species'), fetch('/api/rnr/product-types'),
@@ -222,7 +233,7 @@ export default function PartsListPage() {
         }
       } catch { /* ignore */ }
     }
-    fetchFilters()
+    fetchFormRefs()
   }, [])
 
   function formatDim(val: number | null): string {
@@ -481,21 +492,21 @@ export default function PartsListPage() {
             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Customer" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Customers</SelectItem>
-              {customers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>)}
+              {filterCustomers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterSpecies} onValueChange={setFilterSpecies}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Species" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Species</SelectItem>
-              {species.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
+              {filterSpeciesList.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterProductType} onValueChange={setFilterProductType}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Product Type" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Products</SelectItem>
-              {productTypes.map(pt => <SelectItem key={pt.id} value={pt.id.toString()}>{pt.name}</SelectItem>)}
+              {filterProductTypesList.map(pt => <SelectItem key={pt.id} value={pt.id.toString()}>{pt.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterActive} onValueChange={setFilterActive}>

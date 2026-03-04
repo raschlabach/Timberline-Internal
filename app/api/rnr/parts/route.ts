@@ -94,12 +94,38 @@ export async function GET(request: NextRequest) {
       [...params, limit, offset]
     )
 
+    const filtersResult = await query(
+      `SELECT
+        COALESCE(json_agg(DISTINCT jsonb_build_object('id', c.id, 'customer_name', c.customer_name))
+          FILTER (WHERE c.id IS NOT NULL), '[]') AS customers,
+        COALESCE(json_agg(DISTINCT jsonb_build_object('id', s.id, 'name', s.name))
+          FILTER (WHERE s.id IS NOT NULL), '[]') AS species,
+        COALESCE(json_agg(DISTINCT jsonb_build_object('id', pt.id, 'name', pt.name))
+          FILTER (WHERE pt.id IS NOT NULL), '[]') AS product_types,
+        COALESCE(json_agg(DISTINCT jsonb_build_object('id', pr.id, 'name', pr.name))
+          FILTER (WHERE pr.id IS NOT NULL), '[]') AS profiles
+      FROM rnr_parts p
+      LEFT JOIN customers c ON c.id = p.customer_id
+      LEFT JOIN rnr_species s ON s.id = p.species_id
+      LEFT JOIN rnr_product_types pt ON pt.id = p.product_type_id
+      LEFT JOIN rnr_profiles pr ON pr.id = p.profile_id
+      WHERE p.is_active = true`,
+    )
+
+    const filters = filtersResult.rows[0] || {}
+
     return NextResponse.json({
       parts: partsResult.rows,
       total: parseInt(countResult.rows[0].total),
       page,
       limit,
-      totalPages: Math.ceil(parseInt(countResult.rows[0].total) / limit)
+      totalPages: Math.ceil(parseInt(countResult.rows[0].total) / limit),
+      filters: {
+        customers: filters.customers || [],
+        species: filters.species || [],
+        product_types: filters.product_types || [],
+        profiles: filters.profiles || [],
+      },
     })
   } catch (error: unknown) {
     console.error('Error fetching parts:', error)
