@@ -333,7 +333,12 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const extraction = await extractTextFromFile(file, buffer)
+
+    // Run OCR and database lookups in parallel to save time
+    const [extraction, knownCustomers] = await Promise.all([
+      extractTextFromFile(file, buffer),
+      query(`SELECT id, customer_name FROM customers ORDER BY customer_name`),
+    ])
     const extractedText = extraction.text
     const extractionSource = extraction.source
 
@@ -341,15 +346,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not extract text from file' }, { status: 400 })
     }
 
-    const knownCustomers = await query(
-      `SELECT id, customer_name FROM customers ORDER BY customer_name`,
-    )
     const customerList = knownCustomers.rows
       .map((c: { id: number; customer_name: string }) => c.customer_name)
       .join(', ')
 
     // Quick customer identification from text to look up parse hints
-    let customerHint = ''
     let preMatchedCustomerId: number | null = null
     for (const c of knownCustomers.rows as { id: number; customer_name: string }[]) {
       if (extractedText.toLowerCase().includes(c.customer_name.toLowerCase())) {
@@ -358,18 +359,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Look up customer-specific parse hints
+    // Fetch hints and known parts in parallel once customer is identified
+    let customerHint = ''
+    let knownPartsContext = ''
     if (preMatchedCustomerId) {
-      try {
-        const hintResult = await query(
-          `SELECT hint_text FROM rnr_customer_parse_hints WHERE customer_id = $1`,
+      const [hintResult, knownPartsResult] = await Promise.all([
+        query(`SELECT hint_text FROM rnr_customer_parse_hints WHERE customer_id = $1`, [preMatchedCustomerId]).catch(() => ({ rows: [] })),
+        query(
+          `SELECT customer_part_number, rnr_part_number, description
+           FROM rnr_parts WHERE customer_id = $1 AND is_active = true
+           ORDER BY customer_part_number LIMIT 500`,
           [preMatchedCustomerId],
-        )
-        if (hintResult.rows.length > 0 && hintResult.rows[0].hint_text) {
-          customerHint = hintResult.rows[0].hint_text
-        }
-      } catch {
-        // Table may not exist yet; ignore
+        ).catch(() => ({ rows: [] })),
+      ])
+
+      if (hintResult.rows.length > 0 && hintResult.rows[0].hint_text) {
+        customerHint = hintResult.rows[0].hint_text
+      }
+      if (knownPartsResult.rows.length > 0) {
+        const partsList = knownPartsResult.rows
+          .map((p: { customer_part_number: string | null; rnr_part_number: string | null; description: string | null }) =>
+            `${p.customer_part_number || p.rnr_part_number || '?'} — ${p.description || 'no description'}`)
+          .join('\n')
+        knownPartsContext = `\n\nKNOWN PART NUMBERS FOR THIS CUSTOMER (reference list):\n${partsList}`
       }
     }
 
@@ -380,34 +392,12 @@ export async function POST(request: NextRequest) {
     if (userHint) {
       systemPrompt += `\n\nADDITIONAL USER INSTRUCTIONS:\n${userHint}`
     }
-
-    // Fetch known part numbers for this customer so the AI can match against real data
-    let knownPartsContext = ''
-    if (preMatchedCustomerId) {
-      try {
-        const knownPartsResult = await query(
-          `SELECT customer_part_number, rnr_part_number, description
-           FROM rnr_parts
-           WHERE customer_id = $1 AND is_active = true
-           ORDER BY customer_part_number
-           LIMIT 500`,
-          [preMatchedCustomerId],
-        )
-        if (knownPartsResult.rows.length > 0) {
-          const partsList = knownPartsResult.rows
-            .map((p: { customer_part_number: string | null; rnr_part_number: string | null; description: string | null }) =>
-              `${p.customer_part_number || p.rnr_part_number || '?'} — ${p.description || 'no description'}`)
-            .join('\n')
-          knownPartsContext = `\n\nKNOWN PART NUMBERS FOR THIS CUSTOMER (reference list):\n${partsList}`
-          systemPrompt += `\n\nIMPORTANT: A list of known part numbers for this customer is provided below the order text. Use this list ONLY to help you read ambiguous or blurry characters — for example, if you can't tell whether a digit is a 0 or an 8, check the known list to see which makes sense. However, ALWAYS output exactly what the document says. Do NOT silently replace a part number with a known one. If the document clearly shows a part number that is not in the known list, output it as-is — it may be a genuinely new part.`
-        }
-      } catch {
-        // ignore if query fails
-      }
+    if (knownPartsContext) {
+      systemPrompt += `\n\nIMPORTANT: A list of known part numbers for this customer is provided below the order text. Use this list ONLY to help you read ambiguous or blurry characters — for example, if you can't tell whether a digit is a 0 or an 8, check the known list to see which makes sense. However, ALWAYS output exactly what the document says. Do NOT silently replace a part number with a known one. If the document clearly shows a part number that is not in the known list, output it as-is — it may be a genuinely new part.`
     }
 
     const parseResponse = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         {
