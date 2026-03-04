@@ -35,10 +35,10 @@ export default function ImportPartsPage() {
         toast.success(`Migration applied! Tables: ${data.tables?.join(', ')}`)
         setMigrationDone(true)
       } else {
-        toast.error(data.error || 'Migration failed')
+        toast.error(`${data.error || 'Migration failed'}${data.details ? ': ' + data.details : ''}`)
       }
-    } catch {
-      toast.error('Migration failed')
+    } catch (err) {
+      toast.error(`Migration failed: ${err instanceof Error ? err.message : 'Network error'}`)
     } finally {
       setIsMigrating(false)
     }
@@ -63,10 +63,10 @@ export default function ImportPartsPage() {
         setResult(data)
         toast.success(`Imported ${data.imported} parts!`)
       } else {
-        toast.error(data.error || 'Import failed')
+        toast.error(`${data.error || 'Import failed'}${data.details ? ': ' + data.details : ''}`)
       }
-    } catch {
-      toast.error('Import failed')
+    } catch (err) {
+      toast.error(`Import failed: ${err instanceof Error ? err.message : 'Network error'}`)
     } finally {
       setIsUploading(false)
     }
