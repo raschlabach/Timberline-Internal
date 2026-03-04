@@ -26,8 +26,6 @@ export default function ImportPartsPage() {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [migrationDone, setMigrationDone] = useState(false)
 
-  const isAdmin = session?.user?.role === 'admin'
-
   async function handleRunMigration() {
     setIsMigrating(true)
     try {
@@ -109,24 +107,20 @@ export default function ImportPartsPage() {
               Only needed once.
             </p>
             <div className="mt-3">
-              {isAdmin ? (
-                <Button
-                  onClick={handleRunMigration}
-                  disabled={isMigrating || migrationDone}
-                  variant={migrationDone ? 'outline' : 'default'}
-                  className={migrationDone ? 'gap-2' : 'gap-2 bg-amber-600 hover:bg-amber-700'}
-                >
-                  {isMigrating ? (
-                    <><Loader2 size={16} className="animate-spin" /> Running Migration...</>
-                  ) : migrationDone ? (
-                    <><CheckCircle size={16} className="text-green-600" /> Migration Complete</>
-                  ) : (
-                    'Run Migration'
-                  )}
-                </Button>
-              ) : (
-                <p className="text-sm text-amber-600 font-medium">Admin access required to run migrations</p>
-              )}
+              <Button
+                onClick={handleRunMigration}
+                disabled={isMigrating || migrationDone}
+                variant={migrationDone ? 'outline' : 'default'}
+                className={migrationDone ? 'gap-2' : 'gap-2 bg-amber-600 hover:bg-amber-700'}
+              >
+                {isMigrating ? (
+                  <><Loader2 size={16} className="animate-spin" /> Running Migration...</>
+                ) : migrationDone ? (
+                  <><CheckCircle size={16} className="text-green-600" /> Migration Complete</>
+                ) : (
+                  'Run Migration'
+                )}
+              </Button>
             </div>
           </div>
         </div>
