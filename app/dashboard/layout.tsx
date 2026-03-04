@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -27,12 +27,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   
   // Exclusive section toggle - only one section visible at a time
   const isLumberRoute = pathname?.startsWith('/dashboard/lumber') || false
-  const [activeSection, setActiveSection] = useState<'timberline' | 'rnr'>(
+  const isRnrOfficeRoute = pathname?.startsWith('/dashboard/rnr-office') || false
+  const [activeSection, setActiveSection] = useState<'timberline' | 'rnr' | 'rnr-office'>(
+    isRnrOfficeRoute ? 'rnr-office' :
     isLumberRoute || isRipOperator || isShippingStation ? 'rnr' : 'timberline'
   )
 
   useEffect(() => {
-    if (pathname?.startsWith('/dashboard/lumber')) {
+    if (pathname?.startsWith('/dashboard/rnr-office')) {
+      setActiveSection('rnr-office')
+    } else if (pathname?.startsWith('/dashboard/lumber')) {
       setActiveSection('rnr')
     } else if (canSeeAllPages) {
       setActiveSection('timberline')
@@ -153,33 +157,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="flex h-screen overflow-hidden bg-[#f8f9fa]">
       <aside className={`w-[280px] bg-white border-r border-gray-200 shadow-sm ${isSidebarHidden ? 'hidden' : 'hidden md:flex md:flex-col'}`}>
         {/* Colored accent bar indicating active section */}
-        <div className={`h-1 shrink-0 transition-colors duration-300 ${activeSection === 'rnr' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+        <div className={`h-1 shrink-0 transition-colors duration-300 ${
+          activeSection === 'rnr-office' ? 'bg-amber-500' :
+          activeSection === 'rnr' ? 'bg-emerald-500' : 'bg-blue-500'
+        }`} />
 
         {/* Section Toggle */}
         <div className="p-4 border-b border-gray-200 shrink-0">
           {canSeeAllPages ? (
-            <div className="flex bg-gray-100 rounded-lg p-1">
+            <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
               <button
                 onClick={() => setActiveSection('timberline')}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-md text-xs font-semibold transition-all ${
                   activeSection === 'timberline'
                     ? 'bg-white text-blue-700 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Truck size={16} className={activeSection === 'timberline' ? 'text-blue-600' : ''} />
+                <Truck size={14} className={activeSection === 'timberline' ? 'text-blue-600' : ''} />
                 Timberline
               </button>
               <button
                 onClick={() => setActiveSection('rnr')}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-md text-xs font-semibold transition-all ${
                   activeSection === 'rnr'
                     ? 'bg-white text-emerald-700 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Hammer size={16} className={activeSection === 'rnr' ? 'text-emerald-600' : ''} />
+                <Hammer size={14} className={activeSection === 'rnr' ? 'text-emerald-600' : ''} />
                 RNR
+              </button>
+              <button
+                onClick={() => setActiveSection('rnr-office')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-md text-xs font-semibold transition-all ${
+                  activeSection === 'rnr-office'
+                    ? 'bg-white text-amber-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Briefcase size={14} className={activeSection === 'rnr-office' ? 'text-amber-600' : ''} />
+                RNR Office
               </button>
             </div>
           ) : (
@@ -510,6 +528,84 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 )}
               </>
             )}
+
+            {/* ===== RNR OFFICE SECTION (amber theme) ===== */}
+            {activeSection === 'rnr-office' && canSeeAllPages && (
+              <>
+                <NavItem
+                  href="/dashboard/rnr-office/parts"
+                  icon={<Boxes size={20} />}
+                  label="Master Parts"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/parts')}
+                  isPrimary
+                  theme="amber"
+                />
+                <SubNavItem
+                  href="/dashboard/rnr-office/parts/import"
+                  icon={<FileSpreadsheet size={16} />}
+                  label="Import Parts"
+                  isActive={isActiveRoute('/dashboard/rnr-office/parts/import')}
+                  theme="amber"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/rnr-office/orders"
+                  icon={<ClipboardList size={20} />}
+                  label="Orders"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/orders')}
+                  theme="amber"
+                />
+                <SubNavItem
+                  href="/dashboard/rnr-office/orders/calendar"
+                  icon={<CalendarRange size={16} />}
+                  label="Order Calendar"
+                  isActive={isActiveRoute('/dashboard/rnr-office/orders/calendar')}
+                  theme="amber"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/rnr-office/quotes"
+                  icon={<Calculator size={20} />}
+                  label="Quotes"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/quotes')}
+                  theme="amber"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/rnr-office/machines"
+                  icon={<Wrench size={20} />}
+                  label="Machines"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/machines')}
+                  theme="amber"
+                />
+                <SubNavItem
+                  href="/dashboard/rnr-office/lumber-costs"
+                  icon={<DollarSign size={16} />}
+                  label="Lumber Costs"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/lumber-costs')}
+                  theme="amber"
+                />
+                <SubNavItem
+                  href="/dashboard/rnr-office/customer-pricing"
+                  icon={<FileText size={16} />}
+                  label="Customer Pricing"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/customer-pricing')}
+                  theme="amber"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/rnr-office/reports"
+                  icon={<FileBarChart size={20} />}
+                  label="Reports"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/reports')}
+                  theme="amber"
+                />
+              </>
+            )}
           </div>
 
           {/* User Management - outside both sections, always visible for admins */}
@@ -520,7 +616,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 icon={<UserCog size={20} />}
                 label="User Management"
                 isActive={isActiveSubRoute('/dashboard/users')}
-                theme={activeSection === 'rnr' ? 'emerald' : 'blue'}
+                theme={activeSection === 'rnr-office' ? 'amber' : activeSection === 'rnr' ? 'emerald' : 'blue'}
               />
             </div>
           )}
@@ -582,7 +678,7 @@ interface NavItemProps {
   label: string
   isActive?: boolean
   isPrimary?: boolean
-  theme?: 'blue' | 'emerald'
+  theme?: 'blue' | 'emerald' | 'amber'
 }
 
 function NavItem({ href, icon, label, isActive = false, isPrimary = false, theme = 'blue' }: NavItemProps) {
@@ -595,6 +691,8 @@ function NavItem({ href, icon, label, isActive = false, isPrimary = false, theme
   if (isPrimary) {
     if (theme === 'emerald') {
       stateClasses = isActive ? 'bg-emerald-700 text-white shadow-sm' : 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+    } else if (theme === 'amber') {
+      stateClasses = isActive ? 'bg-amber-700 text-white shadow-sm' : 'bg-amber-600 text-white shadow-sm hover:bg-amber-700'
     } else {
       stateClasses = isActive ? 'bg-blue-700 text-white shadow-sm' : 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
     }
@@ -604,6 +702,10 @@ function NavItem({ href, icon, label, isActive = false, isPrimary = false, theme
     stateClasses = isActive ? 'bg-emerald-50 text-emerald-700 border-r-2 border-emerald-600' : 'text-gray-600 hover:bg-gray-50'
     iconClasses = isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-emerald-600'
     labelClasses = isActive ? 'text-emerald-700 font-medium' : 'group-hover:text-gray-900 font-medium'
+  } else if (theme === 'amber') {
+    stateClasses = isActive ? 'bg-amber-50 text-amber-700 border-r-2 border-amber-600' : 'text-gray-600 hover:bg-gray-50'
+    iconClasses = isActive ? 'text-amber-600' : 'text-gray-400 group-hover:text-amber-600'
+    labelClasses = isActive ? 'text-amber-700 font-medium' : 'group-hover:text-gray-900 font-medium'
   } else {
     stateClasses = isActive ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'
     iconClasses = isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'
@@ -626,17 +728,20 @@ interface SubNavItemProps {
   label: string
   isActive?: boolean
   className?: string
-  theme?: 'blue' | 'emerald'
+  theme?: 'blue' | 'emerald' | 'amber'
 }
 
 function SubNavItem({ href, icon, label, isActive = false, className = 'ml-6', theme = 'blue' }: SubNavItemProps) {
-  const activeClasses = theme === 'emerald'
-    ? 'bg-emerald-50 text-emerald-700 border-r-2 border-emerald-600'
-    : 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
-
-  const activeIcon = theme === 'emerald' ? 'text-emerald-600' : 'text-blue-600'
-  const hoverIcon = theme === 'emerald' ? 'text-gray-400 group-hover:text-emerald-600' : 'text-gray-400 group-hover:text-blue-600'
-  const activeLabel = theme === 'emerald' ? 'text-emerald-700' : 'text-blue-700'
+  const themeMap = {
+    blue: { active: 'bg-blue-50 text-blue-700 border-r-2 border-blue-600', icon: 'text-blue-600', hover: 'text-gray-400 group-hover:text-blue-600', label: 'text-blue-700' },
+    emerald: { active: 'bg-emerald-50 text-emerald-700 border-r-2 border-emerald-600', icon: 'text-emerald-600', hover: 'text-gray-400 group-hover:text-emerald-600', label: 'text-emerald-700' },
+    amber: { active: 'bg-amber-50 text-amber-700 border-r-2 border-amber-600', icon: 'text-amber-600', hover: 'text-gray-400 group-hover:text-amber-600', label: 'text-amber-700' },
+  }
+  const t = themeMap[theme]
+  const activeClasses = t.active
+  const activeIcon = t.icon
+  const hoverIcon = t.hover
+  const activeLabel = t.label
 
   return (
     <div className={className}>
