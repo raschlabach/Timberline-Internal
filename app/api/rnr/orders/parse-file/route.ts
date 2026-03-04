@@ -77,23 +77,17 @@ export async function POST(request: NextRequest) {
 
     let extractedText = ''
 
-    if (file.type === 'application/pdf') {
-      const buffer = Buffer.from(await file.arrayBuffer())
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const parsePdf = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-      const pdfData = await parsePdf(buffer)
-      extractedText = pdfData.text
-    } else if (file.type.startsWith('image/')) {
+    if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
       const buffer = Buffer.from(await file.arrayBuffer())
       const base64 = buffer.toString('base64')
-      const mimeType = file.type
+      const mimeType = file.type === 'application/pdf' ? 'application/pdf' : file.type
 
       const visionResponse = await getOpenAI().chat.completions.create({
         model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'Extract ALL text from this order/purchase order image. Include every line item, number, date, and detail. Return only the extracted text, nothing else.',
+            content: 'Extract ALL text from this purchase order document. Include every line item, part number, quantity, price, date, and detail you can see. Return only the extracted text, nothing else.',
           },
           {
             role: 'user',

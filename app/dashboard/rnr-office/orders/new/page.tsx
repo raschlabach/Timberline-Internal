@@ -196,8 +196,9 @@ export default function NewOrderPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setParseError(data.error || 'Failed to parse')
-        toast.error(data.error || 'Could not parse order file')
+        const errMsg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Failed to parse')
+        setParseError(errMsg)
+        toast.error(errMsg, { duration: 8000 })
         return
       }
 
@@ -239,7 +240,11 @@ export default function NewOrderPage() {
         `Parsed ${data.items?.length || 0} line items (${matchedCount} matched, ${newCount} new parts)`,
         { duration: 5000 }
       )
-    } catch { toast.error('Failed to parse order file') }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to parse order file'
+      setParseError(msg)
+      toast.error(msg, { duration: 8000 })
+    }
     finally { setIsParsing(false) }
   }
   function removeFile() {
