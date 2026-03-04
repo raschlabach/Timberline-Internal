@@ -107,10 +107,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const uniqueSpecies = [...new Set(rows.map(r => r.specie).filter(Boolean))]
-    const uniqueProducts = [...new Set(rows.map(r => r.product).filter(Boolean))]
-    const uniqueProfiles = [...new Set(rows.map(r => r.profile).filter(Boolean))]
-    const uniqueCustomers = [...new Set(rows.map(r => r.customer).filter(Boolean))]
+    const uniqueSpecies = Array.from(new Set(rows.map(r => r.specie).filter(Boolean)))
+    const uniqueProducts = Array.from(new Set(rows.map(r => r.product).filter(Boolean)))
+    const uniqueProfiles = Array.from(new Set(rows.map(r => r.profile).filter(Boolean)))
+    const uniqueCustomers = Array.from(new Set(rows.map(r => r.customer).filter(Boolean)))
 
     const client = await getClient()
     try {
