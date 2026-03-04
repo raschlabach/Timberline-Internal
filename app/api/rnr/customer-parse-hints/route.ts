@@ -3,6 +3,22 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/db'
 
+const ENSURE_TABLE = `
+CREATE TABLE IF NOT EXISTS rnr_customer_parse_hints (
+  id SERIAL PRIMARY KEY,
+  customer_id INTEGER REFERENCES customers(id) ON DELETE CASCADE,
+  hint_text TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(customer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_rnr_parse_hints_customer ON rnr_customer_parse_hints(customer_id);
+`
+
+async function ensureTable() {
+  await query(ENSURE_TABLE)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -10,6 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    await ensureTable()
     const customerId = request.nextUrl.searchParams.get('customer_id')
 
     if (customerId) {
@@ -53,6 +70,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'customer_id and hint_text are required' }, { status: 400 })
     }
 
+    await ensureTable()
     const result = await query(
       `INSERT INTO rnr_customer_parse_hints (customer_id, hint_text)
        VALUES ($1, $2)
@@ -83,6 +101,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'customer_id is required' }, { status: 400 })
     }
 
+    await ensureTable()
     await query(`DELETE FROM rnr_customer_parse_hints WHERE customer_id = $1`, [customerId])
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
