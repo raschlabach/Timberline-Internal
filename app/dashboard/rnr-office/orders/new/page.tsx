@@ -255,9 +255,10 @@ export default function NewOrderPage() {
       const newCount = (data.items || []).filter((i: { is_new_part?: boolean }) => i.is_new_part).length
       const suggestedCount = (data.items || []).filter((i: { suggested_part?: SuggestedPart | null }) => i.suggested_part).length
       const matchedCount = (data.items || []).length - newCount - suggestedCount
+      const sourceLabel = { 'document-ai': 'Google OCR', 'pdf-parse': 'Text PDF', 'openai-vision': 'AI Vision', 'openai-responses': 'AI OCR', 'raw-text': 'Text' }[data.extraction_source as string] || data.extraction_source
       toast.success(
-        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched${suggestedCount > 0 ? `, ${suggestedCount} close matches` : ''}, ${newCount} new parts)`,
-        { duration: 5000 }
+        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched${suggestedCount > 0 ? `, ${suggestedCount} close matches` : ''}, ${newCount} new parts) — via ${sourceLabel}`,
+        { duration: 8000 }
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse order file'

@@ -97,21 +97,30 @@ Example output format:
   ]
 }`
 
+interface ExtractionResult {
+  text: string
+  source: 'pdf-parse' | 'document-ai' | 'openai-vision' | 'openai-responses' | 'raw-text'
+}
+
 async function extractTextFromFile(
   file: File,
   buffer: Buffer,
-): Promise<string> {
+): Promise<ExtractionResult> {
   if (file.type === 'application/pdf') {
+    // Try Document AI first if configured (best OCR for scanned docs)
+    const daiText = await ocrWithDocumentAI(buffer, 'application/pdf')
+    if (daiText && daiText.trim().length > 20) {
+      return { text: daiText, source: 'document-ai' }
+    }
+
+    // Try pdf-parse for text-based PDFs
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pdfParse = require('pdf-parse/lib/pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
     const pdfData = await pdfParse(buffer)
     const text = pdfData.text?.trim() || ''
-    if (text.length > 20) return text
+    if (text.length > 20) return { text, source: 'pdf-parse' }
 
-    // Scanned/image PDF: try Google Document AI first (purpose-built OCR), fall back to OpenAI
-    const daiText = await ocrWithDocumentAI(buffer, 'application/pdf')
-    if (daiText && daiText.trim().length > 20) return daiText
-
+    // Last resort: OpenAI Responses API
     const base64 = buffer.toString('base64')
     const response = await getOpenAI().responses.create({
       model: 'gpt-4o',
@@ -130,13 +139,15 @@ async function extractTextFromFile(
         ],
       }],
     })
-    return response.output_text || ''
+    return { text: response.output_text || '', source: 'openai-responses' }
   }
 
   if (file.type.startsWith('image/')) {
-    // Try Google Document AI first for images too
+    // Try Document AI first for images
     const daiText = await ocrWithDocumentAI(buffer, file.type)
-    if (daiText && daiText.trim().length > 20) return daiText
+    if (daiText && daiText.trim().length > 20) {
+      return { text: daiText, source: 'document-ai' }
+    }
 
     const base64 = buffer.toString('base64')
     const visionResponse = await getOpenAI().chat.completions.create({
@@ -155,10 +166,10 @@ async function extractTextFromFile(
       ],
       max_tokens: 4000,
     })
-    return visionResponse.choices[0]?.message?.content || ''
+    return { text: visionResponse.choices[0]?.message?.content || '', source: 'openai-vision' }
   }
 
-  return await file.text()
+  return { text: await file.text(), source: 'raw-text' }
 }
 
 interface ParsedItem {
@@ -314,7 +325,9 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const extractedText = await extractTextFromFile(file, buffer)
+    const extraction = await extractTextFromFile(file, buffer)
+    const extractedText = extraction.text
+    const extractionSource = extraction.source
 
     if (!extractedText.trim()) {
       return NextResponse.json({ error: 'Could not extract text from file' }, { status: 400 })
@@ -498,6 +511,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      extraction_source: extractionSource,
       customer_name: parsed.customer_name || null,
       customer_id: matchedCustomerId,
       po_number: parsed.po_number || null,
