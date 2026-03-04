@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     const fallbackDate = pickupDate || new Date().toISOString().split('T')[0]
-    const orderStatus = truckloadId ? 'delivery_assigned' : 'pending'
+    const orderStatus = truckloadId ? 'delivery_assigned' : 'unassigned'
 
     for (const item of itemsResult.rows) {
       const itemPickupDate = item.ship_date
@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
         : fallbackDate
 
       const lt = loadTypes || { ohioToIndiana: true, localFlatbed: true, backhaul: false, rrOrder: false, localSemi: false, middlefield: false, paNy: false }
+      lt.ohioToIndiana = true
 
       const orderResult = await client.query(
         `INSERT INTO orders (

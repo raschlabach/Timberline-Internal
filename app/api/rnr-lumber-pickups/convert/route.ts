@@ -151,13 +151,14 @@ export async function POST(request: NextRequest) {
 
     const lt = loadTypes || {
       ohioToIndiana: false,
-      backhaul: false,
+      backhaul: true,
       localFlatbed: false,
       rrOrder: true,
       localSemi: false,
       middlefield: false,
       paNy: false,
     }
+    lt.backhaul = true
 
     const orderStatus = truckloadId ? 'pickup_assigned' : 'unassigned'
 
@@ -217,6 +218,19 @@ export async function POST(request: NextRequest) {
           [truckloadId, orderId, 'pickup', nextSequence]
         )
         nextSequence++
+
+        await client.query(
+          `INSERT INTO truckload_order_assignments (
+            truckload_id, order_id, assignment_type, sequence_number
+          ) VALUES ($1, $2, $3, $4)`,
+          [truckloadId, orderId, 'delivery', nextSequence]
+        )
+        nextSequence++
+
+        await client.query(
+          `UPDATE orders SET is_transfer_order = true WHERE id = $1`,
+          [orderId]
+        )
       }
 
       if (truckloadId && lumberDriverId && truckloadEndDate) {

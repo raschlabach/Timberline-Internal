@@ -214,6 +214,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   theme="blue"
                 />
                 <SubNavItem
+                  href="/dashboard/vinyl-tech"
+                  icon={<FileSpreadsheet size={16} />}
+                  label="Vinyl Tech"
+                  isActive={isActiveSubRoute('/dashboard/vinyl-tech')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/dyoder"
+                  icon={<FileSpreadsheet size={16} />}
+                  label="D. Yoder"
+                  isActive={isActiveSubRoute('/dashboard/dyoder')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/rnr-lumber"
+                  icon={<Trees size={16} />}
+                  label="RNR Lumber"
+                  isActive={isActiveSubRoute('/dashboard/rnr-lumber')}
+                  theme="blue"
+                />
+                <SubNavItem
                   href="/dashboard/customers"
                   icon={<Users size={16} />}
                   label="Customers"
@@ -290,31 +311,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                 <div className="pt-3" />
                 <NavItem
-                  href="/dashboard/vinyl-tech"
-                  icon={<FileSpreadsheet size={20} />}
-                  label="Vinyl Tech"
-                  isActive={isActiveSubRoute('/dashboard/vinyl-tech')}
-                  theme="blue"
-                />
-                <NavItem
-                  href="/dashboard/dyoder"
-                  icon={<FileSpreadsheet size={20} />}
-                  label="D. Yoder"
-                  isActive={isActiveSubRoute('/dashboard/dyoder')}
-                  theme="blue"
-                />
-                <NavItem
                   href="/dashboard/bentwood"
                   icon={<FileSpreadsheet size={20} />}
                   label="Bentwood"
                   isActive={isActiveSubRoute('/dashboard/bentwood')}
-                  theme="blue"
-                />
-                <NavItem
-                  href="/dashboard/rnr-lumber"
-                  icon={<Trees size={20} />}
-                  label="RNR Lumber"
-                  isActive={isActiveSubRoute('/dashboard/rnr-lumber')}
                   theme="blue"
                 />
               </>
