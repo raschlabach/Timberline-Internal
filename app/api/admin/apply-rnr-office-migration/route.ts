@@ -15,14 +15,7 @@ export async function POST() {
     const migrationPath = path.join(process.cwd(), 'database/migrations/20260304_add_rnr_office.sql')
     const migrationSql = fs.readFileSync(migrationPath, 'utf-8')
 
-    const statements = migrationSql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'))
-
-    for (const statement of statements) {
-      await query(statement)
-    }
+    await query(migrationSql)
 
     const tables = await query(`
       SELECT table_name 
