@@ -24,7 +24,7 @@ import {
 import {
   ArrowLeft, Plus, Trash2, Loader2, AlertTriangle, Save,
   ClipboardList, Sparkles, FileUp, FileText, X, Eye, EyeOff,
-  RefreshCw, BookmarkPlus, MessageSquare
+  RefreshCw, BookmarkPlus, MessageSquare, Search, Star, ChevronRight
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -95,6 +95,8 @@ export default function NewOrderPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
 
   const [customerId, setCustomerId] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
   const [poNumber, setPoNumber] = useState('')
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState('')
@@ -132,18 +134,46 @@ export default function NewOrderPage() {
   useEffect(() => {
     async function fetchRefs() {
       try {
-        const [cRes, sRes, ptRes, prRes] = await Promise.all([
+        const [cRes, sRes, ptRes, prRes, csRes] = await Promise.all([
           fetch('/api/customers'), fetch('/api/rnr/species'),
           fetch('/api/rnr/product-types'), fetch('/api/rnr/profiles'),
+          fetch('/api/rnr/customer-settings'),
         ])
         if (cRes.ok) { const d = await cRes.json(); setCustomers(Array.isArray(d) ? d : d.customers || []) }
         if (sRes.ok) setSpecies(await sRes.json())
         if (ptRes.ok) setProductTypes(await ptRes.json())
         if (prRes.ok) setProfiles(await prRes.json())
+        if (csRes.ok) {
+          const settings = await csRes.json()
+          const favs = new Set<number>()
+          for (const s of settings) {
+            if (s.is_favorite) favs.add(s.customer_id)
+          }
+          setFavoriteIds(favs)
+        }
       } catch { /* ignore */ }
     }
     fetchRefs()
   }, [])
+
+  async function toggleFavorite(custId: number) {
+    const wasFav = favoriteIds.has(custId)
+    const next = new Set(favoriteIds)
+    if (wasFav) next.delete(custId); else next.add(custId)
+    setFavoriteIds(next)
+    try {
+      await fetch('/api/rnr/customer-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_id: custId, is_favorite: !wasFav }),
+      })
+    } catch { /* revert silently */ }
+  }
+
+  function selectCustomer(custId: string) {
+    setCustomerId(custId)
+    setCustomerSearch('')
+  }
 
   // --- Drag and Drop ---
   function handleDragEnter(e: React.DragEvent) {
@@ -506,16 +536,89 @@ export default function NewOrderPage() {
 
       {/* Step 1: Customer Selection */}
       {!customerId && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Step 1: Select Customer</h2>
-          <Select value={customerId || 'none'} onValueChange={v => setCustomerId(v === 'none' ? '' : v)}>
-            <SelectTrigger className="max-w-sm"><SelectValue placeholder="Search or select a customer..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">-- Select Customer --</SelectItem>
-              {customers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-400 mt-2">Select the customer first so the AI uses the correct parsing rules and known parts list.</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Select Customer</h2>
+            <p className="text-xs text-gray-400 mt-1">Choose who this order is for so the AI uses the correct parsing rules and known parts.</p>
+          </div>
+
+          {/* Favorites row */}
+          {customers.filter(c => favoriteIds.has(c.id)).length > 0 && (
+            <div>
+              <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1 mb-2">
+                <Star size={11} className="text-amber-500 fill-amber-500" />Favorites
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {customers.filter(c => favoriteIds.has(c.id)).map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectCustomer(c.id.toString())}
+                    className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm font-medium text-amber-800 hover:bg-amber-100 hover:border-amber-300 transition-colors flex items-center gap-2"
+                  >
+                    {c.customer_name}
+                    <ChevronRight size={13} className="text-amber-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search bar */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={customerSearch}
+              onChange={e => setCustomerSearch(e.target.value)}
+              placeholder="Search customers..."
+              className="pl-9 text-sm"
+              autoFocus
+            />
+          </div>
+
+          {/* Customer list */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[340px] overflow-y-auto">
+            {customers
+              .filter(c => c.customer_name.toLowerCase().includes(customerSearch.toLowerCase()))
+              .map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => selectCustomer(c.id.toString())}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-left border-b border-gray-100 last:border-0 hover:bg-amber-50 transition-colors group"
+                >
+                  <span className="text-sm text-gray-800 font-medium">{c.customer_name}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); toggleFavorite(c.id) }}
+                      className="p-1 rounded hover:bg-gray-200 transition-colors"
+                      title={favoriteIds.has(c.id) ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      <Star size={14} className={favoriteIds.has(c.id) ? 'text-amber-500 fill-amber-500' : 'text-gray-300 group-hover:text-gray-400'} />
+                    </button>
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-amber-500" />
+                  </div>
+                </button>
+              ))}
+            {customers.filter(c => c.customer_name.toLowerCase().includes(customerSearch.toLowerCase())).length === 0 && (
+              <div className="px-4 py-6 text-center text-sm text-gray-400">No customers match your search</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Selected customer banner */}
+      {customerId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-amber-600 uppercase tracking-wider">Customer:</span>
+            <span className="text-sm font-semibold text-amber-900">{customers.find(c => c.id.toString() === customerId)?.customer_name}</span>
+          </div>
+          <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 text-xs h-7"
+            onClick={() => { setCustomerId(''); setUploadedFile(null); setFilePreviewUrl(null); setItems([newLineItem()]); setPoNumber(''); setDueDate(''); setNotes(''); setIsRush(false) }}>
+            Change Customer
+          </Button>
         </div>
       )}
 
@@ -623,7 +726,7 @@ export default function NewOrderPage() {
       )}
 
       {/* Main Content - Side by Side when preview is showing */}
-      <div className={isShowingPreview && filePreviewUrl ? 'grid grid-cols-2 gap-6' : ''}>
+      {customerId && <div className={isShowingPreview && filePreviewUrl ? 'grid grid-cols-2 gap-6' : ''}>
         {/* PDF Preview Panel */}
         {isShowingPreview && filePreviewUrl && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-4" style={{ height: 'calc(100vh - 200px)' }}>
@@ -795,7 +898,7 @@ export default function NewOrderPage() {
             </Button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Inline New Part Dialog */}
       <Dialog open={isNewPartOpen} onOpenChange={setIsNewPartOpen}>

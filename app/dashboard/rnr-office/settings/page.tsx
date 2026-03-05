@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Settings, Save, Loader2, Palette, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Settings, Save, Loader2, Palette, MessageSquare, ChevronDown, ChevronUp, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface CustomerSetting {
@@ -32,6 +33,7 @@ export default function RnrSettingsPage() {
   const [savingColor, setSavingColor] = useState<number | null>(null)
   const [savingHint, setSavingHint] = useState<number | null>(null)
   const [showPalette, setShowPalette] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const fetchCustomers = useCallback(async () => {
     if (!session) return
@@ -127,11 +129,23 @@ export default function RnrSettingsPage() {
         </div>
       ) : customers.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center shadow-sm">
-          <p className="text-gray-400">No customers with parts found. Import parts first.</p>
+          <p className="text-gray-400">No customers found.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {customers.map(c => {
+        <div className="space-y-3">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search customers..."
+              className="pl-9"
+            />
+          </div>
+          <div className="space-y-2">
+          {customers
+            .filter(c => c.customer_name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .map(c => {
             const color = getDisplayColor(c)
             const isExpanded = expandedId === c.customer_id
             const hintChanged = (editHints[c.customer_id] || '') !== (c.hint_text || '')
@@ -255,6 +269,7 @@ export default function RnrSettingsPage() {
               </div>
             )
           })}
+          </div>
         </div>
       )}
     </div>

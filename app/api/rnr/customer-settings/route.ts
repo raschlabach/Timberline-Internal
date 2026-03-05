@@ -8,11 +8,13 @@ CREATE TABLE IF NOT EXISTS rnr_customer_settings (
   id SERIAL PRIMARY KEY,
   customer_id INTEGER REFERENCES customers(id) ON DELETE CASCADE,
   calendar_color TEXT NOT NULL DEFAULT '#3B82F6',
+  is_favorite BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(customer_id)
 );
 CREATE INDEX IF NOT EXISTS idx_rnr_customer_settings_customer ON rnr_customer_settings(customer_id);
+ALTER TABLE rnr_customer_settings ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT false;
 `
 
 async function ensureTable() {
@@ -47,17 +49,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result.rows[0] || null)
     }
 
-    // Return all customers that have parts, with their settings (LEFT JOIN so we get all even without settings)
+    // Return all customers with their settings
     const result = await query(
-      `SELECT DISTINCT c.id as customer_id, c.customer_name,
+      `SELECT c.id as customer_id, c.customer_name,
               s.calendar_color, s.id as settings_id,
+              COALESCE(s.is_favorite, false) as is_favorite,
               h.hint_text,
-              (SELECT COUNT(*) FROM rnr_parts p WHERE p.customer_id = c.id AND p.is_active = true) as part_count
+              (SELECT COUNT(*) FROM rnr_parts p WHERE p.customer_id = c.id) as part_count
        FROM customers c
-       INNER JOIN rnr_parts p ON p.customer_id = c.id AND p.is_active = true
        LEFT JOIN rnr_customer_settings s ON s.customer_id = c.id
        LEFT JOIN rnr_customer_parse_hints h ON h.customer_id = c.id
-       GROUP BY c.id, c.customer_name, s.calendar_color, s.id, h.hint_text
        ORDER BY c.customer_name`,
     )
 
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { customer_id, calendar_color } = body
+    const { customer_id, calendar_color, is_favorite } = body
 
     if (!customer_id) {
       return NextResponse.json({ error: 'customer_id is required' }, { status: 400 })
@@ -87,13 +88,24 @@ export async function POST(request: NextRequest) {
 
     await ensureTable()
 
+    if (typeof is_favorite === 'boolean' && calendar_color === undefined) {
+      const result = await query(
+        `INSERT INTO rnr_customer_settings (customer_id, is_favorite)
+         VALUES ($1, $2)
+         ON CONFLICT (customer_id) DO UPDATE SET is_favorite = $2, updated_at = NOW()
+         RETURNING id, customer_id, calendar_color, is_favorite, created_at, updated_at`,
+        [customer_id, is_favorite],
+      )
+      return NextResponse.json(result.rows[0])
+    }
+
     const color = calendar_color || DEFAULT_PALETTE[customer_id % DEFAULT_PALETTE.length]
 
     const result = await query(
       `INSERT INTO rnr_customer_settings (customer_id, calendar_color)
        VALUES ($1, $2)
        ON CONFLICT (customer_id) DO UPDATE SET calendar_color = $2, updated_at = NOW()
-       RETURNING id, customer_id, calendar_color, created_at, updated_at`,
+       RETURNING id, customer_id, calendar_color, is_favorite, created_at, updated_at`,
       [customer_id, color],
     )
 
