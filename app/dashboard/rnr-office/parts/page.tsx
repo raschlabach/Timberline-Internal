@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -169,9 +169,13 @@ export default function PartsListPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
 
-  const [filterCustomer, setFilterCustomer] = useState('all')
-  const [filterSpecies, setFilterSpecies] = useState('all')
-  const [filterProductType, setFilterProductType] = useState('all')
+  // Tiered search state
+  const [lockedCustomer, setLockedCustomer] = useState<Customer | null>(null)
+  const [lockedSpecies, setLockedSpecies] = useState<Species | null>(null)
+  const [lockedProduct, setLockedProduct] = useState<ProductType | null>(null)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   const [filterActive, setFilterActive] = useState('true')
 
   const [selectedPart, setSelectedPart] = useState<Part | null>(null)
@@ -188,16 +192,16 @@ export default function PartsListPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  useEffect(() => { setPage(1) }, [debouncedSearch, filterCustomer, filterSpecies, filterProductType, filterActive])
+  useEffect(() => { setPage(1) }, [debouncedSearch, lockedCustomer, lockedSpecies, lockedProduct, filterActive])
 
   const fetchParts = useCallback(async () => {
     setIsLoading(true)
     try {
       const params = new URLSearchParams({ page: page.toString(), limit: '50' })
       if (debouncedSearch) params.set('search', debouncedSearch)
-      if (filterCustomer !== 'all') params.set('customer_id', filterCustomer)
-      if (filterSpecies !== 'all') params.set('species_id', filterSpecies)
-      if (filterProductType !== 'all') params.set('product_type_id', filterProductType)
+      if (lockedCustomer) params.set('customer_id', lockedCustomer.id.toString())
+      if (lockedSpecies) params.set('species_id', lockedSpecies.id.toString())
+      if (lockedProduct) params.set('product_type_id', lockedProduct.id.toString())
       if (filterActive !== 'all') params.set('is_active', filterActive)
 
       const res = await fetch(`/api/rnr/parts?${params}`)
@@ -213,7 +217,7 @@ export default function PartsListPage() {
         }
       }
     } catch { /* ignore */ } finally { setIsLoading(false) }
-  }, [page, debouncedSearch, filterCustomer, filterSpecies, filterProductType, filterActive])
+  }, [page, debouncedSearch, lockedCustomer, lockedSpecies, lockedProduct, filterActive])
 
   useEffect(() => { fetchParts() }, [fetchParts])
 
@@ -241,10 +245,77 @@ export default function PartsListPage() {
     return val.toString()
   }
 
-  const hasActiveFilters = filterCustomer !== 'all' || filterSpecies !== 'all' || filterProductType !== 'all' || filterActive !== 'true' || debouncedSearch !== ''
+  const hasActiveFilters = !!lockedCustomer || !!lockedSpecies || !!lockedProduct || filterActive !== 'true' || debouncedSearch !== ''
 
   function clearFilters() {
-    setSearch(''); setFilterCustomer('all'); setFilterSpecies('all'); setFilterProductType('all'); setFilterActive('true')
+    setSearch(''); setLockedCustomer(null); setLockedSpecies(null); setLockedProduct(null); setFilterActive('true')
+  }
+
+  function getCurrentTier(): 'customer' | 'species' | 'product' | 'text' {
+    if (!lockedCustomer) return 'customer'
+    if (!lockedSpecies) return 'species'
+    if (!lockedProduct) return 'product'
+    return 'text'
+  }
+
+  function getSuggestions(): { id: number; name: string; type: string }[] {
+    const tier = getCurrentTier()
+    const q = search.toLowerCase().trim()
+    if (tier === 'customer') {
+      return filterCustomers
+        .filter(c => !q || c.customer_name.toLowerCase().includes(q))
+        .slice(0, 8)
+        .map(c => ({ id: c.id, name: c.customer_name, type: 'customer' }))
+    }
+    if (tier === 'species') {
+      return filterSpeciesList
+        .filter(s => !q || s.name.toLowerCase().includes(q))
+        .slice(0, 8)
+        .map(s => ({ id: s.id, name: s.name, type: 'species' }))
+    }
+    if (tier === 'product') {
+      return filterProductTypesList
+        .filter(pt => !q || pt.name.toLowerCase().includes(q))
+        .slice(0, 8)
+        .map(pt => ({ id: pt.id, name: pt.name, type: 'product' }))
+    }
+    return []
+  }
+
+  function selectSuggestion(item: { id: number; name: string; type: string }) {
+    if (item.type === 'customer') {
+      const c = filterCustomers.find(c => c.id === item.id)
+      if (c) setLockedCustomer(c)
+    } else if (item.type === 'species') {
+      const s = filterSpeciesList.find(s => s.id === item.id)
+      if (s) setLockedSpecies(s)
+    } else if (item.type === 'product') {
+      const pt = filterProductTypesList.find(pt => pt.id === item.id)
+      if (pt) setLockedProduct(pt)
+    }
+    setSearch('')
+    setShowSuggestions(false)
+    searchInputRef.current?.focus()
+  }
+
+  function handleSearchKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Backspace' && search === '') {
+      if (lockedProduct) { setLockedProduct(null) }
+      else if (lockedSpecies) { setLockedSpecies(null) }
+      else if (lockedCustomer) { setLockedCustomer(null) }
+    }
+    if (e.key === 'Escape') {
+      setShowSuggestions(false)
+    }
+  }
+
+  const suggestions = getSuggestions()
+  const tier = getCurrentTier()
+  const tierLabels: Record<string, string> = {
+    customer: 'Search customers...',
+    species: 'Search species...',
+    product: 'Search product types...',
+    text: 'Search parts...',
   }
 
   function openEdit() {
@@ -493,46 +564,105 @@ export default function PartsListPage() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Smart Search Bar */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[250px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="Search part numbers, descriptions..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <div
+              className="flex items-center flex-wrap gap-1.5 border border-gray-200 rounded-lg px-3 py-2 bg-white focus-within:ring-2 focus-within:ring-amber-300 focus-within:border-amber-400 transition-all cursor-text min-h-[40px]"
+              onClick={() => searchInputRef.current?.focus()}
+            >
+              <Search className="h-4 w-4 text-gray-400 shrink-0" />
+
+              {lockedCustomer && (
+                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                  {lockedCustomer.customer_name}
+                  <button type="button" onClick={e => { e.stopPropagation(); setLockedCustomer(null); setLockedSpecies(null); setLockedProduct(null); setSearch('') }} className="hover:text-amber-900">
+                    <X size={11} />
+                  </button>
+                  <span className="text-amber-400 ml-0.5">›</span>
+                </span>
+              )}
+
+              {lockedSpecies && (
+                <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                  {lockedSpecies.name}
+                  <button type="button" onClick={e => { e.stopPropagation(); setLockedSpecies(null); setLockedProduct(null); setSearch('') }} className="hover:text-green-900">
+                    <X size={11} />
+                  </button>
+                  <span className="text-green-400 ml-0.5">›</span>
+                </span>
+              )}
+
+              {lockedProduct && (
+                <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-md">
+                  {lockedProduct.name}
+                  <button type="button" onClick={e => { e.stopPropagation(); setLockedProduct(null); setSearch('') }} className="hover:text-blue-900">
+                    <X size={11} />
+                  </button>
+                  <span className="text-blue-400 ml-0.5">›</span>
+                </span>
+              )}
+
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={search}
+                onChange={e => { setSearch(e.target.value); setShowSuggestions(true) }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder={tierLabels[tier]}
+                className="flex-1 min-w-[120px] outline-none text-sm bg-transparent"
+              />
+            </div>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[260px] overflow-y-auto">
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                  {tier === 'customer' ? 'Customers' : tier === 'species' ? 'Species' : 'Product Types'}
+                </div>
+                {suggestions.map(s => (
+                  <button
+                    key={`${s.type}-${s.id}`}
+                    type="button"
+                    onMouseDown={() => selectSuggestion(s)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between"
+                  >
+                    <span className="text-gray-800">{s.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                      s.type === 'customer' ? 'bg-amber-50 text-amber-600' :
+                      s.type === 'species' ? 'bg-green-50 text-green-600' :
+                      'bg-blue-50 text-blue-600'
+                    }`}>
+                      {s.type === 'customer' ? 'Customer' : s.type === 'species' ? 'Species' : 'Product'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <Select value={filterCustomer} onValueChange={setFilterCustomer}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Customer" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              {filterCustomers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterSpecies} onValueChange={setFilterSpecies}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Species" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Species</SelectItem>
-              {filterSpeciesList.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterProductType} onValueChange={setFilterProductType}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Product Type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Products</SelectItem>
-              {filterProductTypesList.map(pt => <SelectItem key={pt.id} value={pt.id.toString()}>{pt.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterActive} onValueChange={setFilterActive}>
-            <SelectTrigger className="w-[130px]"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="true">Active</SelectItem>
-              <SelectItem value="false">Inactive</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-gray-500"><X size={14} />Clear</Button>
-          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant={filterActive === 'true' ? 'default' : 'outline'}
+              size="sm" className={`text-xs h-8 ${filterActive === 'true' ? 'bg-amber-600 hover:bg-amber-700' : ''}`}
+              onClick={() => setFilterActive(filterActive === 'true' ? 'all' : 'true')}
+            >
+              {filterActive === 'true' ? 'Active Only' : 'All Status'}
+            </Button>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-gray-500 h-8"><X size={14} />Clear</Button>
+            )}
+          </div>
         </div>
+
+        {(lockedCustomer || lockedSpecies || lockedProduct) && (
+          <p className="text-[11px] text-gray-400 mt-2 pl-1">
+            Filtering: {[lockedCustomer?.customer_name, lockedSpecies?.name, lockedProduct?.name].filter(Boolean).join(' › ')}
+            {search ? ` › "${search}"` : ''} — Backspace to remove last filter
+          </p>
+        )}
       </div>
 
       {/* Table */}
