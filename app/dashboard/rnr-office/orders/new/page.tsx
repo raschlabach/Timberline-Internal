@@ -134,23 +134,24 @@ export default function NewOrderPage() {
   useEffect(() => {
     async function fetchRefs() {
       try {
-        const [cRes, sRes, ptRes, prRes, csRes] = await Promise.all([
-          fetch('/api/customers'), fetch('/api/rnr/species'),
-          fetch('/api/rnr/product-types'), fetch('/api/rnr/profiles'),
+        const [csRes, sRes, ptRes, prRes] = await Promise.all([
           fetch('/api/rnr/customer-settings'),
+          fetch('/api/rnr/species'),
+          fetch('/api/rnr/product-types'), fetch('/api/rnr/profiles'),
         ])
-        if (cRes.ok) { const d = await cRes.json(); setCustomers(Array.isArray(d) ? d : d.customers || []) }
-        if (sRes.ok) setSpecies(await sRes.json())
-        if (ptRes.ok) setProductTypes(await ptRes.json())
-        if (prRes.ok) setProfiles(await prRes.json())
         if (csRes.ok) {
           const settings = await csRes.json()
+          const custs: Customer[] = settings.map((s: { customer_id: number; customer_name: string }) => ({ id: s.customer_id, customer_name: s.customer_name }))
+          setCustomers(custs)
           const favs = new Set<number>()
           for (const s of settings) {
             if (s.is_favorite) favs.add(s.customer_id)
           }
           setFavoriteIds(favs)
         }
+        if (sRes.ok) setSpecies(await sRes.json())
+        if (ptRes.ok) setProductTypes(await ptRes.json())
+        if (prRes.ok) setProfiles(await prRes.json())
       } catch { /* ignore */ }
     }
     fetchRefs()

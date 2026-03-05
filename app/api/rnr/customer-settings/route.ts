@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result.rows[0] || null)
     }
 
-    // Return all customers with their settings
+    // Return only customers that have parts in rnr_parts
     const result = await query(
       `SELECT c.id as customer_id, c.customer_name,
               s.calendar_color, s.id as settings_id,
@@ -57,8 +57,10 @@ export async function GET(request: NextRequest) {
               h.hint_text,
               (SELECT COUNT(*) FROM rnr_parts p WHERE p.customer_id = c.id) as part_count
        FROM customers c
+       INNER JOIN rnr_parts p2 ON p2.customer_id = c.id
        LEFT JOIN rnr_customer_settings s ON s.customer_id = c.id
        LEFT JOIN rnr_customer_parse_hints h ON h.customer_id = c.id
+       GROUP BY c.id, c.customer_name, s.calendar_color, s.id, s.is_favorite, h.hint_text
        ORDER BY c.customer_name`,
     )
 
