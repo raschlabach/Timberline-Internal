@@ -52,15 +52,6 @@ interface PartResult {
   profile_name: string | null
 }
 
-interface SuggestedPart {
-  part_id: number
-  part_number: string
-  customer_part_number: string | null
-  description: string | null
-  price: number | null
-  distance: number
-}
-
 interface LineItem {
   key: string
   part_id: number | null
@@ -77,7 +68,6 @@ interface LineItem {
   line_total: string
   is_new_part: boolean
   notes: string
-  suggested_part: SuggestedPart | null
 }
 
 function newLineItem(): LineItem {
@@ -86,7 +76,6 @@ function newLineItem(): LineItem {
     isSearching: false, showDropdown: false, selectedPart: null,
     customer_part_number: '', description: '', quantity_ordered: '',
     price_per_unit: '', price_unit: 'BF', line_total: '', is_new_part: false, notes: '',
-    suggested_part: null,
   }
 }
 
@@ -186,6 +175,10 @@ export default function NewOrderPage() {
     }
   }
   function handleFile(file: File) {
+    if (!customerId) {
+      toast.error('Please select a customer before uploading a file')
+      return
+    }
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv']
     if (!allowed.includes(file.type) && !file.name.match(/\.(pdf|png|jpe?g|xlsx?|csv)$/i)) {
       toast.error('Please upload a PDF, image, or spreadsheet file')
@@ -207,6 +200,7 @@ export default function NewOrderPage() {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (customerId) formData.append('customer_id', customerId)
       if (hint) formData.append('user_hint', hint)
       const res = await fetch('/api/rnr/orders/parse-file', { method: 'POST', body: formData })
       const data = await res.json()
@@ -230,7 +224,6 @@ export default function NewOrderPage() {
           part_number?: string; description?: string; quantity?: number;
           price?: number; unit?: string; matched_part_id?: number | null;
           matched_part_number?: string | null; is_new_part?: boolean;
-          suggested_part?: SuggestedPart | null;
         }) => ({
           key: crypto.randomUUID(),
           part_id: item.matched_part_id || null,
@@ -247,17 +240,15 @@ export default function NewOrderPage() {
           line_total: (item.quantity && item.price) ? (item.quantity * item.price).toFixed(2) : '',
           is_new_part: item.is_new_part || false,
           notes: '',
-          suggested_part: item.suggested_part || null,
         }))
         setItems(parsedItems)
       }
 
       const newCount = (data.items || []).filter((i: { is_new_part?: boolean }) => i.is_new_part).length
-      const suggestedCount = (data.items || []).filter((i: { suggested_part?: SuggestedPart | null }) => i.suggested_part).length
-      const matchedCount = (data.items || []).length - newCount - suggestedCount
+      const matchedCount = (data.items || []).length - newCount
       const sourceLabel = { 'document-ai': 'Google OCR', 'pdf-parse': 'Text PDF', 'openai-vision': 'AI Vision', 'openai-responses': 'AI OCR', 'raw-text': 'Text' }[data.extraction_source as string] || data.extraction_source
       toast.success(
-        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched${suggestedCount > 0 ? `, ${suggestedCount} close matches` : ''}, ${newCount} new parts) — via ${sourceLabel}`,
+        `Parsed ${data.items?.length || 0} line items (${matchedCount} matched, ${newCount} new parts) — via ${sourceLabel}`,
         { duration: 8000 }
       )
       if (data.document_ai_error && data.extraction_source !== 'document-ai') {
@@ -471,7 +462,7 @@ export default function NewOrderPage() {
       onDragOver={handleDragOver} onDrop={handleDrop}
     >
       {/* Full-page drag overlay */}
-      {isDragging && (
+      {isDragging && customerId && (
         <div className="fixed inset-0 z-50 bg-amber-600/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
           <div className="bg-white rounded-2xl border-2 border-dashed border-amber-500 p-12 text-center shadow-2xl">
             <FileUp className="h-16 w-16 text-amber-500 mx-auto mb-4" />
@@ -500,7 +491,7 @@ export default function NewOrderPage() {
               <ClipboardList className="h-7 w-7 text-amber-600" />
               New Order
             </h1>
-            <p className="text-sm text-gray-500 mt-0.5">Drop an order file or enter manually</p>
+            <p className="text-sm text-gray-500 mt-0.5">Select a customer, then drop an order file or enter manually</p>
           </div>
         </div>
         {filePreviewUrl && (
@@ -513,15 +504,32 @@ export default function NewOrderPage() {
         )}
       </div>
 
-      {/* File Upload Zone (when no file yet) */}
-      {!uploadedFile && (
+      {/* Step 1: Customer Selection */}
+      {!customerId && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Step 1: Select Customer</h2>
+          <Select value={customerId || 'none'} onValueChange={v => setCustomerId(v === 'none' ? '' : v)}>
+            <SelectTrigger className="max-w-sm"><SelectValue placeholder="Search or select a customer..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">-- Select Customer --</SelectItem>
+              {customers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-400 mt-2">Select the customer first so the AI uses the correct parsing rules and known parts list.</p>
+        </div>
+      )}
+
+      {/* File Upload Zone (when customer selected but no file yet) */}
+      {customerId && !uploadedFile && (
         <div
           className="bg-white rounded-xl border-2 border-dashed border-gray-300 hover:border-amber-400 p-8 text-center cursor-pointer transition-colors"
           onClick={() => fileInputRef.current?.click()}
         >
           <FileUp className="h-10 w-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-700">Drag & drop an order file here, or click to browse</p>
-          <p className="text-xs text-gray-400 mt-1">AI will automatically read and fill in the order · Supports PDF, images, and spreadsheets</p>
+          <p className="text-xs text-gray-400 mt-1">
+            AI will parse this order for <span className="font-medium text-amber-600">{customers.find(c => c.id.toString() === customerId)?.customer_name}</span> · Supports PDF, images, and spreadsheets
+          </p>
         </div>
       )}
 
@@ -696,7 +704,7 @@ export default function NewOrderPage() {
                 </thead>
                 <tbody>
                   {items.map((item, idx) => (
-                    <tr key={item.key} className={`border-b border-gray-100 ${item.is_new_part ? 'bg-amber-50' : item.suggested_part ? 'bg-blue-50' : ''}`}>
+                    <tr key={item.key} className={`border-b border-gray-100 ${item.is_new_part ? 'bg-amber-50' : ''}`}>
                       <td className="px-3 py-2 relative">
                         <div className="relative">
                           <Input
@@ -705,45 +713,13 @@ export default function NewOrderPage() {
                             onFocus={() => { if (item.partResults.length > 0) updateItem(idx, { showDropdown: true }) }}
                             onBlur={() => setTimeout(() => updateItem(idx, { showDropdown: false }), 200)}
                             placeholder="Search parts..."
-                            className={`font-mono text-xs pr-8 ${item.is_new_part ? 'border-amber-400' : item.suggested_part ? 'border-blue-400' : ''}`}
+                            className={`font-mono text-xs pr-8 ${item.is_new_part ? 'border-amber-400' : ''}`}
                           />
                           {item.isSearching && <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
                           {item.is_new_part && (
                             <span className="absolute -top-1.5 -right-1.5 text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-medium">NEW</span>
                           )}
-                          {item.suggested_part && (
-                            <span className="absolute -top-1.5 -right-1.5 text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-medium">CHECK</span>
-                          )}
                         </div>
-                        {item.suggested_part && (
-                          <div className="mt-1 p-1.5 bg-blue-50 border border-blue-200 rounded text-xs">
-                            <span className="text-blue-700">Did you mean </span>
-                            <button type="button"
-                              className="font-mono font-semibold text-blue-800 underline hover:text-blue-900"
-                              onClick={() => {
-                                const s = item.suggested_part!
-                                updateItem(idx, {
-                                  part_id: s.part_id,
-                                  partSearch: s.customer_part_number || s.part_number,
-                                  customer_part_number: s.customer_part_number || s.part_number,
-                                  description: s.description || item.description,
-                                  price_per_unit: s.price?.toString() || item.price_per_unit,
-                                  line_total: calcLineTotal(item.quantity_ordered, s.price?.toString() || item.price_per_unit),
-                                  is_new_part: false,
-                                  suggested_part: null,
-                                })
-                                toast.success(`Accepted: ${s.customer_part_number || s.part_number}`)
-                              }}>
-                              {item.suggested_part.customer_part_number || item.suggested_part.part_number}
-                            </button>
-                            <span className="text-blue-500 ml-1">({item.suggested_part.description || 'no desc'})?</span>
-                            <button type="button" className="ml-2 text-gray-400 hover:text-gray-600"
-                              onClick={() => updateItem(idx, { suggested_part: null, is_new_part: true })}
-                              title="Dismiss suggestion">
-                              <X size={12} />
-                            </button>
-                          </div>
-                        )}
                         {item.showDropdown && item.partResults.length > 0 && (
                           <div className="absolute z-50 mt-1 left-3 right-3 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
                             {item.partResults.map(p => (

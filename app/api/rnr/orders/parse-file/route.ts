@@ -199,83 +199,6 @@ interface MatchedPart {
   length: number | null
 }
 
-interface FuzzySuggestion {
-  part_id: number
-  part_number: string
-  customer_part_number: string | null
-  description: string | null
-  price: number | null
-  distance: number
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length
-  if (m === 0) return n
-  if (n === 0) return m
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
-  for (let i = 0; i <= m; i++) dp[i][0] = i
-  for (let j = 0; j <= n; j++) dp[0][j] = j
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
-    }
-  }
-  return dp[m][n]
-}
-
-async function findFuzzySuggestions(
-  unmatchedNumbers: string[],
-  customerId: number | null,
-): Promise<Record<string, FuzzySuggestion>> {
-  if (unmatchedNumbers.length === 0) return {}
-
-  const candidatesResult = await query(
-    `SELECT id, rnr_part_number, customer_part_number, description, price
-     FROM rnr_parts WHERE is_active = true${customerId ? ' AND (customer_id = $1 OR customer_id IS NULL)' : ''}`,
-    customerId ? [customerId] : [],
-  )
-  const candidates = candidatesResult.rows as {
-    id: number; rnr_part_number: string | null; customer_part_number: string | null;
-    description: string | null; price: number | null
-  }[]
-
-  const suggestions: Record<string, FuzzySuggestion> = {}
-  const maxDistance = 3
-
-  for (const pn of unmatchedNumbers) {
-    const pnLower = pn.toLowerCase()
-    let bestMatch: FuzzySuggestion | null = null
-    let bestDist = maxDistance + 1
-
-    for (const c of candidates) {
-      for (const candidatePn of [c.customer_part_number, c.rnr_part_number]) {
-        if (!candidatePn) continue
-        if (Math.abs(candidatePn.length - pn.length) > maxDistance) continue
-        const dist = levenshtein(pnLower, candidatePn.toLowerCase())
-        if (dist > 0 && dist < bestDist) {
-          bestDist = dist
-          bestMatch = {
-            part_id: c.id,
-            part_number: c.rnr_part_number || candidatePn,
-            customer_part_number: c.customer_part_number,
-            description: c.description,
-            price: c.price,
-            distance: dist,
-          }
-        }
-      }
-    }
-
-    if (bestMatch) {
-      suggestions[pn] = bestMatch
-    }
-  }
-
-  return suggestions
-}
-
 async function matchPartsByDimensions(
   items: ParsedItem[],
   matchedParts: Record<string, MatchedPart>,
@@ -327,6 +250,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get('file') as File
     const userHint = formData.get('user_hint') as string | null
+    const explicitCustomerId = formData.get('customer_id') as string | null
 
     if (!file) {
       return NextResponse.json({ error: 'File is required' }, { status: 400 })
@@ -350,12 +274,14 @@ export async function POST(request: NextRequest) {
       .map((c: { id: number; customer_name: string }) => c.customer_name)
       .join(', ')
 
-    // Quick customer identification from text to look up parse hints
-    let preMatchedCustomerId: number | null = null
-    for (const c of knownCustomers.rows as { id: number; customer_name: string }[]) {
-      if (extractedText.toLowerCase().includes(c.customer_name.toLowerCase())) {
-        preMatchedCustomerId = c.id
-        break
+    // Use explicit customer_id if provided, otherwise auto-detect from text
+    let preMatchedCustomerId: number | null = explicitCustomerId ? parseInt(explicitCustomerId, 10) : null
+    if (!preMatchedCustomerId) {
+      for (const c of knownCustomers.rows as { id: number; customer_name: string }[]) {
+        if (extractedText.toLowerCase().includes(c.customer_name.toLowerCase())) {
+          preMatchedCustomerId = c.id
+          break
+        }
       }
     }
 
@@ -434,8 +360,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Customer matching
-    let matchedCustomerId: number | null = preMatchedCustomerId
+    // Customer matching — explicit customer_id always wins
+    let matchedCustomerId: number | null = explicitCustomerId ? parseInt(explicitCustomerId, 10) : preMatchedCustomerId
     if (!matchedCustomerId && parsed.customer_name) {
       const match = knownCustomers.rows.find(
         (c: { id: number; customer_name: string }) =>
@@ -478,15 +404,8 @@ export async function POST(request: NextRequest) {
     // Dimension-based part matching for items without part numbers
     matchedParts = await matchPartsByDimensions(parsed.items || [], matchedParts)
 
-    // Fuzzy matching for unmatched part numbers
-    const unmatchedNumbers = (parsed.items || [])
-      .map((i: ParsedItem) => i.part_number)
-      .filter((pn): pn is string => !!pn && !matchedParts[pn]) as string[]
-    const fuzzySuggestions = await findFuzzySuggestions(unmatchedNumbers, matchedCustomerId)
-
     const enrichedItems = (parsed.items || []).map((item: ParsedItem) => {
       const matched = item.part_number ? (matchedParts[item.part_number] || null) : null
-      const suggestion = (!matched && item.part_number) ? (fuzzySuggestions[item.part_number] || null) : null
       return {
         part_number: item.part_number || null,
         description: item.description || matched?.description || null,
@@ -495,15 +414,7 @@ export async function POST(request: NextRequest) {
         unit: item.unit || 'PC',
         matched_part_id: matched?.id || null,
         matched_part_number: matched?.rnr_part_number || matched?.customer_part_number || null,
-        is_new_part: !matched && !suggestion,
-        suggested_part: suggestion ? {
-          part_id: suggestion.part_id,
-          part_number: suggestion.part_number,
-          customer_part_number: suggestion.customer_part_number,
-          description: suggestion.description,
-          price: suggestion.price,
-          distance: suggestion.distance,
-        } : null,
+        is_new_part: !matched,
       }
     })
 

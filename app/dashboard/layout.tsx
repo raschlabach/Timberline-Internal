@@ -604,6 +604,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveSubRoute('/dashboard/rnr-office/reports')}
                   theme="amber"
                 />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/rnr-office/settings"
+                  icon={<Settings size={20} />}
+                  label="Settings"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/settings')}
+                  theme="amber"
+                />
               </>
             )}
           </div>

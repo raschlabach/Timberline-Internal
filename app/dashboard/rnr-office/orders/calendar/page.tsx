@@ -37,6 +37,17 @@ interface Customer {
   customer_name: string
 }
 
+interface CustomerColor {
+  customer_id: number
+  customer_name: string
+  calendar_color: string | null
+}
+
+const DEFAULT_PALETTE = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+  '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
+]
+
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
   ordered: { label: 'Ordered', bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
   in_production: { label: 'In Production', bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
@@ -67,6 +78,7 @@ export default function OrderCalendarPage() {
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [customerColors, setCustomerColors] = useState<Record<number, string>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [filterCustomer, setFilterCustomer] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -99,10 +111,21 @@ export default function OrderCalendarPage() {
 
   const fetchCustomers = useCallback(async () => {
     try {
-      const res = await fetch('/api/rnr/parts?limit=1')
-      if (res.ok) {
-        const data = await res.json()
+      const [partsRes, settingsRes] = await Promise.all([
+        fetch('/api/rnr/parts?limit=1'),
+        fetch('/api/rnr/customer-settings'),
+      ])
+      if (partsRes.ok) {
+        const data = await partsRes.json()
         if (data.filters?.customers) setCustomers(data.filters.customers)
+      }
+      if (settingsRes.ok) {
+        const settings: CustomerColor[] = await settingsRes.json()
+        const colorMap: Record<number, string> = {}
+        for (const s of settings) {
+          colorMap[s.customer_id] = s.calendar_color || DEFAULT_PALETTE[s.customer_id % DEFAULT_PALETTE.length]
+        }
+        setCustomerColors(colorMap)
       }
     } catch { /* ignore */ }
   }, [])
@@ -227,8 +250,8 @@ export default function OrderCalendarPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
-        <span className="font-medium text-gray-600">Due dates:</span>
+      <div className="flex items-center gap-4 text-xs text-gray-500 px-1 flex-wrap">
+        <span className="font-medium text-gray-600">Status dots:</span>
         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
           <span key={key} className="flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
@@ -238,6 +261,7 @@ export default function OrderCalendarPage() {
         <span className="ml-2 flex items-center gap-1.5">
           <Zap size={11} className="text-red-500" />Rush
         </span>
+        <span className="text-gray-400 ml-1">| Pill color = customer</span>
       </div>
 
       {/* Calendar Grid */}
@@ -288,18 +312,25 @@ export default function OrderCalendarPage() {
 
                 <div className="mt-1 space-y-0.5 max-h-[80px] overflow-y-auto">
                   {dueOrders.slice(0, 5).map(order => {
-                    const cfg = STATUS_CONFIG[order.status] || { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' }
+                    const cfg = STATUS_CONFIG[order.status] || { label: 'Unknown', bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' }
+                    const custColor = order.customer_id ? customerColors[order.customer_id] : null
+                    const useCustomerColor = !!custColor
+
                     return (
                       <Link
                         key={order.id}
                         href={`/dashboard/rnr-office/orders/${order.id}`}
-                        className={`block px-1.5 py-0.5 rounded text-[10px] leading-tight truncate ${cfg.bg} ${cfg.text} hover:opacity-80 transition-opacity`}
-                        title={`${order.order_number} — ${order.customer_name || 'Unknown'} — ${order.item_count} items — $${order.total_price?.toLocaleString() || '0'}`}
+                        className={`block px-1.5 py-0.5 rounded text-[10px] leading-tight truncate hover:opacity-80 transition-opacity ${
+                          useCustomerColor ? 'text-white' : `${cfg.bg} ${cfg.text}`
+                        }`}
+                        style={useCustomerColor ? { backgroundColor: custColor } : undefined}
+                        title={`${order.order_number} — ${order.customer_name || 'Unknown'} — ${cfg.label} — ${order.item_count} items — $${order.total_price?.toLocaleString() || '0'}`}
                       >
                         <span className="flex items-center gap-1">
-                          {order.is_rush && <Zap size={9} className="text-red-500 shrink-0" />}
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} title={cfg.label} />
+                          {order.is_rush && <Zap size={9} className="text-red-300 shrink-0" />}
                           {hasOverdue && isPast && order.status !== 'complete' && order.status !== 'shipped' && order.status !== 'invoiced' && (
-                            <AlertTriangle size={9} className="text-red-500 shrink-0" />
+                            <AlertTriangle size={9} className="text-red-300 shrink-0" />
                           )}
                           <span className="truncate font-medium">{order.customer_name || order.order_number}</span>
                           <span className="text-[9px] opacity-70 shrink-0">{order.item_count}pcs</span>
