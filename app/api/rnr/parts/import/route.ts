@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       if (fields.length < 34) continue
 
       const customer = fields[28]
-      const itemCode = fields[24]
+      const itemCode = fields[24] || fields[3]
       if (!customer && !itemCode) continue
 
       rows.push({
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         length: fields[21],
         linealFt: fields[22],
         boardFt: fields[23],
-        itemCode: fields[24],
+        itemCode: itemCode,
         layupWidth: fields[26],
         layupLength: fields[27],
         customer: fields[28],
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
       profileMap.set(name, res.rows[0].id)
     }
 
-    // Step 4: Match customers
+    // Step 4: Match customers (auto-create if not found)
     const customerMap = new Map<string, number>()
     for (const custName of uniqueCustomers) {
       const displayName = custName.replace(/_/g, ' ')
@@ -171,26 +171,32 @@ export async function POST(request: NextRequest) {
       )
       if (existing.rows.length > 0) {
         customerMap.set(custName, existing.rows[0].id)
+      } else {
+        const res = await query(
+          `INSERT INTO customers (customer_name) VALUES ($1) RETURNING id`,
+          [displayName]
+        )
+        customerMap.set(custName, res.rows[0].id)
       }
     }
 
-    // Step 5: Check which item codes already exist
-    const existingParts = await query(`SELECT qb_item_code FROM rnr_parts WHERE qb_item_code IS NOT NULL`)
-    const existingCodes = new Set(existingParts.rows.map((r: { qb_item_code: string }) => r.qb_item_code))
+    // Step 5: Check existing item codes to separate inserts from updates
+    const existingParts = await query(`SELECT id, qb_item_code FROM rnr_parts WHERE qb_item_code IS NOT NULL`)
+    const existingCodeMap = new Map<string, number>()
+    for (const r of existingParts.rows as { id: number; qb_item_code: string }[]) {
+      existingCodeMap.set(r.qb_item_code, r.id)
+    }
 
-    // Step 6: Insert parts in batches
     let imported = 0
+    let updated = 0
     let skipped = 0
     const unmatchedCustomers: string[] = []
 
-    const partsToInsert = []
+    const newParts = []
+    const updateParts = []
+
     for (const row of rows) {
       if (!row.itemCode) {
-        skipped++
-        continue
-      }
-
-      if (existingCodes.has(row.itemCode)) {
         skipped++
         continue
       }
@@ -200,20 +206,27 @@ export async function POST(request: NextRequest) {
         unmatchedCustomers.push(row.customer)
       }
 
-      partsToInsert.push({
+      const part = {
         ...row,
         customerId,
         speciesId: row.specie ? speciesMap.get(row.specie) || null : null,
         productTypeId: row.product ? productTypeMap.get(row.product) || null : null,
         profileId: row.profile ? profileMap.get(row.profile) || null : null,
         isActive: row.activeStatus === 'Active',
-      })
+      }
+
+      const existingId = existingCodeMap.get(row.itemCode)
+      if (existingId) {
+        updateParts.push({ ...part, existingId })
+      } else {
+        newParts.push(part)
+      }
     }
 
-    // Batch insert 100 at a time to avoid timeout
-    const BATCH_SIZE = 100
-    for (let i = 0; i < partsToInsert.length; i += BATCH_SIZE) {
-      const batch = partsToInsert.slice(i, i + BATCH_SIZE)
+    // Batch insert new parts
+    const BATCH_SIZE = 50
+    for (let i = 0; i < newParts.length; i += BATCH_SIZE) {
+      const batch = newParts.slice(i, i + BATCH_SIZE)
 
       const values: (string | number | boolean | null)[] = []
       const placeholders: string[] = []
@@ -260,9 +273,32 @@ export async function POST(request: NextRequest) {
       imported += batch.length
     }
 
+    // Update existing parts in individual queries
+    for (const p of updateParts) {
+      await query(
+        `UPDATE rnr_parts SET
+          description = $1, customer_id = $2, species_id = $3,
+          product_type_id = $4, profile_id = $5, thickness = $6,
+          width = $7, length = $8, board_feet = $9, lineal_feet = $10,
+          layup_width = $11, layup_length = $12, pieces_per_layup = $13,
+          item_class = $14, price = $15, is_active = $16
+        WHERE id = $17`,
+        [
+          p.description || null, p.customerId, p.speciesId,
+          p.productTypeId, p.profileId, parseDecimal(p.thickness),
+          parseDecimal(p.width), parseDecimal(p.length), parseDecimal(p.boardFt), parseDecimal(p.linealFt),
+          parseDecimal(p.layupWidth), parseDecimal(p.layupLength), parseInt2(p.pcsPerLayup),
+          p.itemClass || null, parseDecimal(p.price), p.isActive,
+          p.existingId,
+        ]
+      )
+      updated++
+    }
+
     return NextResponse.json({
       success: true,
       imported,
+      updated,
       skipped,
       totalRows: rows.length,
       species: uniqueSpecies.length,

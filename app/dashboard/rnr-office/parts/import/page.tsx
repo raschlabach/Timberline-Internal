@@ -10,6 +10,7 @@ import Link from 'next/link'
 interface ImportResult {
   success: boolean
   imported: number
+  updated: number
   skipped: number
   totalRows: number
   species: number
@@ -61,7 +62,7 @@ export default function ImportPartsPage() {
 
       if (res.ok) {
         setResult(data)
-        toast.success(`Imported ${data.imported} parts!`)
+        toast.success(`Imported ${data.imported} new, updated ${data.updated || 0} existing parts!`)
       } else {
         toast.error(`${data.error || 'Import failed'}${data.details ? ': ' + data.details : ''}`)
       }
@@ -136,7 +137,7 @@ export default function ImportPartsPage() {
             <h3 className="font-semibold text-gray-900">Upload QuickBooks CSV</h3>
             <p className="text-sm text-gray-500 mt-1">
               Upload the &quot;All Parts Export&quot; CSV from QuickBooks. The import will create species, product types,
-              profiles, and parts entries automatically. Duplicate item codes will be skipped.
+              profiles, and parts entries automatically. Existing parts will be updated with the latest data.
             </p>
 
             <div className="mt-4 space-y-4">
@@ -184,14 +185,18 @@ export default function ImportPartsPage() {
             Import Complete
           </h3>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="bg-green-50 rounded-lg p-4">
               <p className="text-2xl font-bold text-green-700">{result.imported.toLocaleString()}</p>
-              <p className="text-sm text-green-600">Parts Imported</p>
+              <p className="text-sm text-green-600">New Parts Imported</p>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-4">
+              <p className="text-2xl font-bold text-blue-700">{(result.updated || 0).toLocaleString()}</p>
+              <p className="text-sm text-blue-600">Existing Parts Updated</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4">
               <p className="text-2xl font-bold text-gray-700">{result.skipped.toLocaleString()}</p>
-              <p className="text-sm text-gray-500">Skipped (duplicates or no item code)</p>
+              <p className="text-sm text-gray-500">Skipped (no item code)</p>
             </div>
           </div>
 
