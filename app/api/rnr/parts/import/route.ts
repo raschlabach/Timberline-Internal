@@ -69,6 +69,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
+    await query(`ALTER TABLE rnr_parts ALTER COLUMN rnr_part_number TYPE VARCHAR(200)`)
+    await query(`ALTER TABLE rnr_parts ALTER COLUMN customer_part_number TYPE VARCHAR(200)`)
+    await query(`ALTER TABLE rnr_parts ALTER COLUMN qb_item_code TYPE VARCHAR(200)`)
+
     const text = await file.text()
     const lines = text.split('\n').filter(l => l.trim())
 
