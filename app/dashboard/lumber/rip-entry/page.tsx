@@ -360,23 +360,18 @@ export default function RipEntryPage() {
         body: JSON.stringify(edits)
       })
 
-      if (response.ok) {
-        toast.success('Pack saved')
-        
-        // Refresh packs
-        if (selectedLoad) {
-          refreshPacks(selectedLoad.id)
-        }
+      if (!response.ok) {
+        toast.error('Failed to save pack')
       }
     } catch (error) {
       console.error('Error saving pack:', error)
-      toast.success('Error')
+      toast.error('Failed to save pack')
     }
   }
 
   async function handleFinishPack(packId: number) {
     if (!operatorId) {
-      toast.success('Missing Operator')
+      toast.error('Please select an operator')
       return
     }
 
@@ -403,7 +398,7 @@ export default function RipEntryPage() {
       }
     } catch (error) {
       console.error('Error finishing pack:', error)
-      toast.success('Error')
+      toast.error('Failed to finish pack')
     }
   }
 
@@ -1381,7 +1376,7 @@ export default function RipEntryPage() {
                                 <Input
                                   type="number"
                                   value={pack.is_finished ? (pack.actual_board_feet || '') : (packEdits[pack.id]?.actual_board_feet || '')}
-                                  onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', parseInt(e.target.value) || null)}
+                                  onChange={(e) => handlePackEdit(pack.id, 'actual_board_feet', e.target.value === '' ? null : parseInt(e.target.value))}
                                   onBlur={() => handleSavePack(pack.id)}
                                   disabled={pack.is_finished}
                                   className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
@@ -1391,7 +1386,7 @@ export default function RipEntryPage() {
                                 <Input
                                   type="number"
                                   value={pack.is_finished ? (pack.rip_yield || '') : (packEdits[pack.id]?.rip_yield || '')}
-                                  onChange={(e) => handlePackEdit(pack.id, 'rip_yield', parseInt(e.target.value) || null)}
+                                  onChange={(e) => handlePackEdit(pack.id, 'rip_yield', e.target.value === '' ? null : parseInt(e.target.value))}
                                   onBlur={() => handleSavePack(pack.id)}
                                   disabled={pack.is_finished}
                                   className="h-6 text-xs px-1 disabled:opacity-100 disabled:cursor-not-allowed"
@@ -1413,7 +1408,7 @@ export default function RipEntryPage() {
                                       size="sm"
                                       onClick={() => handleFinishPack(pack.id)}
                                       className="h-6 px-2 text-xs"
-                                      disabled={!packEdits[pack.id]?.actual_board_feet || !packEdits[pack.id]?.rip_yield}
+                                      disabled={packEdits[pack.id]?.actual_board_feet == null || packEdits[pack.id]?.rip_yield == null}
                                       title="Finish pack"
                                     >
                                       <RefreshCcw className="h-3 w-3" />
@@ -1423,7 +1418,7 @@ export default function RipEntryPage() {
                                       variant="outline"
                                       onClick={() => handlePartialFinish(pack.id)}
                                       className="h-6 px-2 text-xs"
-                                      disabled={!packEdits[pack.id]?.actual_board_feet}
+                                      disabled={packEdits[pack.id]?.actual_board_feet == null}
                                       title="Partial finish - split pack"
                                     >
                                       <Scissors className="h-3 w-3" />
