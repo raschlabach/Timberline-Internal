@@ -375,17 +375,36 @@ export default function RipEntryPage() {
       return
     }
 
+    // Validate selected operator/stackers still exist before sending
+    const selectedIds = [operatorId, stacker1Id, stacker2Id, stacker3Id, stacker4Id].filter(Boolean)
+    const validIds = new Set(operators.map(op => op.id.toString()))
+    const invalidId = selectedIds.find(id => !validIds.has(id))
+    if (invalidId) {
+      toast.error('A selected operator/stacker no longer exists. Please re-select from the dropdowns.')
+      await fetchAllOperators()
+      return
+    }
+
+    const parsedOperatorId = parseInt(operatorId)
+    if (isNaN(parsedOperatorId) || parsedOperatorId <= 0) {
+      toast.error('Invalid operator selection. Please re-select the operator.')
+      return
+    }
+
     try {
+      const payload = {
+        operator_id: parsedOperatorId,
+        stacker_1_id: stacker1Id ? parseInt(stacker1Id) : null,
+        stacker_2_id: stacker2Id ? parseInt(stacker2Id) : null,
+        stacker_3_id: stacker3Id ? parseInt(stacker3Id) : null,
+        stacker_4_id: stacker4Id ? parseInt(stacker4Id) : null
+      }
+      console.log('Finishing pack', packId, 'with payload:', payload)
+
       const response = await fetch(`/api/lumber/packs/${packId}/finish`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          operator_id: parseInt(operatorId),
-          stacker_1_id: stacker1Id ? parseInt(stacker1Id) : null,
-          stacker_2_id: stacker2Id ? parseInt(stacker2Id) : null,
-          stacker_3_id: stacker3Id ? parseInt(stacker3Id) : null,
-          stacker_4_id: stacker4Id ? parseInt(stacker4Id) : null
-        })
+        body: JSON.stringify(payload)
       })
 
       if (response.ok) {
@@ -398,7 +417,13 @@ export default function RipEntryPage() {
       } else {
         const err = await response.json().catch(() => ({}))
         console.error('Finish pack error:', err)
-        toast.error(err.details || err.error || 'Failed to finish pack')
+        const details = err.details || err.error || ''
+        if (details.includes('foreign key')) {
+          toast.error('A selected operator/stacker no longer exists. Please re-select from the dropdowns.')
+          await fetchAllOperators()
+        } else {
+          toast.error(details || 'Failed to finish pack')
+        }
       }
     } catch (error) {
       console.error('Error finishing pack:', error)

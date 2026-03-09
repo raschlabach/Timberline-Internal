@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { withTransaction } from '@/lib/db'
+import { query, withTransaction } from '@/lib/db'
 
 // PATCH /api/lumber/packs/[packId]/finish - Mark pack as finished
 export async function PATCH(
@@ -15,6 +15,32 @@ export async function PATCH(
     }
 
     const body = await request.json()
+
+    const operatorId = body.operator_id != null ? Number(body.operator_id) : null
+    if (!operatorId || isNaN(operatorId) || operatorId <= 0) {
+      return NextResponse.json({ 
+        error: 'Valid operator_id is required',
+        details: `Received operator_id: ${JSON.stringify(body.operator_id)}`
+      }, { status: 400 })
+    }
+
+    // Validate operator exists before trying the update
+    const opCheck = await query(
+      'SELECT id FROM lumber_operators WHERE id = $1',
+      [operatorId]
+    )
+    if (opCheck.rows.length === 0) {
+      return NextResponse.json({ 
+        error: 'Operator not found',
+        details: `Operator ID ${operatorId} does not exist. Please re-select from the dropdown.`
+      }, { status: 400 })
+    }
+
+    const cleanStacker = (val: any) => {
+      if (val == null) return null
+      const num = Number(val)
+      return isNaN(num) || num <= 0 ? null : num
+    }
 
     const result = await withTransaction(async (client) => {
       return client.query(
@@ -31,11 +57,11 @@ export async function PATCH(
          WHERE id = $6
          RETURNING load_id`,
         [
-          body.operator_id,
-          body.stacker_1_id || null,
-          body.stacker_2_id || null,
-          body.stacker_3_id || null,
-          body.stacker_4_id || null,
+          operatorId,
+          cleanStacker(body.stacker_1_id),
+          cleanStacker(body.stacker_2_id),
+          cleanStacker(body.stacker_3_id),
+          cleanStacker(body.stacker_4_id),
           params.packId
         ]
       )
