@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { query } from '@/lib/db'
+import { withTransaction } from '@/lib/db'
 
 // PATCH /api/lumber/packs/[packId]/finish - Mark pack as finished
 export async function PATCH(
@@ -16,11 +16,8 @@ export async function PATCH(
 
     const body = await request.json()
 
-    await query('BEGIN')
-
-    try {
-      // Mark pack as finished
-      const result = await query(
+    const result = await withTransaction(async (client) => {
+      return client.query(
         `UPDATE lumber_packs
          SET 
            is_finished = TRUE,
@@ -35,23 +32,25 @@ export async function PATCH(
          RETURNING load_id`,
         [
           body.operator_id,
-          body.stacker_1_id,
-          body.stacker_2_id,
-          body.stacker_3_id,
-          body.stacker_4_id,
+          body.stacker_1_id || null,
+          body.stacker_2_id || null,
+          body.stacker_3_id || null,
+          body.stacker_4_id || null,
           params.packId
         ]
       )
+    })
 
-      await query('COMMIT')
-
-      return NextResponse.json({ success: true })
-    } catch (error) {
-      await query('ROLLBACK')
-      throw error
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'Pack not found' }, { status: 404 })
     }
-  } catch (error) {
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
     console.error('Error finishing pack:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Failed to finish pack', 
+      details: error?.message || String(error)
+    }, { status: 500 })
   }
 }

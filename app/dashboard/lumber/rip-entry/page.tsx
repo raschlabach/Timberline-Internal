@@ -395,6 +395,10 @@ export default function RipEntryPage() {
         if (selectedLoad) {
           refreshPacks(selectedLoad.id)
         }
+      } else {
+        const err = await response.json().catch(() => ({}))
+        console.error('Finish pack error:', err)
+        toast.error(err.details || err.error || 'Failed to finish pack')
       }
     } catch (error) {
       console.error('Error finishing pack:', error)
