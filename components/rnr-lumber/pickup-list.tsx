@@ -95,6 +95,10 @@ interface Truckload {
   startDate: string
   endDate: string
   description: string | null
+  totalAssignments: number
+  pickupFootage: number
+  deliveryFootage: number
+  transferFootage: number
 }
 
 interface LoadTypes {
@@ -358,27 +362,43 @@ export function RnrLumberPickups() {
               <div className="h-6 w-px bg-gray-300" />
 
               <Select value={selectedTruckloadId} onValueChange={setSelectedTruckloadId}>
-                <SelectTrigger className="w-[280px] bg-white">
+                <SelectTrigger className="w-[360px] bg-white">
                   <SelectValue placeholder="Select a truckload..." />
                 </SelectTrigger>
-                <SelectContent>
-                  {truckloads.map(t => (
-                    <SelectItem key={t.id} value={t.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: t.driverColor }}
-                        />
-                        <span>{t.driverName}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-gray-500">#{t.trailerNumber}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-gray-500 text-xs">
-                          {format(new Date(t.startDate + 'T00:00:00'), 'M/d')}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                <SelectContent className="w-[420px]">
+                  {truckloads.map(t => {
+                    const totalFootage = (t.pickupFootage || 0) + (t.deliveryFootage || 0) + (t.transferFootage || 0)
+                    return (
+                      <SelectItem key={t.id} value={t.id.toString()}>
+                        <div className="flex flex-col gap-0.5 py-0.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: t.driverColor }}
+                            />
+                            <span className="font-medium">{t.driverName}</span>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-gray-500">#{t.trailerNumber}</span>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-gray-500 text-xs">
+                              {format(new Date(t.startDate + 'T00:00:00'), 'M/d')} – {format(new Date(t.endDate + 'T00:00:00'), 'M/d')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 pl-[18px] text-xs text-gray-400">
+                            {t.description && (
+                              <>
+                                <span className="text-gray-500 truncate max-w-[160px]">{t.description}</span>
+                                <span>·</span>
+                              </>
+                            )}
+                            <span>{t.totalAssignments || 0} stop{(t.totalAssignments || 0) !== 1 ? 's' : ''}</span>
+                            <span>·</span>
+                            <span>{totalFootage > 0 ? `${totalFootage.toLocaleString()} ft²` : 'Empty'}</span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
 
