@@ -455,10 +455,10 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
               <div className="h-6 w-px bg-gray-300" />
 
               <Select value={selectedTruckloadId} onValueChange={setSelectedTruckloadId}>
-                <SelectTrigger className="w-[360px] bg-white">
+                <SelectTrigger className="w-[480px] bg-white">
                   <SelectValue placeholder="Select a truckload..." />
                 </SelectTrigger>
-                <SelectContent className="w-[420px]">
+                <SelectContent className="w-[560px]">
                   {truckloads.map(t => {
                     const totalFootage = (t.pickupFootage || 0) + (t.deliveryFootage || 0) + (t.transferFootage || 0)
                     return (
@@ -480,7 +480,7 @@ export function ImportDetail({ importId, onBack }: ImportDetailProps) {
                           <div className="flex items-center gap-2 pl-[18px] text-xs text-gray-400">
                             {t.description && (
                               <>
-                                <span className="text-gray-500 truncate max-w-[160px]">{t.description}</span>
+                                <span className="text-gray-500">{t.description}</span>
                                 <span>·</span>
                               </>
                             )}
