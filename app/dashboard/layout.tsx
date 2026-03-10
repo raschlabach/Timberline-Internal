@@ -253,6 +253,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   theme="blue"
                 />
                 <SubNavItem
+                  href="/dashboard/bentwood"
+                  icon={<FileSpreadsheet size={16} />}
+                  label="Bentwood"
+                  isActive={isActiveSubRoute('/dashboard/bentwood')}
+                  theme="blue"
+                />
+                <SubNavItem
                   href="/dashboard/customers"
                   icon={<Users size={16} />}
                   label="Customers"
@@ -327,14 +334,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   theme="blue"
                 />
 
-                <div className="pt-3" />
-                <NavItem
-                  href="/dashboard/bentwood"
-                  icon={<FileSpreadsheet size={20} />}
-                  label="Bentwood"
-                  isActive={isActiveSubRoute('/dashboard/bentwood')}
-                  theme="blue"
-                />
               </>
             )}
 
