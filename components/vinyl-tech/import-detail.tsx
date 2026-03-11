@@ -960,7 +960,7 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
       String(item.skid_4x8 || ''),
       String(item.misc || ''),
       item.weight ? item.weight.toLocaleString() : '',
-      item.pickup_date ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yy') : '',
+      item.pickup_date && !isNaN(new Date(item.pickup_date + 'T00:00:00').getTime()) ? format(new Date(item.pickup_date + 'T00:00:00'), 'M/d/yy') : '',
       item.pickup_driver || '',
     ])
 
@@ -1071,7 +1071,7 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
                         {item.freight_quote ? `$${item.freight_quote}` : '—'}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        {item.pickup_date ? (
+                        {item.pickup_date && !isNaN(new Date(item.pickup_date + 'T00:00:00').getTime()) ? (
                           format(new Date(item.pickup_date + 'T00:00:00'), 'MMM d, yyyy')
                         ) : (
                           <span className="text-gray-300">—</span>
