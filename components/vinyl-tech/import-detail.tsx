@@ -1032,8 +1032,6 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
                   <th className="px-4 py-2.5 text-right font-medium text-gray-500 w-20">Quote</th>
                   <th className="px-4 py-2.5 text-left font-medium text-gray-500">Pickup Date</th>
                   <th className="px-4 py-2.5 text-left font-medium text-gray-500">Pickup Driver</th>
-                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Delivery Driver</th>
-                  <th className="px-4 py-2.5 text-left font-medium text-gray-500">Delivery Dates</th>
                   <th className="px-4 py-2.5 text-left font-medium text-gray-500">Notes</th>
                 </tr>
               </thead>
@@ -1081,33 +1079,6 @@ function WeeklySummary({ importData, items }: WeeklySummaryProps) {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {item.pickup_driver || <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {isAssigned && item.driver_name ? (
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="h-2.5 w-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: item.driver_color || '#999' }}
-                            />
-                            <span className="text-sm">{item.driver_name}</span>
-                            {item.trailer_number && (
-                              <span className="text-xs text-gray-400">#{item.trailer_number}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {isAssigned && item.truckload_start_date && item.truckload_end_date ? (
-                          <span>
-                            {format(new Date(item.truckload_start_date + 'T00:00:00'), 'MMM d')}
-                            {' – '}
-                            {format(new Date(item.truckload_end_date + 'T00:00:00'), 'MMM d, yyyy')}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate" title={
                         [item.notes_on_skids, item.additional_notes].filter(Boolean).join(' | ')

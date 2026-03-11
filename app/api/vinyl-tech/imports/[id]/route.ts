@@ -59,33 +59,40 @@ export async function GET(
         item.customer_matched,
         item.matched_customer_id,
         item.freight_quote,
+        -- Priority: 1) manual entry, 2) pickup assignment, 3) delivery assignment
         COALESCE(
           TO_CHAR(item.pickup_date, 'YYYY-MM-DD'),
-          TO_CHAR(pickup_t.start_date, 'YYYY-MM-DD')
+          TO_CHAR(pickup_t.start_date, 'YYYY-MM-DD'),
+          TO_CHAR(del_t.start_date, 'YYYY-MM-DD')
         ) as pickup_date,
-        COALESCE(item.pickup_driver, pickup_u.full_name) as pickup_driver,
+        COALESCE(
+          item.pickup_driver,
+          pickup_u.full_name,
+          del_u.full_name
+        ) as pickup_driver,
         item.status,
         item.order_id,
         item.truckload_id,
         c.customer_name as matched_customer_name,
-        u.full_name as driver_name,
-        d.color as driver_color,
-        t.trailer_number,
-        TO_CHAR(t.start_date, 'YYYY-MM-DD') as truckload_start_date,
-        TO_CHAR(t.end_date, 'YYYY-MM-DD') as truckload_end_date,
-        pickup_u.full_name as pickup_assignment_driver,
-        pickup_d.color as pickup_driver_color,
-        TO_CHAR(pickup_t.start_date, 'YYYY-MM-DD') as pickup_truckload_date
+        del_u.full_name as driver_name,
+        del_d.color as driver_color,
+        del_t.trailer_number,
+        TO_CHAR(del_t.start_date, 'YYYY-MM-DD') as truckload_start_date,
+        TO_CHAR(del_t.end_date, 'YYYY-MM-DD') as truckload_end_date
       FROM vinyl_tech_import_items item
       LEFT JOIN customers c ON item.matched_customer_id = c.id
-      LEFT JOIN truckloads t ON item.truckload_id = t.id
-      LEFT JOIN drivers d ON t.driver_id = d.user_id
-      LEFT JOIN users u ON d.user_id = u.id
+      -- Pickup assignment (from order)
       LEFT JOIN truckload_order_assignments pickup_toa
         ON item.order_id = pickup_toa.order_id AND pickup_toa.assignment_type = 'pickup'
       LEFT JOIN truckloads pickup_t ON pickup_toa.truckload_id = pickup_t.id
       LEFT JOIN drivers pickup_d ON pickup_t.driver_id = pickup_d.user_id
       LEFT JOIN users pickup_u ON pickup_d.user_id = pickup_u.id
+      -- Delivery assignment (from order)
+      LEFT JOIN truckload_order_assignments del_toa
+        ON item.order_id = del_toa.order_id AND del_toa.assignment_type = 'delivery'
+      LEFT JOIN truckloads del_t ON del_toa.truckload_id = del_t.id
+      LEFT JOIN drivers del_d ON del_t.driver_id = del_d.user_id
+      LEFT JOIN users del_u ON del_d.user_id = del_u.id
       WHERE item.import_id = $1
       ORDER BY item.id ASC`,
       [importId]
