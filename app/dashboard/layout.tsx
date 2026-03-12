@@ -516,27 +516,56 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isPrimary
                   theme="amber"
                 />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/rnr-office/orders/calendar"
+                  icon={<CalendarRange size={20} />}
+                  label="Order Calendar"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/orders')}
+                  isPrimary
+                  theme="amber"
+                />
                 <SubNavItem
-                  href="/dashboard/rnr-office/parts/import"
-                  icon={<FileSpreadsheet size={16} />}
-                  label="Import Parts"
-                  isActive={isActiveRoute('/dashboard/rnr-office/parts/import')}
+                  href="/dashboard/rnr-office/orders"
+                  icon={<ClipboardList size={16} />}
+                  label="Misc Orders"
+                  isActive={isActiveRoute('/dashboard/rnr-office/orders')}
+                  theme="amber"
+                />
+                <SubNavItem
+                  href="/dashboard/lumber/cabinet"
+                  icon={<Boxes size={16} />}
+                  label="NB Orders"
+                  isActive={pathname === '/dashboard/lumber/cabinet' || (pathname?.startsWith('/dashboard/lumber/cabinet/') && !pathname?.startsWith('/dashboard/lumber/cabinet/parts')) || false}
+                  theme="amber"
+                />
+
+                <div className="pt-3" />
+                <div className="px-4 py-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Shipping</span>
+                </div>
+                <NavItem
+                  href="/dashboard/lumber/nw-shipping"
+                  icon={<Ship size={20} />}
+                  label="NW Shipping Report"
+                  isActive={pathname?.startsWith('/dashboard/lumber/nw-shipping') || false}
+                  theme="amber"
+                />
+                <NavItem
+                  href="/dashboard/lumber/freight"
+                  icon={<Package size={20} />}
+                  label="Misc Freight Report"
+                  isActive={pathname?.startsWith('/dashboard/lumber/freight') || false}
                   theme="amber"
                 />
 
                 <div className="pt-3" />
                 <NavItem
-                  href="/dashboard/rnr-office/orders"
-                  icon={<ClipboardList size={20} />}
-                  label="Orders"
-                  isActive={isActiveSubRoute('/dashboard/rnr-office/orders')}
-                  theme="amber"
-                />
-                <SubNavItem
-                  href="/dashboard/rnr-office/orders/calendar"
-                  icon={<CalendarRange size={16} />}
-                  label="Order Calendar"
-                  isActive={isActiveRoute('/dashboard/rnr-office/orders/calendar')}
+                  href="/dashboard/rnr-office/reports"
+                  icon={<FileBarChart size={20} />}
+                  label="Reports"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/reports')}
                   theme="amber"
                 />
 
@@ -569,45 +598,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<FileText size={16} />}
                   label="Customer Pricing"
                   isActive={isActiveSubRoute('/dashboard/rnr-office/customer-pricing')}
-                  theme="amber"
-                />
-
-                <div className="pt-3" />
-                <NavItem
-                  href="/dashboard/rnr-office/reports"
-                  icon={<FileBarChart size={20} />}
-                  label="Reports"
-                  isActive={isActiveSubRoute('/dashboard/rnr-office/reports')}
-                  theme="amber"
-                />
-
-                <div className="pt-3" />
-                <NavItem
-                  href="/dashboard/lumber/cabinet"
-                  icon={<Boxes size={20} />}
-                  label="NB Orders"
-                  isActive={pathname === '/dashboard/lumber/cabinet' || (pathname?.startsWith('/dashboard/lumber/cabinet/') && !pathname?.startsWith('/dashboard/lumber/cabinet/parts')) || false}
-                  theme="amber"
-                />
-                <SubNavItem
-                  href="/dashboard/lumber/cabinet/parts"
-                  icon={<Calculator size={16} />}
-                  label="Part Builder"
-                  isActive={pathname?.startsWith('/dashboard/lumber/cabinet/parts') || false}
-                  theme="amber"
-                />
-                <NavItem
-                  href="/dashboard/lumber/nw-shipping"
-                  icon={<Ship size={20} />}
-                  label="NW Shipping Report"
-                  isActive={pathname?.startsWith('/dashboard/lumber/nw-shipping') || false}
-                  theme="amber"
-                />
-                <NavItem
-                  href="/dashboard/lumber/freight"
-                  icon={<Package size={20} />}
-                  label="Freight"
-                  isActive={pathname?.startsWith('/dashboard/lumber/freight') || false}
                   theme="amber"
                 />
 
