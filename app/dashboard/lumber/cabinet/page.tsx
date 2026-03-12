@@ -89,7 +89,7 @@ export default function CabinetOrderListPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             file_name: file.name,
-            po_numbers: [...new Set(allPOs)],
+            po_numbers: Array.from(new Set(allPOs)),
             due_date: firstDueDate,
             processed_sheets: processedSheets,
             special_results: specialResults,
