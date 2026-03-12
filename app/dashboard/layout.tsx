@@ -523,7 +523,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<CalendarRange size={20} />}
                   label="Order Calendar"
                   isActive={isActiveSubRoute('/dashboard/rnr-office/orders')}
-                  isPrimary
                   theme="amber"
                 />
                 <SubNavItem
