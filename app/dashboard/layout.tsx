@@ -494,14 +494,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       href="/dashboard/lumber/cabinet"
                       icon={<Boxes size={20} />}
                       label="Order Processor"
-                      isActive={pathname === '/dashboard/lumber/cabinet'}
+                      isActive={pathname === '/dashboard/lumber/cabinet' || pathname?.startsWith('/dashboard/lumber/cabinet/') && !pathname?.startsWith('/dashboard/lumber/cabinet/parts')}
                       theme="emerald"
                     />
                     <NavItem
                       href="/dashboard/lumber/cabinet/parts"
                       icon={<Calculator size={20} />}
                       label="Part Builder"
-                      isActive={pathname === '/dashboard/lumber/cabinet/parts'}
+                      isActive={pathname?.startsWith('/dashboard/lumber/cabinet/parts') || false}
                       theme="emerald"
                     />
                   </>
