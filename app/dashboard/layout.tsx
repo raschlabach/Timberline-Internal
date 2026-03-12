@@ -526,6 +526,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   theme="amber"
                 />
                 <SubNavItem
+                  href="/dashboard/rnr-office/orders/by-customer"
+                  icon={<Users size={16} />}
+                  label="By Customer"
+                  isActive={isActiveRoute('/dashboard/rnr-office/orders/by-customer')}
+                  theme="amber"
+                />
+                <SubNavItem
                   href="/dashboard/rnr-office/orders"
                   icon={<ClipboardList size={16} />}
                   label="Misc Orders"

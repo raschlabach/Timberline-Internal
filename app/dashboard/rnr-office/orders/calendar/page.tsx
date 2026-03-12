@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import {
   CalendarRange, ChevronLeft, ChevronRight, AlertTriangle,
-  Zap, Plus, ArrowLeft
+  Zap, Plus, ArrowLeft, Box, CheckCircle2, Users
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -37,11 +37,25 @@ interface Customer {
   customer_name: string
 }
 
+interface CabinetOrder {
+  id: number
+  file_name: string
+  po_numbers: string[]
+  due_date: string | null
+  is_done: boolean
+  sheet_count: number
+  special_count: number
+  created_at: string
+  updated_at: string
+}
+
 interface CustomerColor {
   customer_id: number
   customer_name: string
   calendar_color: string | null
 }
+
+const CABINET_COLOR = '#059669'
 
 const DEFAULT_PALETTE = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
@@ -73,6 +87,29 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
 
+const MONTH_ABBR: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+}
+
+function parseCabinetDueDate(dueDate: string | null, createdAt: string): string | null {
+  if (!dueDate) return null
+  const match = dueDate.match(/^(\d{1,2})-([A-Za-z]{3})$/)
+  if (match) {
+    const day = parseInt(match[1])
+    const monthIdx = MONTH_ABBR[match[2].toLowerCase()]
+    if (monthIdx !== undefined && day >= 1 && day <= 31) {
+      const year = new Date(createdAt).getFullYear()
+      return `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+  }
+  const d = new Date(dueDate)
+  if (!isNaN(d.getTime())) {
+    return formatDate(d)
+  }
+  return null
+}
+
 export default function OrderCalendarPage() {
   const { data: session } = useSession()
   const router = useRouter()
@@ -82,6 +119,8 @@ export default function OrderCalendarPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [filterCustomer, setFilterCustomer] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterSource, setFilterSource] = useState<string>('all')
+  const [cabinetOrders, setCabinetOrders] = useState<CabinetOrder[]>([])
 
   const now = new Date()
   const [currentYear, setCurrentYear] = useState(now.getFullYear())
@@ -130,8 +169,19 @@ export default function OrderCalendarPage() {
     } catch { /* ignore */ }
   }, [])
 
+  const fetchCabinetOrders = useCallback(async () => {
+    if (!session) return
+    try {
+      const res = await fetch('/api/lumber/cabinet/orders')
+      if (!res.ok) throw new Error('Failed to fetch')
+      const data: CabinetOrder[] = await res.json()
+      setCabinetOrders(data)
+    } catch { /* cabinet orders are supplementary */ }
+  }, [session])
+
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
   useEffect(() => { fetchOrders() }, [fetchOrders])
+  useEffect(() => { fetchCabinetOrders() }, [fetchCabinetOrders])
 
   function prevMonth() {
     if (currentMonth === 0) {
@@ -175,6 +225,27 @@ export default function OrderCalendarPage() {
     }
   }
 
+  const showRnr = filterSource !== 'cabinet'
+  const showCabinet = filterSource !== 'rnr'
+
+  const cabinetByDueDate: Record<string, CabinetOrder[]> = {}
+  if (showCabinet) {
+    for (const co of cabinetOrders) {
+      const parsed = parseCabinetDueDate(co.due_date, co.created_at)
+      if (parsed) {
+        if (!cabinetByDueDate[parsed]) cabinetByDueDate[parsed] = []
+        cabinetByDueDate[parsed].push(co)
+      }
+    }
+  }
+
+  const cabinetThisMonth = cabinetOrders.filter(co => {
+    const parsed = parseCabinetDueDate(co.due_date, co.created_at)
+    if (!parsed) return false
+    const [y, m] = parsed.split('-').map(Number)
+    return y === currentYear && m === currentMonth + 1
+  })
+
   const calendarDays: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) calendarDays.push(null)
   for (let d = 1; d <= daysInMonth; d++) calendarDays.push(d)
@@ -193,6 +264,11 @@ export default function OrderCalendarPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/rnr-office/orders/by-customer">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Users size={14} />By Customer
+            </Button>
+          </Link>
           <Link href="/dashboard/rnr-office/orders">
             <Button variant="outline" size="sm" className="gap-1.5">
               <ArrowLeft size={14} />List View
@@ -224,6 +300,16 @@ export default function OrderCalendarPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Select value={filterSource} onValueChange={setFilterSource}>
+            <SelectTrigger className="w-[150px] h-8 text-xs">
+              <SelectValue placeholder="All Sources" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Orders</SelectItem>
+              <SelectItem value="rnr">R&R Only</SelectItem>
+              <SelectItem value="cabinet">Nature&apos;s Blend Only</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={filterCustomer} onValueChange={setFilterCustomer}>
             <SelectTrigger className="w-[160px] h-8 text-xs">
               <SelectValue placeholder="All Customers" />
@@ -262,6 +348,10 @@ export default function OrderCalendarPage() {
           <Zap size={11} className="text-red-500" />Rush
         </span>
         <span className="text-gray-400 ml-1">| Pill color = customer</span>
+        <span className="ml-2 flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CABINET_COLOR }} />
+          Nature&apos;s Blend
+        </span>
       </div>
 
       {/* Calendar Grid */}
@@ -279,20 +369,29 @@ export default function OrderCalendarPage() {
         <div className="grid grid-cols-7">
           {calendarDays.map((day, idx) => {
             if (day === null) {
-              return <div key={`empty-${idx}`} className="min-h-[110px] bg-gray-50/50 border-b border-r border-gray-100" />
+              return <div key={`empty-${idx}`} className="min-h-[130px] bg-gray-50/50 border-b border-r border-gray-100" />
             }
 
             const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             const isToday = dateStr === todayStr
-            const dueOrders = ordersByDueDate[dateStr] || []
-            const orderedOrders = ordersByOrderDate[dateStr] || []
+            const dueOrders = showRnr ? (ordersByDueDate[dateStr] || []) : []
+            const orderedOrders = showRnr ? (ordersByOrderDate[dateStr] || []) : []
+            const cabDue = cabinetByDueDate[dateStr] || []
             const isPast = dateStr < todayStr
             const hasOverdue = dueOrders.some(o => isPast && o.status !== 'complete' && o.status !== 'shipped' && o.status !== 'invoiced')
+
+            const maxShow = 10
+            const rnrToShow = dueOrders.slice(0, maxShow)
+            const cabSlotsLeft = maxShow - rnrToShow.length
+            const cabToShow = cabDue.slice(0, Math.max(0, cabSlotsLeft))
+            const totalCount = dueOrders.length + cabDue.length
+            const shownCount = rnrToShow.length + cabToShow.length
+            const overflow = totalCount - shownCount
 
             return (
               <div
                 key={dateStr}
-                className={`min-h-[110px] border-b border-r border-gray-100 p-1 transition-colors ${
+                className={`min-h-[130px] border-b border-r border-gray-100 p-1 transition-colors ${
                   isToday ? 'bg-amber-50/60 ring-1 ring-inset ring-amber-300' : ''
                 } ${hasOverdue ? 'bg-red-50/40' : ''}`}
               >
@@ -310,15 +409,15 @@ export default function OrderCalendarPage() {
                   )}
                 </div>
 
-                <div className="mt-1 space-y-0.5 max-h-[80px] overflow-y-auto">
-                  {dueOrders.slice(0, 5).map(order => {
+                <div className="mt-1 space-y-0.5">
+                  {rnrToShow.map(order => {
                     const cfg = STATUS_CONFIG[order.status] || { label: 'Unknown', bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' }
                     const custColor = order.customer_id ? customerColors[order.customer_id] : null
                     const useCustomerColor = !!custColor
 
                     return (
                       <Link
-                        key={order.id}
+                        key={`rnr-${order.id}`}
                         href={`/dashboard/rnr-office/orders/${order.id}`}
                         className={`block px-1.5 py-0.5 rounded text-[10px] leading-tight truncate hover:opacity-80 transition-opacity ${
                           useCustomerColor ? 'text-white' : `${cfg.bg} ${cfg.text}`
@@ -338,8 +437,26 @@ export default function OrderCalendarPage() {
                       </Link>
                     )
                   })}
-                  {dueOrders.length > 5 && (
-                    <div className="text-[10px] text-gray-400 pl-1.5">+{dueOrders.length - 5} more</div>
+                  {cabToShow.map(co => (
+                    <Link
+                      key={`cab-${co.id}`}
+                      href={`/dashboard/lumber/cabinet/${co.id}`}
+                      className="block px-1.5 py-0.5 rounded text-[10px] leading-tight truncate hover:opacity-80 transition-opacity text-white"
+                      style={{ backgroundColor: CABINET_COLOR }}
+                      title={`Nature's Blend — ${co.po_numbers.join(', ') || co.file_name} — ${co.is_done ? 'Done' : 'In Progress'} — ${co.sheet_count} tabs`}
+                    >
+                      <span className="flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${co.is_done ? 'bg-green-300' : 'bg-white/60'}`} />
+                        <Box size={8} className="shrink-0 text-emerald-200" />
+                        <span className="truncate font-medium">
+                          {co.po_numbers.length > 0 ? co.po_numbers[0] : 'NB'}
+                        </span>
+                        <span className="text-[9px] opacity-70 shrink-0">{co.sheet_count}tabs</span>
+                      </span>
+                    </Link>
+                  ))}
+                  {overflow > 0 && (
+                    <div className="text-[10px] text-gray-400 pl-1.5">+{overflow} more</div>
                   )}
                 </div>
               </div>
@@ -349,7 +466,7 @@ export default function OrderCalendarPage() {
       </div>
 
       {/* Monthly Summary */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-6 gap-3">
         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
           const count = orders.filter(o => o.status === key).length
           return (
@@ -362,6 +479,21 @@ export default function OrderCalendarPage() {
             </div>
           )
         })}
+        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: CABINET_COLOR }} />
+            <span className="text-xs font-medium text-gray-600">Nature&apos;s Blend</span>
+          </div>
+          <div className="flex items-baseline gap-2 mt-1">
+            <div className="text-2xl font-bold text-gray-900">{cabinetThisMonth.length}</div>
+            {cabinetThisMonth.filter(co => co.is_done).length > 0 && (
+              <span className="text-xs text-green-600 flex items-center gap-0.5">
+                <CheckCircle2 size={11} />
+                {cabinetThisMonth.filter(co => co.is_done).length} done
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {isLoading && (
