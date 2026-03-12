@@ -22,6 +22,22 @@ import type {
   CellValue,
 } from '@/lib/cabinet-processing'
 
+// ===== Row Color Maps =====
+
+const RIP_SPECIE_COLORS: Record<string, string> = {
+  'Hard Maple': '#ece4f0',
+  'Hickory': '#e0eddf',
+  'Red Oak': '#f5e3d3',
+  'Sap Soft Maple': '#dce6f3',
+}
+
+const MOULD_PROFILE_COLORS: Record<string, string> = {
+  'PL 13': '#e0eddf',
+  'S4S': '#f5e3d3',
+  'Slant Shaker': '#f0edd0',
+  'ISP01': '#dce6f3',
+}
+
 // ===== Editable Part Number Cell =====
 
 function EditablePartNum({ value, onChange }: { value: string; onChange: (val: string) => void }) {
@@ -120,13 +136,14 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact, categoryPrices, 
           const missing = isPartMissing(r.partNum)
           const rate = categoryPrices?.[priceKey(r.profile, r.specie)]
           const ourPrice = rate ? r.boardFt * rate : undefined
+          const rowBg = missing ? '#fffbeb' : RIP_SPECIE_COLORS[r.specie]
           const Td = ({ children, blue }: { children: React.ReactNode; blue?: boolean }) => (
             <td className={compact ? undefined : `px-3 py-1.5 ${blue ? 'bg-blue-50/50' : ''}`}
               style={compact ? { border: bs, padding: p, backgroundColor: blue ? '#eff6ff' : undefined } : undefined}>{children}</td>
           )
           return (
-            <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
-              style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
+            <tr key={i} className={compact ? undefined : 'border-b border-gray-100'}
+              style={rowBg ? { backgroundColor: rowBg } : undefined}>
               <Td>{r.poNumber}</Td>
               <Td>
                 {compact
@@ -202,12 +219,13 @@ function MouldTable({ rows, compact, onPartNumChange }: { rows: SpecialRow[]; co
       <tbody>
         {rows.map((r, i) => {
           const missing = isPartMissing(r.partNum)
+          const rowBg = missing ? '#fffbeb' : MOULD_PROFILE_COLORS[r.profile]
           const Td = ({ children }: { children: React.ReactNode }) => (
             <td className={compact ? undefined : 'px-3 py-1.5'} style={compact ? { border: bs, padding: p } : undefined}>{children}</td>
           )
           return (
-            <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
-              style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
+            <tr key={i} className={compact ? undefined : 'border-b border-gray-100'}
+              style={rowBg ? { backgroundColor: rowBg } : undefined}>
               <Td>{r.poNumber}</Td>
               <Td>
                 {compact
