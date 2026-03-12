@@ -28,20 +28,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Exclusive section toggle - only one section visible at a time
   const isLumberRoute = pathname?.startsWith('/dashboard/lumber') || false
   const isRnrOfficeRoute = pathname?.startsWith('/dashboard/rnr-office') || false
+  const isOfficeLumberRoute = pathname?.startsWith('/dashboard/lumber/cabinet')
+    || pathname?.startsWith('/dashboard/lumber/nw-shipping')
+    || pathname?.startsWith('/dashboard/lumber/freight')
   const [activeSection, setActiveSection] = useState<'timberline' | 'rnr' | 'rnr-office'>(
-    isRnrOfficeRoute ? 'rnr-office' :
+    isRnrOfficeRoute || isOfficeLumberRoute ? 'rnr-office' :
     isLumberRoute || isRipOperator || isShippingStation ? 'rnr' : 'timberline'
   )
 
   useEffect(() => {
-    if (pathname?.startsWith('/dashboard/rnr-office')) {
+    if (pathname?.startsWith('/dashboard/rnr-office') || isOfficeLumberRoute) {
       setActiveSection('rnr-office')
     } else if (pathname?.startsWith('/dashboard/lumber')) {
       setActiveSection('rnr')
     } else if (canSeeAllPages) {
       setActiveSection('timberline')
     }
-  }, [pathname, canSeeAllPages])
+  }, [pathname, canSeeAllPages, isOfficeLumberRoute])
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/auth/login' })
@@ -487,40 +490,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   />
                 )}
 
-                {canSeeAllPages && (
+                {isShippingStation && (
                   <>
                     <div className="pt-3" />
-                    <NavItem
-                      href="/dashboard/lumber/cabinet"
-                      icon={<Boxes size={20} />}
-                      label="Order Processor"
-                      isActive={pathname === '/dashboard/lumber/cabinet' || pathname?.startsWith('/dashboard/lumber/cabinet/') && !pathname?.startsWith('/dashboard/lumber/cabinet/parts')}
-                      theme="emerald"
-                    />
-                    <NavItem
-                      href="/dashboard/lumber/cabinet/parts"
-                      icon={<Calculator size={20} />}
-                      label="Part Builder"
-                      isActive={pathname?.startsWith('/dashboard/lumber/cabinet/parts') || false}
-                      theme="emerald"
-                    />
-                  </>
-                )}
-                {(canSeeAllPages || isShippingStation) && (
-                  <>
-                    {isShippingStation && <div className="pt-3" />}
                     <NavItem
                       href="/dashboard/lumber/nw-shipping"
                       icon={<Ship size={20} />}
                       label="NW Shipping Report"
                       isActive={pathname?.startsWith('/dashboard/lumber/nw-shipping') || false}
-                      theme="emerald"
-                    />
-                    <NavItem
-                      href="/dashboard/lumber/freight"
-                      icon={<Package size={20} />}
-                      label="Freight"
-                      isActive={pathname?.startsWith('/dashboard/lumber/freight') || false}
                       theme="emerald"
                     />
                   </>
@@ -601,6 +578,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<FileBarChart size={20} />}
                   label="Reports"
                   isActive={isActiveSubRoute('/dashboard/rnr-office/reports')}
+                  theme="amber"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/lumber/cabinet"
+                  icon={<Boxes size={20} />}
+                  label="NB Orders"
+                  isActive={pathname === '/dashboard/lumber/cabinet' || (pathname?.startsWith('/dashboard/lumber/cabinet/') && !pathname?.startsWith('/dashboard/lumber/cabinet/parts')) || false}
+                  theme="amber"
+                />
+                <SubNavItem
+                  href="/dashboard/lumber/cabinet/parts"
+                  icon={<Calculator size={16} />}
+                  label="Part Builder"
+                  isActive={pathname?.startsWith('/dashboard/lumber/cabinet/parts') || false}
+                  theme="amber"
+                />
+                <NavItem
+                  href="/dashboard/lumber/nw-shipping"
+                  icon={<Ship size={20} />}
+                  label="NW Shipping Report"
+                  isActive={pathname?.startsWith('/dashboard/lumber/nw-shipping') || false}
+                  theme="amber"
+                />
+                <NavItem
+                  href="/dashboard/lumber/freight"
+                  icon={<Package size={20} />}
+                  label="Freight"
+                  isActive={pathname?.startsWith('/dashboard/lumber/freight') || false}
                   theme="amber"
                 />
 

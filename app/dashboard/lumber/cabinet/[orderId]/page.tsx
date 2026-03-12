@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Printer, RotateCcw, DollarSign, ChevronDown, ChevronUp, Loader2, CheckCircle2, Circle } from 'lucide-react'
+import { ArrowLeft, Printer, RotateCcw, DollarSign, ChevronDown, ChevronUp, Loader2, CheckCircle2, Circle, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   priceKey,
@@ -22,14 +22,69 @@ import type {
   CellValue,
 } from '@/lib/cabinet-processing'
 
+// ===== Editable Part Number Cell =====
+
+function EditablePartNum({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setDraft(value) }, [value])
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  const missing = isPartMissing(value)
+
+  function commit() {
+    setEditing(false)
+    const trimmed = draft.trim()
+    if (trimmed !== value) onChange(trimmed)
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        className="w-28 border border-blue-400 rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-300"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }}
+      />
+    )
+  }
+
+  if (missing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="text-amber-500 font-medium text-xs hover:text-amber-700 hover:underline cursor-pointer"
+      >
+        ⚠ MISSING — click to enter
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="hover:text-blue-600 hover:underline cursor-pointer text-left"
+      title="Click to edit part number"
+    >
+      {value}
+    </button>
+  )
+}
+
 // ===== RipTable Component =====
 
-function RipTable({ rows, speciesTotals, totalBoardFt, compact, categoryPrices }: {
+function RipTable({ rows, speciesTotals, totalBoardFt, compact, categoryPrices, onPartNumChange }: {
   rows: SpecialRow[]
   speciesTotals: { specie: string; boardFt: number }[]
   totalBoardFt: number
   compact?: boolean
   categoryPrices?: Record<string, number>
+  onPartNumChange?: (rowIdx: number, val: string) => void
 }) {
   const p = compact ? '2px 6px' : undefined
   const bs = compact ? '1px solid #ccc' : undefined
@@ -73,7 +128,13 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact, categoryPrices }
             <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
               style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
               <Td>{r.poNumber}</Td>
-              <Td>{missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}</Td>
+              <Td>
+                {compact
+                  ? (missing ? '⚠' : r.partNum)
+                  : onPartNumChange
+                    ? <EditablePartNum value={r.partNum} onChange={(val) => onPartNumChange(i, val)} />
+                    : (missing ? <span className="text-amber-500 font-medium">⚠ MISSING</span> : r.partNum)}
+              </Td>
               <Td>{r.quantity}</Td>
               <Td>{formatNum(r.ripWidth)}</Td>
               <Td>{r.specie}</Td>
@@ -119,7 +180,7 @@ function RipTable({ rows, speciesTotals, totalBoardFt, compact, categoryPrices }
 
 // ===== MouldTable Component =====
 
-function MouldTable({ rows, compact }: { rows: SpecialRow[]; compact?: boolean }) {
+function MouldTable({ rows, compact, onPartNumChange }: { rows: SpecialRow[]; compact?: boolean; onPartNumChange?: (rowIdx: number, val: string) => void }) {
   const p = compact ? '2px 6px' : undefined
   const bs = compact ? '1px solid #ccc' : undefined
   const hb = compact ? '1px solid #999' : undefined
@@ -148,7 +209,13 @@ function MouldTable({ rows, compact }: { rows: SpecialRow[]; compact?: boolean }
             <tr key={i} className={compact ? undefined : `border-b border-gray-100 ${missing ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
               style={compact && missing ? { backgroundColor: '#fffbeb' } : undefined}>
               <Td>{r.poNumber}</Td>
-              <Td>{missing ? (compact ? '⚠' : <span className="text-amber-500 font-medium">⚠ MISSING</span>) : r.partNum}</Td>
+              <Td>
+                {compact
+                  ? (missing ? '⚠' : r.partNum)
+                  : onPartNumChange
+                    ? <EditablePartNum value={r.partNum} onChange={(val) => onPartNumChange(i, val)} />
+                    : (missing ? <span className="text-amber-500 font-medium">⚠ MISSING</span> : r.partNum)}
+              </Td>
               <Td>{r.quantity}</Td>
               <Td>{formatNum(r.width)}</Td>
               <Td>{r.profile}</Td>
@@ -185,6 +252,8 @@ export default function CabinetOrderDetailPage() {
   const [categoryPrices, setCategoryPrices] = useState<Record<string, number>>({})
   const [priceEdits, setPriceEdits] = useState<Record<string, string>>({})
   const [showPriceManager, setShowPriceManager] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -257,6 +326,66 @@ export default function CabinetOrderDetailPage() {
       setIsDone(!newValue)
       toast.error('Failed to update status')
     }
+  }
+
+  async function handleSave() {
+    setIsSaving(true)
+    try {
+      const res = await fetch(`/api/lumber/cabinet/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          processed_sheets: sheets,
+          special_results: specialResults,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setHasUnsavedChanges(false)
+      toast.success('Part numbers saved')
+    } catch {
+      toast.error('Failed to save changes')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function updateSheetPartNum(sheetIdx: number, sectionIdx: number, rowIdx: number, value: string) {
+    setSheets(prev => {
+      const next = prev.map((sheet, si) => {
+        if (si !== sheetIdx) return sheet
+        const newSections = sheet.sections.map((section, secIdx) => {
+          if (secIdx !== sectionIdx) return section
+          const newRows = section.rows.map((row, ri) => {
+            if (ri !== rowIdx) return row
+            const newRow = [...row]
+            newRow[sheet.partNumDisplayIdx] = value || null
+            return newRow
+          })
+          return { ...section, rows: newRows }
+        })
+        const missingPartCount = sheet.partNumDisplayIdx >= 0
+          ? newSections.reduce((sum, sec) => sum + sec.rows.filter(r => {
+              const val = r[sheet.partNumDisplayIdx]
+              return val === null || val === undefined || String(val).trim() === ''
+            }).length, 0)
+          : 0
+        return { ...sheet, sections: newSections, missingPartCount }
+      })
+      return next
+    })
+    setHasUnsavedChanges(true)
+  }
+
+  function updateSpecialPartNum(specialIdx: number, viewType: 'rip' | 'mould', rowIdx: number, value: string) {
+    setSpecialResults(prev => prev.map((sr, si) => {
+      if (si !== specialIdx) return sr
+      const field = viewType === 'rip' ? 'ripRows' : 'mouldRows'
+      const newRows = sr[field].map((r, ri) => ri === rowIdx ? { ...r, partNum: value } : r)
+      const allRows = [...(viewType === 'rip' ? newRows : sr.ripRows), ...(viewType === 'mould' ? newRows : sr.mouldRows)]
+      const missingPartCount = allRows.filter(r => isPartMissing(r.partNum)).length
+      return { ...sr, [field]: newRows, missingPartCount }
+    }))
+    setHasUnsavedChanges(true)
   }
 
   function handlePrint() { window.print() }
@@ -347,6 +476,12 @@ export default function CabinetOrderDetailPage() {
               {missingRateCount > 0 && <span className="ml-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full">{missingRateCount}</span>}
               {showPriceManager ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </Button>
+            {hasUnsavedChanges && (
+              <Button onClick={handleSave} disabled={isSaving} className="gap-2 bg-blue-600 hover:bg-blue-700">
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Changes
+              </Button>
+            )}
             <Button
               variant={isDone ? 'default' : 'outline'}
               onClick={handleToggleDone}
@@ -561,8 +696,11 @@ export default function CabinetOrderDetailPage() {
                           <tr key={rIdx} className={`border-b border-gray-100 ${isMissingPart ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
                             {row.map((cell, cIdx) => (
                               <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap">
-                                {cIdx === activeSheet.partNumDisplayIdx && isMissingPart
-                                  ? <span className="text-amber-500 font-medium text-xs">⚠ MISSING</span>
+                                {cIdx === activeSheet.partNumDisplayIdx
+                                  ? <EditablePartNum
+                                      value={String(cell ?? '')}
+                                      onChange={(val) => updateSheetPartNum(activeTab, sIdx, rIdx, val)}
+                                    />
                                   : formatCell(cell, cIdx, activeSheet.displayHeaders)}
                               </td>
                             ))}
@@ -698,8 +836,10 @@ export default function CabinetOrderDetailPage() {
             </div>
             <div className="overflow-x-auto">
               {specialView === 'rip'
-                ? <RipTable rows={activeSpecial.ripRows} speciesTotals={activeSpecial.speciesTotals} totalBoardFt={activeSpecial.totalBoardFt} categoryPrices={categoryPrices} />
-                : <MouldTable rows={activeSpecial.mouldRows} />}
+                ? <RipTable rows={activeSpecial.ripRows} speciesTotals={activeSpecial.speciesTotals} totalBoardFt={activeSpecial.totalBoardFt} categoryPrices={categoryPrices}
+                    onPartNumChange={(rowIdx, val) => updateSpecialPartNum(activeSpecialIdx!, 'rip', rowIdx, val)} />
+                : <MouldTable rows={activeSpecial.mouldRows}
+                    onPartNumChange={(rowIdx, val) => updateSpecialPartNum(activeSpecialIdx!, 'mould', rowIdx, val)} />}
             </div>
           </div>
         )}

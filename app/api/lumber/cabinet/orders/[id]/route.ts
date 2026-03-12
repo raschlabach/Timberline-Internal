@@ -47,12 +47,36 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const body = await request.json()
 
+    const setClauses: string[] = ['updated_at = NOW()']
+    const values: unknown[] = []
+    let paramIdx = 1
+
+    if (body.is_done !== undefined) {
+      setClauses.push(`is_done = $${paramIdx}`)
+      values.push(body.is_done)
+      paramIdx++
+    }
+
+    if (body.processed_sheets !== undefined) {
+      setClauses.push(`processed_sheets = $${paramIdx}`)
+      values.push(JSON.stringify(body.processed_sheets))
+      paramIdx++
+    }
+
+    if (body.special_results !== undefined) {
+      setClauses.push(`special_results = $${paramIdx}`)
+      values.push(JSON.stringify(body.special_results))
+      paramIdx++
+    }
+
+    values.push(id)
+
     const result = await query(
       `UPDATE cabinet_orders
-       SET is_done = COALESCE($1, is_done), updated_at = NOW()
-       WHERE id = $2
+       SET ${setClauses.join(', ')}
+       WHERE id = $${paramIdx}
        RETURNING id, file_name, po_numbers, due_date, is_done, created_at, updated_at`,
-      [body.is_done ?? null, id]
+      values
     )
 
     if (result.rows.length === 0) {
