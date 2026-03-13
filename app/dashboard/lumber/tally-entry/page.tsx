@@ -264,7 +264,7 @@ export default function TallyEntryPage() {
       )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full divide-y divide-gray-200">
+        <table className="divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
@@ -299,20 +299,10 @@ export default function TallyEntryPage() {
                     <div className="text-sm text-gray-900">{load.supplier_name}</div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       {load.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between gap-3">
-                          <div className="text-sm text-gray-900">
-                            {item.species} - {item.grade} ({item.thickness}) - {item.actual_footage?.toLocaleString()} BF
-                          </div>
-                          {!isShowingHidden && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleOpenTallyDialog(load, item.id)}
-                            >
-                              Enter Tallies
-                            </Button>
-                          )}
+                        <div key={item.id} className="text-sm text-gray-900">
+                          {item.species} - {item.grade} ({item.thickness}) - {item.actual_footage?.toLocaleString()} BF
                         </div>
                       ))}
                     </div>
@@ -324,27 +314,38 @@ export default function TallyEntryPage() {
                         : '-'}
                     </div>
                   </td>
-                  <td className="px-1 py-3">
-                    {isShowingHidden ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleHidden(load.id, false)}
-                        title="Move back to main list"
-                      >
-                        <Undo2 className="h-4 w-4 mr-1" />
-                        Unhide
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleToggleHidden(load.id, true)}
-                        title="Hide from tally list"
-                      >
-                        <EyeOff className="h-4 w-4" />
-                      </Button>
-                    )}
+                  <td className="px-2 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      {!isShowingHidden && load.items.map((item) => (
+                        <Button
+                          key={item.id}
+                          size="sm"
+                          onClick={() => handleOpenTallyDialog(load, item.id)}
+                        >
+                          Enter Tallies
+                        </Button>
+                      ))}
+                      {isShowingHidden ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleHidden(load.id, false)}
+                          title="Move back to main list"
+                        >
+                          <Undo2 className="h-4 w-4 mr-1" />
+                          Unhide
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleToggleHidden(load.id, true)}
+                          title="Hide from tally list"
+                        >
+                          <EyeOff className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
