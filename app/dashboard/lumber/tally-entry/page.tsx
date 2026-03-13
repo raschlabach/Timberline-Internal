@@ -279,14 +279,12 @@ export default function TallyEntryPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Arrival Date
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase w-24">
-              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {displayedLoads.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
                   {isShowingHidden ? 'No hidden loads' : 'No loads needing tally entry'}
                 </td>
               </tr>
@@ -319,33 +317,33 @@ export default function TallyEntryPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
-                      {load.actual_arrival_date 
-                        ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
-                        : '-'}
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-900">
+                        {load.actual_arrival_date 
+                          ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
+                          : '-'}
+                      </div>
+                      {isShowingHidden ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleHidden(load.id, false)}
+                          title="Move back to main list"
+                        >
+                          <Undo2 className="h-4 w-4 mr-1" />
+                          Unhide
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleToggleHidden(load.id, true)}
+                          title="Hide from tally list"
+                        >
+                          <EyeOff className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {isShowingHidden ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleHidden(load.id, false)}
-                        title="Move back to main list"
-                      >
-                        <Undo2 className="h-4 w-4 mr-1" />
-                        Unhide
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleToggleHidden(load.id, true)}
-                        title="Hide from tally list"
-                      >
-                        <EyeOff className="h-4 w-4" />
-                      </Button>
-                    )}
                   </td>
                 </tr>
               ))
