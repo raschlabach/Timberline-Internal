@@ -264,43 +264,44 @@ export default function TallyEntryPage() {
       )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
                 Load ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
                 Supplier
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                 Items to Tally
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
                 Arrival Date
               </th>
+              <th className="px-3 py-2 w-10"></th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {displayedLoads.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={5} className="px-3 py-12 text-center text-gray-500">
                   {isShowingHidden ? 'No hidden loads' : 'No loads needing tally entry'}
                 </td>
               </tr>
             ) : (
               displayedLoads.map((load) => (
                 <tr key={load.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{load.load_id}</div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{load.supplier_name}</div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-3">
                     <div className="space-y-2">
                       {load.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between">
+                        <div key={item.id} className="flex items-center justify-between gap-3">
                           <div className="text-sm text-gray-900">
                             {item.species} - {item.grade} ({item.thickness}) - {item.actual_footage?.toLocaleString()} BF
                           </div>
@@ -316,34 +317,34 @@ export default function TallyEntryPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-900">
-                        {load.actual_arrival_date 
-                          ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
-                          : '-'}
-                      </div>
-                      {isShowingHidden ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleToggleHidden(load.id, false)}
-                          title="Move back to main list"
-                        >
-                          <Undo2 className="h-4 w-4 mr-1" />
-                          Unhide
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleToggleHidden(load.id, true)}
-                          title="Hide from tally list"
-                        >
-                          <EyeOff className="h-4 w-4" />
-                        </Button>
-                      )}
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {load.actual_arrival_date 
+                        ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
+                        : '-'}
                     </div>
+                  </td>
+                  <td className="px-1 py-3">
+                    {isShowingHidden ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleToggleHidden(load.id, false)}
+                        title="Move back to main list"
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        Unhide
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleToggleHidden(load.id, true)}
+                        title="Hide from tally list"
+                      >
+                        <EyeOff className="h-4 w-4" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))
