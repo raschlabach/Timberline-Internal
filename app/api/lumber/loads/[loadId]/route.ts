@@ -78,7 +78,8 @@ export async function PATCH(
       'actual_arrival_date', 'pickup_number', 'plant', 'plant_id', 'pickup_date',
       'invoice_number', 'invoice_total', 'invoice_date', 'driver_id',
       'assigned_pickup_date', 'entered_in_quickbooks', 'is_paid', 'load_quality',
-      'all_packs_tallied', 'all_packs_finished', 'po_generated', 'po_generated_at'
+      'all_packs_tallied', 'all_packs_finished', 'po_generated', 'po_generated_at',
+      'tally_entry_hidden'
     ]
     
     // Map truck_driver_id to driver_id (frontend uses different name)

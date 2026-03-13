@@ -112,6 +112,7 @@ export interface LumberLoad {
   load_quality: number | null
   all_packs_tallied: boolean
   all_packs_finished: boolean
+  tally_entry_hidden: boolean
   
   // Status tracking
   po_generated: boolean

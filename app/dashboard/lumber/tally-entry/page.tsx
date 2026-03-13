@@ -14,15 +14,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Trash2, Save, Check } from 'lucide-react'
+import { Plus, Trash2, Save, Check, EyeOff, Eye, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function TallyEntryPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   
-  
   const [loads, setLoads] = useState<LumberLoadWithDetails[]>([])
+  const [hiddenLoads, setHiddenLoads] = useState<LumberLoadWithDetails[]>([])
+  const [isShowingHidden, setIsShowingHidden] = useState(false)
   const [selectedLoad, setSelectedLoad] = useState<LumberLoadWithDetails | null>(null)
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -43,15 +44,35 @@ export default function TallyEntryPage() {
 
   async function fetchLoads() {
     try {
-      const response = await fetch('/api/lumber/loads/needs-tally')
-      if (response.ok) {
-        const data = await response.json()
-        setLoads(data)
-      }
+      const [mainRes, hiddenRes] = await Promise.all([
+        fetch('/api/lumber/loads/needs-tally'),
+        fetch('/api/lumber/loads/needs-tally?hidden=true'),
+      ])
+      if (mainRes.ok) setLoads(await mainRes.json())
+      if (hiddenRes.ok) setHiddenLoads(await hiddenRes.json())
     } catch (error) {
       console.error('Error fetching loads needing tally:', error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleToggleHidden(loadId: number, hide: boolean) {
+    try {
+      const response = await fetch(`/api/lumber/loads/${loadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tally_entry_hidden: hide }),
+      })
+      if (response.ok) {
+        toast.success(hide ? 'Load moved to hidden list' : 'Load moved back to main list')
+        fetchLoads()
+      } else {
+        toast.error('Failed to update load')
+      }
+    } catch (error) {
+      console.error('Error toggling load visibility:', error)
+      toast.error('Failed to update load')
     }
   }
 
@@ -206,14 +227,41 @@ export default function TallyEntryPage() {
   const totalTallied = tallies.reduce((sum, t) => sum + t.tally_board_feet, 0)
   const selectedItem = selectedLoad?.items.find(i => i.id === selectedItemId)
 
+  const displayedLoads = isShowingHidden ? hiddenLoads : loads
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Tally Entry</h1>
-        <p className="text-gray-600 mt-1">
-          Enter pack tallies for arrived loads
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Tally Entry</h1>
+          <p className="text-gray-600 mt-1">
+            Enter pack tallies for arrived loads
+          </p>
+        </div>
+        <Button
+          variant={isShowingHidden ? 'default' : 'outline'}
+          onClick={() => setIsShowingHidden(!isShowingHidden)}
+        >
+          {isShowingHidden ? (
+            <>
+              <Eye className="h-4 w-4 mr-2" />
+              Showing Hidden ({hiddenLoads.length})
+            </>
+          ) : (
+            <>
+              <EyeOff className="h-4 w-4 mr-2" />
+              Hidden Loads ({hiddenLoads.length})
+            </>
+          )}
+        </Button>
       </div>
+
+      {isShowingHidden && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+          Showing hidden loads. These loads were hidden because tallies were not expected. 
+          They will automatically leave this list once they are out of inventory.
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -231,17 +279,19 @@ export default function TallyEntryPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Arrival Date
               </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase w-24">
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {loads.length === 0 ? (
+            {displayedLoads.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                  No loads needing tally entry
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                  {isShowingHidden ? 'No hidden loads' : 'No loads needing tally entry'}
                 </td>
               </tr>
             ) : (
-              loads.map((load) => (
+              displayedLoads.map((load) => (
                 <tr key={load.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">{load.load_id}</div>
@@ -256,12 +306,14 @@ export default function TallyEntryPage() {
                           <div className="text-sm text-gray-900">
                             {item.species} - {item.grade} ({item.thickness}) - {item.actual_footage?.toLocaleString()} BF
                           </div>
-                          <Button
-                            size="sm"
-                            onClick={() => handleOpenTallyDialog(load, item.id)}
-                          >
-                            Enter Tallies
-                          </Button>
+                          {!isShowingHidden && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleOpenTallyDialog(load, item.id)}
+                            >
+                              Enter Tallies
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -272,6 +324,28 @@ export default function TallyEntryPage() {
                         ? new Date(load.actual_arrival_date).toLocaleDateString('en-US', { timeZone: 'UTC' })
                         : '-'}
                     </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {isShowingHidden ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleToggleHidden(load.id, false)}
+                        title="Move back to main list"
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        Unhide
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleToggleHidden(load.id, true)}
+                        title="Hide from tally list"
+                      >
+                        <EyeOff className="h-4 w-4" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))

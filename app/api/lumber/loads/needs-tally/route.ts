@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const hidden = searchParams.get('hidden') === 'true'
+
     const result = await query(`
       SELECT DISTINCT
         l.*,
@@ -21,8 +24,9 @@ export async function GET(request: NextRequest) {
       WHERE li.actual_footage IS NOT NULL
         AND l.all_packs_tallied = FALSE
         AND COALESCE(l.all_packs_finished, FALSE) = FALSE
+        AND COALESCE(l.tally_entry_hidden, FALSE) = $1
       ORDER BY l.created_at DESC
-    `)
+    `, [hidden])
 
     // Fetch items for each load
     for (const load of result.rows) {
