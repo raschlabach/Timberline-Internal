@@ -500,6 +500,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       isActive={pathname?.startsWith('/dashboard/lumber/nw-shipping') || false}
                       theme="emerald"
                     />
+                    <NavItem
+                      href="/dashboard/lumber/freight"
+                      icon={<Package size={20} />}
+                      label="Misc Freight Report"
+                      isActive={pathname?.startsWith('/dashboard/lumber/freight') || false}
+                      theme="emerald"
+                    />
                   </>
                 )}
               </>
