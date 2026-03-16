@@ -535,6 +535,7 @@ export default function LoadBoardMap() {
   const [truckloadStops, setTruckloadStops] = useState<Record<number, Truckload>>({});
   const [truckloadRoutes, setTruckloadRoutes] = useState<Record<number, google.maps.DirectionsResult>>({});
   const [selectedMarkerInfo, setSelectedMarkerInfo] = useState<{ id: number; type: 'load' | 'truckload'; data: any } | null>(null);
+  const [hoveredMarker, setHoveredMarker] = useState<{ lat: number; lng: number; customerName: string; pickupCount: number; deliveryCount: number } | null>(null);
   const [locationTruckloadStops, setLocationTruckloadStops] = useState<LoadLocation[]>([]);
   const [viewToggles, setViewToggles] = useState<ViewToggles>({
     unassigned: true,
@@ -1336,8 +1337,25 @@ export default function LoadBoardMap() {
                       strokeColor: '#FFFFFF',
                       scale: 8,
                     }}
-                    title={`${load.hasPickup ? 'Pickup' : ''}${load.hasPickup && load.hasDelivery ? ' & ' : ''}${load.hasDelivery ? 'Delivery' : ''} - ${load.clusterSize} stops`}
+                    onMouseOver={() => {
+                      const items = load.clusterItems || [load];
+                      const pickups = items.filter(i => i.type === 'pickup' && !('source' in i && i.source === 'truckload'));
+                      const deliveries = items.filter(i => i.type === 'delivery' && !('source' in i && i.source === 'truckload'));
+                      const name = items[0]?.customerName
+                        || items[0]?.pickupCustomer?.name
+                        || items[0]?.deliveryCustomer?.name
+                        || 'Unknown';
+                      setHoveredMarker({
+                        lat: load.adjustedLat,
+                        lng: load.adjustedLng,
+                        customerName: name,
+                        pickupCount: pickups.length,
+                        deliveryCount: deliveries.length,
+                      });
+                    }}
+                    onMouseOut={() => setHoveredMarker(null)}
                     onClick={async () => {
+                      setHoveredMarker(null);
                       map?.panTo({ lat: load.adjustedLat, lng: load.adjustedLng });
                       setSelectedMarkerInfo({ 
                         id: load.id, 
@@ -1349,7 +1367,6 @@ export default function LoadBoardMap() {
                           clusterItems: load.clusterItems
                         } 
                       });
-                      // Fetch all truckload stops for this location
                       await fetchAllTruckloadStopsForLocation(load.adjustedLat, load.adjustedLng);
                     }}
                   />
@@ -1413,6 +1430,30 @@ export default function LoadBoardMap() {
               />
             );
           })}
+
+          {/* Hover Tooltip */}
+          {hoveredMarker && !selectedMarkerInfo && (
+            <InfoWindowF
+              position={{ lat: hoveredMarker.lat, lng: hoveredMarker.lng }}
+              options={{
+                disableAutoPan: true,
+                pixelOffset: new window.google.maps.Size(0, -12),
+                maxWidth: 200,
+              }}
+            >
+              <div className="py-0.5 px-1">
+                <div className="font-semibold text-sm text-gray-900 leading-tight">{hoveredMarker.customerName}</div>
+                <div className="flex items-center gap-2 mt-1 text-xs">
+                  {hoveredMarker.pickupCount > 0 && (
+                    <span className="text-red-600 font-medium">{hoveredMarker.pickupCount} pickup{hoveredMarker.pickupCount !== 1 ? 's' : ''}</span>
+                  )}
+                  {hoveredMarker.deliveryCount > 0 && (
+                    <span className="text-gray-800 font-medium">{hoveredMarker.deliveryCount} deliver{hoveredMarker.deliveryCount !== 1 ? 'ies' : 'y'}</span>
+                  )}
+                </div>
+              </div>
+            </InfoWindowF>
+          )}
 
           {/* Selected Marker InfoWindow - Dynamically rendered based on type */}
           {selectedMarkerInfo && (
