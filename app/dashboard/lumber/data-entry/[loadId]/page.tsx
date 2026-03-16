@@ -79,12 +79,16 @@ export default function DataEntryPage() {
           const data = await response.json()
           setLoad(data)
           
-          // Pre-fill if data exists
-          if (data.actual_arrival_date) setArrivalDate(data.actual_arrival_date)
-          if (data.pickup_number) setPickupNumber(data.pickup_number)
-          if (data.plant) setPlant(data.plant)
-          if (data.plant_id) setPlantId(data.plant_id.toString())
-          if (data.invoice_number) setInvoiceNumber(data.invoice_number)
+          function toDateInput(val: string | null): string {
+            if (!val) return ''
+            return val.substring(0, 10)
+          }
+
+          setArrivalDate(toDateInput(data.actual_arrival_date))
+          setPickupNumber(data.pickup_number || '')
+          setPlant(data.plant || '')
+          if (data.plant_id != null) setPlantId(data.plant_id.toString())
+          setInvoiceNumber(data.invoice_number || '')
 
           if (data.supplier_id) {
             try {
@@ -95,13 +99,13 @@ export default function DataEntryPage() {
               }
             } catch {}
           }
-          if (data.invoice_total) setInvoiceTotal(data.invoice_total.toString())
-          if (data.invoice_date) setInvoiceDate(data.invoice_date)
+          setInvoiceTotal(data.invoice_total != null ? data.invoice_total.toString() : '')
+          setInvoiceDate(toDateInput(data.invoice_date))
           
           // Pre-fill actual footage
           const footageMap: { [key: number]: string } = {}
           data.items?.forEach((item: any) => {
-            if (item.actual_footage) {
+            if (item.actual_footage != null) {
               footageMap[item.id] = item.actual_footage.toString()
             }
           })

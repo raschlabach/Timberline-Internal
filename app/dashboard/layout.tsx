@@ -523,6 +523,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isPrimary
                   theme="amber"
                 />
+                <SubNavItem
+                  href="/dashboard/lumber/cabinet/parts"
+                  icon={<Calculator size={16} />}
+                  label="Part Builder"
+                  isActive={pathname?.startsWith('/dashboard/lumber/cabinet/parts') || false}
+                  theme="amber"
+                />
 
                 <div className="pt-3" />
                 <NavItem
