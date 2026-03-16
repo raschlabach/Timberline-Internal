@@ -38,7 +38,7 @@ export default function TruckloadPlanner() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [viewMode, setViewMode] = useState<ViewMode>('2week')
   const [customStartDate, setCustomStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [customEndDate, setCustomEndDate] = useState(format(addWeeks(new Date(), 4), 'yyyy-MM-dd'))
 
@@ -376,43 +376,38 @@ export default function TruckloadPlanner() {
     return (hours + minutes / 60) / 24
   }
 
-  // Calculate the left position and width (as percentages) for a truckload block
-  function getBlockPosition(truckload: PlannerTruckload): { left: number; width: number } | null {
-    const totalDays = dateRange.length
-    const rangeStartStr = format(dateRange[0], 'yyyy-MM-dd')
-    const rangeEndStr = format(dateRange[totalDays - 1], 'yyyy-MM-dd')
+  // Calculate the left position and width (as percentages) for a truckload block within a week
+  function getBlockPositionForWeek(truckload: PlannerTruckload, weekDates: Date[]): { left: number; width: number } | null {
+    const totalDays = weekDates.length
+    const rangeStartStr = format(weekDates[0], 'yyyy-MM-dd')
+    const rangeEndStr = format(weekDates[totalDays - 1], 'yyyy-MM-dd')
 
-    // Check if truckload overlaps the visible range at all
     if (truckload.endDate < rangeStartStr || truckload.startDate > rangeEndStr) return null
 
-    // Calculate start position (in day units)
     let startDay = 0
     for (let i = 0; i < totalDays; i++) {
-      if (format(dateRange[i], 'yyyy-MM-dd') === truckload.startDate) {
+      if (format(weekDates[i], 'yyyy-MM-dd') === truckload.startDate) {
         startDay = i
         break
-      } else if (format(dateRange[i], 'yyyy-MM-dd') > truckload.startDate) {
-        startDay = 0 // Started before visible range - clamp to start
+      } else if (format(weekDates[i], 'yyyy-MM-dd') > truckload.startDate) {
+        startDay = 0
         break
       }
       startDay = i + 1
     }
-    // If started before the range
     if (truckload.startDate < rangeStartStr) startDay = 0
 
-    // Calculate end position (in day units)
     let endDay = totalDays - 1
     for (let i = totalDays - 1; i >= 0; i--) {
-      if (format(dateRange[i], 'yyyy-MM-dd') === truckload.endDate) {
+      if (format(weekDates[i], 'yyyy-MM-dd') === truckload.endDate) {
         endDay = i
         break
-      } else if (format(dateRange[i], 'yyyy-MM-dd') < truckload.endDate) {
-        endDay = totalDays - 1 // Ends after visible range - clamp to end
+      } else if (format(weekDates[i], 'yyyy-MM-dd') < truckload.endDate) {
+        endDay = totalDays - 1
         break
       }
     }
 
-    // Add time-based offsets within the start/end day cells
     const startTimeFraction = truckload.startDate >= rangeStartStr ? timeToFraction(truckload.startTime) : 0
     const endTimeFraction = truckload.endDate <= rangeEndStr ? (truckload.endTime ? timeToFraction(truckload.endTime) : 1) : 1
 
@@ -420,27 +415,27 @@ export default function TruckloadPlanner() {
     const rightPos = (endDay + endTimeFraction) / totalDays * 100
     const widthPercent = rightPos - leftPos
 
-    return { left: leftPos, width: Math.max(widthPercent, 100 / totalDays * 0.3) } // Min width so it's always visible
+    return { left: leftPos, width: Math.max(widthPercent, 100 / totalDays * 0.3) }
   }
 
-  // Calculate block position for schedule events
-  function getEventBlockPosition(event: DriverScheduleEvent): { left: number; width: number } | null {
-    const totalDays = dateRange.length
-    const rangeStartStr = format(dateRange[0], 'yyyy-MM-dd')
-    const rangeEndStr = format(dateRange[totalDays - 1], 'yyyy-MM-dd')
+  // Calculate block position for schedule events within a week
+  function getEventBlockPositionForWeek(event: DriverScheduleEvent, weekDates: Date[]): { left: number; width: number } | null {
+    const totalDays = weekDates.length
+    const rangeStartStr = format(weekDates[0], 'yyyy-MM-dd')
+    const rangeEndStr = format(weekDates[totalDays - 1], 'yyyy-MM-dd')
 
     if (event.endDate < rangeStartStr || event.startDate > rangeEndStr) return null
 
     let startDay = 0
     for (let i = 0; i < totalDays; i++) {
-      if (format(dateRange[i], 'yyyy-MM-dd') >= event.startDate) { startDay = i; break }
+      if (format(weekDates[i], 'yyyy-MM-dd') >= event.startDate) { startDay = i; break }
       startDay = i
     }
     if (event.startDate < rangeStartStr) startDay = 0
 
     let endDay = totalDays - 1
     for (let i = totalDays - 1; i >= 0; i--) {
-      if (format(dateRange[i], 'yyyy-MM-dd') <= event.endDate) { endDay = i; break }
+      if (format(weekDates[i], 'yyyy-MM-dd') <= event.endDate) { endDay = i; break }
     }
 
     const leftPos = startDay / totalDays * 100
@@ -655,311 +650,309 @@ export default function TruckloadPlanner() {
         </div>
       </div>
 
-      {/* Calendar Grid */}
-      <div className="bg-white rounded-lg border overflow-auto">
-        <div style={viewMode !== 'week' ? { width: `${140 + dateRange.length * 120}px` } : undefined}>
-          {/* Date headers */}
-          <div className="flex bg-gray-50 border-b">
-            <div className="w-[140px] min-w-[140px] p-2 text-left text-xs font-semibold text-gray-600 border-r sticky left-0 bg-gray-50 z-10">
-              Driver
-            </div>
-            <div className={viewMode === 'week' ? 'flex flex-1' : 'flex'}>
-              {dateRange.map((date) => {
-                const dayIsToday = isToday(date)
-                const isSunday = date.getDay() === 0
-                const isSaturday = date.getDay() === 6
-                return (
-                  <div
-                    key={date.toISOString()}
-                    className={`${viewMode === 'week' ? 'flex-1' : 'w-[120px] min-w-[120px]'} p-1.5 text-center border-r ${
-                      dayIsToday ? 'bg-indigo-50' : isSunday || isSaturday ? 'bg-gray-100' : ''
-                    }`}
-                  >
-                    <div className="text-xs text-gray-500 font-medium">{format(date, 'EEE')}</div>
-                    <div className={`text-sm font-bold ${dayIsToday ? 'text-indigo-600' : 'text-gray-900'}`}>
-                      {format(date, 'MMM d')}
+      {/* Calendar Grid - one week section per row, stacked vertically */}
+      <div className="flex flex-col gap-4">
+        {weekGroups.map((group, groupIndex) => (
+          <div key={`week-${groupIndex}`} className={`rounded-lg border overflow-hidden ${groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}`}>
+            {/* Date headers for this week */}
+            <div className={`flex border-b ${groupIndex % 2 === 0 ? 'bg-gray-50' : 'bg-gray-200'}`}>
+              <div className="w-[140px] min-w-[140px] p-2 text-left border-r">
+                <div className="text-xs font-semibold text-gray-600">Week of</div>
+                <div className="text-sm font-bold text-gray-900">{format(group.weekStart, 'MMM d')}</div>
+              </div>
+              <div className="flex flex-1">
+                {group.dates.map((date) => {
+                  const dayIsToday = isToday(date)
+                  const isSunday = date.getDay() === 0
+                  const isSaturday = date.getDay() === 6
+                  return (
+                    <div
+                      key={date.toISOString()}
+                      className={`flex-1 p-1.5 text-center border-r ${
+                        dayIsToday ? 'bg-indigo-50' : isSunday || isSaturday ? 'bg-gray-100' : ''
+                      }`}
+                    >
+                      <div className="text-xs text-gray-500 font-medium">{format(date, 'EEE')}</div>
+                      <div className={`text-sm font-bold ${dayIsToday ? 'text-indigo-600' : 'text-gray-900'}`}>
+                        {format(date, 'MMM d')}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Daily Notes row */}
-          <div className="flex bg-amber-50/30 border-b">
-            <div className="w-[140px] min-w-[140px] p-1.5 text-xs font-medium text-amber-700 border-r sticky left-0 bg-amber-50/30 z-10">
-              <div className="flex items-center gap-1">
-                <StickyNote className="h-3 w-3" />
-                Notes
+                  )
+                })}
               </div>
             </div>
-            <div className={viewMode === 'week' ? 'flex flex-1' : 'flex'}>
-              {dateRange.map((date) => (
-                <div key={`note-${date.toISOString()}`} className={`${viewMode === 'week' ? 'flex-1' : 'w-[120px] min-w-[120px]'} border-r p-0.5`}>
-                  <WeeklyNoteEditor
-                    noteType="daily"
-                    noteDate={format(date, 'yyyy-MM-dd')}
-                    existingNote={getDailyNote(date)}
-                    onSaved={handleRefresh}
-                    label="Add note..."
-                  />
+
+            {/* Daily Notes row for this week */}
+            <div className="flex bg-amber-50/30 border-b">
+              <div className="w-[140px] min-w-[140px] p-1.5 text-xs font-medium text-amber-700 border-r">
+                <div className="flex items-center gap-1">
+                  <StickyNote className="h-3 w-3" />
+                  Notes
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Driver rows */}
-          {orderedDrivers.map((driver) => {
-            const driverLoads = getDriverTruckloads(driver.id)
-            const driverScheduleEvents = getDriverEvents(driver.id)
-
-            // Assign vertical lanes: only stack when loads actually overlap in dates
-            function assignLanes(items: { startDate: string; endDate: string }[]): number[] {
-              const lanes: number[] = new Array(items.length).fill(0)
-              // For each item, find the lowest lane that doesn't conflict with already-placed overlapping items
-              for (let i = 0; i < items.length; i++) {
-                const usedLanes = new Set<number>()
-                for (let j = 0; j < i; j++) {
-                  // Check if items overlap in date range
-                  if (items[j].startDate <= items[i].endDate && items[j].endDate >= items[i].startDate) {
-                    usedLanes.add(lanes[j])
-                  }
-                }
-                let lane = 0
-                while (usedLanes.has(lane)) lane++
-                lanes[i] = lane
-              }
-              return lanes
-            }
-
-            const eventLanes = assignLanes(driverScheduleEvents.map((e) => ({ startDate: e.startDate, endDate: e.endDate })))
-            const maxEventLane = eventLanes.length > 0 ? Math.max(...eventLanes) + 1 : 0
-
-            const loadLanes = assignLanes(driverLoads.map((l) => ({ startDate: l.startDate, endDate: l.endDate })))
-            const maxLoadLane = loadLanes.length > 0 ? Math.max(...loadLanes) + 1 : 0
-
-            const blockHeight = 32
-            const blockGap = 4
-            const topPad = 6
-            const eventRowsHeight = maxEventLane > 0 ? maxEventLane * (blockHeight + blockGap) : 0
-            const loadRowsHeight = maxLoadLane > 0 ? maxLoadLane * (blockHeight + blockGap) : 0
-            const rowHeight = Math.max(48, topPad + eventRowsHeight + loadRowsHeight + topPad)
-            const isDragging = dragDriverId === driver.id
-            const isDragOver = dragOverDriverId === driver.id && dragDriverId !== driver.id
-
-            return (
-              <div
-                key={driver.id}
-                className={`flex border-b group transition-all ${
-                  isDragging ? 'opacity-40' : ''
-                } ${isDragOver ? 'border-t-2 border-t-indigo-400' : ''}`}
-                draggable
-                onDragStart={(e) => handleDriverDragStart(e, driver.id)}
-                onDragOver={(e) => handleDriverRowDragOver(e, driver.id)}
-                onDrop={(e) => handleDriverRowDrop(e, driver.id)}
-                onDragEnd={handleDragEnd}
-              >
-                {/* Driver name cell */}
-                <div
-                  className="w-[140px] min-w-[140px] p-2 border-r sticky left-0 bg-white z-10 cursor-pointer hover:bg-gray-50 transition-colors flex items-start gap-1"
-                  onClick={() => handleDriverScheduleClick(driver.id)}
-                >
-                  <GripVertical className="h-4 w-4 text-gray-300 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing hover:text-gray-500 transition-colors" />
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: driver.color }} />
-                    <span className="text-sm font-medium text-gray-900 truncate">{driver.full_name}</span>
+              </div>
+              <div className="flex flex-1">
+                {group.dates.map((date) => (
+                  <div key={`note-${date.toISOString()}`} className="flex-1 border-r p-0.5">
+                    <WeeklyNoteEditor
+                      noteType="daily"
+                      noteDate={format(date, 'yyyy-MM-dd')}
+                      existingNote={getDailyNote(date)}
+                      onSaved={handleRefresh}
+                      label="Add note..."
+                    />
                   </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                {/* Day columns with overlaid truckload blocks */}
-                <div className={`relative ${viewMode === 'week' ? 'flex-1' : ''}`} style={{ minHeight: `${rowHeight}px`, ...(viewMode !== 'week' ? { width: `${dateRange.length * 120}px` } : {}) }}>
-                  {/* Background day grid (click targets) */}
-                  <div className="absolute inset-0 flex">
-                    {dateRange.map((date) => {
-                      const dayIsToday = isToday(date)
-                      const isSunday = date.getDay() === 0
-                      const isSaturday = date.getDay() === 6
-                      const cellEvents = getEventsForCell(driver.id, date)
-                      const hasEvent = cellEvents.length > 0
+            {/* Driver rows for this week */}
+            {orderedDrivers.map((driver) => {
+              const driverLoads = getDriverTruckloads(driver.id)
+              const driverScheduleEvents = getDriverEvents(driver.id)
+
+              // Filter to only loads/events that overlap this week
+              const weekStartStr = format(group.dates[0], 'yyyy-MM-dd')
+              const weekEndStr = format(group.dates[group.dates.length - 1], 'yyyy-MM-dd')
+              const weekLoads = driverLoads.filter((l) => l.startDate <= weekEndStr && l.endDate >= weekStartStr)
+              const weekEvents = driverScheduleEvents.filter((e) => e.startDate <= weekEndStr && e.endDate >= weekStartStr)
+
+              function assignLanes(items: { startDate: string; endDate: string }[]): number[] {
+                const lanes: number[] = new Array(items.length).fill(0)
+                for (let i = 0; i < items.length; i++) {
+                  const usedLanes = new Set<number>()
+                  for (let j = 0; j < i; j++) {
+                    if (items[j].startDate <= items[i].endDate && items[j].endDate >= items[i].startDate) {
+                      usedLanes.add(lanes[j])
+                    }
+                  }
+                  let lane = 0
+                  while (usedLanes.has(lane)) lane++
+                  lanes[i] = lane
+                }
+                return lanes
+              }
+
+              const eventLanes = assignLanes(weekEvents.map((e) => ({ startDate: e.startDate, endDate: e.endDate })))
+              const maxEventLane = eventLanes.length > 0 ? Math.max(...eventLanes) + 1 : 0
+
+              const loadLanes = assignLanes(weekLoads.map((l) => ({ startDate: l.startDate, endDate: l.endDate })))
+              const maxLoadLane = loadLanes.length > 0 ? Math.max(...loadLanes) + 1 : 0
+
+              const blockHeight = 32
+              const blockGap = 4
+              const topPad = 6
+              const eventRowsHeight = maxEventLane > 0 ? maxEventLane * (blockHeight + blockGap) : 0
+              const loadRowsHeight = maxLoadLane > 0 ? maxLoadLane * (blockHeight + blockGap) : 0
+              const rowHeight = Math.max(44, topPad + eventRowsHeight + loadRowsHeight + topPad)
+              const isDragging = dragDriverId === driver.id
+              const isDragOver = dragOverDriverId === driver.id && dragDriverId !== driver.id
+
+              return (
+                <div
+                  key={`${driver.id}-week-${groupIndex}`}
+                  className={`flex border-b group transition-all ${
+                    isDragging ? 'opacity-40' : ''
+                  } ${isDragOver ? 'border-t-2 border-t-indigo-400' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDriverDragStart(e, driver.id)}
+                  onDragOver={(e) => handleDriverRowDragOver(e, driver.id)}
+                  onDrop={(e) => handleDriverRowDrop(e, driver.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {/* Driver name cell */}
+                  <div
+                    className={`w-[140px] min-w-[140px] p-2 border-r cursor-pointer hover:bg-gray-200 transition-colors flex items-start gap-1 ${groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}`}
+                    onClick={() => handleDriverScheduleClick(driver.id)}
+                  >
+                    <GripVertical className="h-4 w-4 text-gray-300 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing hover:text-gray-500 transition-colors" />
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: driver.color }} />
+                      <span className="text-sm font-medium text-gray-900 truncate">{driver.full_name}</span>
+                    </div>
+                  </div>
+
+                  {/* Day columns with overlaid truckload blocks */}
+                  <div className="flex-1 relative" style={{ minHeight: `${rowHeight}px` }}>
+                    {/* Background day grid */}
+                    <div className="absolute inset-0 flex">
+                      {group.dates.map((date) => {
+                        const dayIsToday = isToday(date)
+                        const isSunday = date.getDay() === 0
+                        const isSaturday = date.getDay() === 6
+                        const cellEvents = getEventsForCell(driver.id, date)
+                        const hasEvent = cellEvents.length > 0
+
+                        return (
+                          <div
+                            key={`bg-${driver.id}-${date.toISOString()}`}
+                            className={`flex-1 border-r cursor-pointer transition-colors ${
+                              hasEvent
+                                ? 'bg-purple-50/30'
+                                : dayIsToday
+                                ? 'bg-indigo-50/20 hover:bg-indigo-50/40'
+                                : isSunday || isSaturday
+                                ? 'bg-gray-50/30 hover:bg-gray-100/30'
+                                : 'hover:bg-gray-50/50'
+                            }`}
+                            onClick={() => handleCellClick(driver.id, date)}
+                            onDragOver={handleDayCellDragOver}
+                            onDrop={(e) => handleDayCellDrop(e, driver.id, date)}
+                          />
+                        )
+                      })}
+                    </div>
+
+                    {/* Schedule event blocks */}
+                    {weekEvents.map((event, eventIdx) => {
+                      const pos = getEventBlockPositionForWeek(event, group.dates)
+                      if (!pos) return null
+                      const lane = eventLanes[eventIdx]
 
                       return (
                         <div
-                          key={`bg-${driver.id}-${date.toISOString()}`}
-                          className={`${viewMode === 'week' ? 'flex-1' : 'w-[120px] min-w-[120px]'} border-r cursor-pointer transition-colors ${
-                            hasEvent
-                              ? 'bg-purple-50/30'
-                              : dayIsToday
-                              ? 'bg-indigo-50/20 hover:bg-indigo-50/40'
-                              : isSunday || isSaturday
-                              ? 'bg-gray-50/30 hover:bg-gray-100/30'
-                              : 'hover:bg-gray-50/50'
-                          }`}
-                          onClick={() => handleCellClick(driver.id, date)}
-                          onDragOver={handleDayCellDragOver}
-                          onDrop={(e) => handleDayCellDrop(e, driver.id, date)}
-                        />
+                          key={`event-${event.id}-w${groupIndex}`}
+                          className="absolute z-[2] px-1"
+                          style={{
+                            left: `${pos.left}%`,
+                            width: `${pos.width}%`,
+                            top: `${topPad + lane * (blockHeight + blockGap)}px`,
+                            height: `${blockHeight}px`,
+                          }}
+                        >
+                          <div
+                            className="h-full rounded px-2 flex items-center gap-1 bg-purple-100 border border-purple-200 text-purple-700 text-xs font-medium cursor-pointer hover:bg-purple-200 transition-colors truncate"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDriverScheduleClick(driver.id)
+                            }}
+                            title={`${event.eventType}: ${event.description || ''}`}
+                          >
+                            <Palmtree className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">
+                              {event.eventType === 'vacation' ? 'Vacation' :
+                               event.eventType === 'sick' ? 'Sick' :
+                               event.eventType === 'unavailable' ? 'Unavailable' : event.description || 'Event'}
+                              {event.description ? ` - ${event.description}` : ''}
+                            </span>
+                          </div>
+                        </div>
                       )
                     })}
-                  </div>
 
-                  {/* Schedule event blocks */}
-                  {driverScheduleEvents.map((event, eventIdx) => {
-                    const pos = getEventBlockPosition(event)
-                    if (!pos) return null
-                    const lane = eventLanes[eventIdx]
+                    {/* Truckload spanning blocks */}
+                    {weekLoads.map((truckload, loadIdx) => {
+                      const pos = getBlockPositionForWeek(truckload, group.dates)
+                      if (!pos) return null
 
-                    return (
-                      <div
-                        key={`event-${event.id}`}
-                        className="absolute z-[2] px-1"
-                        style={{
-                          left: `${pos.left}%`,
-                          width: `${pos.width}%`,
-                          top: `${topPad + lane * (blockHeight + blockGap)}px`,
-                          height: `${blockHeight}px`,
-                        }}
-                      >
+                      const isDraft = truckload.status === 'draft'
+                      const isCompleted = truckload.isCompleted || truckload.status === 'completed'
+                      const lane = loadLanes[loadIdx]
+
+                      return (
                         <div
-                          className="h-full rounded px-2 flex items-center gap-1 bg-purple-100 border border-purple-200 text-purple-700 text-xs font-medium cursor-pointer hover:bg-purple-200 transition-colors truncate"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDriverScheduleClick(driver.id)
+                          key={`load-${truckload.id}-w${groupIndex}`}
+                          className="absolute z-[3] px-0.5 cursor-grab active:cursor-grabbing"
+                          style={{
+                            left: `${pos.left}%`,
+                            width: `${pos.width}%`,
+                            top: `${topPad + eventRowsHeight + lane * (blockHeight + blockGap)}px`,
+                            height: `${blockHeight}px`,
                           }}
-                          title={`${event.eventType}: ${event.description || ''}`}
+                          draggable
+                          onDragStart={(e) => handleTruckloadDragStart(e, truckload)}
                         >
-                          <Palmtree className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate">
-                            {event.eventType === 'vacation' ? 'Vacation' :
-                             event.eventType === 'sick' ? 'Sick' :
-                             event.eventType === 'unavailable' ? 'Unavailable' : event.description || 'Event'}
-                            {event.description ? ` - ${event.description}` : ''}
-                          </span>
+                          <TooltipProvider delayDuration={300}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate border-2 ${
+                                    isDraft
+                                      ? 'bg-gray-100 border-dashed'
+                                      : isCompleted
+                                      ? 'bg-green-50'
+                                      : 'bg-blue-50'
+                                  }`}
+                                  style={{
+                                    borderColor: driver.color || '#9ca3af',
+                                    color: '#1f2937',
+                                  }}
+                                  onClick={(e) => handleTruckloadClick(truckload, e)}
+                                >
+                                  {isDraft ? (
+                                    <Badge variant="outline" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 border-amber-300 flex-shrink-0">
+                                      Draft
+                                    </Badge>
+                                  ) : isCompleted ? (
+                                    <Badge variant="outline" className="h-4 px-1 text-[9px] bg-green-100 text-green-700 border-green-300 flex-shrink-0">
+                                      Done
+                                    </Badge>
+                                  ) : (
+                                    <Truck className="h-3 w-3 flex-shrink-0" />
+                                  )}
+                                  {truckload.description && (
+                                    <span className="truncate">{truckload.description}</span>
+                                  )}
+                                  {!isDraft && (
+                                    <button
+                                      className="ml-auto flex-shrink-0 p-0.5 rounded hover:bg-black/10 transition-colors"
+                                      title="Open in Trucking page"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        router.push(`/dashboard/trucking/${truckload.id}`)
+                                      }}
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-xs">
+                                <div className="space-y-1">
+                                  <p className="font-semibold">{truckload.description || `Truckload #${truckload.id}`}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {truckload.startDate}{truckload.startDate !== truckload.endDate ? ` → ${truckload.endDate}` : ''}
+                                    {' · '}{driver.full_name}
+                                    {isDraft ? ' · Draft' : isCompleted ? ' · Completed' : ' · Active'}
+                                  </p>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
+                      )
+                    })}
+
+                    {/* Empty state */}
+                    {weekLoads.length === 0 && weekEvents.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none">
+                        <Plus className="h-5 w-5 text-gray-400" />
                       </div>
-                    )
-                  })}
+                    )}
+                  </div>
+                </div>
+              )
+            })}
 
-                  {/* Truckload spanning blocks */}
-                  {driverLoads.map((truckload, loadIdx) => {
-                    const pos = getBlockPosition(truckload)
-                    if (!pos) return null
-
-                    const isDraft = truckload.status === 'draft'
-                    const isCompleted = truckload.isCompleted || truckload.status === 'completed'
-                    const lane = loadLanes[loadIdx]
-
-                    return (
-                      <div
-                        key={`load-${truckload.id}`}
-                        className="absolute z-[3] px-0.5 cursor-grab active:cursor-grabbing"
-                        style={{
-                          left: `${pos.left}%`,
-                          width: `${pos.width}%`,
-                          top: `${topPad + eventRowsHeight + lane * (blockHeight + blockGap)}px`,
-                          height: `${blockHeight}px`,
-                        }}
-                        draggable
-                        onDragStart={(e) => handleTruckloadDragStart(e, truckload)}
-                      >
-                        <TooltipProvider delayDuration={300}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div
-                                className={`h-full rounded-md px-2 flex items-center gap-1.5 cursor-pointer transition-all hover:shadow-md text-xs font-medium truncate border-2 ${
-                                  isDraft
-                                    ? 'bg-gray-100 border-dashed'
-                                    : isCompleted
-                                    ? 'bg-green-50'
-                                    : 'bg-blue-50'
-                                }`}
-                                style={{
-                                  borderColor: driver.color || '#9ca3af',
-                                  color: '#1f2937',
-                                }}
-                                onClick={(e) => handleTruckloadClick(truckload, e)}
-                              >
-                                {isDraft ? (
-                                  <Badge variant="outline" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 border-amber-300 flex-shrink-0">
-                                    Draft
-                                  </Badge>
-                                ) : isCompleted ? (
-                                  <Badge variant="outline" className="h-4 px-1 text-[9px] bg-green-100 text-green-700 border-green-300 flex-shrink-0">
-                                    Done
-                                  </Badge>
-                                ) : (
-                                  <Truck className="h-3 w-3 flex-shrink-0" />
-                                )}
-                                {truckload.description && (
-                                  <span className="truncate">{truckload.description}</span>
-                                )}
-                                {!isDraft && (
-                                  <button
-                                    className="ml-auto flex-shrink-0 p-0.5 rounded hover:bg-black/10 transition-colors"
-                                    title="Open in Trucking page"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      router.push(`/dashboard/trucking/${truckload.id}`)
-                                    }}
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                  </button>
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-xs">
-                              <div className="space-y-1">
-                                <p className="font-semibold">{truckload.description || `Truckload #${truckload.id}`}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {truckload.startDate}{truckload.startDate !== truckload.endDate ? ` → ${truckload.endDate}` : ''}
-                                  {' · '}{driver.full_name}
-                                  {isDraft ? ' · Draft' : isCompleted ? ' · Completed' : ' · Active'}
-                                </p>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    )
-                  })}
-
-                  {/* Empty state - show + on hover */}
-                  {driverLoads.length === 0 && driverScheduleEvents.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none">
-                      <Plus className="h-5 w-5 text-gray-400" />
-                    </div>
-                  )}
+            {/* Weekly note footer for this week */}
+            <div className="flex bg-amber-50/20">
+              <div className="w-[140px] min-w-[140px] p-1.5 text-xs font-medium text-amber-700 border-r">
+                <div className="flex items-center gap-1">
+                  <StickyNote className="h-3 w-3" />
+                  Weekly Note
                 </div>
               </div>
-            )
-          })}
-
-          {/* Weekly notes footer */}
-          <div className="flex bg-amber-50/20">
-            <div className="w-[140px] min-w-[140px] p-1.5 text-xs font-medium text-amber-700 border-r sticky left-0 bg-amber-50/20 z-10">
-              <div className="flex items-center gap-1">
-                <StickyNote className="h-3 w-3" />
-                Weekly Notes
+              <div className="flex-1 p-1">
+                <WeeklyNoteEditor
+                  noteType="weekly"
+                  noteDate={format(group.weekStart, 'yyyy-MM-dd')}
+                  existingNote={getWeeklyNote(group.weekStart)}
+                  onSaved={handleRefresh}
+                  label={`Week of ${format(group.weekStart, 'MMM d')} notes...`}
+                />
               </div>
-            </div>
-            <div className={viewMode === 'week' ? 'flex flex-1' : 'flex'}>
-              {weekGroups.map((group, groupIndex) => (
-                <div
-                  key={`weekly-${groupIndex}`}
-                  className={`border-r p-1 ${viewMode === 'week' ? '' : ''}`}
-                  style={viewMode === 'week' ? { flex: group.dates.length } : { width: `${group.dates.length * 120}px` }}
-                >
-                  <WeeklyNoteEditor
-                    noteType="weekly"
-                    noteDate={format(group.weekStart, 'yyyy-MM-dd')}
-                    existingNote={getWeeklyNote(group.weekStart)}
-                    onSaved={handleRefresh}
-                    label={`Week of ${format(group.weekStart, 'MMM d')} notes...`}
-                  />
-                </div>
-              ))}
             </div>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Legend */}
