@@ -79,7 +79,7 @@ export default function DataEntryPage() {
           const data = await response.json()
           setLoad(data)
           
-          function toDateInput(val: string | null): string {
+          const toDateInput = (val: string | null): string => {
             if (!val) return ''
             return val.substring(0, 10)
           }
