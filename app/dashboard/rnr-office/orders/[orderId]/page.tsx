@@ -25,7 +25,7 @@ import {
   ArrowLeft, Pencil, Save, Loader2, AlertTriangle, Printer,
   Play, CheckCircle, Truck, FileText, Trash2, ClipboardList, X,
   Download, FileUp, ExternalLink, CheckSquare, Square, Copy, Check,
-  Plus, Search, BookOpen, RotateCcw, GripVertical,
+  Plus, Search, BookOpen,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -210,13 +210,8 @@ export default function OrderDetailPage() {
   const [editItems, setEditItems] = useState<EditLineItem[]>([])
   const searchTimers = useRef<Record<string, NodeJS.Timeout>>({})
 
-  // QuickBooks entry popup state
-  const [isQBOpen, setIsQBOpen] = useState(false)
-  const [qbCopied, setQbCopied] = useState<Set<string>>(new Set())
-  const [qbPos, setQbPos] = useState<{ x: number; y: number }>({ x: 80, y: 80 })
-  const qbDragRef = useRef<{ isDragging: boolean; startX: number; startY: number; origX: number; origY: number }>({
-    isDragging: false, startX: 0, startY: 0, origX: 0, origY: 0,
-  })
+  // QuickBooks entry popup window ref
+  const qbWindowRef = useRef<Window | null>(null)
 
   useEffect(() => {
     async function fetchCustomers() {
@@ -241,38 +236,187 @@ export default function OrderDetailPage() {
     setTimeout(() => setCopiedCell(null), 1500)
   }
 
-  function qbCopy(text: string, key: string) {
-    navigator.clipboard.writeText(text)
-    setQbCopied(prev => new Set(prev).add(key))
-    toast.success(`Copied: ${text}`, { duration: 1200 })
-  }
-
-  function resetQbCopied() {
-    setQbCopied(new Set())
-  }
-
   function openQBPopup() {
-    setQbCopied(new Set())
-    setIsQBOpen(true)
+    if (!order) return
+
+    if (qbWindowRef.current && !qbWindowRef.current.closed) {
+      qbWindowRef.current.focus()
+      return
+    }
+
+    const width = 360
+    const height = Math.min(600, 260 + order.items.length * 36)
+    const left = window.screenX + window.outerWidth - width - 30
+    const top = window.screenY + 80
+
+    const popup = window.open('', 'qb_entry', `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`)
+    if (!popup) {
+      toast.error('Popup blocked — please allow popups for this site')
+      return
+    }
+    qbWindowRef.current = popup
+
+    const itemRows = order.items.map((item, idx) => {
+      const partNum = (item.rnr_part_number || item.customer_part_number || '-').replace(/'/g, "\\'").replace(/"/g, '&quot;')
+      const qty = item.quantity_ordered
+      return `
+        <div class="row" id="row-${idx}">
+          <span class="part" id="part-text-${idx}" title="${partNum}">${partNum}</span>
+          <button class="copy-btn" id="part-btn-${idx}" onclick="copyField('${partNum}', 'part-${idx}')" title="Copy part #">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <span class="qty" id="qty-text-${idx}">${qty}</span>
+          <button class="copy-btn" id="qty-btn-${idx}" onclick="copyField('${qty}', 'qty-${idx}')" title="Copy qty">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>`
+    }).join('')
+
+    const customerName = (order.customer_name || '-').replace(/'/g, "\\'").replace(/"/g, '&quot;')
+    const poNumber = (order.po_number || '-').replace(/'/g, "\\'").replace(/"/g, '&quot;')
+    const totalItems = order.items.length
+
+    popup.document.write(`<!DOCTYPE html>
+<html><head>
+<title>QB Entry — ${order.order_number}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1a1a1a; font-size: 13px; user-select: none; }
+  .header { background: #16a34a; color: white; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .header-title { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .header-actions { display: flex; gap: 4px; }
+  .header-btn { background: none; border: none; color: rgba(255,255,255,0.8); cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; }
+  .header-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+  .field { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+  .field-label { font-size: 9px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.8px; }
+  .field-row { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+  .field-value { font-size: 13px; font-weight: 600; transition: color 0.2s; }
+  .field-value.copied { color: #16a34a; }
+  .field-value.mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px; }
+  .copy-btn { background: none; border: none; color: #bbb; cursor: pointer; padding: 3px; border-radius: 4px; display: flex; align-items: center; transition: all 0.15s; }
+  .copy-btn:hover { background: #f0f0f0; color: #16a34a; }
+  .copy-btn.copied { background: #dcfce7; color: #16a34a; }
+  .items-header { padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; }
+  .items-label { font-size: 9px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.8px; }
+  .col-headers { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; padding: 0 12px 4px; font-size: 9px; font-weight: 700; color: #bbb; text-transform: uppercase; letter-spacing: 0.5px; }
+  .items-list { max-height: calc(100vh - 220px); overflow-y: auto; padding: 0 12px; }
+  .row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f8f8f8; }
+  .row:last-child { border-bottom: none; }
+  .row.both-copied { opacity: 0.45; }
+  .part { font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color 0.2s; }
+  .part.copied { color: #16a34a; }
+  .qty { font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px; text-align: right; min-width: 36px; transition: color 0.2s; }
+  .qty.copied { color: #16a34a; font-weight: 700; }
+  .footer { padding: 6px 12px; background: #f9f9f9; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #999; }
+  .reset-btn { background: none; border: none; color: #999; cursor: pointer; font-size: 10px; display: flex; align-items: center; gap: 3px; }
+  .reset-btn:hover { color: #16a34a; }
+  .check-svg { display: none; }
+  .copy-btn.copied .copy-svg { display: none; }
+  .copy-btn.copied .check-svg { display: inline; }
+</style>
+</head><body>
+  <div class="header">
+    <span class="header-title">QB Entry — ${order.order_number}</span>
+    <div class="header-actions">
+      <button class="header-btn" onclick="resetAll()" title="Reset copied">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Customer</div>
+    <div class="field-row">
+      <span class="field-value" id="customer-text">${customerName}</span>
+      <button class="copy-btn" id="customer-btn" onclick="copyField('${customerName}', 'customer')" title="Copy customer">
+        <svg class="copy-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="check-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">PO #</div>
+    <div class="field-row">
+      <span class="field-value mono" id="po-text">${poNumber}</span>
+      <button class="copy-btn" id="po-btn" onclick="copyField('${poNumber}', 'po')" title="Copy PO #">
+        <svg class="copy-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="check-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="items-header">
+    <span class="items-label">Items (${totalItems})</span>
+    <span id="copied-count" style="font-size:10px;color:#999;"></span>
+  </div>
+  <div class="col-headers"><span>Part #</span><span></span><span style="text-align:right">Qty</span><span></span></div>
+  <div class="items-list">${itemRows}</div>
+
+  <div class="footer">
+    <span id="progress">0 / ${totalItems * 2} fields copied</span>
+    <button class="reset-btn" onclick="resetAll()">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      Reset
+    </button>
+  </div>
+
+<script>
+  var copied = {};
+  var totalItems = ${totalItems};
+
+  function copyField(text, key) {
+    navigator.clipboard.writeText(text).then(function() {
+      copied[key] = true;
+      updateUI(key);
+      updateProgress();
+    });
   }
 
-  function handleQbDragStart(e: React.MouseEvent) {
-    e.preventDefault()
-    qbDragRef.current = { isDragging: true, startX: e.clientX, startY: e.clientY, origX: qbPos.x, origY: qbPos.y }
+  function updateUI(key) {
+    var btn = document.getElementById(key + '-btn');
+    var text = document.getElementById(key + '-text');
+    if (btn) btn.classList.add('copied');
+    if (text) text.classList.add('copied');
 
-    function onMove(ev: MouseEvent) {
-      if (!qbDragRef.current.isDragging) return
-      const dx = ev.clientX - qbDragRef.current.startX
-      const dy = ev.clientY - qbDragRef.current.startY
-      setQbPos({ x: qbDragRef.current.origX + dx, y: qbDragRef.current.origY + dy })
+    var parts = key.split('-');
+    if (parts[0] === 'part' || parts[0] === 'qty') {
+      var idx = parts[1];
+      var partCopied = copied['part-' + idx];
+      var qtyCopied = copied['qty-' + idx];
+      var row = document.getElementById('row-' + idx);
+      if (row) {
+        if (partCopied && qtyCopied) row.classList.add('both-copied');
+        else row.classList.remove('both-copied');
+      }
     }
-    function onUp() {
-      qbDragRef.current.isDragging = false
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+  }
+
+  function updateProgress() {
+    var count = 0;
+    for (var k in copied) {
+      if (k.startsWith('part-') || k.startsWith('qty-')) count++;
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    var el = document.getElementById('progress');
+    if (el) el.textContent = count + ' / ' + (totalItems * 2) + ' fields copied';
+    var countEl = document.getElementById('copied-count');
+    if (countEl) countEl.textContent = count > 0 ? count + ' copied' : '';
+  }
+
+  function resetAll() {
+    copied = {};
+    var allBtns = document.querySelectorAll('.copy-btn');
+    allBtns.forEach(function(b) { b.classList.remove('copied'); });
+    var allTexts = document.querySelectorAll('.copied');
+    allTexts.forEach(function(t) { t.classList.remove('copied'); });
+    var allRows = document.querySelectorAll('.row');
+    allRows.forEach(function(r) { r.classList.remove('both-copied'); });
+    updateProgress();
+  }
+</script>
+</body></html>`)
+
+    popup.document.close()
   }
 
   async function fetchOrder() {
@@ -1042,131 +1186,6 @@ export default function OrderDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* QuickBooks Entry Floating Panel */}
-      {isQBOpen && (
-        <div
-          className="fixed z-[9999] bg-white rounded-xl border border-gray-300 shadow-2xl print:hidden"
-          style={{ left: qbPos.x, top: qbPos.y, width: 340 }}
-        >
-          {/* Drag handle + header */}
-          <div
-            className="flex items-center justify-between px-3 py-2 bg-green-600 rounded-t-xl cursor-grab active:cursor-grabbing select-none"
-            onMouseDown={handleQbDragStart}
-          >
-            <div className="flex items-center gap-2 text-white">
-              <GripVertical size={14} className="opacity-60" />
-              <BookOpen size={14} />
-              <span className="text-xs font-semibold tracking-wide uppercase">QB Entry — {order.order_number}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <button onClick={resetQbCopied} className="p-1 rounded hover:bg-green-500 text-white/80 hover:text-white transition-colors" title="Reset copied highlights">
-                <RotateCcw size={13} />
-              </button>
-              <button onClick={() => setIsQBOpen(false)} className="p-1 rounded hover:bg-green-500 text-white/80 hover:text-white transition-colors" title="Close">
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Customer */}
-          <div className="px-3 py-2 border-b border-gray-100">
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Customer</label>
-            <div className="flex items-center justify-between mt-0.5">
-              <span className={`text-sm font-medium transition-colors ${qbCopied.has('qb-customer') ? 'text-green-600' : 'text-gray-900'}`}>
-                {order.customer_name || '-'}
-              </span>
-              {order.customer_name && (
-                <button onClick={() => qbCopy(order.customer_name!, 'qb-customer')}
-                  className={`p-1 rounded transition-colors ${qbCopied.has('qb-customer') ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
-                  title="Copy customer">
-                  {qbCopied.has('qb-customer') ? <Check size={13} /> : <Copy size={13} />}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* PO # */}
-          <div className="px-3 py-2 border-b border-gray-100">
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">PO #</label>
-            <div className="flex items-center justify-between mt-0.5">
-              <span className={`text-sm font-mono font-medium transition-colors ${qbCopied.has('qb-po') ? 'text-green-600' : 'text-gray-900'}`}>
-                {order.po_number || '-'}
-              </span>
-              {order.po_number && (
-                <button onClick={() => qbCopy(order.po_number!, 'qb-po')}
-                  className={`p-1 rounded transition-colors ${qbCopied.has('qb-po') ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
-                  title="Copy PO number">
-                  {qbCopied.has('qb-po') ? <Check size={13} /> : <Copy size={13} />}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Line items list */}
-          <div className="px-3 py-1.5">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Items</label>
-              <span className="text-[10px] text-gray-400">
-                {qbCopied.size > 0 && <>{Array.from(qbCopied).filter(k => k.startsWith('qb-part-') || k.startsWith('qb-qty-')).length} copied</>}
-              </span>
-            </div>
-            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5 px-0.5">
-              <span>Part #</span>
-              <span></span>
-              <span className="text-right">Qty</span>
-              <span></span>
-            </div>
-          </div>
-          <div className="max-h-[50vh] overflow-y-auto px-3 pb-3">
-            <div className="space-y-0">
-              {order.items.map((item, idx) => {
-                const partNum = item.rnr_part_number || item.customer_part_number || '-'
-                const partKey = `qb-part-${idx}`
-                const qtyKey = `qb-qty-${idx}`
-                const isPartCopied = qbCopied.has(partKey)
-                const isQtyCopied = qbCopied.has(qtyKey)
-
-                return (
-                  <div key={item.id}
-                    className={`grid grid-cols-[1fr_auto_auto_auto] gap-x-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${isPartCopied && isQtyCopied ? 'opacity-50' : ''}`}
-                  >
-                    <span className={`text-xs font-mono font-medium truncate transition-colors ${isPartCopied ? 'text-green-600' : 'text-gray-800'}`} title={partNum}>
-                      {partNum}
-                    </span>
-                    <button
-                      onClick={() => qbCopy(partNum, partKey)}
-                      className={`p-0.5 rounded transition-colors ${isPartCopied ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
-                      title="Copy part number"
-                    >
-                      {isPartCopied ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
-                    <span className={`text-xs font-mono text-right min-w-[40px] transition-colors ${isQtyCopied ? 'text-green-600 font-semibold' : 'text-gray-700'}`}>
-                      {item.quantity_ordered}
-                    </span>
-                    <button
-                      onClick={() => qbCopy(item.quantity_ordered.toString(), qtyKey)}
-                      className={`p-0.5 rounded transition-colors ${isQtyCopied ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
-                      title="Copy quantity"
-                    >
-                      {isQtyCopied ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Footer progress */}
-          <div className="px-3 py-2 bg-gray-50 rounded-b-xl border-t border-gray-100 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">
-              {Array.from(qbCopied).filter(k => k.startsWith('qb-part-') || k.startsWith('qb-qty-')).length} / {order.items.length * 2} fields copied
-            </span>
-            <button onClick={resetQbCopied} className="text-[10px] text-gray-400 hover:text-green-600 transition-colors flex items-center gap-1">
-              <RotateCcw size={10} />Reset
-            </button>
-          </div>
-        </div>
-      )}
     </>
   )
 }
