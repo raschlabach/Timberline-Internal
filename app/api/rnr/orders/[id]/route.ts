@@ -71,26 +71,71 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { customer_id, po_number, order_date, due_date, status, is_rush, notes, total_price, items, in_quickbooks, sent_to_shop } = body
+    const { items } = body
+
+    const setClauses: string[] = ['updated_at = NOW()']
+    const queryParams: (string | number | boolean | null)[] = []
+    let paramIdx = 1
+
+    if ('customer_id' in body) {
+      setClauses.push(`customer_id = $${paramIdx}`)
+      queryParams.push(body.customer_id)
+      paramIdx++
+    }
+    if ('po_number' in body) {
+      setClauses.push(`po_number = $${paramIdx}`)
+      queryParams.push(body.po_number || null)
+      paramIdx++
+    }
+    if ('order_date' in body) {
+      setClauses.push(`order_date = $${paramIdx}`)
+      queryParams.push(body.order_date)
+      paramIdx++
+    }
+    if ('due_date' in body) {
+      setClauses.push(`due_date = $${paramIdx}`)
+      queryParams.push(body.due_date || null)
+      paramIdx++
+    }
+    if ('status' in body) {
+      setClauses.push(`status = $${paramIdx}`)
+      queryParams.push(body.status)
+      paramIdx++
+    }
+    if ('is_rush' in body) {
+      setClauses.push(`is_rush = $${paramIdx}`)
+      queryParams.push(body.is_rush)
+      paramIdx++
+    }
+    if ('notes' in body) {
+      setClauses.push(`notes = $${paramIdx}`)
+      queryParams.push(body.notes || null)
+      paramIdx++
+    }
+    if ('total_price' in body) {
+      setClauses.push(`total_price = $${paramIdx}`)
+      queryParams.push(body.total_price)
+      paramIdx++
+    }
+    if ('in_quickbooks' in body) {
+      setClauses.push(`in_quickbooks = $${paramIdx}`)
+      setClauses.push(`in_quickbooks_at = CASE WHEN $${paramIdx} = true AND in_quickbooks = false THEN NOW() ELSE in_quickbooks_at END`)
+      queryParams.push(body.in_quickbooks)
+      paramIdx++
+    }
+    if ('sent_to_shop' in body) {
+      setClauses.push(`sent_to_shop = $${paramIdx}`)
+      setClauses.push(`sent_to_shop_at = CASE WHEN $${paramIdx} = true AND sent_to_shop = false THEN NOW() ELSE sent_to_shop_at END`)
+      queryParams.push(body.sent_to_shop)
+      paramIdx++
+    }
+
+    queryParams.push(params.id)
+    const idParam = paramIdx
 
     const orderResult = await query(
-      `UPDATE rnr_orders SET
-        customer_id = COALESCE($1, customer_id),
-        po_number = $2,
-        order_date = COALESCE($3, order_date),
-        due_date = $4,
-        status = COALESCE($5, status),
-        is_rush = COALESCE($6, is_rush),
-        notes = $7,
-        total_price = COALESCE($8, total_price),
-        in_quickbooks = COALESCE($10, in_quickbooks),
-        in_quickbooks_at = CASE WHEN $10 = true AND in_quickbooks = false THEN NOW() ELSE in_quickbooks_at END,
-        sent_to_shop = COALESCE($11, sent_to_shop),
-        sent_to_shop_at = CASE WHEN $11 = true AND sent_to_shop = false THEN NOW() ELSE sent_to_shop_at END,
-        updated_at = NOW()
-      WHERE id = $9
-      RETURNING *`,
-      [customer_id, po_number || null, order_date, due_date || null, status, is_rush, notes || null, total_price, params.id, in_quickbooks, sent_to_shop]
+      `UPDATE rnr_orders SET ${setClauses.join(', ')} WHERE id = $${idParam} RETURNING *`,
+      queryParams
     )
 
     if (orderResult.rows.length === 0) {

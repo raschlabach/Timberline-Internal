@@ -1,10 +1,19 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -15,7 +24,8 @@ import {
 import {
   ArrowLeft, Pencil, Save, Loader2, AlertTriangle, Printer,
   Play, CheckCircle, Truck, FileText, Trash2, ClipboardList, X,
-  Download, FileUp, ExternalLink, CheckSquare, Square, Copy, Check
+  Download, FileUp, ExternalLink, CheckSquare, Square, Copy, Check,
+  Plus, Search, BookOpen, RotateCcw, GripVertical,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -76,6 +86,74 @@ interface Order {
   items: OrderItem[]
 }
 
+interface Customer {
+  id: number
+  customer_name: string
+}
+
+interface PartResult {
+  id: number
+  rnr_part_number: string | null
+  customer_part_number: string | null
+  description: string | null
+  species_name: string | null
+  price: number | null
+}
+
+interface EditLineItem {
+  key: string
+  part_id: number | null
+  partSearch: string
+  partResults: PartResult[]
+  isSearching: boolean
+  showDropdown: boolean
+  customer_part_number: string
+  description: string
+  quantity_ordered: string
+  quantity_final: string
+  price_per_unit: string
+  price_unit: string
+  line_total: string
+  is_new_part: boolean
+  notes: string
+}
+
+function newEditLineItem(): EditLineItem {
+  return {
+    key: crypto.randomUUID(), part_id: null, partSearch: '', partResults: [],
+    isSearching: false, showDropdown: false,
+    customer_part_number: '', description: '', quantity_ordered: '',
+    quantity_final: '', price_per_unit: '', price_unit: 'BF', line_total: '',
+    is_new_part: false, notes: '',
+  }
+}
+
+function orderItemToEditItem(item: OrderItem): EditLineItem {
+  return {
+    key: crypto.randomUUID(),
+    part_id: item.part_id,
+    partSearch: item.rnr_part_number || item.customer_part_number || '',
+    partResults: [],
+    isSearching: false,
+    showDropdown: false,
+    customer_part_number: item.customer_part_number || '',
+    description: item.description || '',
+    quantity_ordered: item.quantity_ordered?.toString() || '',
+    quantity_final: item.quantity_final?.toString() || '',
+    price_per_unit: item.price_per_unit?.toString() || '',
+    price_unit: item.price_unit || 'BF',
+    line_total: item.line_total?.toString() || '',
+    is_new_part: item.is_new_part,
+    notes: item.notes || '',
+  }
+}
+
+function calcLineTotal(qty: string, price: string): string {
+  const q = parseFloat(qty), p = parseFloat(price)
+  if (!q || !p) return ''
+  return (q * p).toFixed(2)
+}
+
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   ordered: { label: 'Ordered', bg: 'bg-blue-100', text: 'text-blue-700' },
   in_production: { label: 'In Production', bg: 'bg-amber-100', text: 'text-amber-700' },
@@ -117,11 +195,84 @@ export default function OrderDetailPage() {
   const [copiedCell, setCopiedCell] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Header editing state
+  const [isEditingHeader, setIsEditingHeader] = useState(false)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [editCustomerId, setEditCustomerId] = useState('')
+  const [editPoNumber, setEditPoNumber] = useState('')
+  const [editOrderDate, setEditOrderDate] = useState('')
+  const [editDueDate, setEditDueDate] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editIsRush, setEditIsRush] = useState(false)
+
+  // Line item editing state
+  const [isEditingItems, setIsEditingItems] = useState(false)
+  const [editItems, setEditItems] = useState<EditLineItem[]>([])
+  const searchTimers = useRef<Record<string, NodeJS.Timeout>>({})
+
+  // QuickBooks entry popup state
+  const [isQBOpen, setIsQBOpen] = useState(false)
+  const [qbCopied, setQbCopied] = useState<Set<string>>(new Set())
+  const [qbPos, setQbPos] = useState<{ x: number; y: number }>({ x: 80, y: 80 })
+  const qbDragRef = useRef<{ isDragging: boolean; startX: number; startY: number; origX: number; origY: number }>({
+    isDragging: false, startX: 0, startY: 0, origX: 0, origY: 0,
+  })
+
+  useEffect(() => {
+    async function fetchCustomers() {
+      try {
+        const res = await fetch('/api/rnr/customer-settings')
+        if (res.ok) {
+          const settings = await res.json()
+          const custs: Customer[] = settings.map((s: { customer_id: number; customer_name: string }) => ({
+            id: s.customer_id, customer_name: s.customer_name,
+          }))
+          setCustomers(custs)
+        }
+      } catch { /* ignore */ }
+    }
+    fetchCustomers()
+  }, [])
+
   function copyToClipboard(text: string, cellKey: string) {
     navigator.clipboard.writeText(text)
     setCopiedCell(cellKey)
     toast.success(`Copied: ${text}`, { duration: 1500 })
     setTimeout(() => setCopiedCell(null), 1500)
+  }
+
+  function qbCopy(text: string, key: string) {
+    navigator.clipboard.writeText(text)
+    setQbCopied(prev => new Set(prev).add(key))
+    toast.success(`Copied: ${text}`, { duration: 1200 })
+  }
+
+  function resetQbCopied() {
+    setQbCopied(new Set())
+  }
+
+  function openQBPopup() {
+    setQbCopied(new Set())
+    setIsQBOpen(true)
+  }
+
+  function handleQbDragStart(e: React.MouseEvent) {
+    e.preventDefault()
+    qbDragRef.current = { isDragging: true, startX: e.clientX, startY: e.clientY, origX: qbPos.x, origY: qbPos.y }
+
+    function onMove(ev: MouseEvent) {
+      if (!qbDragRef.current.isDragging) return
+      const dx = ev.clientX - qbDragRef.current.startX
+      const dy = ev.clientY - qbDragRef.current.startY
+      setQbPos({ x: qbDragRef.current.origX + dx, y: qbDragRef.current.origY + dy })
+    }
+    function onUp() {
+      qbDragRef.current.isDragging = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
 
   async function fetchOrder() {
@@ -153,6 +304,164 @@ export default function OrderDetailPage() {
 
   useEffect(() => { fetchOrder(); fetchFiles() }, [orderId])
 
+  // --- Header editing ---
+  function startEditingHeader() {
+    if (!order) return
+    setEditCustomerId(order.customer_id?.toString() || '')
+    setEditPoNumber(order.po_number || '')
+    setEditOrderDate(order.order_date ? order.order_date.substring(0, 10) : '')
+    setEditDueDate(order.due_date ? order.due_date.substring(0, 10) : '')
+    setEditNotes(order.notes || '')
+    setEditIsRush(order.is_rush)
+    setIsEditingHeader(true)
+  }
+
+  function cancelEditingHeader() {
+    setIsEditingHeader(false)
+  }
+
+  async function saveHeader() {
+    if (!order) return
+    if (!editCustomerId) { toast.error('Customer is required'); return }
+    if (!editOrderDate) { toast.error('Order date is required'); return }
+
+    setIsSaving(true)
+    try {
+      const res = await fetch(`/api/rnr/orders/${orderId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: parseInt(editCustomerId),
+          po_number: editPoNumber || null,
+          order_date: editOrderDate,
+          due_date: editDueDate || null,
+          notes: editNotes || null,
+          is_rush: editIsRush,
+        }),
+      })
+      if (res.ok) {
+        toast.success('Order details updated')
+        setIsEditingHeader(false)
+        fetchOrder()
+      } else {
+        toast.error('Failed to save changes')
+      }
+    } catch { toast.error('Failed to save changes') }
+    finally { setIsSaving(false) }
+  }
+
+  // --- Line item editing ---
+  function startEditingItems() {
+    if (!order) return
+    setEditItems(order.items.map(orderItemToEditItem))
+    setIsEditingItems(true)
+  }
+
+  function cancelEditingItems() {
+    setIsEditingItems(false)
+    setEditItems([])
+  }
+
+  function updateEditItem(index: number, updates: Partial<EditLineItem>) {
+    setEditItems(prev => prev.map((item, i) => {
+      if (i !== index) return item
+      const updated = { ...item, ...updates }
+      if ('quantity_ordered' in updates || 'price_per_unit' in updates) {
+        updated.line_total = calcLineTotal(updated.quantity_ordered, updated.price_per_unit)
+      }
+      return updated
+    }))
+  }
+
+  function addEditRow() {
+    setEditItems(prev => [...prev, newEditLineItem()])
+  }
+
+  function removeEditRow(index: number) {
+    if (editItems.length <= 1) return
+    setEditItems(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const searchParts = useCallback(async (index: number, q: string) => {
+    if (q.length < 1) {
+      updateEditItem(index, { partResults: [], showDropdown: false, isSearching: false })
+      return
+    }
+    updateEditItem(index, { isSearching: true })
+    try {
+      const params = new URLSearchParams({ q, limit: '10' })
+      if (order?.customer_id) params.set('customer_id', order.customer_id.toString())
+      const res = await fetch(`/api/rnr/parts/search?${params}`)
+      if (res.ok) {
+        const results = await res.json()
+        updateEditItem(index, { partResults: results, showDropdown: true, isSearching: false })
+      }
+    } catch { updateEditItem(index, { isSearching: false }) }
+  }, [order?.customer_id])
+
+  function handlePartSearchChange(index: number, value: string) {
+    updateEditItem(index, { partSearch: value, part_id: null, is_new_part: false })
+    const key = editItems[index].key
+    if (searchTimers.current[key]) clearTimeout(searchTimers.current[key])
+    searchTimers.current[key] = setTimeout(() => searchParts(index, value), 250)
+  }
+
+  function selectPart(index: number, part: PartResult) {
+    updateEditItem(index, {
+      part_id: part.id,
+      partSearch: part.rnr_part_number || part.customer_part_number || '',
+      customer_part_number: part.customer_part_number || '',
+      description: part.description || '',
+      price_per_unit: part.price?.toString() || '',
+      showDropdown: false, partResults: [], is_new_part: false,
+    })
+  }
+
+  function editItemsTotal(): string {
+    let total = 0
+    for (const item of editItems) total += parseFloat(item.line_total || '0')
+    return total.toFixed(2)
+  }
+
+  async function saveItems() {
+    if (!order) return
+    const hasItems = editItems.some(i => i.part_id || i.description)
+    if (!hasItems) { toast.error('Add at least one line item'); return }
+
+    setIsSaving(true)
+    try {
+      const totalPrice = parseFloat(editItemsTotal())
+      const payload = {
+        total_price: totalPrice,
+        items: editItems.filter(i => i.part_id || i.description).map(i => ({
+          part_id: i.part_id,
+          customer_part_number: i.customer_part_number || null,
+          description: i.description || null,
+          quantity_ordered: parseInt(i.quantity_ordered) || 0,
+          quantity_final: i.quantity_final ? parseInt(i.quantity_final) : null,
+          price_per_unit: parseFloat(i.price_per_unit) || null,
+          price_unit: i.price_unit,
+          line_total: parseFloat(i.line_total) || 0,
+          is_new_part: i.is_new_part,
+          notes: i.notes || null,
+        })),
+      }
+      const res = await fetch(`/api/rnr/orders/${orderId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        toast.success('Line items updated')
+        setIsEditingItems(false)
+        setEditItems([])
+        fetchOrder()
+      } else {
+        toast.error('Failed to save line items')
+      }
+    } catch { toast.error('Failed to save') }
+    finally { setIsSaving(false) }
+  }
+
+  // --- Existing functionality ---
   async function updateStatus(newStatus: string) {
     if (!order) return
     setIsSaving(true)
@@ -285,6 +594,9 @@ export default function OrderDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800" onClick={openQBPopup}>
+              <BookOpen size={14} />QB Entry
+            </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={exportToCSV}><Download size={14} />Export CSV</Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}><Printer size={14} />Print</Button>
             {order.status === 'ordered' && (
@@ -352,106 +664,309 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Order Info Grid */}
+        {/* Order Info Grid — View or Edit */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm print:border-0 print:shadow-none print:hidden">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</label><p className="text-sm font-medium">{order.customer_name || '-'}</p></div>
-            <div><label className="text-xs font-medium text-gray-500 uppercase tracking-wider">PO #</label><p className="text-sm font-mono">{order.po_number || '-'}</p></div>
-            <div><label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Order Date</label><p className="text-sm">{formatDate(order.order_date)}</p></div>
-            <div><label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</label><p className="text-sm font-medium">{formatDate(order.due_date)}</p></div>
-          </div>
-          {order.notes && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</label>
-              <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{order.notes}</p>
+          {isEditingHeader ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Edit Order Details</h2>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={cancelEditingHeader} disabled={isSaving}><X size={14} /></Button>
+                  <Button className="gap-1.5 bg-amber-600 hover:bg-amber-700" size="sm" onClick={saveHeader} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Save
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <Label className="text-xs">Customer *</Label>
+                  <Select value={editCustomerId || 'none'} onValueChange={v => setEditCustomerId(v === 'none' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="Select customer..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-- Select --</SelectItem>
+                      {customers.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.customer_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">PO #</Label>
+                  <Input value={editPoNumber} onChange={e => setEditPoNumber(e.target.value)} placeholder="Customer PO number" />
+                </div>
+                <div>
+                  <Label className="text-xs">Order Date *</Label>
+                  <Input type="date" value={editOrderDate} onChange={e => setEditOrderDate(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Due Date</Label>
+                  <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2} placeholder="Internal notes..." />
+                </div>
+                <div className="flex items-end">
+                  <Button variant={editIsRush ? 'destructive' : 'outline'} className="gap-2" onClick={() => setEditIsRush(!editIsRush)}>
+                    <AlertTriangle size={14} />{editIsRush ? 'RUSH ORDER' : 'Mark as Rush'}
+                  </Button>
+                </div>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Order Details</h2>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={startEditingHeader}>
+                  <Pencil size={14} />Edit
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</label>
+                  <p className="text-sm font-medium flex items-center gap-1">
+                    {order.customer_name || '-'}
+                    {order.customer_name && (
+                      <button onClick={() => copyToClipboard(order.customer_name!, 'header-customer')}
+                        className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                        title="Copy customer name">
+                        {copiedCell === 'header-customer' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                      </button>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">PO #</label>
+                  <p className="text-sm font-mono flex items-center gap-1">
+                    {order.po_number || '-'}
+                    {order.po_number && (
+                      <button onClick={() => copyToClipboard(order.po_number!, 'header-po')}
+                        className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                        title="Copy PO number">
+                        {copiedCell === 'header-po' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                      </button>
+                    )}
+                  </p>
+                </div>
+                <div><label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Order Date</label><p className="text-sm">{formatDate(order.order_date)}</p></div>
+                <div><label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</label><p className="text-sm font-medium">{formatDate(order.due_date)}</p></div>
+              </div>
+              {order.notes && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</label>
+                  <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{order.notes}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Line Items */}
+        {/* Line Items — View or Edit */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden print:border print:border-gray-400 print:rounded-none">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between print:bg-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Line Items ({order.items.length})</h2>
-            {!isEditingQty && ['in_production', 'complete'].includes(order.status) && (
-              <Button variant="outline" size="sm" className="gap-1.5 print:hidden" onClick={() => setIsEditingQty(true)}><Pencil size={14} />Edit Final Qty</Button>
-            )}
-            {isEditingQty && (
-              <div className="flex items-center gap-2 print:hidden">
-                <Button variant="outline" size="sm" onClick={() => setIsEditingQty(false)} disabled={isSaving}><X size={14} /></Button>
-                <Button className="gap-1.5 bg-amber-600 hover:bg-amber-700" size="sm" onClick={saveFinalQtys} disabled={isSaving}>
-                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Save
-                </Button>
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              Line Items ({isEditingItems ? editItems.length : order.items.length})
+            </h2>
+            <div className="flex items-center gap-2 print:hidden">
+              {isEditingItems ? (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={addEditRow}><Plus size={14} />Add Row</Button>
+                  <Button variant="outline" size="sm" onClick={cancelEditingItems} disabled={isSaving}><X size={14} /></Button>
+                  <Button className="gap-1.5 bg-amber-600 hover:bg-amber-700" size="sm" onClick={saveItems} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Save Items
+                  </Button>
+                </>
+              ) : isEditingQty ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setIsEditingQty(false)} disabled={isSaving}><X size={14} /></Button>
+                  <Button className="gap-1.5 bg-amber-600 hover:bg-amber-700" size="sm" onClick={saveFinalQtys} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Save
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={startEditingItems}>
+                    <Pencil size={14} />Edit Items
+                  </Button>
+                  {['in_production', 'complete'].includes(order.status) && (
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsEditingQty(true)}>
+                      <Pencil size={14} />Edit Final Qty
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {isEditingItems ? (
+            /* ===== EDIT LINE ITEMS TABLE ===== */
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-[220px]">Part #</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Description</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-[90px]">Qty</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-[100px]">Price</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-[80px]">Unit</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-[100px]">Total</th>
+                      <th className="w-[40px]"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editItems.map((item, idx) => (
+                      <tr key={item.key} className={`border-b border-gray-100 ${item.is_new_part ? 'bg-amber-50' : ''}`}>
+                        <td className="px-3 py-2 relative">
+                          <div className="relative">
+                            <Input
+                              value={item.partSearch}
+                              onChange={e => handlePartSearchChange(idx, e.target.value)}
+                              onFocus={() => { if (item.partResults.length > 0) updateEditItem(idx, { showDropdown: true }) }}
+                              onBlur={() => setTimeout(() => updateEditItem(idx, { showDropdown: false }), 200)}
+                              placeholder="Search parts..."
+                              className="font-mono text-xs pr-8"
+                            />
+                            {item.isSearching && <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
+                            {item.part_id && !item.isSearching && <Check size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500" />}
+                          </div>
+                          {item.showDropdown && item.partResults.length > 0 && (
+                            <div className="absolute z-50 mt-1 left-3 right-3 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[200px] overflow-y-auto">
+                              {item.partResults.map(p => (
+                                <button key={p.id} type="button" onMouseDown={() => selectPart(idx, p)}
+                                  className="w-full text-left px-3 py-2 hover:bg-amber-50 border-b border-gray-50 last:border-0">
+                                  <span className="font-mono text-xs font-medium">{p.rnr_part_number || p.customer_part_number || '-'}</span>
+                                  <span className="text-xs text-gray-500 ml-2 truncate">{p.description}</span>
+                                  {p.species_name && <span className="text-xs text-gray-400 ml-1">({p.species_name})</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input value={item.description} onChange={e => updateEditItem(idx, { description: e.target.value })} placeholder="Description" className="text-xs" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input type="number" value={item.quantity_ordered} onChange={e => updateEditItem(idx, { quantity_ordered: e.target.value })} className="text-right text-xs font-mono" placeholder="0" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input type="number" step="0.0001" value={item.price_per_unit} onChange={e => updateEditItem(idx, { price_per_unit: e.target.value })} className="text-right text-xs font-mono" placeholder="0.00" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Select value={item.price_unit} onValueChange={v => updateEditItem(idx, { price_unit: v })}>
+                            <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="BF">BF</SelectItem>
+                              <SelectItem value="LF">LF</SelectItem>
+                              <SelectItem value="PC">Piece</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="text-right font-mono text-xs text-gray-700 font-medium py-2">
+                            {item.line_total ? `$${item.line_total}` : '-'}
+                          </div>
+                        </td>
+                        <td className="px-1 py-2">
+                          <Button variant="ghost" size="sm" onClick={() => removeEditRow(idx)} disabled={editItems.length <= 1} className="text-gray-400 hover:text-red-500">
+                            <Trash2 size={14} />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Part #</th>
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Description</th>
-                  <th className="text-left px-4 py-2 font-medium text-gray-600">Species</th>
-                  <th className="text-right px-4 py-2 font-medium text-gray-600">Qty Ordered</th>
-                  <th className="text-right px-4 py-2 font-medium text-gray-600">Qty Final</th>
-                  <th className="text-right px-4 py-2 font-medium text-gray-600">Price</th>
-                  <th className="text-center px-4 py-2 font-medium text-gray-600">Unit</th>
-                  <th className="text-right px-4 py-2 font-medium text-gray-600">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {order.items.map(item => (
-                  <tr key={item.id} className="border-b border-gray-100">
-                    <td className="px-4 py-2.5 font-mono text-xs font-medium text-gray-900">
-                      <span className="flex items-center gap-1">
-                        {item.rnr_part_number || item.customer_part_number || '-'}
-                        {item.is_new_part && <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full print:bg-gray-800">NEW</span>}
-                        {(item.rnr_part_number || item.customer_part_number) && (
-                          <button onClick={() => copyToClipboard((item.rnr_part_number || item.customer_part_number)!, `part-${item.id}`)}
-                            className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
-                            title="Copy part number">
-                            {copiedCell === `part-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                          </button>
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600 max-w-[200px] truncate">{item.description || '-'}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{item.species_name || '-'}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{item.quantity_ordered}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      {isEditingQty ? (
-                        <Input type="number" value={finalQtys[item.id] || ''} onChange={e => setFinalQtys({ ...finalQtys, [item.id]: e.target.value })}
-                          className="w-20 text-right text-xs font-mono ml-auto" placeholder="-" />
-                      ) : (
-                        <span className={`font-mono text-xs ${item.quantity_final !== null && item.quantity_final !== item.quantity_ordered ? 'text-amber-600 font-semibold' : ''}`}>
-                          {item.quantity_final !== null ? item.quantity_final : '-'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">
-                      <span className="inline-flex items-center gap-1 justify-end">
-                        {item.price_per_unit ? `$${Number(item.price_per_unit).toFixed(4)}` : '-'}
-                        {item.price_per_unit && (
-                          <button onClick={() => copyToClipboard(Number(item.price_per_unit).toFixed(4), `price-${item.id}`)}
-                            className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
-                            title="Copy price">
-                            {copiedCell === `price-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                          </button>
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-center text-xs text-gray-500">{item.price_unit || '-'}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs font-medium">{item.line_total ? `$${Number(item.line_total).toFixed(2)}` : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-300 bg-gray-50">
-                  <td colSpan={7} className="px-4 py-3 text-right font-semibold text-gray-700">Order Total</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{order.total_price ? `$${Number(order.total_price).toFixed(2)}` : '-'}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+              <div className="px-5 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={addEditRow}><Plus size={14} />Add Row</Button>
+                <div className="text-right">
+                  <span className="text-sm text-gray-500 mr-3">Order Total:</span>
+                  <span className="text-lg font-bold text-gray-900 font-mono">${editItemsTotal()}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ===== VIEW LINE ITEMS TABLE ===== */
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Part #</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Description</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Species</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">Qty Ordered</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">Qty Final</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">Price</th>
+                      <th className="text-center px-4 py-2 font-medium text-gray-600">Unit</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.items.map(item => (
+                      <tr key={item.id} className="border-b border-gray-100">
+                        <td className="px-4 py-2.5 font-mono text-xs font-medium text-gray-900">
+                          <span className="flex items-center gap-1">
+                            {item.rnr_part_number || item.customer_part_number || '-'}
+                            {item.is_new_part && <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full print:bg-gray-800">NEW</span>}
+                            {(item.rnr_part_number || item.customer_part_number) && (
+                              <button onClick={() => copyToClipboard((item.rnr_part_number || item.customer_part_number)!, `part-${item.id}`)}
+                                className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                                title="Copy part number">
+                                {copiedCell === `part-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-600 max-w-[200px] truncate">{item.description || '-'}</td>
+                        <td className="px-4 py-2.5 text-gray-600">{item.species_name || '-'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-xs">
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            {item.quantity_ordered}
+                            <button onClick={() => copyToClipboard(item.quantity_ordered.toString(), `qty-${item.id}`)}
+                              className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                              title="Copy quantity">
+                              {copiedCell === `qty-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                            </button>
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          {isEditingQty ? (
+                            <Input type="number" value={finalQtys[item.id] || ''} onChange={e => setFinalQtys({ ...finalQtys, [item.id]: e.target.value })}
+                              className="w-20 text-right text-xs font-mono ml-auto" placeholder="-" />
+                          ) : (
+                            <span className={`font-mono text-xs ${item.quantity_final !== null && item.quantity_final !== item.quantity_ordered ? 'text-amber-600 font-semibold' : ''}`}>
+                              {item.quantity_final !== null ? item.quantity_final : '-'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-xs">
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            {item.price_per_unit ? `$${Number(item.price_per_unit).toFixed(4)}` : '-'}
+                            {item.price_per_unit && (
+                              <button onClick={() => copyToClipboard(Number(item.price_per_unit).toFixed(4), `price-${item.id}`)}
+                                className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors print:hidden"
+                                title="Copy price">
+                                {copiedCell === `price-${item.id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center text-xs text-gray-500">{item.price_unit || '-'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-xs font-medium">{item.line_total ? `$${Number(item.line_total).toFixed(2)}` : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-300 bg-gray-50">
+                      <td colSpan={7} className="px-4 py-3 text-right font-semibold text-gray-700">Order Total</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{order.total_price ? `$${Number(order.total_price).toFixed(2)}` : '-'}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Print footer */}
@@ -489,7 +1004,7 @@ export default function OrderDetailPage() {
           )}
 
           {files.length === 0 && !order.original_file_url && (
-            <p className="text-sm text-gray-400 text-center py-4">No files attached. Click "Attach File" to add order documents.</p>
+            <p className="text-sm text-gray-400 text-center py-4">No files attached. Click &quot;Attach File&quot; to add order documents.</p>
           )}
 
           {files.length > 0 && (
@@ -526,6 +1041,132 @@ export default function OrderDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* QuickBooks Entry Floating Panel */}
+      {isQBOpen && (
+        <div
+          className="fixed z-[9999] bg-white rounded-xl border border-gray-300 shadow-2xl print:hidden"
+          style={{ left: qbPos.x, top: qbPos.y, width: 340 }}
+        >
+          {/* Drag handle + header */}
+          <div
+            className="flex items-center justify-between px-3 py-2 bg-green-600 rounded-t-xl cursor-grab active:cursor-grabbing select-none"
+            onMouseDown={handleQbDragStart}
+          >
+            <div className="flex items-center gap-2 text-white">
+              <GripVertical size={14} className="opacity-60" />
+              <BookOpen size={14} />
+              <span className="text-xs font-semibold tracking-wide uppercase">QB Entry — {order.order_number}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={resetQbCopied} className="p-1 rounded hover:bg-green-500 text-white/80 hover:text-white transition-colors" title="Reset copied highlights">
+                <RotateCcw size={13} />
+              </button>
+              <button onClick={() => setIsQBOpen(false)} className="p-1 rounded hover:bg-green-500 text-white/80 hover:text-white transition-colors" title="Close">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Customer</label>
+            <div className="flex items-center justify-between mt-0.5">
+              <span className={`text-sm font-medium transition-colors ${qbCopied.has('qb-customer') ? 'text-green-600' : 'text-gray-900'}`}>
+                {order.customer_name || '-'}
+              </span>
+              {order.customer_name && (
+                <button onClick={() => qbCopy(order.customer_name!, 'qb-customer')}
+                  className={`p-1 rounded transition-colors ${qbCopied.has('qb-customer') ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
+                  title="Copy customer">
+                  {qbCopied.has('qb-customer') ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* PO # */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">PO #</label>
+            <div className="flex items-center justify-between mt-0.5">
+              <span className={`text-sm font-mono font-medium transition-colors ${qbCopied.has('qb-po') ? 'text-green-600' : 'text-gray-900'}`}>
+                {order.po_number || '-'}
+              </span>
+              {order.po_number && (
+                <button onClick={() => qbCopy(order.po_number!, 'qb-po')}
+                  className={`p-1 rounded transition-colors ${qbCopied.has('qb-po') ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
+                  title="Copy PO number">
+                  {qbCopied.has('qb-po') ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Line items list */}
+          <div className="px-3 py-1.5">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Items</label>
+              <span className="text-[10px] text-gray-400">
+                {qbCopied.size > 0 && <>{Array.from(qbCopied).filter(k => k.startsWith('qb-part-') || k.startsWith('qb-qty-')).length} copied</>}
+              </span>
+            </div>
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5 px-0.5">
+              <span>Part #</span>
+              <span></span>
+              <span className="text-right">Qty</span>
+              <span></span>
+            </div>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto px-3 pb-3">
+            <div className="space-y-0">
+              {order.items.map((item, idx) => {
+                const partNum = item.rnr_part_number || item.customer_part_number || '-'
+                const partKey = `qb-part-${idx}`
+                const qtyKey = `qb-qty-${idx}`
+                const isPartCopied = qbCopied.has(partKey)
+                const isQtyCopied = qbCopied.has(qtyKey)
+
+                return (
+                  <div key={item.id}
+                    className={`grid grid-cols-[1fr_auto_auto_auto] gap-x-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${isPartCopied && isQtyCopied ? 'opacity-50' : ''}`}
+                  >
+                    <span className={`text-xs font-mono font-medium truncate transition-colors ${isPartCopied ? 'text-green-600' : 'text-gray-800'}`} title={partNum}>
+                      {partNum}
+                    </span>
+                    <button
+                      onClick={() => qbCopy(partNum, partKey)}
+                      className={`p-0.5 rounded transition-colors ${isPartCopied ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
+                      title="Copy part number"
+                    >
+                      {isPartCopied ? <Check size={12} /> : <Copy size={12} />}
+                    </button>
+                    <span className={`text-xs font-mono text-right min-w-[40px] transition-colors ${isQtyCopied ? 'text-green-600 font-semibold' : 'text-gray-700'}`}>
+                      {item.quantity_ordered}
+                    </span>
+                    <button
+                      onClick={() => qbCopy(item.quantity_ordered.toString(), qtyKey)}
+                      className={`p-0.5 rounded transition-colors ${isQtyCopied ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-green-600'}`}
+                      title="Copy quantity"
+                    >
+                      {isQtyCopied ? <Check size={12} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Footer progress */}
+          <div className="px-3 py-2 bg-gray-50 rounded-b-xl border-t border-gray-100 flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">
+              {Array.from(qbCopied).filter(k => k.startsWith('qb-part-') || k.startsWith('qb-qty-')).length} / {order.items.length * 2} fields copied
+            </span>
+            <button onClick={resetQbCopied} className="text-[10px] text-gray-400 hover:text-green-600 transition-colors flex items-center gap-1">
+              <RotateCcw size={10} />Reset
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
