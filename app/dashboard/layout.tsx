@@ -21,9 +21,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isRipOperator = session?.user?.role === 'rip_operator'
   const isDriver = session?.user?.role === 'driver'
   const isShippingStation = session?.user?.role === 'shipping_station'
+  const isGrainOperator = session?.user?.role === 'grain_operator'
   
   // Restricted roles only see specific pages
-  const canSeeAllPages = !isRipOperator && !isDriver && !isShippingStation
+  const canSeeAllPages = !isRipOperator && !isDriver && !isShippingStation && !isGrainOperator
   
   // Exclusive section toggle - only one section visible at a time
   const isLumberRoute = pathname?.startsWith('/dashboard/lumber') || false
@@ -56,6 +57,46 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Hide sidebar on rip entry page to maximize horizontal space
   const isRipEntryPage = pathname === '/dashboard/lumber/rip-entry'
   const isSidebarHidden = isRipEntryPage
+
+  // Grain operator layout - completely separate, clean interface
+  if (isGrainOperator) {
+    return (
+      <div className="flex flex-col h-screen bg-[#fafaf8]">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 md:px-8 shrink-0 z-20">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-amber-100 rounded-lg">
+                <BarChart3 size={20} className="text-amber-700" />
+              </div>
+              <div>
+                <h1 className="text-base font-bold tracking-tight text-gray-900">Grain Tracker</h1>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold leading-none">Storage Management</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <div className="text-sm font-medium text-gray-900">
+                  {session?.user?.name || 'Operator'}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 h-8"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            </div>
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </div>
+    )
+  }
 
   // Driver portal layout - mobile-first with bottom navigation
   if (isDriver) {

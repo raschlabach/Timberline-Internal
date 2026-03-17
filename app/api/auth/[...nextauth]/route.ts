@@ -74,7 +74,7 @@ const handler = NextAuth({
       return token
     },
     async session({ session, token }) {
-      const allowed = ['admin', 'user', 'driver', 'rip_operator', 'shipping_station'] as const
+      const allowed = ['admin', 'user', 'driver', 'rip_operator', 'shipping_station', 'grain_operator'] as const
       type Role = typeof allowed[number]
 
       const incoming = String((token as any).role ?? '')

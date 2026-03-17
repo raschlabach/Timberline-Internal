@@ -31,6 +31,11 @@ const SHIPPING_STATION_ALLOWED_PATHS = [
   '/dashboard/lumber/freight',
 ]
 
+// Pages that grain_operator role CAN access
+const GRAIN_OPERATOR_ALLOWED_PATHS = [
+  '/dashboard/grain',
+]
+
 /**
  * Middleware that runs on specific routes to protect them from unauthorized access
  */
@@ -140,6 +145,21 @@ export async function middleware(request: NextRequest) {
       
       if (!isAllowed) {
         return NextResponse.redirect(new URL('/dashboard/lumber/overview', request.url));
+      }
+    }
+  }
+
+  // Role-based access control for grain_operator
+  if (isAuthenticated && token?.role === 'grain_operator') {
+    const isDashboardPath = path.startsWith('/dashboard')
+    
+    if (isDashboardPath) {
+      const isAllowed = GRAIN_OPERATOR_ALLOWED_PATHS.some(allowedPath => 
+        path === allowedPath || path.startsWith(allowedPath + '/')
+      )
+      
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL('/dashboard/grain', request.url));
       }
     }
   }
