@@ -19,7 +19,9 @@
     "create-env": "node scripts/create-env.js",
     "setup": "node scripts/setup.js",
     "setup:quick": "npm run create-env && npm run db:apply-node-preview && npm run create-admin",
-    "import-customers": "node scripts/import-customers.js"
+    "import-customers": "node scripts/import-customers.js",
+    "grain:setup-preview": "node scripts/setup-grain.js preview",
+    "grain:setup-main": "node scripts/setup-grain.js main"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

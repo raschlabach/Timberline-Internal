@@ -83,7 +83,9 @@ function getDefaultFormData(): TicketFormData {
 }
 
 function formatNumber(num: number, decimals = 2): string {
-  return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+  const n = Number(num)
+  if (!Number.isFinite(n)) return '0'
+  return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 
 function formatDate(dateStr: string): string {
@@ -141,9 +143,9 @@ export default function GrainDashboard() {
     fetchData()
   }, [fetchData])
 
-  // Computed totals
+  // Computed totals (coerce to number; Postgres often returns decimals as strings)
   const totals = useMemo(() => {
-    const startBushels = settings?.starting_amount_bushels || 0
+    const startBushels = Number(settings?.starting_amount_bushels) || 0
 
     let totalUnloaded = 0
     let totalLoaded = 0
@@ -163,7 +165,7 @@ export default function GrainDashboard() {
       startBushels,
       totalUnloaded,
       totalLoaded,
-      currentTotal,
+      currentTotal: Number.isFinite(currentTotal) ? currentTotal : 0,
       ticketCount: tickets.length,
     }
   }, [tickets, settings])
