@@ -53,18 +53,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Update loads where all packs are finished
+    // Update loads where all packs are finished, also setting arrival date
+    // if missing so the load stays visible on the Invoice page
     const result = await query(`
       UPDATE lumber_loads l
-      SET all_packs_finished = TRUE
+      SET all_packs_finished = TRUE,
+          actual_arrival_date = COALESCE(l.actual_arrival_date, CURRENT_DATE)
       WHERE l.id IN (
-        SELECT l.id
-        FROM lumber_loads l
-        JOIN lumber_load_items li ON li.load_id = l.id
+        SELECT l2.id
+        FROM lumber_loads l2
+        JOIN lumber_load_items li ON li.load_id = l2.id
         LEFT JOIN lumber_packs p ON p.load_item_id = li.id
-        WHERE l.actual_arrival_date IS NOT NULL
-          AND COALESCE(l.all_packs_finished, FALSE) = FALSE
-        GROUP BY l.id
+        WHERE COALESCE(l2.all_packs_finished, FALSE) = FALSE
+        GROUP BY l2.id
         HAVING COUNT(p.id) > 0 
            AND COUNT(p.id) = COUNT(CASE WHEN p.is_finished = TRUE THEN 1 END)
       )

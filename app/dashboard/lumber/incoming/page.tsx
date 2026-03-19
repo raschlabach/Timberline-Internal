@@ -384,6 +384,10 @@ export default function IncomingLoadsPage() {
             <div className="w-4 h-4 rounded bg-green-100 border border-green-300"></div>
             <span>Has Actual Footage (Needs Invoice/Docs)</span>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-amber-100 border border-amber-400"></div>
+            <span>Ripping Complete — Needs Invoice/Docs</span>
+          </div>
         </div>
       </div>
 
@@ -452,22 +456,31 @@ export default function IncomingLoadsPage() {
               </tr>
             ) : (
               filteredLoads.map((load, loadIdx) => {
-                // Check if any item has actual footage
                 const hasActualFootage = load.items?.some(item => item.actual_footage)
+                const isFinishedNeedsInvoice = load.all_packs_finished && !load.is_paid
                 
                 return (
                   <tr 
                     key={load.id} 
                     className={`hover:bg-blue-50 transition-colors ${
-                      hasActualFootage 
-                        ? 'bg-green-50 hover:bg-green-100' 
-                        : loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                      isFinishedNeedsInvoice
+                        ? 'bg-amber-50 hover:bg-amber-100'
+                        : hasActualFootage 
+                          ? 'bg-green-50 hover:bg-green-100' 
+                          : loadIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     }`}
                   >
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}`}>
-                        {load.load_id}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-gray-900" title={`Created: ${new Date(load.created_at).toLocaleDateString('en-US', { timeZone: 'UTC' })}`}>
+                          {load.load_id}
+                        </span>
+                        {isFinishedNeedsInvoice && (
+                          <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-200 text-amber-800">
+                            RIPPED
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="text-xs font-medium text-gray-900">{load.supplier_name}</span>

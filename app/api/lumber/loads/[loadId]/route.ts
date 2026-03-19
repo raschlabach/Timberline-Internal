@@ -88,6 +88,18 @@ export async function PATCH(
       delete body.truck_driver_id
     }
 
+    // When marking a load as finished, ensure it has an arrival date so it
+    // stays visible on the Invoice page for paperwork processing
+    if (body.all_packs_finished === true && body.actual_arrival_date === undefined) {
+      const existing = await query(
+        'SELECT actual_arrival_date FROM lumber_loads WHERE id = $1',
+        [params.loadId]
+      )
+      if (existing.rows.length > 0 && !existing.rows[0].actual_arrival_date) {
+        body.actual_arrival_date = new Date().toISOString().split('T')[0]
+      }
+    }
+
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
         updates.push(`${field} = $${paramIndex++}`)

@@ -47,7 +47,23 @@ export async function GET(request: NextRequest) {
       LEFT JOIN lumber_supplier_locations sl ON l.supplier_location_id = sl.id
       LEFT JOIN lumber_drivers d ON l.driver_id = d.id
       LEFT JOIN lumber_load_items li ON l.id = li.load_id
-      WHERE COALESCE(l.all_packs_finished, FALSE) = FALSE
+      WHERE (
+          COALESCE(l.all_packs_finished, FALSE) = FALSE
+          OR (
+            -- Keep finished loads visible if they still need invoicing.
+            -- Only includes loads that have packs (went through the rip workflow),
+            -- which excludes old imported loads that were just toggled finished.
+            COALESCE(l.all_packs_finished, FALSE) = TRUE
+            AND COALESCE(l.is_paid, FALSE) = FALSE
+            AND (l.invoice_number IS NULL OR l.invoice_total IS NULL
+                 OR NOT EXISTS (SELECT 1 FROM lumber_load_documents WHERE load_id = l.id LIMIT 1))
+            AND EXISTS (
+              SELECT 1 FROM lumber_packs p
+              JOIN lumber_load_items li2 ON p.load_item_id = li2.id
+              WHERE li2.load_id = l.id
+            )
+          )
+        )
         AND (
           li.actual_footage IS NULL
           OR l.invoice_number IS NULL

@@ -96,13 +96,12 @@ export default function LoadInfoPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [loadRes, suppliersRes, speciesRes, gradesRes, driversRes, docsRes] = await Promise.all([
+        const [loadRes, suppliersRes, speciesRes, gradesRes, driversRes] = await Promise.all([
           fetch(`/api/lumber/loads/${loadId}`),
           fetch('/api/lumber/suppliers'),
           fetch('/api/lumber/species'),
           fetch('/api/lumber/grades'),
           fetch('/api/lumber/drivers'),
-          fetch(`/api/lumber/documents/upload?loadId=${loadId}`)
         ])
 
         if (loadRes.ok) {
@@ -138,13 +137,16 @@ export default function LoadInfoPage() {
           setInvoiceDate(loadData.invoice_date?.split('T')[0] || '')
           setAllPacksFinished(loadData.all_packs_finished || false)
           setPoGenerated(loadData.po_generated || false)
+
+          // Fetch documents using the text load_id (not the numeric DB ID from URL)
+          const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${loadData.load_id}`)
+          if (docsRes.ok) setDocuments(await docsRes.json())
         }
 
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
         if (speciesRes.ok) setSpeciesList(await speciesRes.json())
         if (gradesRes.ok) setGradesList(await gradesRes.json())
         if (driversRes.ok) setDrivers(await driversRes.json())
-        if (docsRes.ok) setDocuments(await docsRes.json())
       } catch (error) {
         console.error('Error fetching data:', error)
         toast.error('Failed to load data')
@@ -367,10 +369,10 @@ export default function LoadInfoPage() {
       })
 
       if (response.ok) {
-        const newDoc = await response.json()
-        setDocuments([...documents, newDoc])
+        // Refetch documents to get consistent column names from the GET endpoint
+        const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${load.load_id}`)
+        if (docsRes.ok) setDocuments(await docsRes.json())
         toast.success('Document uploaded successfully')
-        // Clear file input
         e.target.value = ''
       } else {
         toast.error('Failed to upload document')
