@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ArrowLeft, Save, FileText, Trash2, Plus, CheckCircle2, X, Settings, Pencil, Check } from 'lucide-react'
+import { ArrowLeft, Save, FileText, Trash2, Plus, CheckCircle2, X, Settings, Pencil, Check, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui/checkbox'
 
@@ -38,6 +38,14 @@ interface LoadItem {
   estimated_footage: number | null
   actual_footage: number | null
   price: number | null
+}
+
+interface UploadedDocument {
+  id: number
+  filename: string
+  filepath: string
+  file_type: string
+  uploaded_at: string
 }
 
 export default function LoadInfoPage() {
@@ -85,7 +93,10 @@ export default function LoadInfoPage() {
   const [speciesList, setSpeciesList] = useState<any[]>([])
   const [gradesList, setGradesList] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
-  const [documents, setDocuments] = useState<any[]>([])
+  const [documents, setDocuments] = useState<UploadedDocument[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -138,9 +149,7 @@ export default function LoadInfoPage() {
           setAllPacksFinished(loadData.all_packs_finished || false)
           setPoGenerated(loadData.po_generated || false)
 
-          // Fetch documents using the text load_id (not the numeric DB ID from URL)
-          const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${loadData.load_id}`)
-          if (docsRes.ok) setDocuments(await docsRes.json())
+          fetchDocuments(loadData.load_id)
         }
 
         if (suppliersRes.ok) setSuppliers(await suppliersRes.json())
@@ -354,34 +363,95 @@ export default function LoadInfoPage() {
     }
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function fetchDocuments(loadIdStr: string) {
+    try {
+      const response = await fetch(`/api/lumber/documents/upload?loadId=${loadIdStr}`)
+      if (response.ok) {
+        const docs = await response.json()
+        setDocuments(docs)
+      }
+    } catch (error) {
+      console.error('Error fetching documents:', error)
+    }
+  }
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('loadId', load.load_id)
+  async function handleFileUpload(files: FileList | null) {
+    if (!files || files.length === 0 || !load?.load_id) return
+
+    setIsUploading(true)
 
     try {
-      const response = await fetch('/api/lumber/documents/upload', {
-        method: 'POST',
-        body: formData
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('loadId', load.load_id)
+
+        const response = await fetch('/api/lumber/documents/upload', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`)
+        }
+      }
+
+      toast.success(`${files.length} file(s) uploaded successfully`)
+      fetchDocuments(load.load_id)
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast.error('Failed to upload file(s)')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  async function handleDeleteDocument(docId: number) {
+    if (!confirm('Delete this document?')) return
+
+    try {
+      const response = await fetch(`/api/lumber/documents/${docId}`, {
+        method: 'DELETE'
       })
 
       if (response.ok) {
-        // Refetch documents to get consistent column names from the GET endpoint
-        const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${load.load_id}`)
-        if (docsRes.ok) setDocuments(await docsRes.json())
-        toast.success('Document uploaded successfully')
-        e.target.value = ''
+        toast.success('Document deleted')
+        if (load?.load_id) fetchDocuments(load.load_id)
       } else {
-        toast.error('Failed to upload document')
+        toast.error('Failed to delete document')
       }
     } catch (error) {
-      console.error('Upload error:', error)
-      toast.error('Failed to upload document')
+      console.error('Delete error:', error)
+      toast.error('Failed to delete document')
     }
   }
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = e.dataTransfer.files
+    handleFileUpload(files)
+  }, [load?.load_id])
 
   if (status === 'loading' || isLoading) {
     return (
@@ -807,35 +877,96 @@ export default function LoadInfoPage() {
 
         {/* Paperwork */}
         <div className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Paperwork & Documents</h2>
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="upload">Upload Document</Label>
-              <Input
-                id="upload"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleFileUpload}
-                className="mt-1"
-              />
-            </div>
-            {documents.length > 0 && (
-              <div className="space-y-2">
-                <Label>Attached Documents</Label>
+          <h2 className="text-lg font-semibold mb-4">Documents & Attachments</h2>
+
+          {/* Drag and Drop Zone */}
+          <div
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`
+              border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+              transition-colors duration-200
+              ${isDragging
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+              }
+              ${isUploading ? 'opacity-50 pointer-events-none' : ''}
+            `}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={(e) => handleFileUpload(e.target.files)}
+              className="hidden"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+            />
+
+            <Upload className={`mx-auto h-12 w-12 mb-3 ${isDragging ? 'text-blue-500' : 'text-gray-400'}`} />
+
+            {isUploading ? (
+              <div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Uploading...</p>
+              </div>
+            ) : isDragging ? (
+              <p className="text-blue-600 font-medium">Drop files here</p>
+            ) : (
+              <>
+                <p className="text-gray-600 font-medium">Drag and drop files here</p>
+                <p className="text-sm text-gray-500 mt-1">or click to browse</p>
+                <p className="text-xs text-gray-400 mt-2">PDF, Images, Word, Excel accepted</p>
+              </>
+            )}
+          </div>
+
+          {/* Uploaded Documents List */}
+          {documents.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <h3 className="text-sm font-medium text-gray-700">Uploaded Documents ({documents.length})</h3>
+              <div className="border rounded-lg divide-y">
                 {documents.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-2 border rounded">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">{doc.filename}</span>
+                  <div key={doc.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-blue-600" />
+                      <div>
+                        <a
+                          href={doc.filepath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          {doc.filename}
+                        </a>
+                        <p className="text-xs text-gray-500">
+                          {new Date(doc.uploaded_at).toLocaleDateString('en-US', {
+                            timeZone: 'UTC',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteDocument(doc.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

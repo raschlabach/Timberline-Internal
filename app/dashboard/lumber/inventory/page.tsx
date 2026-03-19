@@ -41,6 +41,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { toast } from 'sonner'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#d084d0', '#a4de6c']
 
@@ -1142,59 +1143,67 @@ export default function InventoryPage() {
     }
   }
   
-  // Upload file for load
   async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
     if (!editingLoad || !event.target.files || event.target.files.length === 0) return
-    
-    const file = event.target.files[0]
+
+    const files = event.target.files
     setIsUploadingFile(true)
-    
+
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('loadId', editingLoad.load_id)
-      
-      const res = await fetch('/api/lumber/documents/upload', {
-        method: 'POST',
-        body: formData
-      })
-      
-      if (res.ok) {
-        // Refresh documents list
-        const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${editingLoad.load_id}`)
-        if (docsRes.ok) {
-          const docsData = await docsRes.json()
-          setLoadDocuments(docsData)
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('loadId', editingLoad.load_id)
+
+        const res = await fetch('/api/lumber/documents/upload', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!res.ok) {
+          throw new Error(`Failed to upload ${file.name}`)
         }
-      } else {
-        alert('Failed to upload file')
+      }
+
+      toast.success(`${files.length} file(s) uploaded successfully`)
+      const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${editingLoad.load_id}`)
+      if (docsRes.ok) {
+        const docsData = await docsRes.json()
+        setLoadDocuments(docsData)
       }
     } catch (error) {
       console.error('Error uploading file:', error)
-      alert('Error uploading file')
+      toast.error('Failed to upload file(s)')
     } finally {
       setIsUploadingFile(false)
-      event.target.value = '' // Reset input
+      event.target.value = ''
     }
   }
   
-  // Delete document
   async function handleDeleteDocument(docId: number) {
     if (!confirm('Delete this document?')) return
-    
+
     try {
       const res = await fetch(`/api/lumber/documents/${docId}`, {
         method: 'DELETE'
       })
-      
+
       if (res.ok) {
-        setLoadDocuments(prev => prev.filter(d => d.id !== docId))
+        toast.success('Document deleted')
+        if (editingLoad?.load_id) {
+          const docsRes = await fetch(`/api/lumber/documents/upload?loadId=${editingLoad.load_id}`)
+          if (docsRes.ok) {
+            const docsData = await docsRes.json()
+            setLoadDocuments(docsData)
+          }
+        }
       } else {
-        alert('Failed to delete document')
+        toast.error('Failed to delete document')
       }
     } catch (error) {
       console.error('Error deleting document:', error)
-      alert('Error deleting document')
+      toast.error('Failed to delete document')
     }
   }
   
@@ -2622,8 +2631,9 @@ export default function InventoryPage() {
                     <label className="cursor-pointer">
                       <input
                         type="file"
+                        multiple
                         className="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                         onChange={handleFileUpload}
                         disabled={isUploadingFile}
                       />
