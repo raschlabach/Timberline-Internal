@@ -141,6 +141,10 @@ export default function FuelReportPage() {
       {/* Report Content */}
       {hasSearched && (
         <div ref={printRef} className="bg-white">
+          <div className="text-center py-4 print:py-2">
+            <h2 className="text-xl font-bold text-gray-900">Timberline Trucking</h2>
+            <p className="text-sm text-gray-500">Fuel Report</p>
+          </div>
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
