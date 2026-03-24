@@ -14,16 +14,16 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, driver_id } = body;
+    const { name, driver_id, voyager_vehicle_description } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Truck name is required' }, { status: 400 });
     }
 
     const result = await query(
-      `UPDATE fuel_trucks SET name = $1, driver_id = $2 WHERE id = $3
-       RETURNING id, name, driver_id, is_active`,
-      [name.trim(), driver_id || null, params.id]
+      `UPDATE fuel_trucks SET name = $1, driver_id = $2, voyager_vehicle_description = $3 WHERE id = $4
+       RETURNING id, name, driver_id, is_active, voyager_vehicle_description`,
+      [name.trim(), driver_id || null, voyager_vehicle_description?.trim() || null, params.id]
     );
 
     if (result.rows.length === 0) {

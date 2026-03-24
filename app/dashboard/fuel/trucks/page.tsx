@@ -30,6 +30,7 @@ interface FuelTruck {
   driver_id: number | null
   is_active: boolean
   driver_name: string | null
+  voyager_vehicle_description: string | null
   created_at: string
 }
 
@@ -48,6 +49,7 @@ export default function FuelTrucksPage() {
   const [editingTruck, setEditingTruck] = useState<FuelTruck | null>(null)
   const [truckName, setTruckName] = useState('')
   const [truckDriverId, setTruckDriverId] = useState('')
+  const [truckVoyagerDesc, setTruckVoyagerDesc] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Delete confirmation
@@ -79,6 +81,7 @@ export default function FuelTrucksPage() {
     setEditingTruck(null)
     setTruckName('')
     setTruckDriverId('')
+    setTruckVoyagerDesc('')
     setIsDialogOpen(true)
   }
 
@@ -86,6 +89,7 @@ export default function FuelTrucksPage() {
     setEditingTruck(truck)
     setTruckName(truck.name)
     setTruckDriverId(truck.driver_id?.toString() || '')
+    setTruckVoyagerDesc(truck.voyager_vehicle_description || '')
     setIsDialogOpen(true)
   }
 
@@ -103,6 +107,7 @@ export default function FuelTrucksPage() {
         body: JSON.stringify({
           name: truckName.trim(),
           driver_id: truckDriverId && truckDriverId !== 'none' ? parseInt(truckDriverId) : null,
+          voyager_vehicle_description: truckVoyagerDesc.trim() || null,
         }),
       })
 
@@ -192,6 +197,9 @@ export default function FuelTrucksPage() {
                             <span className="text-sm text-gray-400 italic">Unassigned</span>
                           )}
                         </div>
+                        {truck.voyager_vehicle_description && (
+                          <span className="text-xs text-gray-400 mt-0.5">Voyager: {truck.voyager_vehicle_description}</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -268,6 +276,15 @@ export default function FuelTrucksPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Voyager Vehicle Description (optional)</Label>
+              <Input
+                placeholder="e.g. 810, 781"
+                value={truckVoyagerDesc}
+                onChange={(e) => setTruckVoyagerDesc(e.target.value)}
+              />
+              <p className="text-xs text-gray-400">Maps this truck to a vehicle in Red Rover / Voyager fuel reports</p>
             </div>
           </div>
           <DialogFooter>

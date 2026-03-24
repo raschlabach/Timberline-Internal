@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -399,6 +399,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<FileText size={16} />}
                   label="Fuel Report"
                   isActive={isActiveRoute('/dashboard/fuel/report')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/fuel/import"
+                  icon={<Upload size={16} />}
+                  label="Import"
+                  isActive={isActiveRoute('/dashboard/fuel/import')}
                   theme="blue"
                 />
 

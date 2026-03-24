@@ -18,6 +18,7 @@ export async function GET() {
         ft.name,
         ft.driver_id,
         ft.is_active,
+        ft.voyager_vehicle_description,
         ft.created_at,
         u.full_name as driver_name
       FROM fuel_trucks ft
@@ -40,17 +41,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, driver_id } = body;
+    const { name, driver_id, voyager_vehicle_description } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Truck name is required' }, { status: 400 });
     }
 
     const result = await query(
-      `INSERT INTO fuel_trucks (name, driver_id, created_by)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, driver_id, is_active, created_at`,
-      [name.trim(), driver_id || null, session.user.id]
+      `INSERT INTO fuel_trucks (name, driver_id, voyager_vehicle_description, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, driver_id, is_active, voyager_vehicle_description, created_at`,
+      [name.trim(), driver_id || null, voyager_vehicle_description?.trim() || null, session.user.id]
     );
 
     return NextResponse.json({ truck: result.rows[0] }, { status: 201 });
