@@ -14,7 +14,7 @@ export async function GET() {
 
     const driverId = session.user.id;
 
-    const [tankResult, trucksResult, assignedResult] = await Promise.all([
+    const [tankResult, trucksResult, assignedResult, recentResult] = await Promise.all([
       query(`
         SELECT
           COALESCE((SELECT SUM(gallons) FROM fuel_tank_refills), 0) as total_refilled,
@@ -32,6 +32,16 @@ export async function GET() {
         WHERE driver_id = $1 AND is_active = true
         LIMIT 1
       `, [driverId]),
+      query(`
+        SELECT
+          f.id, f.fillup_date, f.truck_id, f.mileage, f.gallons, f.notes,
+          ft.name as truck_name
+        FROM fuel_truck_fillups f
+        LEFT JOIN fuel_trucks ft ON f.truck_id = ft.id
+        WHERE f.driver_id = $1
+        ORDER BY f.fillup_date DESC
+        LIMIT 10
+      `, [driverId]),
     ]);
 
     const totalRefilled = parseFloat(tankResult.rows[0].total_refilled) || 0;
@@ -42,6 +52,7 @@ export async function GET() {
       currentLevel,
       trucks: trucksResult.rows,
       assignedTruck: assignedResult.rows[0] || null,
+      recentFillups: recentResult.rows,
     });
   } catch (error) {
     console.error('Error fetching driver fuel data:', error);

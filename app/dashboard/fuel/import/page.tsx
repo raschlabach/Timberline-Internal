@@ -6,7 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Upload, FileText, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { ArrowLeft, Upload, FileText, AlertTriangle, CheckCircle2, Loader2, Trash2 } from 'lucide-react'
 
 interface ParsedTransaction {
   transactionDate: string
@@ -64,6 +72,8 @@ export default function FuelImportPage() {
   const [saveResult, setSaveResult] = useState<{ imported: number; skipped: number } | null>(null)
   const [error, setError] = useState('')
   const [pastImports, setPastImports] = useState<PastImport[]>([])
+  const [deletingImport, setDeletingImport] = useState<PastImport | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const fetchPastImports = useCallback(async () => {
     try {
@@ -142,6 +152,22 @@ export default function FuelImportPage() {
       setError('Failed to save import')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleDeleteImport() {
+    if (!deletingImport) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/fuel/import/${deletingImport.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setDeletingImport(null)
+        fetchPastImports()
+      }
+    } catch (err) {
+      console.error('Delete error:', err)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -391,7 +417,7 @@ export default function FuelImportPage() {
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900 truncate">{imp.filename}</p>
                     <p className="text-xs text-gray-500">
-                      {formatDate(imp.date_from)} - {formatDate(imp.date_to)}
+                      {formatDate(String(imp.date_from).slice(0, 10))} - {formatDate(String(imp.date_to).slice(0, 10))}
                       <span className="mx-1">&middot;</span>
                       {imp.total_transactions} transaction{imp.total_transactions !== 1 ? 's' : ''}
                       {imp.created_by_name && (
@@ -402,15 +428,45 @@ export default function FuelImportPage() {
                       )}
                     </p>
                   </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">
-                    {new Date(imp.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                      {new Date(imp.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeletingImport(imp)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-400" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deletingImport !== null} onOpenChange={(open) => { if (!open) setDeletingImport(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove Import</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the import &quot;{deletingImport?.filename}&quot; and all {deletingImport?.total_transactions} associated transaction{deletingImport?.total_transactions !== 1 ? 's' : ''}. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingImport(null)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteImport} disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete Import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

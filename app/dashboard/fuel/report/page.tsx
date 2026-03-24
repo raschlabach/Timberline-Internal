@@ -424,7 +424,7 @@ export default function FuelReportPage() {
                             {report.externalTxns.map((t) => (
                               <div key={t.id} className="px-4 md:px-6 py-2.5">
                                 <div className="hidden md:grid grid-cols-[1fr_1fr_80px_80px_80px_90px] gap-2 items-center">
-                                  <div className="text-sm text-gray-900">{formatDate(t.transaction_date + 'T00:00:00')}</div>
+                                  <div className="text-sm text-gray-900">{formatDate(String(t.transaction_date).slice(0, 10) + 'T00:00:00')}</div>
                                   <div className="text-sm text-gray-700 truncate">
                                     {t.merchant_name}
                                     <span className="text-gray-400 ml-1">{t.merchant_city}, {t.state}</span>
@@ -444,7 +444,7 @@ export default function FuelReportPage() {
                                 </div>
                                 <div className="md:hidden space-y-1">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-gray-900">{formatDate(t.transaction_date + 'T00:00:00')}</span>
+                                    <span className="text-sm font-medium text-gray-900">{formatDate(String(t.transaction_date).slice(0, 10) + 'T00:00:00')}</span>
                                     <span className="text-sm font-bold text-gray-900">{formatCurrency(parseFloat(String(t.trans_amount)))}</span>
                                   </div>
                                   <div className="text-xs text-gray-500">{t.merchant_name}, {t.merchant_city}</div>

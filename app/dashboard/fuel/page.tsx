@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Fuel, TrendingUp, TrendingDown, Plus, Truck, Droplets, History, ArrowRight } from 'lucide-react'
+import { Fuel, TrendingUp, TrendingDown, Plus, Truck, Droplets, History, ArrowRight, Pencil, Trash2 } from 'lucide-react'
 
 interface FillupItem {
   id: number
@@ -58,11 +58,14 @@ interface Driver {
 
 type ActivityItem = {
   id: string
+  rawId: number
   date: string
   type: 'refill' | 'fillup'
   gallons: number
   description: string
   notes: string | null
+  rawFillup?: FillupItem
+  rawRefill?: RefillItem
 }
 
 function formatDate(dateStr: string): string {
@@ -79,6 +82,12 @@ function formatDateTime(dateStr: string): string {
   return `${formatDate(dateStr)} ${formatTime(dateStr)}`
 }
 
+function toLocalDatetimeValue(isoStr: string): string {
+  const d = new Date(isoStr)
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
 export default function FuelDashboard() {
   const [currentLevel, setCurrentLevel] = useState(0)
   const [totalRefilled, setTotalRefilled] = useState(0)
@@ -90,6 +99,7 @@ export default function FuelDashboard() {
 
   // Refill dialog
   const [isRefillOpen, setIsRefillOpen] = useState(false)
+  const [editingRefillId, setEditingRefillId] = useState<number | null>(null)
   const [refillDate, setRefillDate] = useState('')
   const [refillGallons, setRefillGallons] = useState('')
   const [refillNotes, setRefillNotes] = useState('')
@@ -97,12 +107,16 @@ export default function FuelDashboard() {
 
   // Fillup dialog
   const [isFillupOpen, setIsFillupOpen] = useState(false)
+  const [editingFillupId, setEditingFillupId] = useState<number | null>(null)
   const [fillupDate, setFillupDate] = useState('')
   const [fillupTruckId, setFillupTruckId] = useState('')
   const [fillupDriverId, setFillupDriverId] = useState('')
   const [fillupMileage, setFillupMileage] = useState('')
   const [fillupGallons, setFillupGallons] = useState('')
   const [fillupNotes, setFillupNotes] = useState('')
+
+  // Delete confirmation
+  const [deletingItem, setDeletingItem] = useState<ActivityItem | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -129,20 +143,24 @@ export default function FuelDashboard() {
 
       const fillupItems: ActivityItem[] = (fillupsData.fillups || []).map((f: FillupItem) => ({
         id: `fillup-${f.id}`,
+        rawId: f.id,
         date: f.fillup_date,
         type: 'fillup' as const,
         gallons: parseFloat(String(f.gallons)) || 0,
         description: `${f.driver_name || 'Unknown'} → ${f.truck_name}`,
         notes: f.notes,
+        rawFillup: f,
       }))
 
       const refillItems: ActivityItem[] = (refillsData.refills || []).slice(0, 10).map((r: RefillItem) => ({
         id: `refill-${r.id}`,
+        rawId: r.id,
         date: r.refill_date,
         type: 'refill' as const,
         gallons: parseFloat(String(r.gallons)) || 0,
         description: `Tank refill${r.created_by_name ? ` by ${r.created_by_name}` : ''}`,
         notes: r.notes,
+        rawRefill: r,
       }))
 
       const merged = [...fillupItems, ...refillItems]
@@ -162,6 +180,7 @@ export default function FuelDashboard() {
   }, [fetchData])
 
   function openRefillDialog() {
+    setEditingRefillId(null)
     const now = new Date()
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
     setRefillDate(local.toISOString().slice(0, 16))
@@ -170,7 +189,18 @@ export default function FuelDashboard() {
     setIsRefillOpen(true)
   }
 
+  function openEditRefill(item: ActivityItem) {
+    const r = item.rawRefill
+    if (!r) return
+    setEditingRefillId(r.id)
+    setRefillDate(toLocalDatetimeValue(r.refill_date))
+    setRefillGallons(String(parseFloat(String(r.gallons))))
+    setRefillNotes(r.notes || '')
+    setIsRefillOpen(true)
+  }
+
   function openFillupDialog() {
+    setEditingFillupId(null)
     const now = new Date()
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
     setFillupDate(local.toISOString().slice(0, 16))
@@ -182,12 +212,29 @@ export default function FuelDashboard() {
     setIsFillupOpen(true)
   }
 
+  function openEditFillup(item: ActivityItem) {
+    const f = item.rawFillup
+    if (!f) return
+    setEditingFillupId(f.id)
+    setFillupDate(toLocalDatetimeValue(f.fillup_date))
+    setFillupTruckId(String(f.truck_id))
+    setFillupDriverId(f.driver_id ? String(f.driver_id) : '')
+    setFillupMileage(String(f.mileage))
+    setFillupGallons(String(parseFloat(String(f.gallons))))
+    setFillupNotes(f.notes || '')
+    setIsFillupOpen(true)
+  }
+
   async function handleRefillSubmit() {
     if (!refillDate || !refillGallons) return
     setIsSubmitting(true)
     try {
-      const res = await fetch('/api/fuel/refills', {
-        method: 'POST',
+      const isEditing = editingRefillId !== null
+      const url = isEditing ? `/api/fuel/refills/${editingRefillId}` : '/api/fuel/refills'
+      const method = isEditing ? 'PUT' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           refill_date: new Date(refillDate).toISOString(),
@@ -200,7 +247,7 @@ export default function FuelDashboard() {
         fetchData()
       }
     } catch (error) {
-      console.error('Error adding refill:', error)
+      console.error('Error saving refill:', error)
     } finally {
       setIsSubmitting(false)
     }
@@ -210,8 +257,12 @@ export default function FuelDashboard() {
     if (!fillupDate || !fillupTruckId || !fillupMileage || !fillupGallons) return
     setIsSubmitting(true)
     try {
-      const res = await fetch('/api/fuel/fillups', {
-        method: 'POST',
+      const isEditing = editingFillupId !== null
+      const url = isEditing ? `/api/fuel/fillups/${editingFillupId}` : '/api/fuel/fillups'
+      const method = isEditing ? 'PUT' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fillup_date: new Date(fillupDate).toISOString(),
@@ -227,9 +278,26 @@ export default function FuelDashboard() {
         fetchData()
       }
     } catch (error) {
-      console.error('Error adding fillup:', error)
+      console.error('Error saving fillup:', error)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deletingItem) return
+    try {
+      const isFillup = deletingItem.type === 'fillup'
+      const url = isFillup
+        ? `/api/fuel/fillups/${deletingItem.rawId}`
+        : `/api/fuel/refills/${deletingItem.rawId}`
+      const res = await fetch(url, { method: 'DELETE' })
+      if (res.ok) {
+        setDeletingItem(null)
+        fetchData()
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error)
     }
   }
 
@@ -367,7 +435,7 @@ export default function FuelDashboard() {
               {activity.map((item) => {
                 const isRefill = item.type === 'refill'
                 return (
-                  <div key={item.id} className="px-4 md:px-6 py-3 hover:bg-gray-50/50 transition-colors">
+                  <div key={item.id} className="px-4 md:px-6 py-3 hover:bg-gray-50/50 transition-colors group">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isRefill ? 'bg-green-500' : 'bg-blue-500'}`} />
@@ -384,11 +452,31 @@ export default function FuelDashboard() {
                           )}
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <div className={`text-lg font-bold ${isRefill ? 'text-green-700' : 'text-blue-700'}`}>
-                          {isRefill ? '+' : '-'}{item.gallons.toFixed(1)}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => isRefill ? openEditRefill(item) : openEditFillup(item)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-gray-400" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setDeletingItem(item)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                          </Button>
                         </div>
-                        <div className="text-xs text-gray-400">gal</div>
+                        <div className="text-right shrink-0">
+                          <div className={`text-lg font-bold ${isRefill ? 'text-green-700' : 'text-blue-700'}`}>
+                            {isRefill ? '+' : '-'}{item.gallons.toFixed(1)}
+                          </div>
+                          <div className="text-xs text-gray-400">gal</div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -399,12 +487,14 @@ export default function FuelDashboard() {
         </CardContent>
       </Card>
 
-      {/* Add Tank Refill Dialog */}
+      {/* Add/Edit Tank Refill Dialog */}
       <Dialog open={isRefillOpen} onOpenChange={setIsRefillOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Tank Refill</DialogTitle>
-            <DialogDescription>Record a gas company delivery to the 1,000 gallon tank.</DialogDescription>
+            <DialogTitle>{editingRefillId ? 'Edit Tank Refill' : 'Add Tank Refill'}</DialogTitle>
+            <DialogDescription>
+              {editingRefillId ? 'Update the tank refill details.' : 'Record a gas company delivery to the 1,000 gallon tank.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -443,18 +533,20 @@ export default function FuelDashboard() {
               disabled={!refillDate || !refillGallons || isSubmitting}
               className="bg-green-600 hover:bg-green-700"
             >
-              {isSubmitting ? 'Saving...' : 'Add Refill'}
+              {isSubmitting ? 'Saving...' : editingRefillId ? 'Update Refill' : 'Add Refill'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Add Truck Fill-up Dialog */}
+      {/* Add/Edit Truck Fill-up Dialog */}
       <Dialog open={isFillupOpen} onOpenChange={setIsFillupOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Truck Fill-up</DialogTitle>
-            <DialogDescription>Manually record a driver filling their truck from the tank.</DialogDescription>
+            <DialogTitle>{editingFillupId ? 'Edit Truck Fill-up' : 'Add Truck Fill-up'}</DialogTitle>
+            <DialogDescription>
+              {editingFillupId ? 'Update the fill-up details.' : 'Manually record a driver filling their truck from the tank.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -532,8 +624,24 @@ export default function FuelDashboard() {
               disabled={!fillupDate || !fillupTruckId || !fillupMileage || !fillupGallons || isSubmitting}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isSubmitting ? 'Saving...' : 'Add Fill-up'}
+              {isSubmitting ? 'Saving...' : editingFillupId ? 'Update Fill-up' : 'Add Fill-up'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <Dialog open={deletingItem !== null} onOpenChange={(open) => { if (!open) setDeletingItem(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {deletingItem?.type === 'refill' ? 'Tank Refill' : 'Truck Fill-up'}</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this {deletingItem?.type === 'refill' ? 'tank refill' : 'truck fill-up'} of {deletingItem?.gallons.toFixed(1)} gallons from {deletingItem ? formatDate(deletingItem.date) : ''}? This will update the tank level accordingly.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingItem(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
