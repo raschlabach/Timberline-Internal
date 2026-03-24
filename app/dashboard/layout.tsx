@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -105,6 +105,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       { href: '/dashboard/driver/customers', icon: Users, label: 'Customers' },
       { href: '/dashboard/driver/load-papers', icon: FolderOpen, label: 'Papers' },
       { href: '/dashboard/driver/log-hours', icon: Clock, label: 'Hours' },
+      { href: '/dashboard/driver/fuel', icon: Fuel, label: 'Fuel' },
     ]
 
     return (
@@ -375,6 +376,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<Calculator size={20} />}
                   label="Pricing Notes"
                   isActive={isActiveSubRoute('/dashboard/pricing-notes')}
+                  theme="blue"
+                />
+
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/fuel"
+                  icon={<Fuel size={20} />}
+                  label="Fuel Tracker"
+                  isActive={isActiveSubRoute('/dashboard/fuel')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/fuel/trucks"
+                  icon={<Truck size={16} />}
+                  label="Trucks"
+                  isActive={isActiveRoute('/dashboard/fuel/trucks')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/fuel/report"
+                  icon={<FileText size={16} />}
+                  label="Fuel Report"
+                  isActive={isActiveRoute('/dashboard/fuel/report')}
                   theme="blue"
                 />
 

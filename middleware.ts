@@ -20,6 +20,7 @@ const DRIVER_ALLOWED_PATHS = [
   '/dashboard/driver/customers',
   '/dashboard/driver/load-papers',
   '/dashboard/driver/log-hours',
+  '/dashboard/driver/fuel',
 ]
 
 // Pages that shipping_station role CAN access
