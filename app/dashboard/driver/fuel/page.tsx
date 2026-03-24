@@ -342,6 +342,7 @@ export default function DriverFuelPage() {
           </label>
           <Input
             type="number"
+            inputMode="numeric"
             placeholder="Current mileage"
             value={mileage}
             onChange={(e) => setMileage(e.target.value)}
@@ -357,6 +358,7 @@ export default function DriverFuelPage() {
           </label>
           <Input
             type="number"
+            inputMode="decimal"
             step="0.01"
             placeholder="0.00"
             value={gallons}
@@ -388,35 +390,34 @@ export default function DriverFuelPage() {
           </div>
           <div className="divide-y">
             {recentFillups.map((f) => (
-              <div key={f.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900">{formatDate(f.fillup_date)}</span>
-                    <span className="text-xs text-gray-400">{formatTime(f.fillup_date)}</span>
+              <div key={f.id} className="px-3 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-medium text-gray-900">{formatDate(f.fillup_date)}</span>
+                      <span className="text-xs text-gray-400">{formatTime(f.fillup_date)}</span>
+                      <span className="text-xs font-semibold text-blue-700 ml-auto mr-1">{parseFloat(String(f.gallons)).toFixed(1)} gal</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                      <span>{f.truck_name}</span>
+                      <span className="text-gray-300">|</span>
+                      <span>{Number(f.mileage).toLocaleString()} mi</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-xs text-gray-500">{f.truck_name}</span>
-                    <span className="text-xs text-gray-400">{Number(f.mileage).toLocaleString()} mi</span>
-                    <span className="text-xs font-semibold text-blue-700">{parseFloat(String(f.gallons)).toFixed(1)} gal</span>
+                  <div className="flex items-center shrink-0 -mr-1">
+                    <button
+                      onClick={() => openEditDialog(f)}
+                      className="p-2.5 rounded-lg active:bg-gray-100 touch-manipulation"
+                    >
+                      <Pencil className="h-4 w-4 text-gray-400" />
+                    </button>
+                    <button
+                      onClick={() => setDeletingFillup(f)}
+                      className="p-2.5 rounded-lg active:bg-red-50 touch-manipulation"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-400" />
+                    </button>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => openEditDialog(f)}
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-gray-400" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setDeletingFillup(f)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-red-400" />
-                  </Button>
                 </div>
               </div>
             ))}
@@ -424,9 +425,12 @@ export default function DriverFuelPage() {
         </div>
       )}
 
+      {/* Bottom safe area for mobile nav */}
+      <div className="h-4" />
+
       {/* Edit Fill-up Dialog */}
       <Dialog open={editingFillup !== null} onOpenChange={(open) => { if (!open) setEditingFillup(null) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md mx-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>Edit Fill-up</DialogTitle>
             <DialogDescription>Update your fill-up details.</DialogDescription>
@@ -469,6 +473,7 @@ export default function DriverFuelPage() {
                 <label className="text-xs font-medium text-gray-600 block mb-1.5">Mileage</label>
                 <Input
                   type="number"
+                  inputMode="numeric"
                   value={editMileage}
                   onChange={(e) => setEditMileage(e.target.value)}
                   className="h-12 rounded-xl"
@@ -478,6 +483,7 @@ export default function DriverFuelPage() {
                 <label className="text-xs font-medium text-gray-600 block mb-1.5">Gallons</label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   value={editGallons}
                   onChange={(e) => setEditGallons(e.target.value)}
@@ -486,32 +492,38 @@ export default function DriverFuelPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingFillup(null)}>Cancel</Button>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setEditingFillup(null)} className="h-12 sm:h-10 rounded-xl">
+              Cancel
+            </Button>
             <Button
               onClick={handleEditSubmit}
               disabled={!editDate || !editTime || !editTruckId || !editMileage || !editGallons || isEditSubmitting}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="h-12 sm:h-10 rounded-xl bg-blue-600 hover:bg-blue-700"
             >
-              {isEditSubmitting ? 'Saving...' : 'Update'}
+              {isEditSubmitting ? 'Saving...' : 'Update Fill-up'}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation */}
       <Dialog open={deletingFillup !== null} onOpenChange={(open) => { if (!open) setDeletingFillup(null) }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>Delete Fill-up</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete this fill-up of {deletingFillup ? parseFloat(String(deletingFillup.gallons)).toFixed(1) : '0'} gallons from {deletingFillup ? formatDate(deletingFillup.fillup_date) : ''}?
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingFillup(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
-          </DialogFooter>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeletingFillup(null)} className="h-12 sm:h-10 rounded-xl">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} className="h-12 sm:h-10 rounded-xl">
+              Delete
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
