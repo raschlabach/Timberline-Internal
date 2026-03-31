@@ -431,8 +431,6 @@ export async function PATCH(
               updated_at = CURRENT_TIMESTAMP
           WHERE id = $2
             AND truckload_id = $3
-            AND is_manual = true
-            AND (comment IS NULL OR comment NOT LIKE '%split load%')
         `, [appliesTo, dbId, truckloadId])
       } else {
         // Column doesn't exist, can't update
@@ -495,15 +493,18 @@ export async function DELETE(
       await client.query('BEGIN')
 
       // Delete the deduction
-      await client.query(`
+      const deleteResult = await client.query(`
         DELETE FROM cross_driver_freight_deductions
         WHERE id = $1
           AND truckload_id = $2
-          AND is_manual = true
-          AND (comment IS NULL OR comment NOT LIKE '%split load%')
+        RETURNING id
       `, [dbId, truckloadId])
       
       await client.query('COMMIT')
+      
+      if (deleteResult.rowCount === 0) {
+        return NextResponse.json({ success: false, error: 'Deduction not found' }, { status: 404 })
+      }
       
       return NextResponse.json({
         success: true
