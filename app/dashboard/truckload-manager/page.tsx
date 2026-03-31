@@ -633,8 +633,8 @@ export default function TruckloadManager() {
             </Button>
           </div>
 
-          {/* Print tracking tags */}
-          {(truckload.truckloadSheetPrintedAt || truckload.pickupListPrintedAt || truckload.loadingSheetPrintedAt) && (
+          {/* Print tracking tags — only shown for active (non-completed) truckloads */}
+          {!truckload.isCompleted && (truckload.truckloadSheetPrintedAt || truckload.pickupListPrintedAt || truckload.loadingSheetPrintedAt) && (
             <div className="flex flex-wrap gap-1">
               {([
                 { label: 'Sheet', printedAt: truckload.truckloadSheetPrintedAt },
