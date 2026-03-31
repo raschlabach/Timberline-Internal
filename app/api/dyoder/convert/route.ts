@@ -160,11 +160,10 @@ export async function POST(request: NextRequest) {
 
       const orderId = orderResult.rows[0].id
 
-      // Create one vinyl record: skid_count is the length (rounded-up trailer ft), width is always 8
       const skidLength = item.skid_count || 0
       if (skidLength > 0) {
         await client.query(
-          `INSERT INTO vinyl (order_id, width, length, square_footage, quantity)
+          `INSERT INTO skids (order_id, width, length, square_footage, quantity)
            VALUES ($1, $2, $3, $4, $5)`,
           [orderId, 8, skidLength, 8 * skidLength, 1]
         )

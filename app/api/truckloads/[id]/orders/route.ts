@@ -44,7 +44,7 @@ export async function GET(
       WITH skids_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as skids_count,
+          COALESCE(SUM(quantity), 0) as skids_count,
           SUM(width * length * quantity) as total_skid_footage,
           json_agg(
             json_build_object(
