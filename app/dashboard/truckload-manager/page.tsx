@@ -18,6 +18,8 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  Printer,
+  AlertTriangle,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +69,10 @@ interface TruckloadSummary {
   pickupFootage: number;
   deliveryFootage: number;
   transferFootage: number;
+  truckloadSheetPrintedAt: string | null;
+  pickupListPrintedAt: string | null;
+  loadingSheetPrintedAt: string | null;
+  lastDataModifiedAt: string | null;
 }
 
 export default function TruckloadManager() {
@@ -626,6 +632,36 @@ export default function TruckloadManager() {
               <Info className="h-3 w-3 text-gray-500" />
             </Button>
           </div>
+
+          {/* Print tracking tags */}
+          {(truckload.truckloadSheetPrintedAt || truckload.pickupListPrintedAt || truckload.loadingSheetPrintedAt) && (
+            <div className="flex flex-wrap gap-1">
+              {([
+                { label: 'Sheet', printedAt: truckload.truckloadSheetPrintedAt },
+                { label: 'Pickup', printedAt: truckload.pickupListPrintedAt },
+                { label: 'Loading', printedAt: truckload.loadingSheetPrintedAt },
+              ] as const).filter(t => t.printedAt).map(tag => {
+                const isStale = truckload.lastDataModifiedAt
+                  && new Date(truckload.lastDataModifiedAt) > new Date(tag.printedAt!)
+                return (
+                  <span
+                    key={tag.label}
+                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      isStale
+                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                    }`}
+                  >
+                    {isStale
+                      ? <AlertTriangle className="h-2.5 w-2.5" />
+                      : <Printer className="h-2.5 w-2.5" />
+                    }
+                    {tag.label}
+                  </span>
+                )
+              })}
+            </div>
+          )}
 
           {/* Description */}
           <div className="text-xs text-gray-700 leading-tight">

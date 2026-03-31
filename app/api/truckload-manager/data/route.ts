@@ -99,6 +99,25 @@ export async function GET() {
         FROM truckload_order_assignments toa
         JOIN orders o ON toa.order_id = o.id
         GROUP BY toa.truckload_id
+      ),
+      last_modified AS (
+        SELECT
+          toa.truckload_id,
+          GREATEST(
+            MAX(toa.updated_at),
+            MAX(o.updated_at),
+            MAX(c_pickup.updated_at),
+            MAX(c_delivery.updated_at),
+            MAX(l_pickup.updated_at),
+            MAX(l_delivery.updated_at)
+          ) as last_data_modified_at
+        FROM truckload_order_assignments toa
+        JOIN orders o ON toa.order_id = o.id
+        LEFT JOIN customers c_pickup ON o.pickup_customer_id = c_pickup.id
+        LEFT JOIN locations l_pickup ON c_pickup.location_id = l_pickup.id
+        LEFT JOIN customers c_delivery ON o.delivery_customer_id = c_delivery.id
+        LEFT JOIN locations l_delivery ON c_delivery.location_id = l_delivery.id
+        GROUP BY toa.truckload_id
       )
       SELECT 
         t.id,
@@ -118,12 +137,17 @@ export async function GET() {
         COALESCE(fc.transfer_footage, 0) as "transferFootage",
         COALESCE(qs.total_assignments, 0) as "totalAssignments",
         COALESCE(qs.quotes_filled, 0) as "quotesFilled",
-        (COALESCE(qs.total_assignments, 0) > 0 AND COALESCE(qs.quotes_filled, 0) = COALESCE(qs.total_assignments, 0)) as "allQuotesFilled"
+        (COALESCE(qs.total_assignments, 0) > 0 AND COALESCE(qs.quotes_filled, 0) = COALESCE(qs.total_assignments, 0)) as "allQuotesFilled",
+        t.truckload_sheet_printed_at as "truckloadSheetPrintedAt",
+        t.pickup_list_printed_at as "pickupListPrintedAt",
+        t.loading_sheet_printed_at as "loadingSheetPrintedAt",
+        COALESCE(lm.last_data_modified_at, t.created_at) as "lastDataModifiedAt"
       FROM truckloads t
       LEFT JOIN users u ON t.driver_id = u.id
       LEFT JOIN drivers d ON u.id = d.user_id
       LEFT JOIN footage_calculations fc ON t.id = fc.truckload_id
       LEFT JOIN quotes_status qs ON t.id = qs.truckload_id
+      LEFT JOIN last_modified lm ON t.id = lm.truckload_id
       WHERE COALESCE(t.status, 'active') != 'draft'
       ORDER BY t.start_date DESC
     `)
@@ -146,7 +170,11 @@ export async function GET() {
       transferFootage: parseFloat(row.transferFootage) || 0,
       totalAssignments: parseInt(row.totalAssignments) || 0,
       quotesFilled: parseInt(row.quotesFilled) || 0,
-      allQuotesFilled: row.allQuotesFilled || false
+      allQuotesFilled: row.allQuotesFilled || false,
+      truckloadSheetPrintedAt: row.truckloadSheetPrintedAt || null,
+      pickupListPrintedAt: row.pickupListPrintedAt || null,
+      loadingSheetPrintedAt: row.loadingSheetPrintedAt || null,
+      lastDataModifiedAt: row.lastDataModifiedAt || null,
     }))
 
     return NextResponse.json({

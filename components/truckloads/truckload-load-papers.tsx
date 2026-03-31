@@ -99,6 +99,14 @@ type Html2CanvasWithScaleOptions = Html2Canvas.Html2CanvasOptions & {
   background?: string
 }
 
+function recordPrint(truckloadId: number, sheetType: 'truckload_sheet' | 'pickup_list' | 'loading_sheet') {
+  fetch(`/api/truckloads/${truckloadId}/print-tracking`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sheetType }),
+  }).catch((err) => console.error('Failed to record print:', err))
+}
+
 export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
   const [stops, setStops] = useState<TruckloadStop[]>([])
   const [truckload, setTruckload] = useState<TruckloadData | null>(null)
@@ -196,6 +204,7 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
       }
     `,
     contentRef: printRef,
+    onAfterPrint: () => recordPrint(truckloadId, 'truckload_sheet'),
   })
 
   // Print functionality for pickup sheet
@@ -224,6 +233,7 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
       }
     `,
     contentRef: pickupPrintRef,
+    onAfterPrint: () => recordPrint(truckloadId, 'pickup_list'),
   })
 
   // Print functionality for loading sheet
@@ -252,6 +262,7 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
       }
     `,
     contentRef: loadingPrintRef,
+    onAfterPrint: () => recordPrint(truckloadId, 'loading_sheet'),
   })
 
   // Export functionality for truckload sheet
@@ -318,10 +329,11 @@ export function TruckloadLoadPapers({ truckloadId }: TruckloadLoadPapersProps) {
         
         // Download the PDF
         pdf.save(`Truckload-Sheet-${truckloadId}.pdf`)
+        recordPrint(truckloadId, 'truckload_sheet')
       }
     } catch (error) {
       console.error('Error exporting truckload sheet:', error)
-      // Fallback to print functionality if export fails
+      // Fallback to print functionality if export fails (onAfterPrint will record it)
       handlePrint()
     }
   }

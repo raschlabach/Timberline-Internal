@@ -104,6 +104,13 @@ export function TruckloadSheetDialog({ truckload, stops, children }: TruckloadSh
       }
     `,
     contentRef: printRef,
+    onAfterPrint: () => {
+      fetch(`/api/truckloads/${truckload.id}/print-tracking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetType: 'truckload_sheet' }),
+      }).catch((err) => console.error('Failed to record print:', err))
+    },
   })
 
   // Sort stops by sequence number (bottom to top display)
