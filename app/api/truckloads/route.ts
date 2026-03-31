@@ -115,65 +115,6 @@ export async function GET(request: Request) {
       ORDER BY t.start_date DESC
     `)
 
-    // Log detailed information for each truckload
-    if (result.rows && result.rows.length > 0) {
-      console.log(`\n=== Truckload Footage Summary ===`)
-      for (const truckload of result.rows) {
-        console.log(`Truckload ${truckload.id} (${truckload.driverName || 'No Driver'}):`, {
-          pickupFootage: truckload.pickupFootage,
-          deliveryFootage: truckload.deliveryFootage,
-          transferFootage: truckload.transferFootage,
-        })
-        
-        // Check if this truckload has assignments
-        const assignmentsCheck = await query(`
-          SELECT COUNT(*) as count
-          FROM truckload_order_assignments
-          WHERE truckload_id = $1
-        `, [truckload.id])
-        
-        if (parseInt(assignmentsCheck.rows[0].count) > 0) {
-          const assignments = await query(`
-            SELECT 
-              toa.truckload_id,
-              toa.order_id,
-              toa.assignment_type,
-              COALESCE(
-                (
-                  SELECT COALESCE(SUM(s.width * s.length * s.quantity), 0)
-                  FROM skids s
-                  WHERE s.order_id = o.id
-                ) + (
-                  SELECT COALESCE(SUM(v.width * v.length * v.quantity), 0)
-                  FROM vinyl v
-                  WHERE v.order_id = o.id
-                ),
-                0
-              ) as square_footage,
-              EXISTS (
-                SELECT 1 
-                FROM truckload_order_assignments toa2 
-                WHERE toa2.truckload_id = toa.truckload_id 
-                AND toa2.order_id = toa.order_id 
-                AND toa2.assignment_type != toa.assignment_type
-              ) as is_transfer_order
-            FROM truckload_order_assignments toa
-            JOIN orders o ON toa.order_id = o.id
-            WHERE toa.truckload_id = $1
-          `, [truckload.id])
-          
-          console.log(`  Assignments (${assignments.rows.length}):`, assignments.rows.map(a => ({
-            orderId: a.order_id,
-            type: a.assignment_type,
-            footage: a.square_footage,
-            isTransfer: a.is_transfer_order
-          })))
-        } else {
-          console.log(`  No assignments found`)
-        }
-      }
-    }
-
     if (!result.rows) {
       console.error('No rows returned from query')
       return NextResponse.json({

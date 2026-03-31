@@ -1320,9 +1320,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
           const manuals = data.deductions.filter((d: CrossDriverDeduction) => 
             d.isManual && 
             !d.splitLoadId && 
-            d.comment && 
-            d.comment.trim() !== '' &&
-            !d.comment.toLowerCase().includes('split load')
+            !d.orderId
           )
           setManualDeductions(manuals)
         } else {
@@ -1377,9 +1375,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
         const manuals = data.deductions.filter((d: CrossDriverDeduction) => 
           d.isManual && 
           !d.splitLoadId && 
-          d.comment && 
-          d.comment.trim() !== '' &&
-          !d.comment.toLowerCase().includes('split load')
+          !d.orderId
         )
         setManualDeductions(manuals)
         } else {
@@ -1954,17 +1950,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
 
       const data = await response.json()
       if (data.success) {
-        // Reload manual deductions
-        const reloadRes = await fetch(`/api/truckloads/${selectedTruckloadId}/manual-deductions`, {
-          method: 'GET',
-          credentials: 'include'
-        })
-        if (reloadRes.ok) {
-          const reloadData = await reloadRes.json()
-          if (reloadData.success && reloadData.deductions) {
-            setManualDeductions(reloadData.deductions)
-          }
-        }
+        await reloadAllDeductions()
 
         // Close dialog and reset
         setDeductionDialogOpen(false)
@@ -1982,7 +1968,7 @@ export default function TruckloadInvoicePage({}: TruckloadInvoicePageProps) {
       console.error('Error saving manual deduction:', error)
       toast.error('Failed to save manual deduction')
     }
-  }, [selectedTruckloadId, deductionDialogAmount, deductionDialogComment, deductionDialogAppliesTo, selectedTruckload])
+  }, [selectedTruckloadId, deductionDialogAmount, deductionDialogComment, deductionDialogAppliesTo, deductionDialogIsAddition, selectedTruckload, reloadAllDeductions])
 
   // Save stop-specific deduction/addition
   const handleSaveStopDeduction = useCallback(async () => {
