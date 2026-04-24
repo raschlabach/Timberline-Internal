@@ -669,6 +669,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   isActive={isActiveSubRoute('/dashboard/rnr-office/quotes')}
                   theme="amber"
                 />
+                <SubNavItem
+                  href="/dashboard/rnr-office/quote-config"
+                  icon={<Wrench size={16} />}
+                  label="Quote Config"
+                  isActive={isActiveSubRoute('/dashboard/rnr-office/quote-config')}
+                  theme="amber"
+                />
 
                 <div className="pt-3" />
                 <NavItem
