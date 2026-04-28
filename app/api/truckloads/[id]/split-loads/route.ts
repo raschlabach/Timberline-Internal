@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
+import { tableHasColumn } from '@/lib/db/schema-cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -23,15 +24,7 @@ export async function GET(
     const includeOrderId = searchParams.get('includeOrderId')
     const includeOrderIdNum = includeOrderId ? parseInt(includeOrderId, 10) : null
 
-    // Check if applies_to column exists
-    const appliesToCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'applies_to'
-    `)
-    const hasAppliesTo = appliesToCheck.rows.length > 0
+    const hasAppliesTo = await tableHasColumn('cross_driver_freight_deductions', 'applies_to')
 
     // Get all orders in this truckload that have assignment_quote set OR are middlefield orders
     const sqlQuery = `
@@ -130,15 +123,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Updates array is required' }, { status: 400 })
     }
 
-    // Check if applies_to column exists
-    const appliesToCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'applies_to'
-    `)
-    const hasAppliesTo = appliesToCheck.rows.length > 0
+    const hasAppliesTo = await tableHasColumn('cross_driver_freight_deductions', 'applies_to')
 
     const client = await getClient()
     

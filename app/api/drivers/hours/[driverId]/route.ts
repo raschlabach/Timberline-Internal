@@ -36,7 +36,11 @@ export async function GET(
         hours,
         type,
         COALESCE(is_driver_submitted, false) as "isDriverSubmitted",
-        truckload_id as "truckloadId"
+        truckload_id as "truckloadId",
+        original_hours as "originalHours",
+        edited_at as "editedAt",
+        edited_by as "editedBy",
+        edit_reason as "editReason"
       FROM driver_hours
       WHERE driver_id = $1
         AND date >= $2
@@ -204,13 +208,28 @@ export async function PATCH(
       }
     }
 
+    // Check if hours are being changed for audit trail
+    const existing = await query(
+      `SELECT hours, original_hours FROM driver_hours WHERE id = $1 AND driver_id = $2`,
+      [id, driverId]
+    )
+    const newHours = parseFloat(String(hours))
+    const isHoursChanged = existing.rows.length > 0 && existing.rows[0].hours !== newHours
+
+    const auditClauses = isHoursChanged
+      ? `, original_hours = COALESCE(original_hours, $7), edited_at = NOW(), edited_by = $8`
+      : ''
+    const auditParams = isHoursChanged
+      ? [existing.rows[0].hours, parseInt(session.user.id)]
+      : []
+
     const result = await query(`
       UPDATE driver_hours
       SET date = $1::date,
           description = $2,
           hours = $3,
           type = $4,
-          updated_at = CURRENT_TIMESTAMP
+          updated_at = CURRENT_TIMESTAMP${auditClauses}
       WHERE id = $5 AND driver_id = $6
       RETURNING 
         id,
@@ -218,8 +237,10 @@ export async function PATCH(
         TO_CHAR(date, 'YYYY-MM-DD') as date,
         description,
         hours,
-        type
-    `, [dateToSave, description || null, parseFloat(String(hours)), type, id, driverId])
+        type,
+        original_hours as "originalHours",
+        edited_at as "editedAt"
+    `, [dateToSave, description || null, newHours, type, id, driverId, ...auditParams])
 
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Hour entry not found' }, { status: 404 })

@@ -22,7 +22,7 @@ export async function GET(
       `WITH skids_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as skids_count,
+          COALESCE(SUM(quantity), 0) as skids_count,
           SUM(square_footage * quantity) as total_skid_footage,
           json_agg(
             json_build_object(
@@ -41,7 +41,7 @@ export async function GET(
       vinyl_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as vinyl_count,
+          COALESCE(SUM(quantity), 0) as vinyl_count,
           SUM(square_footage * quantity) as total_vinyl_footage,
           json_agg(
             json_build_object(
@@ -169,6 +169,7 @@ export async function GET(
         COALESCE(o.needs_attention, false) as "needsAttention",
         o.comments,
         o.freight_quote as "freightQuote",
+        o.weight,
         -- Filters
         json_build_object(
           'ohioToIndiana', COALESCE(o.oh_to_in, false),
@@ -282,21 +283,19 @@ export async function PATCH(
           rr_order = COALESCE($13, rr_order),
           middlefield = COALESCE($14, middlefield),
           pa_ny = COALESCE($15, pa_ny),
+          weight = $16,
           updated_at = NOW(),
-          last_edited_by = $16,
+          last_edited_by = $17,
           last_edited_at = NOW()
-        WHERE id = $17
+        WHERE id = $18
         RETURNING *`,
         [
           data.pickupCustomer?.id,
           data.deliveryCustomer?.id,
           data.payingCustomer?.id || null,
-          // Ensure pickupDate is a date string (YYYY-MM-DD) or null
-          // PostgreSQL DATE type handles this correctly without timezone conversion
           data.pickupDate && typeof data.pickupDate === 'string' 
             ? data.pickupDate 
             : (data.pickupDate ? new Date(data.pickupDate).toISOString().split('T')[0] : null),
-          // Convert empty string to null for numeric field
           (data.freightQuote && data.freightQuote.toString().trim() !== '') 
             ? parseFloat(data.freightQuote.toString()) 
             : null,
@@ -310,6 +309,7 @@ export async function PATCH(
           data.filters?.rrOrder,
           data.filters?.middlefield,
           data.filters?.paNy,
+          data.weight != null ? data.weight : null,
           session.user.id,
           orderId
         ]
@@ -416,8 +416,32 @@ export async function DELETE(
       await client.query('DELETE FROM skids WHERE order_id = $1', [orderId]);
       await client.query('DELETE FROM vinyl WHERE order_id = $1', [orderId]);
       await client.query('DELETE FROM footage WHERE order_id = $1', [orderId]);
+      await client.query('DELETE FROM freight_items WHERE order_id = $1', [orderId]);
       await client.query('DELETE FROM order_links WHERE order_id = $1', [orderId]);
       await client.query('DELETE FROM truckload_order_assignments WHERE order_id = $1', [orderId]);
+
+      // Reset import items back to pending so they reappear on their import pages
+      await client.query(`UPDATE bentwood_import_items SET status = 'pending', order_id = NULL, truckload_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE order_id = $1`, [orderId]);
+      await client.query(`UPDATE vinyl_tech_import_items SET status = 'pending', order_id = NULL, truckload_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE order_id = $1`, [orderId]);
+      await client.query(`UPDATE dyoder_import_items SET status = 'pending', order_id = NULL, truckload_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE order_id = $1`, [orderId]);
+      await client.query('UPDATE lumber_loads SET timberline_order_id = NULL WHERE timberline_order_id = $1', [orderId]);
+
+      // Revert parent imports back to active if they had been marked completed
+      await client.query(`
+        UPDATE bentwood_imports SET status = 'active', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'completed'
+          AND id IN (SELECT import_id FROM bentwood_import_items WHERE status = 'pending')
+      `);
+      await client.query(`
+        UPDATE vinyl_tech_imports SET status = 'active', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'completed'
+          AND id IN (SELECT import_id FROM vinyl_tech_import_items WHERE status = 'pending')
+      `);
+      await client.query(`
+        UPDATE dyoder_imports SET status = 'active', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'completed'
+          AND id IN (SELECT import_id FROM dyoder_import_items WHERE status = 'pending')
+      `);
       
       // Finally delete the order
       await client.query('DELETE FROM orders WHERE id = $1', [orderId]);

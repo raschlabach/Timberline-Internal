@@ -80,6 +80,7 @@ export interface OrderData {
     url: string;
     description: string;
   }>;
+  weight: number | null;
   created_at: string;
   created_by?: number;
   pickupAssignment: {

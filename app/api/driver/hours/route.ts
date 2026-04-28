@@ -2,21 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { tableHasColumn, invalidateTableCache } from '@/lib/db/schema-cache'
 
 async function ensureColumns() {
   try {
-    const colCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-        AND table_name = 'driver_hours'
-        AND column_name IN ('is_driver_submitted', 'truckload_id', 'started_at')
-    `)
-    const existing = colCheck.rows.map((r: any) => r.column_name)
+    const checks = await Promise.all([
+      tableHasColumn('driver_hours', 'is_driver_submitted'),
+      tableHasColumn('driver_hours', 'truckload_id'),
+      tableHasColumn('driver_hours', 'started_at'),
+    ])
     const missing: string[] = []
-    if (!existing.includes('is_driver_submitted')) missing.push('ADD COLUMN IF NOT EXISTS is_driver_submitted BOOLEAN DEFAULT false NOT NULL')
-    if (!existing.includes('truckload_id')) missing.push('ADD COLUMN IF NOT EXISTS truckload_id INTEGER REFERENCES truckloads(id) ON DELETE SET NULL')
-    if (!existing.includes('started_at')) missing.push('ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE')
+    if (!checks[0]) missing.push('ADD COLUMN IF NOT EXISTS is_driver_submitted BOOLEAN DEFAULT false NOT NULL')
+    if (!checks[1]) missing.push('ADD COLUMN IF NOT EXISTS truckload_id INTEGER REFERENCES truckloads(id) ON DELETE SET NULL')
+    if (!checks[2]) missing.push('ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE')
 
     if (missing.length > 0) {
       const client = await getClient()
@@ -25,6 +23,7 @@ async function ensureColumns() {
         await client.query(`ALTER TABLE driver_hours ${missing.join(', ')}`)
         await client.query(`CREATE INDEX IF NOT EXISTS idx_driver_hours_truckload_id ON driver_hours(truckload_id)`)
         await client.query('COMMIT')
+        invalidateTableCache('driver_hours')
       } catch (e) {
         await client.query('ROLLBACK').catch(() => {})
         console.error('Error applying driver_hours migration:', e)
@@ -61,7 +60,11 @@ export async function GET(request: NextRequest) {
         dh.hours,
         dh.type,
         dh.truckload_id as "truckloadId",
-        t.description as "truckloadDescription"
+        t.description as "truckloadDescription",
+        dh.original_hours as "originalHours",
+        dh.edited_at as "editedAt",
+        dh.edit_reason as "editReason",
+        dh.is_driver_submitted as "isDriverSubmitted"
       FROM driver_hours dh
       LEFT JOIN truckloads t ON dh.truckload_id = t.id
       WHERE dh.driver_id = $1
@@ -236,7 +239,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, hour: result.rows[0] })
     }
 
-    return NextResponse.json({ success: false, error: 'Invalid action. Use "start" or "stop"' }, { status: 400 })
+    if (action === 'manual') {
+      const { type, description, hours, date, truckloadId } = body
+
+      if (!type || (type !== 'misc_driving' && type !== 'maintenance')) {
+        return NextResponse.json({ success: false, error: 'type must be "misc_driving" or "maintenance"' }, { status: 400 })
+      }
+
+      const manualHours = parseFloat(hours)
+      if (isNaN(manualHours) || manualHours <= 0) {
+        return NextResponse.json({ success: false, error: 'hours must be a positive number' }, { status: 400 })
+      }
+
+      if (truckloadId) {
+        const check = await query(
+          `SELECT id FROM truckloads WHERE id = $1 AND driver_id = $2`,
+          [truckloadId, driverId]
+        )
+        if (check.rows.length === 0) {
+          return NextResponse.json({ success: false, error: 'Truckload not found or not assigned to you' }, { status: 403 })
+        }
+      }
+
+      const entryDate = date || new Date().toISOString().split('T')[0]
+
+      const result = await query(`
+        INSERT INTO driver_hours (driver_id, date, description, hours, type, is_driver_submitted, truckload_id)
+        VALUES ($1, $2, $3, $4, $5, true, $6)
+        RETURNING 
+          id,
+          TO_CHAR(date, 'YYYY-MM-DD') as date,
+          description,
+          hours,
+          type,
+          truckload_id as "truckloadId"
+      `, [driverId, entryDate, description || null, manualHours, type, truckloadId || null])
+
+      // If load-specific, update truckload pay_hours
+      if (truckloadId) {
+        const totalHoursResult = await query(`
+          SELECT COALESCE(SUM(hours), 0) as total_hours
+          FROM driver_hours
+          WHERE truckload_id = $1 AND driver_id = $2 AND started_at IS NULL
+        `, [truckloadId, driverId])
+        const totalHours = parseFloat(totalHoursResult.rows[0].total_hours) || 0
+        await query(`
+          UPDATE truckloads SET pay_calculation_method = 'hourly', pay_hours = $1 WHERE id = $2
+        `, [totalHours, truckloadId]).catch(() => {})
+      }
+
+      return NextResponse.json({ success: true, hour: result.rows[0] })
+    }
+
+    return NextResponse.json({ success: false, error: 'Invalid action. Use "start", "stop", or "manual"' }, { status: 400 })
   } catch (error: any) {
     if (error?.message?.includes('column') && error?.message?.includes('does not exist')) {
       return NextResponse.json({
@@ -312,7 +367,7 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-// PATCH /api/driver/hours - Update description on a driver's own hour entry
+// PATCH /api/driver/hours - Update description and/or hours on a driver's own hour entry
 export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -321,21 +376,93 @@ export async function PATCH(request: NextRequest) {
     }
 
     const driverId = parseInt(session.user.id)
-    const { id, description } = await request.json()
+    const body = await request.json()
+    const { id, description, hours, editReason } = body
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 })
     }
 
+    const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP']
+    const params: any[] = []
+    let paramIdx = 1
+
+    if (description !== undefined) {
+      setClauses.push(`description = $${paramIdx}`)
+      params.push(description || null)
+      paramIdx++
+    }
+
+    if (hours !== undefined) {
+      const newHours = parseFloat(hours)
+      if (isNaN(newHours) || newHours < 0) {
+        return NextResponse.json({ success: false, error: 'hours must be a non-negative number' }, { status: 400 })
+      }
+
+      // Store original hours for audit trail (only on first edit)
+      const existing = await query(
+        `SELECT hours, original_hours FROM driver_hours WHERE id = $1 AND driver_id = $2`,
+        [id, driverId]
+      )
+      if (existing.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Hour entry not found' }, { status: 404 })
+      }
+
+      if (existing.rows[0].original_hours === null) {
+        setClauses.push(`original_hours = $${paramIdx}`)
+        params.push(existing.rows[0].hours)
+        paramIdx++
+      }
+
+      setClauses.push(`hours = $${paramIdx}`)
+      params.push(newHours)
+      paramIdx++
+
+      setClauses.push(`edited_at = NOW()`)
+      setClauses.push(`edited_by = $${paramIdx}`)
+      params.push(driverId)
+      paramIdx++
+
+      if (editReason) {
+        setClauses.push(`edit_reason = $${paramIdx}`)
+        params.push(editReason)
+        paramIdx++
+      }
+    }
+
+    params.push(id)
+    const idIdx = paramIdx
+    paramIdx++
+    params.push(driverId)
+    const driverIdx = paramIdx
+
     const result = await query(`
       UPDATE driver_hours
-      SET description = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2 AND driver_id = $3
-      RETURNING id, description
-    `, [description || null, id, driverId])
+      SET ${setClauses.join(', ')}
+      WHERE id = $${idIdx} AND driver_id = $${driverIdx}
+      RETURNING id, description, hours, original_hours as "originalHours", edited_at as "editedAt"
+    `, params)
 
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Hour entry not found' }, { status: 404 })
+    }
+
+    // If load-specific, recalculate truckload pay_hours
+    const entry = await query(
+      `SELECT truckload_id as "truckloadId" FROM driver_hours WHERE id = $1`,
+      [id]
+    )
+    if (entry.rows[0]?.truckloadId) {
+      const totalHoursResult = await query(`
+        SELECT COALESCE(SUM(hours), 0) as total_hours
+        FROM driver_hours
+        WHERE truckload_id = $1 AND driver_id = $2 AND started_at IS NULL
+      `, [entry.rows[0].truckloadId, driverId])
+      const totalHours = parseFloat(totalHoursResult.rows[0].total_hours) || 0
+      await query(
+        `UPDATE truckloads SET pay_hours = $1 WHERE id = $2`,
+        [totalHours, entry.rows[0].truckloadId]
+      ).catch(() => {})
     }
 
     return NextResponse.json({ success: true, hour: result.rows[0] })

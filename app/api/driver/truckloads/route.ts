@@ -37,164 +37,175 @@ export async function GET(request: NextRequest) {
       LIMIT 50
     `, [driverId])
 
-    // For each truckload, fetch its orders and documents
-    const truckloads = []
-    for (const truckload of truckloadsResult.rows) {
-      // Fetch orders for this truckload with full customer + freight detail
-      const ordersResult = await query(`
-        WITH skids_summary AS (
-          SELECT 
-            order_id,
-            COALESCE(SUM(quantity), 0) as skids_count,
-            SUM(width * length * quantity) as total_skid_footage,
-            json_agg(
-              json_build_object(
-                'id', id, 'type', 'skid',
-                'width', width, 'length', length,
-                'footage', square_footage,
-                'quantity', quantity
-              )
-            ) as skids_data
-          FROM skids GROUP BY order_id
-        ),
-        vinyl_summary AS (
-          SELECT 
-            order_id,
-            COUNT(*) as vinyl_count,
-            SUM(width * length * quantity) as total_vinyl_footage,
-            json_agg(
-              json_build_object(
-                'id', id, 'type', 'vinyl',
-                'width', width, 'length', length,
-                'footage', square_footage,
-                'quantity', quantity
-              )
-            ) as vinyl_data
-          FROM vinyl GROUP BY order_id
-        ),
-        hand_bundles_summary AS (
-          SELECT 
-            order_id,
-            COUNT(*) as hand_bundles_count,
-            json_agg(
-              json_build_object(
-                'id', id::text,
-                'quantity', quantity,
-                'description', description
-              )
-            ) as hand_bundles_data
-          FROM freight_items
-          WHERE type = 'hand_bundle'
-          GROUP BY order_id
-        )
+    const truckloadIds = truckloadsResult.rows.map((t: any) => t.id)
+
+    if (truckloadIds.length === 0) {
+      return NextResponse.json({ success: true, truckloads: [] })
+    }
+
+    // Fetch ALL orders for ALL truckloads in one query
+    const ordersResult = await query(`
+      WITH skids_summary AS (
         SELECT 
-          o.id,
-          toa.assignment_type as "assignmentType",
-          toa.sequence_number as "sequenceNumber",
-          -- Pickup customer full info
-          json_build_object(
-            'id', pc.id,
-            'name', pc.customer_name,
-            'address', CONCAT_WS(', ', NULLIF(pl.address, ''), NULLIF(pl.city, ''), NULLIF(pl.state, '')),
-            'phone', pc.phone_number_1,
-            'phone2', pc.phone_number_2,
-            'notes', pc.notes
-          ) as "pickupCustomer",
-          -- Delivery customer full info
-          json_build_object(
-            'id', dc.id,
-            'name', dc.customer_name,
-            'address', CONCAT_WS(', ', NULLIF(dl.address, ''), NULLIF(dl.city, ''), NULLIF(dl.state, '')),
-            'phone', dc.phone_number_1,
-            'phone2', dc.phone_number_2,
-            'notes', dc.notes
-          ) as "deliveryCustomer",
-          -- Freight totals
-          (
-            COALESCE(ss.total_skid_footage, 0) + COALESCE(vs.total_vinyl_footage, 0)
-          ) as footage,
-          COALESCE(ss.skids_count, 0) as skids,
-          COALESCE(vs.vinyl_count, 0) as vinyl,
-          COALESCE(hbs.hand_bundles_count, 0) as "handBundles",
-          -- Freight detail arrays
-          COALESCE(ss.skids_data, '[]'::json) as "skidsData",
-          COALESCE(vs.vinyl_data, '[]'::json) as "vinylData",
-          COALESCE(hbs.hand_bundles_data, '[]'::json) as "handBundlesData",
-          -- Order metadata
-          o.comments,
-          COALESCE(o.is_rush, false) as "isRush",
-          COALESCE(o.needs_attention, false) as "needsAttention",
-          COALESCE(o.is_transfer_order, false) as "isTransferOrder"
-        FROM truckload_order_assignments toa
-        JOIN orders o ON toa.order_id = o.id
-        LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
-        LEFT JOIN locations pl ON pc.location_id = pl.id
-        LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
-        LEFT JOIN locations dl ON dc.location_id = dl.id
-        LEFT JOIN skids_summary ss ON o.id = ss.order_id
-        LEFT JOIN vinyl_summary vs ON o.id = vs.order_id
-        LEFT JOIN hand_bundles_summary hbs ON o.id = hbs.order_id
-        WHERE toa.truckload_id = $1
-        ORDER BY toa.sequence_number DESC
-      `, [truckload.id])
+          order_id,
+          COALESCE(SUM(quantity), 0) as skids_count,
+          SUM(width * length * quantity) as total_skid_footage,
+          json_agg(
+            json_build_object(
+              'id', id, 'type', 'skid',
+              'width', width, 'length', length,
+              'footage', square_footage,
+              'quantity', quantity
+            )
+          ) as skids_data
+        FROM skids GROUP BY order_id
+      ),
+      vinyl_summary AS (
+        SELECT 
+          order_id,
+          COALESCE(SUM(quantity), 0) as vinyl_count,
+          SUM(width * length * quantity) as total_vinyl_footage,
+          json_agg(
+            json_build_object(
+              'id', id, 'type', 'vinyl',
+              'width', width, 'length', length,
+              'footage', square_footage,
+              'quantity', quantity
+            )
+          ) as vinyl_data
+        FROM vinyl GROUP BY order_id
+      ),
+      hand_bundles_summary AS (
+        SELECT 
+          order_id,
+          COUNT(*) as hand_bundles_count,
+          json_agg(
+            json_build_object(
+              'id', id::text,
+              'quantity', quantity,
+              'description', description
+            )
+          ) as hand_bundles_data
+        FROM freight_items
+        WHERE type = 'hand_bundle'
+        GROUP BY order_id
+      )
+      SELECT 
+        toa.truckload_id as "truckloadId",
+        o.id,
+        toa.assignment_type as "assignmentType",
+        toa.sequence_number as "sequenceNumber",
+        json_build_object(
+          'id', pc.id,
+          'name', pc.customer_name,
+          'address', CONCAT_WS(', ', NULLIF(pl.address, ''), NULLIF(pl.city, ''), NULLIF(pl.state, '')),
+          'phone', pc.phone_number_1,
+          'phone2', pc.phone_number_2,
+          'notes', pc.notes
+        ) as "pickupCustomer",
+        json_build_object(
+          'id', dc.id,
+          'name', dc.customer_name,
+          'address', CONCAT_WS(', ', NULLIF(dl.address, ''), NULLIF(dl.city, ''), NULLIF(dl.state, '')),
+          'phone', dc.phone_number_1,
+          'phone2', dc.phone_number_2,
+          'notes', dc.notes
+        ) as "deliveryCustomer",
+        (
+          COALESCE(ss.total_skid_footage, 0) + COALESCE(vs.total_vinyl_footage, 0)
+        ) as footage,
+        COALESCE(ss.skids_count, 0) as skids,
+        COALESCE(vs.vinyl_count, 0) as vinyl,
+        COALESCE(hbs.hand_bundles_count, 0) as "handBundles",
+        COALESCE(ss.skids_data, '[]'::json) as "skidsData",
+        COALESCE(vs.vinyl_data, '[]'::json) as "vinylData",
+        COALESCE(hbs.hand_bundles_data, '[]'::json) as "handBundlesData",
+        o.comments,
+        o.weight,
+        COALESCE(o.is_rush, false) as "isRush",
+        COALESCE(o.needs_attention, false) as "needsAttention",
+        COALESCE(o.is_transfer_order, false) as "isTransferOrder"
+      FROM truckload_order_assignments toa
+      JOIN orders o ON toa.order_id = o.id
+      LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+      LEFT JOIN locations pl ON pc.location_id = pl.id
+      LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+      LEFT JOIN locations dl ON dc.location_id = dl.id
+      LEFT JOIN skids_summary ss ON o.id = ss.order_id
+      LEFT JOIN vinyl_summary vs ON o.id = vs.order_id
+      LEFT JOIN hand_bundles_summary hbs ON o.id = hbs.order_id
+      WHERE toa.truckload_id = ANY($1)
+      ORDER BY toa.truckload_id, toa.sequence_number DESC
+    `, [truckloadIds])
 
-      // Fetch documents for each order
-      const ordersWithDocs = []
-      for (const order of ordersResult.rows) {
-        let documents: any[] = []
-        try {
-          const docsResult = await query(`
-            SELECT 
-              da.id::text as id,
-              da.file_name as "fileName",
-              da.file_path as "filePath",
-              da.file_type as "fileType",
-              da.file_size as "fileSize",
-              COALESCE(u.username, 'System') as "uploadedBy",
-              da.created_at as "createdAt",
-              'document_attachment' as source
-            FROM document_attachments da
-            LEFT JOIN users u ON da.uploaded_by = u.id
-            WHERE da.order_id = $1
+    // Collect all order IDs and fetch ALL documents in one query
+    const allOrderIds = ordersResult.rows.map((o: any) => o.id)
+    let docsMap: Record<number, any[]> = {}
 
-            UNION ALL
+    if (allOrderIds.length > 0) {
+      try {
+        const docsResult = await query(`
+          SELECT 
+            da.order_id as "orderId",
+            da.id::text as id,
+            da.file_name as "fileName",
+            da.file_path as "filePath",
+            da.file_type as "fileType",
+            da.file_size as "fileSize",
+            COALESCE(u.username, 'System') as "uploadedBy",
+            da.created_at as "createdAt",
+            'document_attachment' as source
+          FROM document_attachments da
+          LEFT JOIN users u ON da.uploaded_by = u.id
+          WHERE da.order_id = ANY($1)
 
-            SELECT 
-              ol.id::text as id,
-              COALESCE(ol.file_name, ol.description, 'Uploaded File') as "fileName",
-              CONCAT('/api/orders/', $1::text, '/documents/order-links/', ol.id::text) as "filePath",
-              ol.file_type as "fileType",
-              ol.file_size as "fileSize",
-              'Order Entry' as "uploadedBy",
-              ol.created_at as "createdAt",
-              'order_link' as source
-            FROM order_links ol
-            WHERE ol.order_id = $1 
-              AND ol.file_data IS NOT NULL
+          UNION ALL
 
-            ORDER BY "createdAt" DESC
-          `, [order.id])
-          documents = docsResult.rows
-        } catch {
-          // Documents tables might not exist or have issues
-          documents = []
+          SELECT 
+            ol.order_id as "orderId",
+            ol.id::text as id,
+            COALESCE(ol.file_name, ol.description, 'Uploaded File') as "fileName",
+            CONCAT('/api/orders/', ol.order_id::text, '/documents/order-links/', ol.id::text) as "filePath",
+            ol.file_type as "fileType",
+            ol.file_size as "fileSize",
+            'Order Entry' as "uploadedBy",
+            ol.created_at as "createdAt",
+            'order_link' as source
+          FROM order_links ol
+          WHERE ol.order_id = ANY($1)
+            AND ol.file_data IS NOT NULL
+
+          ORDER BY "createdAt" DESC
+        `, [allOrderIds])
+
+        for (const doc of docsResult.rows) {
+          if (!docsMap[doc.orderId]) docsMap[doc.orderId] = []
+          docsMap[doc.orderId].push(doc)
         }
-
-        ordersWithDocs.push({
-          ...order,
-          footage: Number(order.footage) || 0,
-          skids: Number(order.skids) || 0,
-          vinyl: Number(order.vinyl) || 0,
-          handBundles: Number(order.handBundles) || 0,
-          documents,
-        })
+      } catch {
+        docsMap = {}
       }
+    }
 
-      truckloads.push({
-        ...truckload,
-        orders: ordersWithDocs,
+    // Group orders by truckload ID
+    const ordersByTruckload: Record<number, any[]> = {}
+    for (const order of ordersResult.rows) {
+      const tlId = order.truckloadId
+      if (!ordersByTruckload[tlId]) ordersByTruckload[tlId] = []
+      ordersByTruckload[tlId].push({
+        ...order,
+        footage: Number(order.footage) || 0,
+        skids: Number(order.skids) || 0,
+        vinyl: Number(order.vinyl) || 0,
+        handBundles: Number(order.handBundles) || 0,
+        documents: docsMap[order.id] || [],
       })
     }
+
+    const truckloads = truckloadsResult.rows.map((truckload: any) => ({
+      ...truckload,
+      orders: ordersByTruckload[truckload.id] || [],
+    }))
 
     return NextResponse.json({
       success: true,

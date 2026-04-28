@@ -127,6 +127,10 @@ export async function POST(request: NextRequest) {
       lt.ohioToIndiana = true
       lt.localFlatbed = true
 
+      const freightQuote = item.freight_quote
+        ? item.freight_quote
+        : (item.skid_qty > 0 && !item.is_bundle ? item.skid_qty * 85 : null)
+
       const orderResult = await client.query(
         `INSERT INTO orders (
           pickup_customer_id,
@@ -148,7 +152,7 @@ export async function POST(request: NextRequest) {
           pickupCustomerId,
           item.matched_customer_id,
           itemPickupDate,
-          item.freight_quote || null,
+          freightQuote,
           orderStatus,
           session.user.id,
           lt.ohioToIndiana,

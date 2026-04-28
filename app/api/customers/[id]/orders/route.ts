@@ -82,13 +82,13 @@ export async function GET(
       LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
       LEFT JOIN (
         SELECT order_id,
-          COUNT(*) as skids_count,
+          COALESCE(SUM(quantity), 0) as skids_count,
           SUM(square_footage * quantity) as total_skid_footage
         FROM skids GROUP BY order_id
       ) ss ON o.id = ss.order_id
       LEFT JOIN (
         SELECT order_id,
-          COUNT(*) as vinyl_count,
+          COALESCE(SUM(quantity), 0) as vinyl_count,
           SUM(square_footage * quantity) as total_vinyl_footage
         FROM vinyl GROUP BY order_id
       ) vs ON o.id = vs.order_id

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       WITH skids_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as skids_count,
+          COALESCE(SUM(quantity), 0) as skids_count,
           SUM(square_footage * quantity) as total_skid_footage,
           json_agg(
             json_build_object(
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       vinyl_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as vinyl_count,
+          COALESCE(SUM(quantity), 0) as vinyl_count,
           SUM(square_footage * quantity) as total_vinyl_footage,
           json_agg(
             json_build_object(
@@ -173,6 +173,7 @@ export async function GET(request: NextRequest) {
         COALESCE(o.needs_attention, false) as "needsAttention",
         o.comments,
         o.freight_quote as "freightQuote",
+        o.weight,
         -- Filters
         json_build_object(
           'ohioToIndiana', COALESCE(o.oh_to_in, false),
@@ -396,16 +397,15 @@ export async function POST(request: NextRequest) {
           rr_order,
           middlefield,
           pa_ny,
+          weight,
           created_by,
           status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING id`,
         [
           data.pickupCustomer.id,
           data.deliveryCustomer.id,
           data.payingCustomer?.id || null,
-          // Ensure pickupDate is a date string (YYYY-MM-DD) or null
-          // PostgreSQL DATE type handles this correctly without timezone conversion
           data.pickupDate && typeof data.pickupDate === 'string' 
             ? data.pickupDate 
             : (data.pickupDate ? new Date(data.pickupDate).toISOString().split('T')[0] : null),
@@ -420,6 +420,7 @@ export async function POST(request: NextRequest) {
           data.filters?.rrOrder || false,
           data.filters?.middlefield || false,
           data.filters?.paNy || false,
+          data.weight != null ? data.weight : null,
           session.user.id,
           'unassigned'
         ]

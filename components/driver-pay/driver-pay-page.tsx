@@ -40,6 +40,10 @@ interface DriverHour {
   type: 'misc_driving' | 'maintenance'
   isDriverSubmitted?: boolean
   truckloadId?: number | null
+  originalHours?: number | null
+  editedAt?: string | null
+  editedBy?: number | null
+  editReason?: string | null
 }
 
 interface Deduction {
@@ -1418,6 +1422,11 @@ export default function DriverPayPage({}: DriverPayPageProps) {
                                 {hour.isDriverSubmitted && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium print:hidden">
                                     Driver Submitted
+                                  </span>
+                                )}
+                                {hour.originalHours != null && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200 font-medium" title={hour.editReason || undefined}>
+                                    Edited (was {parseFloat(String(hour.originalHours)).toFixed(2)} hrs)
                                   </span>
                                 )}
                                 {hour.truckloadId && (

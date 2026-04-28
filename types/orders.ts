@@ -106,6 +106,7 @@ export interface OrderFormState {
   pickupDate: Date | null;
   comments: string;
   freightQuote: string;
+  weight: number | null;
   statusFlags: {
     rushOrder: boolean;
     needsAttention: boolean;

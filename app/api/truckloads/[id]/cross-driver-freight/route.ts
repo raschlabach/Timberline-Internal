@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query, getClient } from '@/lib/db'
+import { tableExists, tableHasColumn, invalidateTableCache } from '@/lib/db/schema-cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import fs from 'fs'
@@ -21,155 +22,44 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
 
-    // Check if table exists first
-    const tableCheck = await query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-      )
-    `)
-    
-    if (!tableCheck.rows[0].exists) {
-      // Table doesn't exist yet - return empty array instead of error
-      return NextResponse.json({
-        success: true,
-        items: []
-      })
+    const TABLE = 'cross_driver_freight_deductions'
+
+    if (!(await tableExists(TABLE))) {
+      return NextResponse.json({ success: true, items: [] })
     }
 
-      // Check if is_addition column exists, if not, apply migration automatically
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'is_addition'
-      `)
-      
-      if (columnCheck.rows.length === 0) {
-        console.log('is_addition column not found, applying migration...')
+    // Auto-apply missing column migrations (uses cached schema check)
+    const migrationPairs: [string, string][] = [
+      ['is_addition', 'add-is-addition-to-cross-driver-freight.sql'],
+      ['applies_to', 'add-applies-to-cross-driver-freight.sql'],
+      ['customer_name', 'add-customer-name-to-cross-driver-freight.sql'],
+      ['order_id', 'add-order-id-to-cross-driver-freight.sql'],
+    ]
+    for (const [col, migrationFile] of migrationPairs) {
+      if (!(await tableHasColumn(TABLE, col))) {
+        console.log(`${col} column not found, applying migration...`)
         const client = await getClient()
         try {
           await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
           const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-is-addition-to-cross-driver-freight.sql'),
-            'utf8'
+            path.join(process.cwd(), 'database', 'migrations', migrationFile), 'utf8'
           )
           await client.query(migrationSql)
           await client.query('COMMIT')
-          console.log('is_addition column migration applied successfully')
+          invalidateTableCache(TABLE)
+          console.log(`${col} column migration applied successfully`)
         } catch (migrationError) {
           await client.query('ROLLBACK')
-          console.error('Error applying is_addition migration:', migrationError)
-          // Continue anyway - the column might already exist or migration might fail
+          console.error(`Error applying ${col} migration:`, migrationError)
         } finally {
           client.release()
         }
       }
-
-      // Check if applies_to column exists, if not, apply migration automatically
-      const appliesToCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'applies_to'
-      `)
-      
-      if (appliesToCheck.rows.length === 0) {
-        console.log('applies_to column not found, applying migration...')
-        const client = await getClient()
-        try {
-          await client.query('BEGIN')
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-          const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-applies-to-cross-driver-freight.sql'),
-            'utf8'
-          )
-          await client.query(migrationSql)
-          await client.query('COMMIT')
-          console.log('applies_to column migration applied successfully')
-        } catch (migrationError) {
-          await client.query('ROLLBACK')
-          console.error('Error applying applies_to migration:', migrationError)
-          // Continue anyway - the column might already exist or migration might fail
-        } finally {
-          client.release()
-        }
-      }
-
-    // Check if applies_to column exists (reuse the check from above)
-    const hasAppliesTo = appliesToCheck.rows.length > 0
-    
-    // Check if customer_name column exists
-    const customerNameCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'customer_name'
-    `)
-    let hasCustomerName = customerNameCheck.rows.length > 0
-    
-    // If customer_name column doesn't exist, apply migration automatically
-    if (!hasCustomerName) {
-      console.log('customer_name column not found, applying migration...')
-      const client = await getClient()
-      try {
-        await client.query('BEGIN')
-        const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-        const migrationSql = fs.readFileSync(
-          path.join(migrationsDir, 'add-customer-name-to-cross-driver-freight.sql'),
-          'utf8'
-        )
-        await client.query(migrationSql)
-        await client.query('COMMIT')
-        console.log('customer_name column migration applied successfully')
-        hasCustomerName = true
-      } catch (migrationError) {
-        await client.query('ROLLBACK')
-        console.error('Error applying customer_name migration:', migrationError)
-        // Continue anyway - the column might already exist or migration might fail
-      } finally {
-        client.release()
-      }
     }
 
-    // Check if order_id column exists
-    const orderIdCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'order_id'
-    `)
-    let hasOrderId = orderIdCheck.rows.length > 0
-    
-    // If order_id column doesn't exist, apply migration automatically
-    if (!hasOrderId) {
-      console.log('order_id column not found, applying migration...')
-      const client = await getClient()
-      try {
-        await client.query('BEGIN')
-        const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
-        const migrationSql = fs.readFileSync(
-          path.join(migrationsDir, 'add-order-id-to-cross-driver-freight.sql'),
-          'utf8'
-        )
-        await client.query(migrationSql)
-        await client.query('COMMIT')
-        console.log('order_id column migration applied successfully')
-        hasOrderId = true
-      } catch (migrationError) {
-        await client.query('ROLLBACK')
-        console.error('Error applying order_id migration:', migrationError)
-        // Continue anyway - the column might already exist or migration might fail
-      } finally {
-        client.release()
-      }
-    }
+    const hasAppliesTo = await tableHasColumn(TABLE, 'applies_to')
+    const hasCustomerName = await tableHasColumn(TABLE, 'customer_name')
+    const hasOrderId = await tableHasColumn(TABLE, 'order_id')
 
     const result = await query(`
       SELECT 
@@ -247,41 +137,20 @@ export async function POST(
       console.log(`[Cross-Driver Freight] Environment check - NODE_ENV: ${process.env.NODE_ENV}, Has PREVIEW_URL: ${!!previewUrl}, Has MAIN_URL: ${!!mainUrl}`)
       console.log(`[Cross-Driver Freight] Database should be PREVIEW (development): ${process.env.NODE_ENV !== 'production'}`)
       
-      // Check if table exists
-      const tableCheck = await client.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'cross_driver_freight_deductions'
-        )
-      `)
-      
-      if (!tableCheck.rows[0].exists) {
+      const POST_TABLE = 'cross_driver_freight_deductions'
+      if (!(await tableExists(POST_TABLE))) {
         throw new Error('Table cross_driver_freight_deductions does not exist. Please run the migration: database/migrations/add-cross-driver-freight-table.sql')
       }
 
-      // Check if is_addition column exists, if not, apply migration automatically
-      const columnCheck = await client.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'is_addition'
-      `)
-      
-      if (columnCheck.rows.length === 0) {
-        console.log('is_addition column not found, applying migration...')
+      if (!(await tableHasColumn(POST_TABLE, 'is_addition'))) {
         try {
-          const migrationsDir = path.join(process.cwd(), 'database', 'migrations')
           const migrationSql = fs.readFileSync(
-            path.join(migrationsDir, 'add-is-addition-to-cross-driver-freight.sql'),
-            'utf8'
+            path.join(process.cwd(), 'database', 'migrations', 'add-is-addition-to-cross-driver-freight.sql'), 'utf8'
           )
           await client.query(migrationSql)
-          console.log('is_addition column migration applied successfully')
+          invalidateTableCache(POST_TABLE)
         } catch (migrationError) {
           console.error('Error applying is_addition migration:', migrationError)
-          // Continue anyway - the column might already exist or migration might fail
         }
       }
 
@@ -289,42 +158,15 @@ export async function POST(
 
       console.log(`[Cross-Driver Freight] Saving ${items.length} items for truckload ${truckloadId}`)
 
-      // Delete existing items for this truckload
       const deleteResult = await client.query(
         'DELETE FROM cross_driver_freight_deductions WHERE truckload_id = $1',
         [truckloadId]
       )
       console.log(`[Cross-Driver Freight] Deleted ${deleteResult.rowCount} existing items`)
 
-      // Check if applies_to column exists for INSERT
-      const appliesToCheckForInsert = await client.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'applies_to'
-      `)
-      const hasAppliesTo = appliesToCheckForInsert.rows.length > 0
-
-      // Check if customer_name column exists for INSERT
-      const customerNameCheckForInsert = await client.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'customer_name'
-      `)
-      const hasCustomerNameForInsert = customerNameCheckForInsert.rows.length > 0
-
-      // Check if order_id column exists for INSERT
-      const orderIdCheckForInsert = await client.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'order_id'
-      `)
-      const hasOrderIdForInsert = orderIdCheckForInsert.rows.length > 0
+      const hasAppliesTo = await tableHasColumn(POST_TABLE, 'applies_to')
+      const hasCustomerNameForInsert = await tableHasColumn(POST_TABLE, 'customer_name')
+      const hasOrderIdForInsert = await tableHasColumn(POST_TABLE, 'order_id')
 
       // Insert new items
       for (const item of items) {

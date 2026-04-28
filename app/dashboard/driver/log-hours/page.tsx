@@ -29,6 +29,10 @@ interface DriverHourEntry {
   type: 'misc_driving' | 'maintenance'
   truckloadId: number | null
   truckloadDescription: string | null
+  originalHours: number | null
+  editedAt: string | null
+  editReason: string | null
+  isDriverSubmitted: boolean
 }
 
 interface ActiveTimer {
@@ -75,6 +79,20 @@ export default function DriverLogHoursPage() {
   const [editingDescription, setEditingDescription] = useState('')
   const [isSavingDescription, setIsSavingDescription] = useState(false)
 
+  // Hours editing
+  const [editingHoursId, setEditingHoursId] = useState<number | null>(null)
+  const [editingHoursValue, setEditingHoursValue] = useState('')
+  const [isSavingHours, setIsSavingHours] = useState(false)
+
+  // Manual hours form
+  const [isManualFormOpen, setIsManualFormOpen] = useState(false)
+  const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0])
+  const [manualHours, setManualHours] = useState('')
+  const [manualType, setManualType] = useState<'misc_driving' | 'maintenance'>('misc_driving')
+  const [manualDescription, setManualDescription] = useState('')
+  const [manualTruckloadId, setManualTruckloadId] = useState<string>('')
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false)
+
   function startEditing(id: number, currentDescription: string | null) {
     setEditingId(id)
     setEditingDescription(currentDescription || '')
@@ -96,6 +114,70 @@ export default function DriverLogHoursPage() {
       console.error('Error saving description:', error)
     } finally {
       setIsSavingDescription(false)
+    }
+  }
+
+  function startEditingHours(id: number, currentHours: number) {
+    setEditingHoursId(id)
+    setEditingHoursValue(String(currentHours))
+  }
+
+  async function saveHours(id: number) {
+    const newHours = parseFloat(editingHoursValue)
+    if (isNaN(newHours) || newHours < 0) return
+    setIsSavingHours(true)
+    try {
+      const response = await fetch('/api/driver/hours', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, hours: newHours }),
+      })
+      if (response.ok) {
+        setEditingHoursId(null)
+        await loadData()
+      }
+    } catch (error) {
+      console.error('Error saving hours:', error)
+    } finally {
+      setIsSavingHours(false)
+    }
+  }
+
+  async function handleManualSubmit() {
+    const hrs = parseFloat(manualHours)
+    if (isNaN(hrs) || hrs <= 0) return
+    setIsSubmittingManual(true)
+    try {
+      const body: any = {
+        action: 'manual',
+        type: manualType,
+        hours: hrs,
+        date: manualDate,
+        description: manualDescription.trim() || null,
+      }
+      if (manualTruckloadId) {
+        body.truckloadId = parseInt(manualTruckloadId)
+      }
+      const response = await fetch('/api/driver/hours', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (response.ok) {
+        setIsManualFormOpen(false)
+        setManualHours('')
+        setManualDescription('')
+        setManualTruckloadId('')
+        await loadData()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        alert(errorData.error || 'Failed to add hours')
+      }
+    } catch (error) {
+      console.error('Error adding manual hours:', error)
+      alert('Failed to add hours. Please try again.')
+    } finally {
+      setIsSubmittingManual(false)
     }
   }
 
@@ -407,31 +489,146 @@ export default function DriverLogHoursPage() {
       )}
 
       {/* Start Timer Buttons - only show when no timer running */}
-      {!activeTimer && !isStartFormOpen && (
-        <div className="flex gap-3">
-          <button
-            onClick={() => openStartForm('general')}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl p-4 flex flex-col items-center gap-2 transition-colors"
+      {!activeTimer && !isStartFormOpen && !isManualFormOpen && (
+        <>
+          <div className="flex gap-3">
+            <button
+              onClick={() => openStartForm('general')}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl p-4 flex flex-col items-center gap-2 transition-colors"
+            >
+              <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Play className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-semibold">General Hours</span>
+              <span className="text-[10px] text-emerald-200">Misc driving or maintenance</span>
+            </button>
+            <button
+              onClick={() => openStartForm('load')}
+              disabled={truckloads.length === 0}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-300 text-white rounded-xl p-4 flex flex-col items-center gap-2 transition-colors"
+            >
+              <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Truck className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-semibold">Hours for Load</span>
+              <span className="text-[10px] text-indigo-200">
+                {truckloads.length === 0 ? 'No active loads' : 'Track time on a load'}
+              </span>
+            </button>
+          </div>
+          <Button
+            onClick={() => setIsManualFormOpen(true)}
+            variant="outline"
+            className="w-full h-12 rounded-xl border-dashed border-2 text-gray-500 hover:text-gray-700 gap-2"
           >
-            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
-              <Play className="h-6 w-6" />
+            <Clock className="h-4 w-4" />
+            Add Manual Hours
+          </Button>
+        </>
+      )}
+
+      {/* Manual Hours Form */}
+      {!activeTimer && isManualFormOpen && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">Add Manual Hours</h3>
+            <Button variant="ghost" size="sm" onClick={() => setIsManualFormOpen(false)} className="h-8 w-8 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1.5">Date</label>
+            <Input
+              type="date"
+              value={manualDate}
+              onChange={(e) => setManualDate(e.target.value)}
+              className="h-12 rounded-xl text-base"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1.5">Hours</label>
+            <Input
+              type="number"
+              step="0.25"
+              min="0.01"
+              placeholder="e.g. 2.5"
+              value={manualHours}
+              onChange={(e) => setManualHours(e.target.value)}
+              className="h-12 rounded-xl text-base"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1.5">Type</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setManualType('misc_driving')}
+                className={`flex-1 h-12 rounded-xl text-sm font-medium border-2 transition-colors flex items-center justify-center gap-2 ${
+                  manualType === 'misc_driving'
+                    ? 'bg-green-50 border-green-400 text-green-700'
+                    : 'bg-white border-gray-200 text-gray-500'
+                }`}
+              >
+                <Truck className="h-4 w-4" />
+                Misc Driving
+              </button>
+              <button
+                onClick={() => setManualType('maintenance')}
+                className={`flex-1 h-12 rounded-xl text-sm font-medium border-2 transition-colors flex items-center justify-center gap-2 ${
+                  manualType === 'maintenance'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700'
+                    : 'bg-white border-gray-200 text-gray-500'
+                }`}
+              >
+                <Wrench className="h-4 w-4" />
+                Maintenance
+              </button>
             </div>
-            <span className="text-sm font-semibold">General Hours</span>
-            <span className="text-[10px] text-emerald-200">Misc driving or maintenance</span>
-          </button>
-          <button
-            onClick={() => openStartForm('load')}
-            disabled={truckloads.length === 0}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-gray-300 text-white rounded-xl p-4 flex flex-col items-center gap-2 transition-colors"
+          </div>
+
+          {truckloads.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1.5">Truckload (optional)</label>
+              <select
+                value={manualTruckloadId}
+                onChange={(e) => setManualTruckloadId(e.target.value)}
+                className="w-full h-12 border rounded-xl px-3 text-sm bg-white"
+              >
+                <option value="">No specific load</option>
+                {truckloads.map((tl) => (
+                  <option key={tl.id} value={tl.id}>
+                    {tl.description || `Truckload #${tl.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1.5">Description (optional)</label>
+            <Input
+              type="text"
+              placeholder="What did you do?"
+              value={manualDescription}
+              onChange={(e) => setManualDescription(e.target.value)}
+              className="h-12 rounded-xl text-base"
+            />
+          </div>
+
+          <Button
+            onClick={handleManualSubmit}
+            disabled={isSubmittingManual || !manualHours || parseFloat(manualHours) <= 0}
+            className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl"
           >
-            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
-              <Truck className="h-6 w-6" />
-            </div>
-            <span className="text-sm font-semibold">Hours for Load</span>
-            <span className="text-[10px] text-indigo-200">
-              {truckloads.length === 0 ? 'No active loads' : 'Track time on a load'}
-            </span>
-          </button>
+            {isSubmittingManual ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Check className="h-5 w-5" />
+            )}
+            Add Hours
+          </Button>
         </div>
       )}
 
@@ -612,12 +809,44 @@ export default function DriverLogHoursPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-gray-900">
-                        {parseFloat(String(hour.hours)).toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-gray-400 ml-0.5">hrs</span>
-                    </div>
+                    {editingHoursId === hour.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          value={editingHoursValue}
+                          onChange={(e) => setEditingHoursValue(e.target.value)}
+                          className="h-8 w-16 rounded-lg text-xs text-right"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveHours(hour.id) }}
+                        />
+                        <Button onClick={() => saveHours(hour.id)} disabled={isSavingHours} size="sm" className="h-8 w-8 p-0 rounded-lg">
+                          {isSavingHours ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button onClick={() => setEditingHoursId(null)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditingHours(hour.id, hour.hours)}
+                        className="text-right group"
+                      >
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">
+                            {parseFloat(String(hour.hours)).toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-gray-400 ml-0.5">hrs</span>
+                          <Pencil className="h-2.5 w-2.5 text-gray-300 group-hover:text-emerald-500 transition-colors ml-0.5" />
+                        </div>
+                        {hour.originalHours !== null && (
+                          <p className="text-[9px] text-amber-600">
+                            was {parseFloat(String(hour.originalHours)).toFixed(2)} hrs
+                          </p>
+                        )}
+                      </button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -665,7 +894,6 @@ export default function DriverLogHoursPage() {
                       <Calendar className="h-3 w-3 flex-shrink-0" />
                       <span>{formatDate(hour.date)}</span>
                     </div>
-                    {/* Editable description */}
                     {editingId === hour.id ? (
                       <div className="flex gap-1.5 mt-1.5">
                         <Input
@@ -695,12 +923,44 @@ export default function DriverLogHoursPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-gray-900">
-                        {parseFloat(String(hour.hours)).toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-gray-400 ml-0.5">hrs</span>
-                    </div>
+                    {editingHoursId === hour.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          value={editingHoursValue}
+                          onChange={(e) => setEditingHoursValue(e.target.value)}
+                          className="h-8 w-16 rounded-lg text-xs text-right"
+                          autoFocus
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveHours(hour.id) }}
+                        />
+                        <Button onClick={() => saveHours(hour.id)} disabled={isSavingHours} size="sm" className="h-8 w-8 p-0 rounded-lg">
+                          {isSavingHours ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button onClick={() => setEditingHoursId(null)} variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditingHours(hour.id, hour.hours)}
+                        className="text-right group"
+                      >
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-lg font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">
+                            {parseFloat(String(hour.hours)).toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-gray-400 ml-0.5">hrs</span>
+                          <Pencil className="h-2.5 w-2.5 text-gray-300 group-hover:text-emerald-500 transition-colors ml-0.5" />
+                        </div>
+                        {hour.originalHours !== null && (
+                          <p className="text-[9px] text-amber-600">
+                            was {parseFloat(String(hour.originalHours)).toFixed(2)} hrs
+                          </p>
+                        )}
+                      </button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -723,7 +983,7 @@ export default function DriverLogHoursPage() {
       )}
 
       {/* Empty state */}
-      {hours.length === 0 && !activeTimer && !isStartFormOpen && (
+      {hours.length === 0 && !activeTimer && !isStartFormOpen && !isManualFormOpen && (
         <div className="flex flex-col items-center py-12 text-gray-400">
           <Timer className="h-10 w-10 mb-3" />
           <p className="text-sm font-medium">No hours logged yet</p>

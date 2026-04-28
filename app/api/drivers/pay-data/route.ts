@@ -689,7 +689,11 @@ export async function GET(request: NextRequest) {
           hours,
           type,
           COALESCE(is_driver_submitted, false) as "isDriverSubmitted",
-          truckload_id as "truckloadId"
+          truckload_id as "truckloadId",
+          original_hours as "originalHours",
+          edited_at as "editedAt",
+          edited_by as "editedBy",
+          edit_reason as "editReason"
         FROM driver_hours
           WHERE driver_id = ANY($1::int[])
             AND date >= $2::date

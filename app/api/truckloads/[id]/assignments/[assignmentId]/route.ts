@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
+import { tableHasColumn } from '@/lib/db/schema-cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -39,17 +40,9 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Assignment not found or does not belong to this truckload' }, { status: 404 })
     }
 
-    // Check if exclude_from_load_value column exists
     let hasExcludeFromLoadValue = false
     try {
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'truckload_order_assignments'
-        AND column_name = 'exclude_from_load_value'
-      `)
-      hasExcludeFromLoadValue = columnCheck.rows.length > 0
+      hasExcludeFromLoadValue = await tableHasColumn('truckload_order_assignments', 'exclude_from_load_value')
     } catch (e) {
       // Column check failed, assume it doesn't exist
       hasExcludeFromLoadValue = false

@@ -70,6 +70,7 @@ export default function OrderEntryPage() {
     pickupDate: null,
     comments: '',
     freightQuote: '',
+    weight: null,
     statusFlags: {
       rushOrder: false,
       needsAttention: false,
@@ -364,6 +365,7 @@ export default function OrderEntryPage() {
         handBundles: formState.handBundles,
         comments: formState.comments,
         freightQuote: formState.freightQuote ? parseFloat(formState.freightQuote) : null,
+        weight: formState.weight,
         statusFlags: formState.statusFlags,
         links: formState.links
       };
@@ -447,6 +449,7 @@ export default function OrderEntryPage() {
       pickupDate: null,
       comments: '',
       freightQuote: '',
+      weight: null,
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
@@ -472,7 +475,6 @@ export default function OrderEntryPage() {
 
   // Add this handler function before the return statement
   const handleLoadRecentOrder = (orderState: Partial<OrderFormState>) => {
-    // Clear the form and load new data in a single state update
     const initialState: OrderFormState = {
       pickupCustomer: null,
       deliveryCustomer: null,
@@ -493,6 +495,7 @@ export default function OrderEntryPage() {
       pickupDate: null,
       comments: '',
       freightQuote: '',
+      weight: null,
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
@@ -516,7 +519,6 @@ export default function OrderEntryPage() {
   // Handle loading a preset
   const handleLoadPreset = (presetState: Partial<OrderFormState>) => {
     console.log('Loading preset with comments:', presetState.comments, 'Type:', typeof presetState.comments);
-    // Clear the form and load new data in a single state update
     const initialState: OrderFormState = {
       pickupCustomer: null,
       deliveryCustomer: null,
@@ -537,6 +539,7 @@ export default function OrderEntryPage() {
       pickupDate: null,
       comments: '',
       freightQuote: '',
+      weight: null,
       statusFlags: {
         rushOrder: false,
         needsAttention: false,
@@ -1091,13 +1094,34 @@ export default function OrderEntryPage() {
                         value={formState.freightQuote}
                         onChange={handleFreightQuoteChange}
                         onWheel={(e) => {
-                          // Prevent scroll from changing the input value
                           e.currentTarget.blur();
                         }}
                         min="0"
                         step="0.01"
                       />
                     </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="weight" className="mb-1 block font-medium text-sm">Weight (lbs)</Label>
+                    <Input
+                      id="weight"
+                      type="number"
+                      placeholder="Enter weight in lbs"
+                      value={formState.weight ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormState(prev => ({
+                          ...prev,
+                          weight: val === '' ? null : parseFloat(val)
+                        }));
+                      }}
+                      onWheel={(e) => {
+                        e.currentTarget.blur();
+                      }}
+                      min="0"
+                      step="0.01"
+                    />
                   </div>
                   
                   <div>

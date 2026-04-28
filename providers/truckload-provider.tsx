@@ -27,6 +27,8 @@ interface TruckloadProviderProps {
 export function TruckloadProvider({ children }: TruckloadProviderProps) {
   const { data: truckloads = [], isLoading, error } = useQuery({
     queryKey: ["truckloads"],
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const response = await fetch("/api/truckloads")
       if (!response.ok) throw new Error("Failed to fetch truckloads")

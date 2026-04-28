@@ -168,7 +168,8 @@ export function OrderInfoDialog({
         created_by: data.created_by,
         pickupAssignment: data.pickupAssignment || null,
         deliveryAssignment: data.deliveryAssignment || null,
-        isTransferOrder: Boolean(data.isTransferOrder)
+        isTransferOrder: Boolean(data.isTransferOrder),
+        weight: data.weight != null ? Number(data.weight) : null
       };
       
       setOrder(orderData);
@@ -233,7 +234,8 @@ export function OrderInfoDialog({
           freightQuote: formData.freightQuote,
           filters: formData.filters,
           skidsData: skidsData,
-          vinylData: vinylData
+          vinylData: vinylData,
+          weight: formData.weight
         })
       });
       
@@ -567,6 +569,20 @@ export function OrderInfoDialog({
                     id="freightQuote"
                     value={formData.freightQuote}
                     onChange={(e) => handleInputChange('freightQuote', e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="weight" className="text-gray-600">Weight (lbs)</Label>
+                  <Input
+                    type="number"
+                    id="weight"
+                    placeholder="Enter weight in lbs"
+                    value={formData.weight ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      handleInputChange('weight', val === '' ? null : parseFloat(val));
+                    }}
                     className="w-full"
                   />
                 </div>

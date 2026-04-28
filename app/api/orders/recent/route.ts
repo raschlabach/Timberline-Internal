@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       WITH skids_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as skids_count,
+          COALESCE(SUM(quantity), 0) as skids_count,
           SUM(square_footage * quantity) as total_skid_footage,
           json_agg(
             json_build_object(
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       vinyl_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as vinyl_count,
+          COALESCE(SUM(quantity), 0) as vinyl_count,
           SUM(square_footage * quantity) as total_vinyl_footage,
           json_agg(
             json_build_object(
@@ -229,6 +229,7 @@ export async function GET(request: NextRequest) {
         COALESCE(o.needs_attention, false) as "needsAttention",
         o.comments,
         o.freight_quote as "freightQuote",
+        o.weight,
         o.status,
         -- Filters
         json_build_object(

@@ -3,6 +3,8 @@ import { query } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
+let cachedHasExcludeFromLoadValue: boolean | null = null
+
 // GET /api/truckloads/[id]/orders - Get all orders assigned to a specific truckload
 export async function GET(
   request: NextRequest,
@@ -19,21 +21,22 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
 
-    // Check if exclude_from_load_value column exists
-    let hasExcludeFromLoadValue = false
-    try {
-      const columnCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'truckload_order_assignments'
-        AND column_name = 'exclude_from_load_value'
-      `)
-      hasExcludeFromLoadValue = columnCheck.rows.length > 0
-    } catch (e) {
-      // Column check failed, assume it doesn't exist
-      hasExcludeFromLoadValue = false
+    // Check if exclude_from_load_value column exists (cached after first check)
+    if (cachedHasExcludeFromLoadValue === null) {
+      try {
+        const columnCheck = await query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          AND table_name = 'truckload_order_assignments'
+          AND column_name = 'exclude_from_load_value'
+        `)
+        cachedHasExcludeFromLoadValue = columnCheck.rows.length > 0
+      } catch (e) {
+        cachedHasExcludeFromLoadValue = false
+      }
     }
+    const hasExcludeFromLoadValue = cachedHasExcludeFromLoadValue
 
     // Build the query with conditional exclude_from_load_value column
     const excludeColumnSelect = hasExcludeFromLoadValue 
@@ -62,7 +65,7 @@ export async function GET(
       vinyl_summary AS (
         SELECT 
           order_id,
-          COUNT(*) as vinyl_count,
+          COALESCE(SUM(quantity), 0) as vinyl_count,
           SUM(width * length * quantity) as total_vinyl_footage,
           json_agg(
             json_build_object(
@@ -169,6 +172,7 @@ export async function GET(
         COALESCE(o.needs_attention, false) as needs_attention,
         o.comments,
         o.freight_quote,
+        o.weight,
         toa.assignment_quote,
         COALESCE(o.middlefield, false) as middlefield,
         COALESCE(o.backhaul, false) as backhaul,

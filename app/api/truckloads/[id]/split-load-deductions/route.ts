@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getClient, query } from '@/lib/db'
+import { tableHasColumn } from '@/lib/db/schema-cache'
 
 // GET /api/truckloads/[id]/split-load-deductions - Get all split load deductions for a truckload
 export async function GET(
@@ -19,38 +20,13 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid truckload ID' }, { status: 400 })
     }
 
-    // Check if applies_to column exists
-    const appliesToCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'applies_to'
-    `)
-    const hasAppliesTo = appliesToCheck.rows.length > 0
-
-    // Check if order_id column exists
-    const orderIdCheck = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-      AND table_name = 'cross_driver_freight_deductions'
-      AND column_name = 'order_id'
-    `)
-    const hasOrderId = orderIdCheck.rows.length > 0
+    const hasAppliesTo = await tableHasColumn('cross_driver_freight_deductions', 'applies_to')
+    const hasOrderId = await tableHasColumn('cross_driver_freight_deductions', 'order_id')
 
     const client = await getClient()
     
     try {
-      // Check if split_load_id column exists (new simplified system)
-      const splitLoadIdCheck = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'cross_driver_freight_deductions'
-        AND column_name = 'split_load_id'
-      `)
-      const hasSplitLoadId = splitLoadIdCheck.rows.length > 0
+      const hasSplitLoadId = await tableHasColumn('cross_driver_freight_deductions', 'split_load_id')
 
       let result
       if (hasSplitLoadId) {

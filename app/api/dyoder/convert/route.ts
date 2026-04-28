@@ -134,8 +134,9 @@ export async function POST(request: NextRequest) {
           rr_order,
           local_semi,
           middlefield,
-          pa_ny
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          pa_ny,
+          weight
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING id`,
         [
           pickupCustomerId,
@@ -155,6 +156,7 @@ export async function POST(request: NextRequest) {
           lt.localSemi,
           lt.middlefield,
           lt.paNy,
+          item.weight || null,
         ]
       )
 

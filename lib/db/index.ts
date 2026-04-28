@@ -42,7 +42,7 @@ if (!isProduction && !isBuildPhase && connectionConfig) {
 
 const CONNECTION_TIMEOUT_MS = 10000
 const IDLE_TIMEOUT_MS = 30000
-const MAX_POOL_SIZE = 20
+const MAX_POOL_SIZE = isProduction ? 20 : 5
 
 let pool: Pool | null = null
 let migrationsRun = false

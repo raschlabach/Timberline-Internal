@@ -62,6 +62,7 @@ interface TruckloadStop {
   skids: number
   vinyl: number
   footage: number
+  weight: number | null
   skids_data: any[]
   vinyl_data: any[]
   pickup_date: string
@@ -665,7 +666,6 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                   {sortedStops
                     .filter(s => s.is_transfer_order)
                     .reduce((acc, stop) => {
-                          // Use order_id to deduplicate transfer orders (same order appears twice - pickup and delivery)
                           const orderId = stop.order_id
                           if (!acc.processedOrders.has(orderId)) {
                             acc.processedOrders.add(orderId)
@@ -677,6 +677,18 @@ export function TruckloadSidebarList({ truckloadId }: TruckloadSidebarListProps)
                     .toLocaleString()} ft²
                 </span>
               </div>
+              {(() => {
+                const totalWeight = sortedStops.reduce((total, stop) => {
+                  return total + (stop.weight != null ? Number(stop.weight) : 0)
+                }, 0)
+                if (totalWeight <= 0) return null
+                return (
+                  <div className="flex justify-between items-center pt-2 mt-2 border-t border-gray-200">
+                    <span className="text-sm font-medium">Total Weight</span>
+                    <span className="font-medium">{totalWeight.toLocaleString()} lbs</span>
+                  </div>
+                )
+              })()}
             </div>
           </Card>
             </CollapsibleContent>

@@ -317,13 +317,15 @@ export async function DELETE(request: Request) {
             DELETE FROM split_loads WHERE id = $1
           `, [splitLoadId])
         } else if (totalCount === 1) {
-          // Only one assignment remains - clear assignment_quote but keep split_loads config
+          // Only one assignment remains - clear assignment_quote and remove orphaned deductions
           await client.query(`
             UPDATE truckload_order_assignments
             SET assignment_quote = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE order_id = $1
           `, [orderId])
-          // Deductions will be cleaned up by cascade when split_loads is eventually deleted
+          await client.query(`
+            DELETE FROM cross_driver_freight_deductions WHERE split_load_id = $1
+          `, [splitLoadId])
         }
         // If both assignments still exist, keep everything as is
       }

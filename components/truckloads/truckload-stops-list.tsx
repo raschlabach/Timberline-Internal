@@ -87,6 +87,7 @@ interface TruckloadStop {
   vinyl: number
   footage: number
   hand_bundles: number
+  weight: number | null
   skids_data: any[]
   vinyl_data: any[]
   hand_bundles_data: Array<{
@@ -324,6 +325,12 @@ function SortableGroupedStop({ groupedStop, onOrderInfoClick, onStopUpdate, truc
                         <div className="flex items-center gap-1">
                           <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>HB:</span>
                           <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
+                        </div>
+                      )}
+                      {stop.weight != null && stop.weight > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>Wt:</span>
+                          <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{stop.weight} lbs</span>
                         </div>
                       )}
                     </div>
@@ -672,6 +679,12 @@ function SortableStop({ stop, onOrderInfoClick, onStopUpdate, truckloadId, colum
                   <div className="flex items-center gap-1">
                     <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>HB:</span>
                     <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded text-xs">{stop.hand_bundles}</span>
+                  </div>
+                )}
+                {stop.weight != null && stop.weight > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className={stop.assignment_type === 'pickup' ? 'text-red-500' : 'text-gray-500'}>Wt:</span>
+                    <span className={`font-medium ${stop.assignment_type === 'pickup' ? 'text-red-600' : ''}`}>{stop.weight} lbs</span>
                   </div>
                 )}
               </div>

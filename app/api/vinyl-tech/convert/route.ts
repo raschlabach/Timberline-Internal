@@ -116,8 +116,9 @@ export async function POST(request: NextRequest) {
           comments,
           status,
           oh_to_in,
-          created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          created_by,
+          weight
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id`,
         [
           pickupCustomerId,
@@ -130,6 +131,7 @@ export async function POST(request: NextRequest) {
           orderStatus,
           true,
           session.user.id,
+          item.weight || null,
         ]
       )
 
