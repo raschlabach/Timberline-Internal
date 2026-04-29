@@ -22,7 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Search, Info, CheckCircle, XCircle, X, Package, Save, Trash2 } from 'lucide-react'
+import { Search, Info, CheckCircle, XCircle, X, Package, Save, Trash2, MessageSquare } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 
 interface Operator {
@@ -657,6 +658,12 @@ export default function AllLoadsPage() {
                 <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
                   Actual Footage
                 </th>
+                <th className="px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider">
+                  Price/BF
+                </th>
+                <th className="px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider">
+                  Price
+                </th>
                 <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
                   Arrival
                 </th>
@@ -666,6 +673,9 @@ export default function AllLoadsPage() {
                 <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider w-12">
+                  Note
+                </th>
                 <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">
                   
                 </th>
@@ -674,7 +684,7 @@ export default function AllLoadsPage() {
             <tbody>
             {filteredLoads.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-2 py-8 text-center text-xs text-gray-500">
+                <td colSpan={12} className="px-2 py-8 text-center text-xs text-gray-500">
                   {loads.length === 0 ? 'No loads found' : 'No loads match your search'}
                 </td>
               </tr>
@@ -723,6 +733,33 @@ export default function AllLoadsPage() {
                       ))}
                     </div>
                   </td>
+                  <td className="px-2 py-1.5 text-right">
+                    <div className="text-xs font-mono text-gray-900">
+                      {load.items.map((item, idx) => (
+                        <div key={idx}>
+                          {item.price != null && Number(item.price) > 0
+                            ? `$${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : <span className="text-gray-300">—</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {(() => {
+                      const totalPrice = load.items.reduce((sum, item) => {
+                        const ft = item.actual_footage ?? item.estimated_footage ?? 0
+                        const price = item.price ?? 0
+                        return sum + Number(ft) * Number(price)
+                      }, 0)
+                      return totalPrice > 0 ? (
+                        <span className="text-xs font-mono text-gray-900">
+                          ${totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )
+                    })()}
+                  </td>
                   <td className="px-2 py-1.5">
                     <div className="text-xs text-gray-900">
                       {load.actual_arrival_date 
@@ -758,6 +795,22 @@ export default function AllLoadsPage() {
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">
                         Complete
                       </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    {load.comments ? (
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <MessageSquare className="h-3.5 w-3.5 text-gray-400 hover:text-gray-700 cursor-pointer inline-block" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[300px] text-sm whitespace-pre-wrap">
+                            {load.comments}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
                     )}
                   </td>
                   <td className="px-2 py-1.5">
