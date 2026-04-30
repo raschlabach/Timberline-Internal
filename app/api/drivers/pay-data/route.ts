@@ -604,6 +604,7 @@ export async function GET(request: NextRequest) {
             COALESCE(cdfd.applies_to, 'driver_pay') as "appliesTo",
             cdfd.customer_name as "customerName",
             cdfd.split_load_id as "splitLoadId",
+            COALESCE(cdfd.excluded_from_qb, false) as "excludedFromQb",
             -- For split load deductions, get the other driver's assignment info
             CASE 
               WHEN cdfd.split_load_id IS NOT NULL AND cdfd.order_id IS NOT NULL THEN (
@@ -651,7 +652,8 @@ export async function GET(request: NextRequest) {
             is_addition as "isAddition",
             COALESCE(applies_to, 'driver_pay') as "appliesTo",
             NULL as "customerName",
-            NULL as "splitLoadId"
+            NULL as "splitLoadId",
+            false as "excludedFromQb"
           FROM cross_driver_freight_deductions
           WHERE truckload_id = ANY($1::int[])
           ORDER BY truckload_id, date
@@ -673,7 +675,8 @@ export async function GET(request: NextRequest) {
           is_addition as "isAddition",
             COALESCE(applies_to, 'driver_pay') as "appliesTo",
             NULL as "customerName",
-            NULL as "splitLoadId"
+            NULL as "splitLoadId",
+            false as "excludedFromQb"
         FROM cross_driver_freight_deductions
         WHERE truckload_id = ANY($1::int[])
         ORDER BY truckload_id, date

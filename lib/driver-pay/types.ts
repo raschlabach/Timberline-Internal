@@ -85,6 +85,11 @@ export interface PayrollAdjustment {
   appliesTo: AdjustmentAppliesTo
   comment: string | null
   customerName: string | null
+  // When TRUE, this adjustment is hidden from the QuickBooks
+  // reconciliation total — it still affects load value and driver pay
+  // normally. Used so admins can opt an individual adjustment out of
+  // the QB invoice math when a deduction was internal-only.
+  excludedFromQb: boolean
   otherAssignmentInfo: {
     assignmentType: AssignmentType
     customerName: string | null

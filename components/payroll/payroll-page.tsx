@@ -10,6 +10,7 @@ import { DriverSettingsDialog } from './driver-settings-dialog'
 import { TruckloadList } from './truckload-list'
 import { TruckloadDetail } from './truckload-detail'
 import { usePayrollData } from './use-payroll-data'
+import { usePayrollSettings } from './use-payroll-settings'
 import { getLastWeek } from '@/lib/driver-pay/date-helpers'
 import type {
   PayCalculationMethod,
@@ -29,6 +30,11 @@ export default function PayrollPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const { drivers, isLoading, setDrivers, refetch } = usePayrollData(dateRange?.from, dateRange?.to)
+  const {
+    fuelSurchargePercentage,
+    isUpdating: isSurchargeUpdating,
+    saveFuelSurchargePercentage,
+  } = usePayrollSettings()
 
   const selectedDriver = useMemo(
     () => drivers.find((d) => d.driverId === selectedDriverId) ?? null,
@@ -110,6 +116,9 @@ export default function PayrollPage() {
         drivers={drivers}
         selectedDriverId={selectedDriverId}
         onSelectDriver={setSelectedDriverId}
+        fuelSurchargePercentage={fuelSurchargePercentage}
+        isSurchargeUpdating={isSurchargeUpdating}
+        onSaveSurcharge={saveFuelSurchargePercentage}
       />
 
       <ScrollArea className="flex-1">
@@ -135,6 +144,7 @@ export default function PayrollPage() {
                 <TruckloadDetail
                   driver={selectedDriver}
                   truckload={expandedTruckload}
+                  fuelSurchargePercentage={fuelSurchargePercentage}
                   onBack={() => setExpandedTruckloadId(null)}
                   onTruckloadUpdate={(updates) =>
                     handleTruckloadUpdate(expandedTruckload.id, updates)

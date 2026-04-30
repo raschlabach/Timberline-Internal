@@ -71,7 +71,7 @@ export async function POST(
         truckload_id, order_id, deduction, is_manual, comment,
         is_addition, applies_to, customer_name, action, date
       ) VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, CURRENT_DATE)
-      RETURNING id, order_id, deduction, comment, is_addition, applies_to, customer_name, action, TO_CHAR(date, 'YYYY-MM-DD') as date`,
+      RETURNING id, order_id, deduction, comment, is_addition, applies_to, customer_name, action, COALESCE(excluded_from_qb, false) as excluded_from_qb, TO_CHAR(date, 'YYYY-MM-DD') as date`,
       [
         truckloadId,
         orderId ?? null,
@@ -98,6 +98,7 @@ export async function POST(
         appliesTo: row.applies_to,
         customerName: row.customer_name,
         action: row.action,
+        excludedFromQb: row.excluded_from_qb,
         date: row.date,
       },
     })

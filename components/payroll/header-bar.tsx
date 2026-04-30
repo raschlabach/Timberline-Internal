@@ -9,6 +9,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { getThisWeek, getLastWeek } from '@/lib/driver-pay/date-helpers'
 import type { PayrollDriver } from '@/lib/driver-pay/types'
+import { FuelSurchargePill } from './fuel-surcharge-pill'
 
 interface HeaderBarProps {
   dateRange: DateRange | undefined
@@ -16,6 +17,9 @@ interface HeaderBarProps {
   drivers: PayrollDriver[]
   selectedDriverId: number | null
   onSelectDriver: (driverId: number) => void
+  fuelSurchargePercentage: number
+  isSurchargeUpdating: boolean
+  onSaveSurcharge: (next: number) => Promise<boolean>
 }
 
 export function HeaderBar({
@@ -24,6 +28,9 @@ export function HeaderBar({
   drivers,
   selectedDriverId,
   onSelectDriver,
+  fuelSurchargePercentage,
+  isSurchargeUpdating,
+  onSaveSurcharge,
 }: HeaderBarProps) {
   const handleThisWeek = () => {
     const week = getThisWeek()
@@ -41,6 +48,11 @@ export function HeaderBar({
         <h1 className="text-2xl font-bold tracking-tight">Payroll</h1>
 
         <div className="flex items-center gap-2">
+          <FuelSurchargePill
+            fuelSurchargePercentage={fuelSurchargePercentage}
+            isUpdating={isSurchargeUpdating}
+            onSave={onSaveSurcharge}
+          />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[280px] justify-start text-left font-normal">

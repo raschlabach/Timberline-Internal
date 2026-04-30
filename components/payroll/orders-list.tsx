@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -34,14 +34,20 @@ import { CustomerChip } from './customer-chip'
 import { EditableQuote } from './editable-quote'
 import { HandledBy } from './handled-by'
 import { OrderInfoButton } from './order-info-button'
+import { QbSidebar } from './qb-sidebar'
 import { SplitExcludedQuote } from './split-excluded-quote'
 import { SplitLoadButton } from './split-load-button'
+import {
+  calculateTruckloadQb,
+  type OrderQbBreakdown,
+} from '@/lib/driver-pay/calculations'
 
 const COLUMN_COUNT = 14
 
 interface OrdersListProps {
   truckload: PayrollTruckload
   driverName: string
+  fuelSurchargePercentage: number
   onOrderUpdate: (orderId: number, updates: Partial<PayrollOrder>) => void
   onOrdersReordered: (orderedOrders: PayrollOrder[]) => void
   onAdjustmentsChange: (adjustments: PayrollAdjustment[]) => void
@@ -58,6 +64,11 @@ interface SortableOrderTbodyProps {
   driverName: string
   orderAdjustments: PayrollAdjustment[]
   allAdjustments: PayrollAdjustment[]
+  // Used by the parent to measure this tbody's height so the QB sidebar
+  // can mirror it. The parent passes a stable rowKey so it can correlate
+  // measurements across renders.
+  rowKey: string
+  registerTbody: (key: string, el: HTMLTableSectionElement | null) => void
   onToggleExclude: (newValue: boolean) => void
   onAdjustmentsChange: (adjustments: PayrollAdjustment[]) => void
   onQuoteSaved: (newValue: number | null) => void
@@ -72,6 +83,8 @@ function SortableOrderTbody({
   driverName,
   orderAdjustments,
   allAdjustments,
+  rowKey,
+  registerTbody,
   onToggleExclude,
   onAdjustmentsChange,
   onQuoteSaved,
@@ -81,6 +94,16 @@ function SortableOrderTbody({
     order.assignmentId !== null ? String(order.assignmentId) : `order-${order.orderId}`
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: sortableId })
+
+  // Compose dnd-kit's tbody ref with our measurement registration so the
+  // parent can observe this tbody's resize events.
+  const composedRef = useCallback(
+    (el: HTMLTableSectionElement | null) => {
+      setNodeRef(el)
+      registerTbody(rowKey, el)
+    },
+    [setNodeRef, rowKey, registerTbody]
+  )
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -137,7 +160,7 @@ function SortableOrderTbody({
   const cellBgClass = `${rowShade} ${isExcluded ? 'opacity-60' : ''}`
 
   return (
-    <tbody ref={setNodeRef} style={style} className={isDragging ? 'shadow-lg' : ''}>
+    <tbody ref={composedRef} style={style} className={isDragging ? 'shadow-lg' : ''}>
       {/* MAIN ROW: each cell is a column that auto-sizes to its widest content */}
       <tr>
         <td
@@ -357,12 +380,92 @@ function SortableOrderTbody({
 export function OrdersList({
   truckload,
   driverName,
+  fuelSurchargePercentage,
   onOrderUpdate,
   onOrdersReordered,
   onAdjustmentsChange,
   onRefetch,
 }: OrdersListProps) {
+  // Pre-compute the QB breakdown once per render. It returns one entry per
+  // assignment row, keyed by orderId+assignmentId combo via row order.
+  const qbBreakdown = calculateTruckloadQb(truckload, fuelSurchargePercentage)
+  // Build a quick lookup keyed by `${orderId}-${assignmentId ?? 'none'}` so
+  // we can match each rendered order row to its breakdown entry.
+  const qbByRowKey = new Map<string, OrderQbBreakdown>()
+  truckload.orders.forEach((order, idx) => {
+    const breakdown = qbBreakdown.perOrder[idx]
+    if (!breakdown) return
+    const key = `${order.orderId}-${order.assignmentId ?? 'none'}`
+    qbByRowKey.set(key, breakdown)
+  })
   const [savingOrder, setSavingOrder] = useState(false)
+
+  // Track the rendered height of each order tbody so the QB sidebar can
+  // size its mirror rows to match. ResizeObserver fires on initial paint
+  // AND on any layout change (e.g. adjustments added).
+  const orderTbodyRefs = useRef<Map<string, HTMLTableSectionElement>>(new Map())
+  const observerRef = useRef<ResizeObserver | null>(null)
+  const [tbodyHeights, setTbodyHeights] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    observerRef.current = new ResizeObserver((entries) => {
+      setTbodyHeights((prev) => {
+        const next = { ...prev }
+        let changed = false
+        entries.forEach((entry) => {
+          const el = entry.target as HTMLElement
+          let key: string | undefined
+          orderTbodyRefs.current.forEach((v, k) => {
+            if (v === el) key = k
+          })
+          if (!key) return
+          // Use the bounding rect height — contentRect doesn't include
+          // padding/borders we need.
+          const h = el.getBoundingClientRect().height
+          if (Math.abs((prev[key] || 0) - h) > 0.5) {
+            next[key] = h
+            changed = true
+          }
+        })
+        return changed ? next : prev
+      })
+    })
+    orderTbodyRefs.current.forEach((el) => observerRef.current!.observe(el))
+    return () => {
+      observerRef.current?.disconnect()
+      observerRef.current = null
+    }
+  }, [])
+
+  const registerTbody = useCallback(
+    (key: string, el: HTMLTableSectionElement | null) => {
+      const previous = orderTbodyRefs.current.get(key)
+      if (previous && previous !== el && observerRef.current) {
+        observerRef.current.unobserve(previous)
+      }
+      if (el) {
+        orderTbodyRefs.current.set(key, el)
+        if (observerRef.current && previous !== el) {
+          observerRef.current.observe(el)
+        }
+        // Seed initial height in case the observer hasn't fired yet.
+        const h = el.getBoundingClientRect().height
+        setTbodyHeights((prev) =>
+          Math.abs((prev[key] || 0) - h) > 0.5 ? { ...prev, [key]: h } : prev
+        )
+      } else {
+        orderTbodyRefs.current.delete(key)
+        setTbodyHeights((prev) => {
+          if (!(key in prev)) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      }
+    },
+    []
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -473,52 +576,69 @@ export function OrdersList({
 
   return (
     <Card className="p-3 overflow-x-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-900">Orders</h3>
-        {savingOrder && (
-          <span className="text-[11px] text-gray-400 italic">Saving order…</span>
-        )}
+      <div className="flex items-start gap-6">
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">Orders</h3>
+            {savingOrder && (
+              <span className="text-[11px] text-gray-400 italic">Saving order…</span>
+            )}
+          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <table className="border-separate" style={{ borderSpacing: '0 6px' }}>
+                {sortedOrders.map((order, idx) => {
+                  // Show under each order: manual non-split adjustments AND
+                  // split-load entries that are tied to this specific order.
+                  const orderAdjustments = truckload.adjustments.filter(
+                    (a) =>
+                      a.orderId === order.orderId &&
+                      ((a.isManual && a.splitLoadId === null) || a.splitLoadId !== null)
+                  )
+                  const rowKey = `${order.orderId}-${order.assignmentId ?? 'none'}`
+                  return (
+                    <SortableOrderTbody
+                      key={order.assignmentId ?? `order-${order.orderId}-${order.assignmentType}`}
+                      truckload={truckload}
+                      order={order}
+                      index={idx}
+                      isTransfer={transferOrderIds.has(order.orderId)}
+                      driverName={driverName}
+                      orderAdjustments={orderAdjustments}
+                      allAdjustments={truckload.adjustments}
+                      rowKey={rowKey}
+                      registerTbody={registerTbody}
+                      onToggleExclude={(checked) => handleToggleExclude(order, checked)}
+                      onAdjustmentsChange={onAdjustmentsChange}
+                      onQuoteSaved={(newValue) =>
+                        onOrderUpdate(order.orderId, {
+                          fullQuote: newValue,
+                          freightQuote: newValue,
+                        })
+                      }
+                      onRefetch={onRefetch}
+                    />
+                  )
+                })}
+              </table>
+            </SortableContext>
+          </DndContext>
+        </div>
+
+        <QbSidebar
+          truckload={truckload}
+          sortedOrders={sortedOrders}
+          qbByRowKey={qbByRowKey}
+          surchargePercentage={fuelSurchargePercentage}
+          allAdjustments={truckload.adjustments}
+          rowHeights={tbodyHeights}
+          onAdjustmentsChange={onAdjustmentsChange}
+        />
       </div>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-          <table className="border-separate" style={{ borderSpacing: '0 6px' }}>
-            {sortedOrders.map((order, idx) => {
-              // Show under each order: manual non-split adjustments AND
-              // split-load entries that are tied to this specific order.
-              const orderAdjustments = truckload.adjustments.filter(
-                (a) =>
-                  a.orderId === order.orderId &&
-                  ((a.isManual && a.splitLoadId === null) || a.splitLoadId !== null)
-              )
-              return (
-                <SortableOrderTbody
-                  key={order.assignmentId ?? `order-${order.orderId}-${order.assignmentType}`}
-                  truckload={truckload}
-                  order={order}
-                  index={idx}
-                  isTransfer={transferOrderIds.has(order.orderId)}
-                  driverName={driverName}
-                  orderAdjustments={orderAdjustments}
-                  allAdjustments={truckload.adjustments}
-                  onToggleExclude={(checked) => handleToggleExclude(order, checked)}
-                  onAdjustmentsChange={onAdjustmentsChange}
-                  onQuoteSaved={(newValue) =>
-                    onOrderUpdate(order.orderId, {
-                      fullQuote: newValue,
-                      freightQuote: newValue,
-                    })
-                  }
-                  onRefetch={onRefetch}
-                />
-              )
-            })}
-          </table>
-        </SortableContext>
-      </DndContext>
     </Card>
   )
 }

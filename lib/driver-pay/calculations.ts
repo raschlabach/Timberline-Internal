@@ -398,3 +398,202 @@ export function calculateDriverWeeklyTotals(driver: PayrollDriver): DriverWeekly
 export function formatCurrency(value: number): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
+
+// ---------------------------------------------------------------------------
+// QuickBooks reconciliation math
+//
+// The fuel surcharge is a flat percentage that gets added to every billable
+// freight quote on the customer invoice — but it is intentionally excluded
+// from driver-pay calculations (drivers get paid on the base load value).
+//
+// Each load-value adjustment can be individually toggled OUT of the QB total
+// via the excludedFromQb flag; that adjustment still counts for load value
+// and driver pay, just not for the QB invoice number admins reconcile.
+// ---------------------------------------------------------------------------
+
+export interface OrderQbAdjustment {
+  adjustmentId: number
+  isAddition: boolean
+  amount: number
+  signedAmount: number
+  description: string
+  appliedToQb: boolean
+  appliesTo: 'load_value' | 'driver_pay'
+}
+
+export interface OrderQbBreakdown {
+  orderId: number
+  assignmentId: number | null
+  isBillingRow: boolean
+  baseQuote: number
+  surchargeAmount: number
+  adjustments: OrderQbAdjustment[]
+  qbTotal: number
+}
+
+export interface TruckloadQbBreakdown {
+  surchargePercentage: number
+  perOrder: OrderQbBreakdown[]
+  loadLevelAdjustments: OrderQbAdjustment[]
+  baseQuotesTotal: number
+  surchargeTotal: number
+  appliedAdjustmentsTotal: number
+  qbTotal: number
+}
+
+// Returns the amount this order would contribute to the customer invoice
+// before surcharge or adjustments. Applies the same exclusion rules used
+// by load-value math (excluded orders, split-load misc side, missing
+// quote, etc.). Returns 0 for non-billable rows.
+function getOrderBaseQuote(order: PayrollOrder): number {
+  if (order.excludeFromLoadValue) return 0
+
+  let fullQuote: number
+  if (order.fullQuote !== null && order.fullQuote !== undefined) {
+    fullQuote = order.fullQuote
+  } else if (order.freightQuote !== null && order.freightQuote !== undefined) {
+    fullQuote = order.freightQuote
+  } else {
+    return 0
+  }
+  if (!Number.isFinite(fullQuote) || fullQuote <= 0) return 0
+
+  // Split load: only the "main" side (>= 50% of fullQuote) counts.
+  // Mirrors sumQuotes() behavior so QB totals line up with load value.
+  if (order.assignmentQuote !== null && order.assignmentQuote !== undefined) {
+    const assignmentQuote = order.assignmentQuote
+    const otherPortion = fullQuote - assignmentQuote
+    if (assignmentQuote < otherPortion) return 0
+    return fullQuote
+  }
+  return fullQuote
+}
+
+// For a transfer (same orderId has both pickup and delivery on this
+// truckload), legacy logic charges the customer once — on the delivery
+// side. Returns true if THIS row is the one that gets billed.
+function isBillingRowForOrder(
+  order: PayrollOrder,
+  allOrders: PayrollOrder[]
+): boolean {
+  const sameOrder = allOrders.filter((o) => o.orderId === order.orderId)
+  if (sameOrder.length <= 1) return true
+  const hasPickup = sameOrder.some((o) => o.assignmentType === 'pickup')
+  const hasDelivery = sameOrder.some((o) => o.assignmentType === 'delivery')
+  if (hasPickup && hasDelivery) {
+    return order.assignmentType === 'delivery'
+  }
+  // Multiple rows but not a transfer (rare data shape) — keep them all.
+  return true
+}
+
+function adjustmentDescription(adj: PayrollAdjustment): string {
+  if (adj.comment && adj.comment.trim().length > 0) return adj.comment
+  if (adj.action && adj.action.trim().length > 0) return adj.action
+  if (adj.customerName) {
+    return adj.isAddition ? `${adj.customerName} addition` : `${adj.customerName} deduction`
+  }
+  return adj.isAddition ? 'Addition' : 'Deduction'
+}
+
+function buildQbAdjustment(adj: PayrollAdjustment): OrderQbAdjustment {
+  const signedAmount = adj.isAddition ? adj.amount : -adj.amount
+  return {
+    adjustmentId: adj.id,
+    isAddition: adj.isAddition,
+    amount: adj.amount,
+    signedAmount,
+    description: adjustmentDescription(adj),
+    appliedToQb: !adj.excludedFromQb,
+    appliesTo: adj.appliesTo,
+  }
+}
+
+// Computes the QuickBooks reconciliation breakdown for a truckload at the
+// given fuel surcharge %. Pure, side-effect-free.
+export function calculateTruckloadQb(
+  truckload: PayrollTruckload,
+  fuelSurchargePercentage: number
+): TruckloadQbBreakdown {
+  const safeSurcharge = Number.isFinite(fuelSurchargePercentage)
+    ? Math.max(0, fuelSurchargePercentage)
+    : 0
+  const surchargeMultiplier = safeSurcharge / 100
+
+  // Only LOAD-VALUE adjustments affect QB. Driver-pay-only ones don't.
+  const loadValueAdjustments = truckload.adjustments.filter(
+    (a) => a.appliesTo === 'load_value'
+  )
+
+  // Group adjustments by orderId for fast per-row lookup.
+  const adjustmentsByOrderId = new Map<number, PayrollAdjustment[]>()
+  const loadLevelAdjustments: PayrollAdjustment[] = []
+  for (const adj of loadValueAdjustments) {
+    if (adj.orderId === null || adj.orderId === undefined) {
+      loadLevelAdjustments.push(adj)
+    } else {
+      const list = adjustmentsByOrderId.get(adj.orderId) ?? []
+      list.push(adj)
+      adjustmentsByOrderId.set(adj.orderId, list)
+    }
+  }
+
+  // Track which orderIds we've already attached to a billing row so we
+  // don't double-list adjustments on transfer pickup AND delivery rows.
+  const orderIdsAttached = new Set<number>()
+
+  const perOrder: OrderQbBreakdown[] = truckload.orders.map((order) => {
+    const isBilling = isBillingRowForOrder(order, truckload.orders)
+    const baseQuote = isBilling ? getOrderBaseQuote(order) : 0
+    const surchargeAmount = baseQuote * surchargeMultiplier
+
+    let rowAdjustments: OrderQbAdjustment[] = []
+    if (isBilling && !orderIdsAttached.has(order.orderId)) {
+      orderIdsAttached.add(order.orderId)
+      const matched = adjustmentsByOrderId.get(order.orderId) ?? []
+      rowAdjustments = matched.map(buildQbAdjustment)
+    }
+
+    const appliedAdjSum = rowAdjustments
+      .filter((a) => a.appliedToQb)
+      .reduce((s, a) => s + a.signedAmount, 0)
+
+    const qbTotal = baseQuote + surchargeAmount + appliedAdjSum
+
+    return {
+      orderId: order.orderId,
+      assignmentId: order.assignmentId,
+      isBillingRow: isBilling,
+      baseQuote,
+      surchargeAmount,
+      adjustments: rowAdjustments,
+      qbTotal,
+    }
+  })
+
+  const loadLevelAdj = loadLevelAdjustments.map(buildQbAdjustment)
+  const baseQuotesTotal = perOrder.reduce((s, o) => s + o.baseQuote, 0)
+  const surchargeTotal = perOrder.reduce((s, o) => s + o.surchargeAmount, 0)
+
+  const perOrderAppliedAdj = perOrder.reduce(
+    (s, o) =>
+      s + o.adjustments.filter((a) => a.appliedToQb).reduce((s2, a) => s2 + a.signedAmount, 0),
+    0
+  )
+  const loadLevelAppliedAdj = loadLevelAdj
+    .filter((a) => a.appliedToQb)
+    .reduce((s, a) => s + a.signedAmount, 0)
+
+  const appliedAdjustmentsTotal = perOrderAppliedAdj + loadLevelAppliedAdj
+  const qbTotal = baseQuotesTotal + surchargeTotal + appliedAdjustmentsTotal
+
+  return {
+    surchargePercentage: safeSurcharge,
+    perOrder,
+    loadLevelAdjustments: loadLevelAdj,
+    baseQuotesTotal,
+    surchargeTotal,
+    appliedAdjustmentsTotal,
+    qbTotal,
+  }
+}

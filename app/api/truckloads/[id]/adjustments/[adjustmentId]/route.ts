@@ -32,9 +32,9 @@ export async function PATCH(
     return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { isAddition, amount, appliesTo, comment, orderId } = body
+  const { isAddition, amount, appliesTo, comment, orderId, excludedFromQb } = body
 
-  // Verify the adjustment belongs to this truckload AND is manual.
+  // Verify the adjustment belongs to this truckload.
   const existing = await query(
     `SELECT id, is_manual, split_load_id
      FROM cross_driver_freight_deductions
@@ -47,23 +47,38 @@ export async function PATCH(
       { status: 404 }
     )
   }
-  if (!existing.rows[0].is_manual) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Cannot edit non-manual adjustment',
-      },
-      { status: 400 }
-    )
-  }
-  if (existing.rows[0].split_load_id) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Cannot edit split-load adjustment from this endpoint',
-      },
-      { status: 400 }
-    )
+
+  // The QB-exclusion flag is a metadata toggle that admins can flip on
+  // ANY adjustment row, including system-generated split-load entries —
+  // it doesn't change the row's content. So we only enforce the
+  // "manual-only / non-split" guard when a CONTENT field is being
+  // edited (amount/comment/etc).
+  const editsContent =
+    isAddition !== undefined ||
+    amount !== undefined ||
+    appliesTo !== undefined ||
+    comment !== undefined ||
+    orderId !== undefined
+
+  if (editsContent) {
+    if (!existing.rows[0].is_manual) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Cannot edit non-manual adjustment',
+        },
+        { status: 400 }
+      )
+    }
+    if (existing.rows[0].split_load_id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Cannot edit split-load adjustment from this endpoint',
+        },
+        { status: 400 }
+      )
+    }
   }
 
   // Build dynamic SET clause from supplied fields only.
@@ -123,6 +138,16 @@ export async function PATCH(
     values.push(orderId)
     sets.push(`order_id = $${values.length}`)
   }
+  if (excludedFromQb !== undefined) {
+    if (typeof excludedFromQb !== 'boolean') {
+      return NextResponse.json(
+        { success: false, error: 'excludedFromQb must be boolean' },
+        { status: 400 }
+      )
+    }
+    values.push(excludedFromQb)
+    sets.push(`excluded_from_qb = $${values.length}`)
+  }
 
   if (sets.length === 0) {
     return NextResponse.json(
@@ -143,7 +168,7 @@ export async function PATCH(
       `UPDATE cross_driver_freight_deductions
        SET ${sets.join(', ')}
        WHERE id = $${idParam} AND truckload_id = $${tlParam}
-       RETURNING id, order_id, deduction, comment, is_addition, applies_to, customer_name, TO_CHAR(date, 'YYYY-MM-DD') as date`,
+       RETURNING id, order_id, deduction, comment, is_addition, applies_to, customer_name, COALESCE(excluded_from_qb, false) as excluded_from_qb, TO_CHAR(date, 'YYYY-MM-DD') as date`,
       values
     )
     await client.query('COMMIT')
@@ -159,6 +184,7 @@ export async function PATCH(
         isAddition: row.is_addition,
         appliesTo: row.applies_to,
         customerName: row.customer_name,
+        excludedFromQb: row.excluded_from_qb,
         date: row.date,
       },
     })

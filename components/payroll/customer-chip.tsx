@@ -117,6 +117,7 @@ export function CustomerChip({
         appliesTo: data.adjustment.appliesTo,
         comment: data.adjustment.comment,
         customerName: data.adjustment.customerName ?? customer.name,
+        excludedFromQb: data.adjustment.excludedFromQb ?? false,
         otherAssignmentInfo: null,
       }
       onAdjustmentAdded(created)

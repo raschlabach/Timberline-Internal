@@ -9,6 +9,7 @@ import { OrdersList } from './orders-list'
 import { PaySummary } from './pay-summary'
 import { LoadLevelAdjustments } from './load-level-adjustments'
 import { PayMethodControl } from './pay-method-control'
+import { QbReconciliationCard } from './qb-reconciliation-card'
 import { VerificationToggles } from './verification-toggles'
 import { parseLocalDate } from '@/lib/driver-pay/date-helpers'
 import type {
@@ -21,6 +22,7 @@ import type {
 interface TruckloadDetailProps {
   driver: PayrollDriver
   truckload: PayrollTruckload
+  fuelSurchargePercentage: number
   onBack: () => void
   onTruckloadUpdate: (updates: Partial<PayrollTruckload>) => void
   onOrdersReplace: (orders: PayrollOrder[]) => void
@@ -32,6 +34,7 @@ interface TruckloadDetailProps {
 export function TruckloadDetail({
   driver,
   truckload,
+  fuelSurchargePercentage,
   onBack,
   onTruckloadUpdate,
   onOrdersReplace,
@@ -106,6 +109,7 @@ export function TruckloadDetail({
       <OrdersList
         truckload={truckload}
         driverName={driver.driverName}
+        fuelSurchargePercentage={fuelSurchargePercentage}
         onOrderUpdate={handleOrderUpdate}
         onOrdersReordered={onOrdersReplace}
         onAdjustmentsChange={onAdjustmentsReplace}
@@ -118,6 +122,12 @@ export function TruckloadDetail({
       />
 
       <PaySummary driver={driver} truckload={truckload} />
+
+      <QbReconciliationCard
+        truckload={truckload}
+        fuelSurchargePercentage={fuelSurchargePercentage}
+        onAdjustmentsChange={onAdjustmentsReplace}
+      />
     </div>
   )
 }

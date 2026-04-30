@@ -182,6 +182,7 @@ export function CrossDriverDeductionCell({
           appliesTo: data.adjustment.appliesTo,
           comment: data.adjustment.comment,
           customerName: data.adjustment.customerName ?? null,
+          excludedFromQb: data.adjustment.excludedFromQb ?? false,
           otherAssignmentInfo: null,
         }
         onAdjustmentsChange([...allAdjustments, created])

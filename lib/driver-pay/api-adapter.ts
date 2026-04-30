@@ -198,6 +198,7 @@ function adaptAdjustment(raw: any): PayrollAdjustment {
     appliesTo: toAppliesTo(raw.appliesTo),
     comment: raw.comment ?? null,
     customerName: raw.customerName ?? null,
+    excludedFromQb: toBool(raw.excludedFromQb),
     otherAssignmentInfo: raw.otherAssignmentInfo
       ? {
           assignmentType: toAssignmentType(raw.otherAssignmentInfo.assignmentType),
