@@ -19,15 +19,36 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid driver ID' }, { status: 400 })
     }
 
-    const result = await query(`
-      SELECT 
-        driver_id as "driverId",
-        load_percentage as "loadPercentage",
-        COALESCE(misc_driving_rate, hourly_rate, 30.00) as "miscDrivingRate",
-        COALESCE(maintenance_rate, 30.00) as "maintenanceRate"
-      FROM driver_pay_settings
-      WHERE driver_id = $1
-    `, [driverId])
+    let result
+    try {
+      result = await query(`
+        SELECT
+          driver_id as "driverId",
+          load_percentage as "loadPercentage",
+          COALESCE(misc_driving_rate, hourly_rate, 30.00) as "miscDrivingRate",
+          COALESCE(maintenance_rate, 30.00) as "maintenanceRate",
+          COALESCE(default_pay_method, 'automatic') as "defaultPayMethod"
+        FROM driver_pay_settings
+        WHERE driver_id = $1
+      `, [driverId])
+    } catch (err: any) {
+      // Fallback for environments where default_pay_method column hasn't been
+      // migrated yet. The new payroll migration will add it.
+      if (err?.message?.includes('default_pay_method')) {
+        result = await query(`
+          SELECT
+            driver_id as "driverId",
+            load_percentage as "loadPercentage",
+            COALESCE(misc_driving_rate, hourly_rate, 30.00) as "miscDrivingRate",
+            COALESCE(maintenance_rate, 30.00) as "maintenanceRate",
+            'automatic' as "defaultPayMethod"
+          FROM driver_pay_settings
+          WHERE driver_id = $1
+        `, [driverId])
+      } else {
+        throw err
+      }
+    }
 
     if (result.rows.length === 0) {
       // Return default values if no settings exist
@@ -37,7 +58,8 @@ export async function GET(
           driverId,
           loadPercentage: 30.00,
           miscDrivingRate: 30.00,
-          maintenanceRate: 30.00
+          maintenanceRate: 30.00,
+          defaultPayMethod: 'automatic'
         }
       })
     }
@@ -71,34 +93,76 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Invalid driver ID' }, { status: 400 })
     }
 
-    const { loadPercentage, miscDrivingRate, maintenanceRate } = await request.json()
+    const body = await request.json()
+    const { loadPercentage, miscDrivingRate, maintenanceRate, defaultPayMethod } = body
 
     if (loadPercentage === undefined || miscDrivingRate === undefined || maintenanceRate === undefined) {
       return NextResponse.json({ success: false, error: 'loadPercentage, miscDrivingRate, and maintenanceRate are required' }, { status: 400 })
+    }
+
+    // defaultPayMethod is optional. When omitted, leave the existing value
+    // alone (or use 'automatic' for new rows).
+    const VALID_METHODS = ['automatic', 'hourly', 'manual']
+    if (defaultPayMethod !== undefined && !VALID_METHODS.includes(defaultPayMethod)) {
+      return NextResponse.json({
+        success: false,
+        error: `defaultPayMethod must be one of ${VALID_METHODS.join(', ')}`
+      }, { status: 400 })
     }
 
     const client = await getClient()
     try {
       await client.query('BEGIN')
 
-      // Check if settings exist
+      // Check whether the default_pay_method column exists. If not, fall back
+      // to writing without it so the request still succeeds in environments
+      // missing the new migration.
+      let hasDefaultPayMethod = false
+      try {
+        const colCheck = await client.query(`
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'driver_pay_settings'
+            AND column_name = 'default_pay_method'
+          LIMIT 1
+        `)
+        hasDefaultPayMethod = colCheck.rows.length > 0
+      } catch {
+        hasDefaultPayMethod = false
+      }
+
       const checkResult = await client.query(`
         SELECT driver_id FROM driver_pay_settings WHERE driver_id = $1
       `, [driverId])
 
       if (checkResult.rows.length === 0) {
-        // Insert new settings
-        await client.query(`
-          INSERT INTO driver_pay_settings (driver_id, load_percentage, misc_driving_rate, maintenance_rate)
-          VALUES ($1, $2, $3, $4)
-        `, [driverId, loadPercentage, miscDrivingRate, maintenanceRate])
+        if (hasDefaultPayMethod) {
+          await client.query(`
+            INSERT INTO driver_pay_settings (driver_id, load_percentage, misc_driving_rate, maintenance_rate, default_pay_method)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [driverId, loadPercentage, miscDrivingRate, maintenanceRate, defaultPayMethod ?? 'automatic'])
+        } else {
+          await client.query(`
+            INSERT INTO driver_pay_settings (driver_id, load_percentage, misc_driving_rate, maintenance_rate)
+            VALUES ($1, $2, $3, $4)
+          `, [driverId, loadPercentage, miscDrivingRate, maintenanceRate])
+        }
       } else {
-        // Update existing settings
-        await client.query(`
-          UPDATE driver_pay_settings
-          SET load_percentage = $1, misc_driving_rate = $2, maintenance_rate = $3, updated_at = CURRENT_TIMESTAMP
-          WHERE driver_id = $4
-        `, [loadPercentage, miscDrivingRate, maintenanceRate, driverId])
+        if (hasDefaultPayMethod && defaultPayMethod !== undefined) {
+          await client.query(`
+            UPDATE driver_pay_settings
+            SET load_percentage = $1, misc_driving_rate = $2, maintenance_rate = $3,
+                default_pay_method = $4, updated_at = CURRENT_TIMESTAMP
+            WHERE driver_id = $5
+          `, [loadPercentage, miscDrivingRate, maintenanceRate, defaultPayMethod, driverId])
+        } else {
+          await client.query(`
+            UPDATE driver_pay_settings
+            SET load_percentage = $1, misc_driving_rate = $2, maintenance_rate = $3,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE driver_id = $4
+          `, [loadPercentage, miscDrivingRate, maintenanceRate, driverId])
+        }
       }
 
       await client.query('COMMIT')
@@ -109,7 +173,8 @@ export async function PATCH(
           driverId,
           loadPercentage,
           miscDrivingRate,
-          maintenanceRate
+          maintenanceRate,
+          defaultPayMethod: defaultPayMethod ?? 'automatic'
         }
       })
     } catch (error) {

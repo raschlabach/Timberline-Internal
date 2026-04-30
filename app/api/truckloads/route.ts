@@ -187,6 +187,25 @@ export async function POST(request: Request) {
         bolNumber = bolResult.rows[0].bol_number
       }
 
+      // Look up the driver's default pay method (if set) so new truckloads
+      // pre-fill the right pay calculation. Falls back to 'automatic' when the
+      // driver has no explicit default or the column hasn't been migrated yet.
+      let driverDefaultPayMethod: 'automatic' | 'hourly' | 'manual' = 'automatic'
+      if (driverId) {
+        try {
+          const dpmResult = await client.query(
+            `SELECT default_pay_method FROM driver_pay_settings WHERE driver_id = $1`,
+            [driverId]
+          )
+          const v = dpmResult.rows[0]?.default_pay_method
+          if (v === 'hourly' || v === 'manual' || v === 'automatic') {
+            driverDefaultPayMethod = v
+          }
+        } catch {
+          // Column or row doesn't exist yet; leave the default.
+        }
+      }
+
       // Insert into truckloads table
       const truckloadStatus = status === 'draft' ? 'draft' : 'active'
       const result = await client.query(
@@ -200,9 +219,10 @@ export async function POST(request: Request) {
           created_by,
           status,
           start_time,
-          end_time
+          end_time,
+          pay_calculation_method
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, status`,
         [
           driverId,
@@ -219,7 +239,8 @@ export async function POST(request: Request) {
           session.user.id,
           truckloadStatus,
           startTime || null,
-          endTime || null
+          endTime || null,
+          driverDefaultPayMethod
         ]
       )
 

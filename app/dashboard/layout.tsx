@@ -356,16 +356,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                 <div className="pt-3" />
                 <NavItem
+                  href="/dashboard/payroll"
+                  icon={<DollarSign size={20} />}
+                  label="Payroll"
+                  isActive={isActiveSubRoute('/dashboard/payroll')}
+                  theme="blue"
+                />
+                <SubNavItem
                   href="/dashboard/invoices"
-                  icon={<FileText size={20} />}
-                  label="Invoice Page"
+                  icon={<FileText size={16} />}
+                  label="Invoice Page (legacy)"
                   isActive={isActiveSubRoute('/dashboard/invoices')}
                   theme="blue"
                 />
                 <SubNavItem
                   href="/dashboard/driver-pay"
                   icon={<DollarSign size={16} />}
-                  label="Driver Pay"
+                  label="Driver Pay (legacy)"
                   isActive={isActiveSubRoute('/dashboard/driver-pay')}
                   theme="blue"
                 />

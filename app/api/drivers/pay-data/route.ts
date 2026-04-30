@@ -430,6 +430,9 @@ export async function GET(request: NextRequest) {
       const queryString = `
         SELECT 
           o.id as "orderId",
+          toa.id as "assignmentId",
+          toa.sequence_number as "sequenceNumber",
+          toa.payroll_sequence as "payrollSequence",
           toa.truckload_id as "truckloadId",
           toa.assignment_type as "assignmentType",
           o.freight_quote as "fullQuote",
@@ -443,11 +446,69 @@ export async function GET(request: NextRequest) {
             (SELECT SUM(v.width * v.length * v.quantity) FROM vinyl v WHERE v.order_id = o.id),
             0
           ) as footage,
+          o.comments,
+          COALESCE(o.is_rush, false) as "isRush",
+          COALESCE(o.needs_attention, false) as "needsAttention",
+          -- Pickup customer
           pc.customer_name as "pickupCustomerName",
+          pc.phone_number_1 as "pickupPhone1",
+          pc.phone_number_2 as "pickupPhone2",
+          pc.notes as "pickupNotes",
+          pl.address as "pickupAddress",
+          pl.city as "pickupCity",
+          pl.state as "pickupState",
+          pl.zip_code as "pickupZip",
+          -- Delivery customer
           dc.customer_name as "deliveryCustomerName",
+          dc.phone_number_1 as "deliveryPhone1",
+          dc.phone_number_2 as "deliveryPhone2",
+          dc.notes as "deliveryNotes",
+          dl.address as "deliveryAddress",
+          dl.city as "deliveryCity",
+          dl.state as "deliveryState",
+          dl.zip_code as "deliveryZip",
+          -- Paying customer (may be null)
+          pay.customer_name as "payingCustomerName",
+          pay.phone_number_1 as "payingPhone1",
+          pay.phone_number_2 as "payingPhone2",
+          pay.notes as "payingNotes",
+          payl.address as "payingAddress",
+          payl.city as "payingCity",
+          payl.state as "payingState",
+          payl.zip_code as "payingZip",
+          -- Skids and vinyl breakdown for "dimensions" display
+          COALESCE(
+            (SELECT json_agg(json_build_object('width', s.width, 'length', s.length, 'quantity', s.quantity))
+             FROM skids s WHERE s.order_id = o.id),
+            '[]'::json
+          ) as "skidsData",
+          COALESCE(
+            (SELECT json_agg(json_build_object('width', v.width, 'length', v.length, 'quantity', v.quantity))
+             FROM vinyl v WHERE v.order_id = o.id),
+            '[]'::json
+          ) as "vinylData",
           COALESCE(o.middlefield, false) as "middlefield",
           COALESCE(o.backhaul, false) as "backhaul",
           COALESCE(o.oh_to_in, false) as "ohioToIndiana",
+          COALESCE(o.rr_order, false) as "rrOrder",
+          -- "Handled By" — info about the OTHER half of this order. When this
+          -- assignment is a pickup, look up the matching delivery (if any).
+          -- When this assignment is a delivery, look up the matching pickup.
+          (
+            SELECT json_build_object(
+              'assignmentType', other_toa.assignment_type,
+              'driverName', other_u.full_name,
+              'assignmentDate', TO_CHAR(other_t.start_date, 'YYYY-MM-DD')
+            )
+            FROM truckload_order_assignments other_toa
+            JOIN truckloads other_t ON other_toa.truckload_id = other_t.id
+            LEFT JOIN users other_u ON other_t.driver_id = other_u.id
+            WHERE other_toa.order_id = toa.order_id
+              AND other_toa.assignment_type != toa.assignment_type
+              AND COALESCE(other_t.status, 'active') != 'draft'
+            ORDER BY other_t.start_date ASC
+            LIMIT 1
+          ) as "otherHalf",
           -- Check if quotes are set for middlefield orders
           CASE 
             -- If assignment_quote is set, quote is "set"
@@ -462,9 +523,13 @@ export async function GET(request: NextRequest) {
         FROM truckload_order_assignments toa
         JOIN orders o ON toa.order_id = o.id
         LEFT JOIN customers pc ON o.pickup_customer_id = pc.id
+        LEFT JOIN locations pl ON pc.location_id = pl.id
         LEFT JOIN customers dc ON o.delivery_customer_id = dc.id
+        LEFT JOIN locations dl ON dc.location_id = dl.id
+        LEFT JOIN customers pay ON o.paying_customer_id = pay.id
+        LEFT JOIN locations payl ON pay.location_id = payl.id
         WHERE toa.truckload_id = ANY($1::int[])
-        ORDER BY toa.truckload_id, toa.sequence_number
+        ORDER BY toa.truckload_id, COALESCE(toa.payroll_sequence, toa.sequence_number)
       `
       
       console.log('[Driver Pay API] Query includes excludeFromLoadValue:', queryString.includes('excludeFromLoadValue'))
@@ -634,7 +699,8 @@ export async function GET(request: NextRequest) {
           d.color as "driverColor",
         COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
         COALESCE(dps.misc_driving_rate, dps.hourly_rate, 30.00) as "miscDrivingRate",
-        COALESCE(dps.maintenance_rate, 30.00) as "maintenanceRate"
+        COALESCE(dps.maintenance_rate, 30.00) as "maintenanceRate",
+        COALESCE(dps.default_pay_method, 'automatic') as "defaultPayMethod"
         FROM truckloads t
         LEFT JOIN users u ON t.driver_id = u.id
         LEFT JOIN drivers d ON u.id = d.user_id
@@ -649,15 +715,42 @@ export async function GET(request: NextRequest) {
         ORDER BY u.full_name
       `, [startDate, endDate])
     } catch (err: any) {
-      // If table doesn't exist, query without the join
-      if (err?.message?.includes('does not exist') || err?.code === '42P01') {
+      const msg = err?.message || ''
+      // If the new default_pay_method column hasn't been migrated yet, retry
+      // without it so the rest of the request still works.
+      if (msg.includes('default_pay_method')) {
+        driversResult = await query(`
+          SELECT DISTINCT
+            t.driver_id as "driverId",
+            u.full_name as "driverName",
+            d.color as "driverColor",
+          COALESCE(dps.load_percentage, 30.00) as "loadPercentage",
+          COALESCE(dps.misc_driving_rate, dps.hourly_rate, 30.00) as "miscDrivingRate",
+          COALESCE(dps.maintenance_rate, 30.00) as "maintenanceRate",
+          'automatic' as "defaultPayMethod"
+          FROM truckloads t
+          LEFT JOIN users u ON t.driver_id = u.id
+          LEFT JOIN drivers d ON u.id = d.user_id
+          LEFT JOIN driver_pay_settings dps ON t.driver_id = dps.driver_id
+          WHERE t.driver_id IS NOT NULL
+            AND COALESCE(t.status, 'active') != 'draft'
+            AND (
+              (t.start_date >= $1::date AND t.start_date <= $2::date)
+              OR (t.end_date >= $1::date AND t.end_date <= $2::date)
+              OR (t.start_date <= $1::date AND t.end_date >= $2::date)
+            )
+          ORDER BY u.full_name
+        `, [startDate, endDate])
+      } else if (msg.includes('does not exist') || err?.code === '42P01') {
+        // If table doesn't exist, query without the join
         driversResult = await query(`
           SELECT DISTINCT
             t.driver_id as "driverId",
             u.full_name as "driverName",
             d.color as "driverColor",
             30.00 as "loadPercentage",
-            30.00 as "hourlyRate"
+            30.00 as "hourlyRate",
+            'automatic' as "defaultPayMethod"
           FROM truckloads t
           LEFT JOIN users u ON t.driver_id = u.id
           LEFT JOIN drivers d ON u.id = d.user_id
@@ -722,6 +815,7 @@ export async function GET(request: NextRequest) {
         loadPercentage: parseFloat(driver.loadPercentage),
         miscDrivingRate: parseFloat(driver.miscDrivingRate || driver.hourlyRate || 30.00),
         maintenanceRate: parseFloat(driver.maintenanceRate || 30.00),
+        defaultPayMethod: driver.defaultPayMethod || 'automatic',
         truckloads: [],
         hours: []
       })
@@ -792,15 +886,49 @@ export async function GET(request: NextRequest) {
           
           truckload.orders.push({
             orderId: order.orderId,
+            assignmentId: order.assignmentId ?? null,
+            sequenceNumber: order.sequenceNumber ?? null,
+            payrollSequence: order.payrollSequence ?? null,
             assignmentType: order.assignmentType,
             freightQuote: order.freightQuote ? parseFloat(order.freightQuote) : null,
             fullQuote: order.fullQuote ? parseFloat(order.fullQuote) : null,
             assignmentQuote: order.assignmentQuote ? parseFloat(order.assignmentQuote) : null,
             excludeFromLoadValue: excludeFromLoadValue, // Always include this field in response
             footage: parseFloat(order.footage) || 0,
+            comments: order.comments ?? null,
+            isRush: order.isRush === true,
+            needsAttention: order.needsAttention === true,
             pickupCustomerName: order.pickupCustomerName,
+            pickupPhone1: order.pickupPhone1 ?? null,
+            pickupPhone2: order.pickupPhone2 ?? null,
+            pickupNotes: order.pickupNotes ?? null,
+            pickupAddress: order.pickupAddress ?? null,
+            pickupCity: order.pickupCity ?? null,
+            pickupState: order.pickupState ?? null,
+            pickupZip: order.pickupZip ?? null,
             deliveryCustomerName: order.deliveryCustomerName,
-            middlefield: order.middlefield || false
+            deliveryPhone1: order.deliveryPhone1 ?? null,
+            deliveryPhone2: order.deliveryPhone2 ?? null,
+            deliveryNotes: order.deliveryNotes ?? null,
+            deliveryAddress: order.deliveryAddress ?? null,
+            deliveryCity: order.deliveryCity ?? null,
+            deliveryState: order.deliveryState ?? null,
+            deliveryZip: order.deliveryZip ?? null,
+            payingCustomerName: order.payingCustomerName ?? null,
+            payingPhone1: order.payingPhone1 ?? null,
+            payingPhone2: order.payingPhone2 ?? null,
+            payingNotes: order.payingNotes ?? null,
+            payingAddress: order.payingAddress ?? null,
+            payingCity: order.payingCity ?? null,
+            payingState: order.payingState ?? null,
+            payingZip: order.payingZip ?? null,
+            skidsData: Array.isArray(order.skidsData) ? order.skidsData : [],
+            vinylData: Array.isArray(order.vinylData) ? order.vinylData : [],
+            middlefield: order.middlefield || false,
+            backhaul: order.backhaul || false,
+            ohioToIndiana: order.ohioToIndiana || false,
+            rrOrder: order.rrOrder || false,
+            otherHalf: order.otherHalf || null
           })
         }
       }
