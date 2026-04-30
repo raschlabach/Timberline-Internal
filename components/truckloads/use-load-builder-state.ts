@@ -139,20 +139,10 @@ export function useLoadBuilderState(truckloadId: number) {
   const actions: LoadBuilderActions = useMemo(() => ({
     setSelectedSkid: (skid) => setState(prev => ({ ...prev, selectedSkid: skid })),
     setPlacedDeliverySkids: (skids) => {
-      console.log('setPlacedDeliverySkids called with', skids.length, 'items', skids)
-      setState(prev => {
-        console.log('Updating delivery skids state, prev count:', prev.placedDeliverySkids.length, 'new count:', skids.length)
-        // Create a new array reference to ensure React detects the change
-        return { ...prev, placedDeliverySkids: [...skids] }
-      })
+      setState(prev => ({ ...prev, placedDeliverySkids: skids }))
     },
     setPlacedPickupSkids: (skids) => {
-      console.log('setPlacedPickupSkids called with', skids.length, 'items', skids)
-      setState(prev => {
-        console.log('Updating pickup skids state, prev count:', prev.placedPickupSkids.length, 'new count:', skids.length)
-        // Create a new array reference to ensure React detects the change
-        return { ...prev, placedPickupSkids: [...skids] }
-      })
+      setState(prev => ({ ...prev, placedPickupSkids: skids }))
     },
     setPreviewPosition: (position) => setState(prev => ({ ...prev, previewPosition: position })),
     setUsedDeliverySkidIds: (ids) => setState(prev => ({ ...prev, usedDeliverySkidIds: ids })),
@@ -275,11 +265,24 @@ export function useLoadBuilderState(truckloadId: number) {
         // Add to existing stack
         const stackId = existingStack.stackId
         if (!stackId) {
-          // If existing stack has no ID, assign the next available ID
+          // Existing item has no stack ID (e.g. from older data) - create a new stack for both
           const newStackId = nextStackId
+          const existingIndex = currentLayoutFromState.findIndex(item => 
+            item.x === snappedX && item.y === snappedY
+          )
+          const updatedExisting: GridPosition = {
+            ...currentLayoutFromState[existingIndex],
+            stackId: newStackId,
+            stackPosition: 1
+          }
           newSkid.stackId = newStackId
-          newSkid.stackPosition = 1
-          updatedLayout = [...currentLayoutFromState, newSkid]
+          newSkid.stackPosition = 2
+          updatedLayout = [
+            ...currentLayoutFromState.slice(0, existingIndex),
+            updatedExisting,
+            ...currentLayoutFromState.slice(existingIndex + 1),
+            newSkid
+          ]
         } else {
           // Add to existing stack with known ID
         const stackItems = currentLayoutFromState.filter(item => 
@@ -380,33 +383,21 @@ export function useLoadBuilderState(truckloadId: number) {
         }))
       }
 
-                    // Auto-save the layout after placing the item
-              if (saveLayout) {
-                try {
-                  console.log(`Saving ${activeTab} layout with ${updatedLayout.length} items. Active tab: ${activeTab}`)
-                  console.log('Updated layout items:', updatedLayout.map(item => ({
-                    item_id: item.item_id,
-                    x: item.x,
-                    y: item.y,
-                    stackId: item.stackId,
-                    customerName: item.customerName
-                  })))
-                  await saveLayout(updatedLayout)
-                  console.log(`Layout saved successfully for ${activeTab} tab`)
-                } catch (error) {
-                  console.error('Failed to auto-save layout:', error)
-                  toast.error(`Failed to save layout: ${error instanceof Error ? error.message : 'Unknown error'}`)
-                }
-              } else {
-                console.warn('saveLayout function not provided to handleGridClick')
-              }
+      // Auto-save the layout after placing the item
+      if (saveLayout) {
+        try {
+          await saveLayout(updatedLayout)
+        } catch (error) {
+          console.error('Failed to auto-save layout:', error)
+          toast.error(`Failed to save layout: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      }
     },
 
     handleGridMouseMove: (e: React.MouseEvent<HTMLDivElement>) => {
       if (!state.selectedSkid) {
-        // If no skid is selected, make sure preview is cleared
         if (state.previewPosition) {
-          actions.setPreviewPosition(null)
+          setState(prev => ({ ...prev, previewPosition: null }))
         }
         return
       }
@@ -415,100 +406,67 @@ export function useLoadBuilderState(truckloadId: number) {
       const x = Math.floor((e.clientX - rect.left) / CELL_SIZE)
       const y = Math.floor((e.clientY - rect.top) / CELL_SIZE)
 
-      // Only update preview if we have a valid position
       const snappedX = Math.max(0, Math.min(GRID_WIDTH - 1, x))
       const snappedY = Math.max(0, Math.min(GRID_LENGTH - 1, y))
       
-      actions.setPreviewPosition({ x: snappedX, y: snappedY })
+      setState(prev => ({ ...prev, previewPosition: { x: snappedX, y: snappedY } }))
     },
 
     handleGridMouseLeave: () => {
-      actions.setPreviewPosition(null)
+      setState(prev => ({ ...prev, previewPosition: null }))
     },
 
-                handleRotate: (skidIndex: number) => {
-              const skidToRotate = currentLayout[skidIndex]
-      
-      // Remove the skid from current layout
+    handleRotate: (skidIndex: number) => {
+      const skidToRotate = currentLayout[skidIndex]
       const updatedLayout = currentLayout.filter((_, index) => index !== skidIndex)
       
-      // Update rotation state
       const newRotations = new Map(state.skidRotations)
       const currentRotation = newRotations.get(skidToRotate.item_id) || false
       newRotations.set(skidToRotate.item_id, !currentRotation)
-      actions.setSkidRotations(newRotations)
       
-      // Set it as the selected skid with rotated dimensions
-      actions.setSelectedSkid({
-        id: skidToRotate.item_id,
-        // Swap width and length
-        width: skidToRotate.length,
-        length: skidToRotate.width,
-        type: skidToRotate.type
-      })
-
-      // Store the rotated skid info for preview
-      actions.setDraggedSkid({
-        ...skidToRotate,
-        width: skidToRotate.length,
-        length: skidToRotate.width,
-        rotation: 0 // No visual rotation needed
-      })
-      
-      // Store the updated layout in state for immediate use
-      if (activeTab === 'delivery') {
-        setState(prev => ({
-          ...prev,
-          placedDeliverySkids: updatedLayout,
-          // Store the updated layout for immediate use in grid click
-          tempUpdatedLayout: updatedLayout
-        }))
-      } else {
-        setState(prev => ({
-          ...prev,
-          placedPickupSkids: updatedLayout,
-          // Store the updated layout for immediate use in grid click
-          tempUpdatedLayout: updatedLayout
-        }))
-      }
+      setState(prev => ({
+        ...prev,
+        skidRotations: newRotations,
+        selectedSkid: {
+          id: skidToRotate.item_id,
+          width: skidToRotate.length,
+          length: skidToRotate.width,
+          type: skidToRotate.type
+        },
+        draggedSkid: {
+          ...skidToRotate,
+          width: skidToRotate.length,
+          length: skidToRotate.width,
+          rotation: 0
+        },
+        ...(activeTab === 'delivery'
+          ? { placedDeliverySkids: updatedLayout }
+          : { placedPickupSkids: updatedLayout }),
+        tempUpdatedLayout: updatedLayout
+      }))
     },
 
     handleMove: (skidIndex: number) => {
       const skidToMove = currentLayout[skidIndex]
-      
-      // Remove the skid from current layout
       const updatedLayout = currentLayout.filter((_, index) => index !== skidIndex)
       
-      // Set it as the selected skid (keep same dimensions)
-      actions.setSelectedSkid({
-        id: skidToMove.item_id,
-        width: skidToMove.width,
-        length: skidToMove.length,
-        type: skidToMove.type
-      })
-
-      // Store the skid info for preview (keep same dimensions)
-      actions.setDraggedSkid({
-        ...skidToMove,
-        rotation: 0
-      })
-      
-      // Store the updated layout in state for immediate use
-      if (activeTab === 'delivery') {
-        setState(prev => ({
-          ...prev,
-          placedDeliverySkids: updatedLayout,
-          // Store the updated layout for immediate use in grid click
-          tempUpdatedLayout: updatedLayout
-        }))
-      } else {
-        setState(prev => ({
-          ...prev,
-          placedPickupSkids: updatedLayout,
-          // Store the updated layout for immediate use in grid click
-          tempUpdatedLayout: updatedLayout
-        }))
-      }
+      setState(prev => ({
+        ...prev,
+        selectedSkid: {
+          id: skidToMove.item_id,
+          width: skidToMove.width,
+          length: skidToMove.length,
+          type: skidToMove.type
+        },
+        draggedSkid: {
+          ...skidToMove,
+          rotation: 0
+        },
+        ...(activeTab === 'delivery'
+          ? { placedDeliverySkids: updatedLayout }
+          : { placedPickupSkids: updatedLayout }),
+        tempUpdatedLayout: updatedLayout
+      }))
     },
 
     handleRemove: async (skid: GridPosition, isStack: boolean, currentStack?: VinylStack, saveLayout?: (layout: GridPosition[]) => Promise<void>) => {
@@ -668,14 +626,19 @@ export function useLoadBuilderState(truckloadId: number) {
       const newVinylStacks = buildVinylStacks(updatedLayout)
       
       if (activeTab === 'delivery') {
-        actions.setPlacedDeliverySkids(updatedLayout)
-        actions.setDeliveryVinylStacks(newVinylStacks)
+        setState(prev => ({
+          ...prev,
+          placedDeliverySkids: [...updatedLayout],
+          deliveryVinylStacks: newVinylStacks
+        }))
       } else {
-        actions.setPlacedPickupSkids(updatedLayout)
-        actions.setPickupVinylStacks(newVinylStacks)
+        setState(prev => ({
+          ...prev,
+          placedPickupSkids: [...updatedLayout],
+          pickupVinylStacks: newVinylStacks
+        }))
       }
 
-      // Auto-save the layout after moving the item
       if (saveLayout) {
         try {
           await saveLayout(updatedLayout)
@@ -686,7 +649,6 @@ export function useLoadBuilderState(truckloadId: number) {
     },
 
     removeFromStack: async (stackId: number, skidId: number, saveLayout?: (layout: GridPosition[]) => Promise<void>) => {
-      // Remove the skid from the layout (remove only the first matching item_id in this stack)
       const stackItems = currentLayout.filter(item => item.stackId === stackId)
       const itemToRemove = stackItems.find(item => item.item_id === skidId)
       
@@ -695,12 +657,11 @@ export function useLoadBuilderState(truckloadId: number) {
         return
       }
       
-      // Remove the item and renumber remaining stack positions
       const remainingStackItems = stackItems
         .filter(item => !(item.item_id === skidId && item.x === itemToRemove.x && item.y === itemToRemove.y))
         .map((item, idx) => ({
           ...item,
-          stackPosition: stackItems.length - idx // Renumber positions (highest = top)
+          stackPosition: stackItems.length - idx
         }))
       
       const updatedLayout = [
@@ -708,7 +669,6 @@ export function useLoadBuilderState(truckloadId: number) {
         ...remainingStackItems
       ]
       
-      // Rebuild vinyl stacks
       const buildVinylStacks = (layout: GridPosition[]) => {
         const stacks: VinylStack[] = []
         const stackMap = new Map<number, GridPosition[]>()
@@ -738,14 +698,19 @@ export function useLoadBuilderState(truckloadId: number) {
       const newVinylStacks = buildVinylStacks(updatedLayout)
       
       if (activeTab === 'delivery') {
-        actions.setPlacedDeliverySkids(updatedLayout)
-        actions.setDeliveryVinylStacks(newVinylStacks)
+        setState(prev => ({
+          ...prev,
+          placedDeliverySkids: [...updatedLayout],
+          deliveryVinylStacks: newVinylStacks
+        }))
       } else {
-        actions.setPlacedPickupSkids(updatedLayout)
-        actions.setPickupVinylStacks(newVinylStacks)
+        setState(prev => ({
+          ...prev,
+          placedPickupSkids: [...updatedLayout],
+          pickupVinylStacks: newVinylStacks
+        }))
       }
 
-      // Auto-save the layout after removing from stack
       if (saveLayout) {
         try {
           await saveLayout(updatedLayout)
@@ -762,7 +727,7 @@ export function useLoadBuilderState(truckloadId: number) {
         return { ...prev, skidRotations: next }
       })
     }
-  }), [activeTab, currentLayout, vinylStacks, nextStackId, state.selectedSkid, state.draggedSkid, state.deliveryVinylStacks, state.pickupVinylStacks])
+  }), [activeTab, currentLayout, vinylStacks, nextStackId, state.selectedSkid, state.draggedSkid, state.deliveryVinylStacks, state.pickupVinylStacks, state.tempUpdatedLayout, state.skidRotations])
 
   return {
     state: { ...state, currentLayout },

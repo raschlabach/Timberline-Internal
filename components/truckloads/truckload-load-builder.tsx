@@ -56,7 +56,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showBothLayouts, setShowBothLayouts] = useState(false)
-  const [renderKey, setRenderKey] = useState(0)
   
   // Print refs for layout sections
   const deliveryPrintRef = useRef<HTMLDivElement>(null)
@@ -125,38 +124,19 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
   // Fetch layout data on mount only
   useEffect(() => {
     if (truckloadId) {
-      fetchLayoutData().then(() => {
-        console.log('TruckloadLoadBuilder: Layout fetch complete, current state:', {
-          deliveryCount: state.placedDeliverySkids.length,
-          pickupCount: state.placedPickupSkids.length
-        })
-        // Force re-render by updating renderKey after a brief delay to ensure state is set
-        setTimeout(() => {
-          console.log('TruckloadLoadBuilder: Forcing re-render with renderKey update')
-          setRenderKey(prev => prev + 1)
-        }, 100)
-      }).catch((error) => {
-        console.error('TruckloadLoadBuilder: Error fetching layout data:', error)
+      fetchLayoutData().catch((error) => {
+        console.error('Error fetching layout data:', error)
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [truckloadId])
-  
-  // Also watch for state changes and force re-render
-  useEffect(() => {
-    console.log('TruckloadLoadBuilder: State changed, forcing re-render', {
-      deliveryCount: state.placedDeliverySkids.length,
-      pickupCount: state.placedPickupSkids.length
-    })
-    setRenderKey(prev => prev + 1)
-  }, [state.placedDeliverySkids.length, state.placedPickupSkids.length])
 
   // Handle tab change with proper state management
   const handleTabChange = useCallback(async (newTab: 'delivery' | 'pickup') => {
     try {
-      // Save current layout before switching
+      // Save current layout before switching (use immediate save, not debounced)
       const currentLayout = activeTab === 'delivery' ? state.placedDeliverySkids : state.placedPickupSkids
-      await saveLayout(currentLayout, false)
+      await saveLayoutImmediate(currentLayout, false)
       
       // Clear temporary states
       actions.clearSelection()
@@ -167,7 +147,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
       console.error('Error switching tabs:', error)
       toast.error('Failed to save layout before switching tabs')
     }
-  }, [activeTab, state.placedDeliverySkids, state.placedPickupSkids, saveLayout, actions, setActiveTab])
+  }, [activeTab, state.placedDeliverySkids, state.placedPickupSkids, saveLayoutImmediate, actions, setActiveTab])
 
   // Add error boundary for unexpected errors
   const handleError = useCallback((error: Error) => {
@@ -255,15 +235,22 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     contentRef: pickupPrintRef,
   })
 
-  // Split stacks into left and right columns (alternating) for two-column layout
+  // Split stacks into left/right based on their x-position on the trailer
+  // Stacks on the left half go to the left panel, right half to the right panel
+  // Within each side, sort by y-position so panels flow top-to-bottom matching the grid
+  const GRID_MIDPOINT = 4
+
   const { leftDeliveryStacks, rightDeliveryStacks } = useMemo(() => {
     const multiItem = state.deliveryVinylStacks.filter(s => s.skids.length > 1)
     const left: typeof multiItem = []
     const right: typeof multiItem = []
-    multiItem.forEach((stack, i) => {
-      if (i % 2 === 0) left.push(stack)
+    multiItem.forEach(stack => {
+      const centerX = stack.x + (stack.skids[stack.skids.length - 1]?.width || 0) / 2
+      if (centerX < GRID_MIDPOINT) left.push(stack)
       else right.push(stack)
     })
+    left.sort((a, b) => a.y - b.y)
+    right.sort((a, b) => a.y - b.y)
     return { leftDeliveryStacks: left, rightDeliveryStacks: right }
   }, [state.deliveryVinylStacks])
 
@@ -271,10 +258,13 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
     const multiItem = state.pickupVinylStacks.filter(s => s.skids.length > 1)
     const left: typeof multiItem = []
     const right: typeof multiItem = []
-    multiItem.forEach((stack, i) => {
-      if (i % 2 === 0) left.push(stack)
+    multiItem.forEach(stack => {
+      const centerX = stack.x + (stack.skids[stack.skids.length - 1]?.width || 0) / 2
+      if (centerX < GRID_MIDPOINT) left.push(stack)
       else right.push(stack)
     })
+    left.sort((a, b) => a.y - b.y)
+    right.sort((a, b) => a.y - b.y)
     return { leftPickupStacks: left, rightPickupStacks: right }
   }, [state.pickupVinylStacks])
 
@@ -433,7 +423,6 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
 
                 {/* Trailer Grid */}
                 <TrailerGrid
-                  key={`delivery-${renderKey}`}
                   placedSkids={state.placedDeliverySkids}
                   vinylStacks={state.deliveryVinylStacks}
                   selectedSkid={activeTab === 'delivery' ? state.selectedSkid : null}
@@ -475,7 +464,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               )}
               <div className="print-grid-wrapper">
                 <TrailerGrid
-                  key={`delivery-print-${renderKey}`}
+                  key="delivery-print"
                   placedSkids={state.placedDeliverySkids}
                   vinylStacks={state.deliveryVinylStacks}
                   selectedSkid={null}
@@ -559,7 +548,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
 
                 {/* Trailer Grid */}
                 <TrailerGrid
-                  key={`pickup-${renderKey}`}
+                  key="pickup"
                   placedSkids={state.placedPickupSkids}
                   vinylStacks={state.pickupVinylStacks}
                   selectedSkid={activeTab === 'pickup' ? state.selectedSkid : null}
@@ -601,7 +590,7 @@ export function TruckloadLoadBuilder({ truckloadId }: TruckloadLoadBuilderProps)
               )}
               <div className="print-grid-wrapper">
                 <TrailerGrid
-                  key={`pickup-print-${renderKey}`}
+                  key="pickup-print"
                   placedSkids={state.placedPickupSkids}
                   vinylStacks={state.pickupVinylStacks}
                   selectedSkid={null}

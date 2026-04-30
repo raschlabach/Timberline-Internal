@@ -107,8 +107,18 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const client = await getClient()
-  
+  let client;
+  try {
+    client = await getClient()
+  } catch (error) {
+    console.error('Failed to get database client:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Database connection failed. Please try again.',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 503 })
+  }
+
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -274,7 +284,7 @@ export async function POST(
       details: errorMessage
     }, { status: 500 })
   } finally {
-    client.release()
+    client?.release()
   }
 }
 

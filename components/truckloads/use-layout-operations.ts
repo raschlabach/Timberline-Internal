@@ -138,29 +138,28 @@ export function useLayoutOperations(
     if (!truckloadId) return
 
     try {
-      console.log('Fetching layout data for truckload:', truckloadId)
-      // Fetch both layouts at once to ensure consistency
+      const fetchLayout = async (type: string) => {
+        const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${type}`)
+        if (!response.ok) {
+          console.error(`Failed to fetch ${type} layout: HTTP ${response.status}`)
+          return { success: false, error: `HTTP ${response.status}` }
+        }
+        return response.json()
+      }
+
       const [deliveryLayout, pickupLayout] = await Promise.all([
-        fetch(`/api/truckloads/${truckloadId}/layout?type=delivery`).then(r => r.json()),
-        fetch(`/api/truckloads/${truckloadId}/layout?type=pickup`).then(r => r.json())
+        fetchLayout('delivery'),
+        fetchLayout('pickup')
       ])
       
-      console.log('Fetched delivery layout:', deliveryLayout)
-      console.log('Fetched pickup layout:', pickupLayout)
-      
-      // Process delivery layout
       if (deliveryLayout.success) {
         if (deliveryLayout.layout && Array.isArray(deliveryLayout.layout) && deliveryLayout.layout.length > 0) {
           const { finalLayout, stacks, nextStackId } = processLayoutData(deliveryLayout.layout)
-          console.log('Processed delivery layout:', finalLayout.length, 'items,', stacks.length, 'stacks')
-        actions.setPlacedDeliverySkids(finalLayout)
-        actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
-        actions.setDeliveryVinylStacks(stacks)
-          // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
+          actions.setPlacedDeliverySkids(finalLayout)
+          actions.setUsedDeliverySkidIds(new Set(finalLayout.map(item => item.item_id)))
+          actions.setDeliveryVinylStacks(stacks)
           actions.setNextDeliveryStackId(nextStackId)
         } else {
-          // Empty layout - explicitly set empty arrays
-          console.log('Delivery layout is empty or invalid')
           actions.setPlacedDeliverySkids([])
           actions.setUsedDeliverySkidIds(new Set())
           actions.setDeliveryVinylStacks([])
@@ -170,21 +169,14 @@ export function useLayoutOperations(
         console.error('Failed to fetch delivery layout:', deliveryLayout)
       }
       
-      // Process pickup layout
       if (pickupLayout.success) {
         if (pickupLayout.layout && Array.isArray(pickupLayout.layout) && pickupLayout.layout.length > 0) {
           const { finalLayout, stacks, nextStackId } = processLayoutData(pickupLayout.layout)
-          console.log('Processed pickup layout:', finalLayout.length, 'items,', stacks.length, 'stacks')
-          console.log('Setting pickup skids in state:', finalLayout)
-        actions.setPlacedPickupSkids(finalLayout)
-        actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
-        actions.setPickupVinylStacks(stacks)
-          // Set next stack ID to continue sequential numbering (1, 2, 3, etc.)
+          actions.setPlacedPickupSkids(finalLayout)
+          actions.setUsedPickupSkidIds(new Set(finalLayout.map(item => item.item_id)))
+          actions.setPickupVinylStacks(stacks)
           actions.setNextPickupStackId(nextStackId)
-          console.log('Pickup skids state updated')
         } else {
-          // Empty layout - explicitly set empty arrays
-          console.log('Pickup layout is empty or invalid')
           actions.setPlacedPickupSkids([])
           actions.setUsedPickupSkidIds(new Set())
           actions.setPickupVinylStacks([])
@@ -261,19 +253,6 @@ export function useLayoutOperations(
         throw new Error('Cannot save layout: All items are missing required fields')
       }
       
-      console.log('Saving layout to API:', {
-        truckloadId,
-        activeTab,
-        itemCount: cleanedLayout.length,
-        items: cleanedLayout.map(item => ({
-          item_id: item.item_id,
-          x: item.x,
-          y: item.y,
-          stackId: item.stackId,
-          customerName: item.customerName
-        }))
-      })
-      
       const response = await fetch(`/api/truckloads/${truckloadId}/layout?type=${activeTab}`, {
         method: 'POST',
         headers: {
@@ -284,21 +263,15 @@ export function useLayoutOperations(
         })
       })
       
-      console.log('Save response status:', response.status, response.statusText)
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: Failed to save layout`)
       }
 
       const result = await response.json()
-      console.log('Save API response:', result)
-      
       if (!result.success) {
         throw new Error(result.error || result.details || 'Failed to save layout')
       }
-
-      console.log(`Successfully saved ${cleanedLayout.length} items to ${activeTab} layout for truckload ${truckloadId}`)
 
       if (showSuccessToast) {
         toast.success('Layout saved successfully')

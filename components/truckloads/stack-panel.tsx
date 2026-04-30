@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
+import { getStackColor } from "./trailer-grid"
 
 interface GridPosition {
   x: number
@@ -99,14 +100,15 @@ export function StackPanel({
     <div className="flex flex-col gap-1">
       {multiItemStacks.map(stack => {
         const stackType = getStackTypeLabel(stack)
+        const stackColor = getStackColor(stack.stackId)
         return (
           <Card 
             key={stack.stackId} 
-            className="p-2 shrink-0 bg-white shadow-md w-full"
+            className={`p-2 shrink-0 shadow-md w-full border-2 ${stackColor.border} ${stackColor.bg}`}
           >
             <div className="text-xs font-semibold mb-1 flex items-center gap-1">
-              <span>Stack #{stack.stackId}</span>
-              <span className="text-[8px] bg-yellow-100 text-yellow-700 px-1 py-0.5 rounded">{stackType}</span>
+              <span className={stackColor.text}>Stack #{stack.stackId}</span>
+              <span className="text-[8px] bg-white/70 text-gray-600 px-1 py-0.5 rounded">{stackType}</span>
             </div>
             <div className="space-y-1">
               {stack.skids.map((skid, index) => (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Trash2 } from "lucide-react"
@@ -85,6 +85,23 @@ const CUSTOMER_COLORS = [
   'bg-cyan-100',
 ]
 
+const STACK_COLORS = [
+  { bg: 'bg-blue-50', border: 'border-blue-400', text: 'text-blue-700', badge: 'bg-blue-500' },
+  { bg: 'bg-emerald-50', border: 'border-emerald-400', text: 'text-emerald-700', badge: 'bg-emerald-500' },
+  { bg: 'bg-violet-50', border: 'border-violet-400', text: 'text-violet-700', badge: 'bg-violet-500' },
+  { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-700', badge: 'bg-amber-500' },
+  { bg: 'bg-rose-50', border: 'border-rose-400', text: 'text-rose-700', badge: 'bg-rose-500' },
+  { bg: 'bg-cyan-50', border: 'border-cyan-400', text: 'text-cyan-700', badge: 'bg-cyan-500' },
+  { bg: 'bg-fuchsia-50', border: 'border-fuchsia-400', text: 'text-fuchsia-700', badge: 'bg-fuchsia-500' },
+  { bg: 'bg-lime-50', border: 'border-lime-400', text: 'text-lime-700', badge: 'bg-lime-500' },
+  { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', badge: 'bg-orange-500' },
+  { bg: 'bg-indigo-50', border: 'border-indigo-400', text: 'text-indigo-700', badge: 'bg-indigo-500' },
+]
+
+export function getStackColor(stackId: number) {
+  return STACK_COLORS[(stackId - 1) % STACK_COLORS.length]
+}
+
 function getCustomerColorClass(customerId: number) {
   return CUSTOMER_COLORS[customerId % CUSTOMER_COLORS.length]
 }
@@ -107,28 +124,6 @@ export function TrailerGrid({
   actions,
   stops
 }: TrailerGridProps) {
-  console.log('TrailerGrid render:', {
-    activeTab,
-    placedSkidsCount: placedSkids.length,
-    vinylStacksCount: vinylStacks.length,
-    placedSkids: placedSkids.map(s => ({ item_id: s.item_id, x: s.x, y: s.y, width: s.width, length: s.length, stackId: s.stackId, type: s.type }))
-  })
-  
-  // Debug: Log what will be rendered
-  const itemsToRender = placedSkids.filter((skid, index) => {
-    if (skid.stackId) {
-      const stackGroup = vinylStacks.find(s => s.stackId === skid.stackId)
-      if (stackGroup) {
-        const bottomSkid = stackGroup.skids[stackGroup.skids.length - 1]
-        // Compare by item_id and position, not object reference
-        if (skid.item_id !== bottomSkid.item_id || skid.x !== bottomSkid.x || skid.y !== bottomSkid.y) {
-          return false // Skip non-bottom stack items
-        }
-      }
-    }
-    return true
-  })
-  console.log('TrailerGrid: Items that will be rendered:', itemsToRender.length, itemsToRender)
 
   const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!actions) return // Don't allow interaction if actions are null (inactive tab)
@@ -191,24 +186,14 @@ export function TrailerGrid({
           const isStack = currentStack && currentStack.skids.length > 1
           const bottomSkid = isStack ? currentStack.skids[currentStack.skids.length - 1] : skid
 
-          console.log(`Rendering skid ${index}:`, {
-            item_id: skid.item_id,
-            x: bottomSkid.x,
-            y: bottomSkid.y,
-            width: bottomSkid.width,
-            length: bottomSkid.length,
-            left: bottomSkid.x * CELL_SIZE,
-            top: bottomSkid.y * CELL_SIZE,
-            stackId: skid.stackId,
-            isStack
-          })
+          const stackColor = isStack && currentStack?.stackId ? getStackColor(currentStack.stackId) : null
 
           return (
             <div
               key={`placed-${skid.item_id}-${index}-${skid.x}-${skid.y}`}
               className={`absolute ${
-                isStack 
-                  ? 'bg-gray-100/70 border-2 border-dotted border-gray-400' 
+                isStack && stackColor
+                  ? `${stackColor.bg} border-[3px] ${stackColor.border} rounded-sm` 
                   : `${skid.type === 'vinyl' ? 'border-[3px] border-dashed' : 'border-2'} border-black ${getCustomerColorClass(skid.customerId)}`
               } group`}
               style={{
@@ -216,16 +201,25 @@ export function TrailerGrid({
                 top: bottomSkid.y * CELL_SIZE,
                 width: bottomSkid.width * CELL_SIZE,
                 height: bottomSkid.length * CELL_SIZE,
-                zIndex: 10
+                zIndex: 10,
+                ...(isStack ? {
+                  boxShadow: '3px 3px 0px 0px rgba(0,0,0,0.15), 6px 6px 0px 0px rgba(0,0,0,0.08)'
+                } : {})
               }}
             >
+              {/* Stack count badge */}
+              {isStack && stackColor && (
+                <div className={`absolute -top-2 -right-2 ${stackColor.badge} text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm z-20`}>
+                  {currentStack.skids.length}
+                </div>
+              )}
+
               {/* Customer name and dimensions */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-center p-1 break-words">
-                {isStack ? (
+                {isStack && stackColor ? (
                   <>
-                    <div className="font-medium">Stack #{currentStack.stackId}</div>
-                    <div>{bottomSkid.width}' × {bottomSkid.length}'</div>
-                    <div className="text-gray-500">{currentStack.skids.length} skids</div>
+                    <div className={`font-semibold ${stackColor.text}`}>#{currentStack.stackId}</div>
+                    <div className="text-[10px]">{bottomSkid.width}' × {bottomSkid.length}'</div>
                   </>
                 ) : (
                   <>

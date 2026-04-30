@@ -61,6 +61,10 @@ interface LoadBuilderActions {
   setUsedPickupSkidIds: (ids: Set<number>) => void
   setSkidRotations: (rotations: Map<number, boolean>) => void
   setPreviewPosition?: (position: {x: number, y: number} | null) => void
+  setDeliveryVinylStacks: (stacks: any[]) => void
+  setPickupVinylStacks: (stacks: any[]) => void
+  setNextDeliveryStackId: (id: number) => void
+  setNextPickupStackId: (id: number) => void
   handleSkidRotation: (skidId: number, isRotated: boolean) => void
   handleMove: (skidIndex: number) => void
 }
@@ -94,28 +98,23 @@ export function AvailableItemsPanel({
   }
 
   const handleClear = async () => {
-    // Only clear the layout for the currently active tab (incoming or outgoing)
     if (activeTab === 'delivery') {
-      // Clear outgoing layout only
       actions.setPlacedDeliverySkids([])
       actions.setUsedDeliverySkidIds(new Set())
+      actions.setDeliveryVinylStacks([])
+      actions.setNextDeliveryStackId(1)
     } else {
-      // Clear incoming layout only
       actions.setPlacedPickupSkids([])
       actions.setUsedPickupSkidIds(new Set())
+      actions.setPickupVinylStacks([])
+      actions.setNextPickupStackId(1)
     }
     
-    // Clear selection and preview only if they're for the active tab
-    // (Selection is shared, so we clear it, but it will be re-selected if needed)
     actions.setSelectedSkid(null)
     if (actions.setPreviewPosition) {
       actions.setPreviewPosition(null)
     }
     
-    // Note: We don't clear skidRotations as they're shared between tabs
-    // and might be needed for the other tab
-    
-    // Save the empty layout for the active tab only
     if (saveLayout) {
       try {
         await saveLayout([])
