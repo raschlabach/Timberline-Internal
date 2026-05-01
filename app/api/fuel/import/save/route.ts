@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
 
       for (const vehicle of vehicles) {
         for (const txn of vehicle.transactions) {
+          const savepointName = `sp_${imported + skipped}`
+          await client.query(`SAVEPOINT ${savepointName}`)
           try {
             await client.query(
               `INSERT INTO fuel_external_transactions
@@ -82,10 +84,12 @@ export async function POST(request: NextRequest) {
                 vehicle.vehicleDescription,
               ]
             )
+            await client.query(`RELEASE SAVEPOINT ${savepointName}`)
             imported++
           } catch (err: unknown) {
             const pgErr = err as { code?: string }
             if (pgErr.code === '23505') {
+              await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`)
               skipped++
             } else {
               throw err
