@@ -160,6 +160,16 @@ function parseTransactionFields(fields: string[]): ParsedTransaction | null {
   }
 }
 
+function deduplicateTransactions(transactions: ParsedTransaction[]): ParsedTransaction[] {
+  const seen = new Set<string>()
+  return transactions.filter((txn) => {
+    const key = txn.invoiceNumber
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function parseFuelReport(text: string): ParsedFuelReport {
   const dateRangeMatch = text.match(/(\d{2}\/\d{2}\/\d{4})\s+(?:to|-)\s+(\d{2}\/\d{2}\/\d{4})/)
   let dateFrom = ''
@@ -198,6 +208,9 @@ export function parseFuelReport(text: string): ParsedFuelReport {
     }
   }
 
-  const vehicles = Array.from(vehicleMap.values())
+  const vehicles = Array.from(vehicleMap.values()).map((v) => ({
+    ...v,
+    transactions: deduplicateTransactions(v.transactions),
+  }))
   return { dateFrom, dateTo, vehicles }
 }
