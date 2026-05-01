@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye, PanelLeftClose, PanelLeftOpen, Lightbulb } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -351,6 +351,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon={<ArrowLeftRight size={16} />}
                   label="Backhaul Planner"
                   isActive={isActiveRoute('/dashboard/backhaul-planner')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/suggested-loads"
+                  icon={<Lightbulb size={16} />}
+                  label="Suggested Loads"
+                  isActive={isActiveRoute('/dashboard/suggested-loads')}
                   theme="blue"
                 />
 
