@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -26,6 +26,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Restricted roles only see specific pages
   const canSeeAllPages = !isRipOperator && !isDriver && !isShippingStation && !isGrainOperator
   
+  // Sidebar collapse state - persisted in localStorage
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('sidebar-collapsed')
+    if (stored === 'true') setIsSidebarCollapsed(true)
+  }, [])
+
+  function toggleSidebar() {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('sidebar-collapsed', String(next))
+      return next
+    })
+  }
+
   // Exclusive section toggle - only one section visible at a time
   const isLumberRoute = pathname?.startsWith('/dashboard/lumber') || false
   const isRnrOfficeRoute = pathname?.startsWith('/dashboard/rnr-office') || false
@@ -200,7 +216,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f8f9fa]">
-      <aside className={`w-[280px] bg-white border-r border-gray-200 shadow-sm ${isSidebarHidden ? 'hidden' : 'hidden md:flex md:flex-col'}`}>
+      <aside className={`bg-white border-r border-gray-200 shadow-sm transition-all duration-300 ease-in-out ${isSidebarHidden ? 'hidden' : 'hidden md:flex md:flex-col'} ${isSidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-[280px]'}`}>
         {/* Colored accent bar indicating active section */}
         <div className={`h-1 shrink-0 transition-colors duration-300 ${
           activeSection === 'rnr-office' ? 'bg-amber-500' :
@@ -759,7 +775,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <span className="text-sm font-medium">Back to Dashboard</span>
               </Link>
             ) : (
-              <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleSidebar}
+                  className="hidden md:flex items-center justify-center h-8 w-8 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                  title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                  {isSidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+                </button>
+                <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+              </div>
             )}
             <div className="flex items-center gap-4">
               <div className="text-right">
