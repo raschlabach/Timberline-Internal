@@ -117,6 +117,16 @@ interface Order {
 // Add new types for sorting
 type SortField = 'pickupDate' | 'createdAt' | 'pickupCustomer' | 'deliveryCustomer';
 
+type StageFilterKey = 'all' | 'unassigned' | 'awaiting-pickup' | 'in-warehouse' | 'awaiting-delivery' | 'completed';
+
+const STAGE_FILTER_OPTIONS: { key: StageFilterKey; label: string }[] = [
+  { key: 'unassigned', label: 'Unassigned' },
+  { key: 'awaiting-pickup', label: 'Awaiting Pickup' },
+  { key: 'in-warehouse', label: 'In Warehouse' },
+  { key: 'awaiting-delivery', label: 'Awaiting Delivery' },
+  { key: 'completed', label: 'Completed' },
+];
+
 // Function to generate consistent colors for users
 function getUserColor(username: string): string {
   // Special color for System
@@ -617,7 +627,7 @@ function useLoadBoardOrders(
 
       return matchesSearch && matchesFilters;
     }));
-  }, [allOrdersToFilter, searchTerm, activeFilters]);
+  }, [allOrdersToFilter, searchTerm, activeFilters, sortConfig]);
 
   return { 
     orders: filteredOrders, 
@@ -951,6 +961,38 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
       };
     }
   };
+
+  // Stage filter state
+  const [stageFilter, setStageFilter] = useState<StageFilterKey>('all');
+
+  const getStageKey = useCallback((order: Order): Exclude<StageFilterKey, 'all'> => {
+    const pickupAssignment = order.pickupAssignment;
+    const deliveryAssignment = order.deliveryAssignment;
+    
+    const pickupTruckload = pickupAssignment ? truckloads.find(t => t.id === pickupAssignment.truckloadId) : null;
+    const isPickupCompleted = pickupTruckload?.isCompleted || false;
+    const deliveryTruckload = deliveryAssignment ? truckloads.find(t => t.id === deliveryAssignment.truckloadId) : null;
+    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
+
+    if (deliveryAssignment && !isDeliveryCompleted) return 'awaiting-delivery';
+    if (!pickupAssignment) return 'unassigned';
+    if (pickupAssignment && !isPickupCompleted) return 'awaiting-pickup';
+    if (isPickupCompleted && !deliveryAssignment) return 'in-warehouse';
+    return 'completed';
+  }, [truckloads]);
+
+  const displayOrders = useMemo(() => {
+    if (stageFilter === 'all') return orders;
+    return orders.filter(order => getStageKey(order) === stageFilter);
+  }, [orders, stageFilter, getStageKey]);
+
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const option of STAGE_FILTER_OPTIONS) {
+      counts[option.key] = orders.filter(order => getStageKey(order) === option.key).length;
+    }
+    return counts;
+  }, [orders, getStageKey]);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -1309,6 +1351,43 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
               </div>
             )}
 
+            {/* Stage Filter Toggle */}
+            <div className="flex items-center gap-1.5 bg-white rounded-md px-2 py-1 border border-gray-200">
+              <span className="text-xs font-medium text-gray-600">Stage:</span>
+              <div className="flex items-center gap-0.5">
+                {STAGE_FILTER_OPTIONS.map((option) => {
+                  const isActive = stageFilter === option.key;
+                  const count = stageCounts[option.key] || 0;
+                  return (
+                    <Button
+                      key={option.key}
+                      variant={isActive ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStageFilter(prev => prev === option.key ? 'all' : option.key)}
+                      className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                        isActive 
+                          ? 'bg-gray-800 hover:bg-gray-900 text-white shadow-sm' 
+                          : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                      }`}
+                    >
+                      <span className="flex items-center gap-0.5">
+                        <span>{option.label}</span>
+                        {count > 0 && (
+                          <span className={`inline-flex items-center justify-center w-3.5 h-3.5 text-[9px] rounded-full ${
+                            isActive
+                              ? 'bg-white text-gray-800'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}>
+                            {count}
+                          </span>
+                        )}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
             {showFilters && (
               <>
                 {/* Load Type Filters Section */}
@@ -1367,7 +1446,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
             {/* Order Count */}
             <div className="ml-auto bg-blue-50 rounded-md px-2 py-1 border border-blue-200">
               <span className="text-xs font-medium text-blue-700">
-                {orders.length} order{orders.length !== 1 ? 's' : ''}
+                {displayOrders.length} order{displayOrders.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
@@ -1382,12 +1461,12 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                     <div className="flex items-center justify-center h-full">
                       <Checkbox 
                         className="h-5 w-5" 
-                        checked={checkedOrders.size === orders.length}
+                        checked={checkedOrders.size === displayOrders.length && displayOrders.length > 0}
                         onCheckedChange={() => {
-                          if (checkedOrders.size === orders.length) {
+                          if (checkedOrders.size === displayOrders.length) {
                             setCheckedOrders(new Set());
                           } else {
-                            setCheckedOrders(new Set(orders.map(order => order.id)));
+                            setCheckedOrders(new Set(displayOrders.map(order => order.id)));
                           }
                         }}
                       />
@@ -1430,13 +1509,13 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
               </TableHeader>
               <TableBody>
                 {(() => {
-                  const rushIndices = orders
+                  const rushIndices = displayOrders
                     .map((o, i) => (o.isRushOrder ? i : -1))
                     .filter(i => i !== -1);
                   const firstRushIndex = rushIndices.length > 0 ? rushIndices[0] : -1;
                   const lastRushIndex = rushIndices.length > 0 ? rushIndices[rushIndices.length - 1] : -1;
 
-                  return orders.map((order, index) => (
+                  return displayOrders.map((order, index) => (
                   <TableRow 
                     key={order.id}
                     className={`
@@ -1941,7 +2020,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                 <div className="flex items-center gap-2 min-w-[200px]">
                   <span className="text-base font-medium text-gray-600">Total Skids:</span>
                   <span className="text-2xl font-bold text-gray-900">
-                    {orders
+                    {displayOrders
                       .filter(order => checkedOrders.has(order.id))
                       .reduce((total, order) => total + Number(order.skids || 0), 0)}
                   </span>
@@ -1949,7 +2028,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                 <div className="flex items-center gap-2 min-w-[200px]">
                   <span className="text-base font-medium text-gray-600">Total Vinyl:</span>
                   <span className="text-2xl font-bold text-gray-900">
-                    {orders
+                    {displayOrders
                       .filter(order => checkedOrders.has(order.id))
                       .reduce((total, order) => total + Number(order.vinyl || 0), 0)}
                   </span>
@@ -1957,7 +2036,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                 <div className="flex items-center gap-2 min-w-[200px]">
                   <span className="text-base font-medium text-gray-600">Total Footage:</span>
                   <span className="text-2xl font-bold text-gray-900">
-                    {orders
+                    {displayOrders
                       .filter(order => checkedOrders.has(order.id))
                       .reduce((total, order) => total + Number(order.footage || 0), 0)} ft²
                   </span>
@@ -1965,7 +2044,7 @@ export function LoadBoardOrders({ initialFilters, initialViewToggles, showFilter
                 <div className="flex items-center gap-2 min-w-[200px]">
                   <span className="text-base font-medium text-gray-600">Total HB:</span>
                   <span className="text-2xl font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                    {orders
+                    {displayOrders
                       .filter(order => checkedOrders.has(order.id))
                       .reduce((total, order) => total + Number(order.handBundles || 0), 0)}
                   </span>

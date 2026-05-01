@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -472,6 +472,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     icon={<FileText size={16} />}
                     label="Invoice Page"
                     isActive={isActiveRoute('/dashboard/lumber/invoices')}
+                    theme="emerald"
+                  />
+                )}
+                {canSeeAllPages && (
+                  <SubNavItem
+                    href="/dashboard/lumber/boss-view"
+                    icon={<Eye size={16} />}
+                    label="Master View"
+                    isActive={isActiveRoute('/dashboard/lumber/boss-view')}
                     theme="emerald"
                   />
                 )}
