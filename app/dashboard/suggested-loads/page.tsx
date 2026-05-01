@@ -19,7 +19,7 @@ interface PolygonData {
   name: string
   coordinates: Array<{ lat: number; lng: number }>
   color: string
-  matchOn: 'pickup' | 'delivery'
+  matchOn: 'pickup' | 'delivery' | 'both'
   maxFootage: number | null
   maxStops: number | null
   onlyUnassignedType: string | null
