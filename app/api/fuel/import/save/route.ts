@@ -56,48 +56,39 @@ export async function POST(request: NextRequest) {
       const importId = importResult.rows[0].id
 
       let imported = 0
-      let skipped = 0
 
       for (const vehicle of vehicles) {
         for (const txn of vehicle.transactions) {
-          const savepointName = `sp_${imported + skipped}`
-          await client.query(`SAVEPOINT ${savepointName}`)
-          try {
-            await client.query(
-              `INSERT INTO fuel_external_transactions
-                (import_id, truck_id, transaction_date, merchant_name, merchant_city, state,
-                 invoice_number, odometer, product_code, quantity, unit_cost, trans_amount, vehicle_description)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-              [
-                importId,
-                vehicle.matchedTruckId,
-                txn.transactionDate,
-                txn.merchantName,
-                txn.merchantCity,
-                txn.state,
-                txn.invoiceNumber,
-                txn.odometer || null,
-                txn.productCode,
-                txn.quantity,
-                txn.unitCost,
-                txn.transAmount,
-                vehicle.vehicleDescription,
-              ]
-            )
-            await client.query(`RELEASE SAVEPOINT ${savepointName}`)
+          const res = await client.query(
+            `INSERT INTO fuel_external_transactions
+              (import_id, truck_id, transaction_date, merchant_name, merchant_city, state,
+               invoice_number, odometer, product_code, quantity, unit_cost, trans_amount, vehicle_description)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (invoice_number, vehicle_description) DO NOTHING
+             RETURNING id`,
+            [
+              importId,
+              vehicle.matchedTruckId,
+              txn.transactionDate,
+              txn.merchantName,
+              txn.merchantCity,
+              txn.state,
+              txn.invoiceNumber,
+              txn.odometer || null,
+              txn.productCode,
+              txn.quantity,
+              txn.unitCost,
+              txn.transAmount,
+              vehicle.vehicleDescription,
+            ]
+          )
+          if (res.rowCount && res.rowCount > 0) {
             imported++
-          } catch (err: unknown) {
-            const pgErr = err as { code?: string }
-            if (pgErr.code === '23505') {
-              await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`)
-              skipped++
-            } else {
-              throw err
-            }
           }
         }
       }
 
+      const skipped = totalTransactions - imported
       return { importId, imported, skipped }
     })
 
