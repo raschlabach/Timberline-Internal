@@ -23,9 +23,10 @@ interface OrderWarningsProps {
 //     splitLoadId tied to it. Informational; the split flow handles it.
 //
 //  2. Should be a split load — orange. The order matches one of the
-//     legacy "needs split" conditions (middlefield, 424 footage non-
-//     transfer, or transfer) AND no active split exists yet. Action
-//     required.
+//     legacy "needs split" conditions (middlefield, or 424 footage on
+//     a non-transfer) AND no active split exists yet. Transfers are
+//     never flagged because the same driver handles both halves —
+//     there's nothing to split.
 //
 //  3. Middlefield — yellow. Order-level flag, shown whenever the order
 //     is middlefield. Adds a "+ backhaul" suffix when both flags are set
@@ -44,17 +45,13 @@ export function OrderWarnings({
 
   const shouldBeSplitLoad =
     !hasActiveSplitLoad &&
-    (order.middlefield ||
-      (order.footage === 424 && !isTransfer) ||
-      isTransfer)
+    !isTransfer &&
+    (order.middlefield || order.footage === 424)
 
   let shouldBeSplitReason = ''
   if (shouldBeSplitLoad) {
     if (order.middlefield) {
       shouldBeSplitReason = 'Middlefield order — should be a split load'
-    } else if (isTransfer) {
-      shouldBeSplitReason =
-        'Transfer order (pickup + delivery on same load) — should be a split load'
     } else {
       shouldBeSplitReason = '424 ft² order — should be a split load'
     }

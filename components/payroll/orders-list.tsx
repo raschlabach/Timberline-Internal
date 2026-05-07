@@ -348,8 +348,8 @@ function SortableOrderTbody({
           colSpan={COLUMN_COUNT}
           className={`${cellBgClass} border-l-2 border-r-2 border-b-2 ${rowBorder} rounded-b-md px-3 py-1`}
         >
-          <div className="flex justify-between items-start gap-3">
-            <div className="flex-shrink-0 pt-0.5">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 min-w-0 flex justify-end pt-0.5">
               <OrderWarnings
                 order={order}
                 isTransfer={isTransfer}
