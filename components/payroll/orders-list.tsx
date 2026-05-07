@@ -32,8 +32,10 @@ import { AddAdjustmentButton } from './add-adjustment-button'
 import { CrossDriverDeductionCell } from './cross-driver-deduction-cell'
 import { CustomerChip } from './customer-chip'
 import { EditableQuote } from './editable-quote'
+import { FreightEditorDialog } from './freight-editor-dialog'
 import { HandledBy } from './handled-by'
 import { OrderInfoButton } from './order-info-button'
+import { OrderWarnings } from './order-warnings'
 import { QbSidebar } from './qb-sidebar'
 import { SplitExcludedQuote } from './split-excluded-quote'
 import { SplitLoadButton } from './split-load-button'
@@ -72,6 +74,11 @@ interface SortableOrderTbodyProps {
   onToggleExclude: (newValue: boolean) => void
   onAdjustmentsChange: (adjustments: PayrollAdjustment[]) => void
   onQuoteSaved: (newValue: number | null) => void
+  onFreightSaved: (result: {
+    skidsData: PayrollOrder['skidsData']
+    vinylData: PayrollOrder['vinylData']
+    footage: number
+  }) => void
   onRefetch: () => void
 }
 
@@ -88,12 +95,14 @@ function SortableOrderTbody({
   onToggleExclude,
   onAdjustmentsChange,
   onQuoteSaved,
+  onFreightSaved,
   onRefetch,
 }: SortableOrderTbodyProps) {
   const sortableId =
     order.assignmentId !== null ? String(order.assignmentId) : `order-${order.orderId}`
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: sortableId })
+  const [freightEditorOpen, setFreightEditorOpen] = useState(false)
 
   // Compose dnd-kit's tbody ref with our measurement registration so the
   // parent can observe this tbody's resize events.
@@ -253,16 +262,30 @@ function SortableOrderTbody({
           </div>
         </td>
 
-        <td className={`${cellPad} ${cellBgClass} ${cellBorderTop} text-sm font-medium text-gray-700 text-right whitespace-nowrap`}>
-          {order.footage.toFixed(0)} ft²
+        <td className={`${cellPad} ${cellBgClass} ${cellBorderTop} text-right whitespace-nowrap p-0`}>
+          <button
+            type="button"
+            onClick={() => setFreightEditorOpen(true)}
+            className="w-full h-full px-2 py-2.5 text-sm font-medium text-gray-700 text-right hover:bg-black/5 rounded transition-colors cursor-pointer"
+            title="Click to edit skid / vinyl details"
+          >
+            {order.footage.toFixed(0)} ft²
+          </button>
         </td>
 
-        <td className={`${cellPad} ${cellBgClass} ${cellBorderTop} text-sm text-gray-700 whitespace-nowrap`}>
-          {skidsLabel ? (
-            <span title={`Skids: ${skidsLabel}`}>{skidsLabel}</span>
-          ) : (
-            <span className="text-gray-300">—</span>
-          )}
+        <td className={`${cellPad} ${cellBgClass} ${cellBorderTop} whitespace-nowrap p-0`}>
+          <button
+            type="button"
+            onClick={() => setFreightEditorOpen(true)}
+            className="w-full h-full px-2 py-2.5 text-sm text-gray-700 text-left hover:bg-black/5 rounded transition-colors cursor-pointer"
+            title={
+              skidsLabel
+                ? `Click to edit — current: ${skidsLabel}`
+                : 'Click to add skid / vinyl details'
+            }
+          >
+            {skidsLabel ? skidsLabel : <span className="text-gray-300">—</span>}
+          </button>
         </td>
 
         <td className={`${cellPad} ${cellBgClass} ${cellBorderTop}`}>
@@ -318,13 +341,21 @@ function SortableOrderTbody({
         </td>
       </tr>
 
-      {/* SUB-ROW: adjustments anchored to the right side, near the quote / deduction columns */}
+      {/* SUB-ROW: warnings on the left (split / middlefield labels),
+          adjustments anchored to the right near the quote / deduction columns */}
       <tr>
         <td
           colSpan={COLUMN_COUNT}
           className={`${cellBgClass} border-l-2 border-r-2 border-b-2 ${rowBorder} rounded-b-md px-3 py-1`}
         >
-          <div className="flex justify-end items-start gap-2">
+          <div className="flex justify-between items-start gap-3">
+            <div className="flex-shrink-0 pt-0.5">
+              <OrderWarnings
+                order={order}
+                isTransfer={isTransfer}
+                allAdjustments={allAdjustments}
+              />
+            </div>
             <table className="border-separate bg-white/60 rounded px-1 py-0.5" style={{ borderSpacing: 0 }}>
               <tbody>
                 {orderAdjustments.map((adj) => (
@@ -371,6 +402,15 @@ function SortableOrderTbody({
               </tbody>
             </table>
           </div>
+          <FreightEditorDialog
+            open={freightEditorOpen}
+            onOpenChange={setFreightEditorOpen}
+            orderId={order.orderId}
+            orderLabel={attachedToLabel}
+            initialSkids={order.skidsData}
+            initialVinyl={order.vinylData}
+            onSaved={onFreightSaved}
+          />
         </td>
       </tr>
     </tbody>
@@ -472,43 +512,87 @@ export function OrdersList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  const sortedOrders = [...truckload.orders].sort((a, b) => {
-    const aSeq = a.payrollSequence ?? a.sequenceNumber ?? 0
-    const bSeq = b.payrollSequence ?? b.sequenceNumber ?? 0
+  // Group assignments by orderId so transfers (same order having both a
+  // pickup and a delivery on this load) render as a single row instead of
+  // two. The "primary" of each group is the delivery side when both
+  // halves are present (matches legacy load-value math, which only counts
+  // the delivery for transfers); otherwise it's the only assignment.
+  interface OrderGroup {
+    orderId: number
+    isTransfer: boolean
+    primary: PayrollOrder
+    pickup: PayrollOrder | null
+    delivery: PayrollOrder | null
+    members: PayrollOrder[]
+  }
+
+  const orderGroupsByOrderId = new Map<number, PayrollOrder[]>()
+  truckload.orders.forEach((o) => {
+    const list = orderGroupsByOrderId.get(o.orderId) ?? []
+    list.push(o)
+    orderGroupsByOrderId.set(o.orderId, list)
+  })
+
+  const orderGroups: OrderGroup[] = []
+  orderGroupsByOrderId.forEach((members, orderId) => {
+    const pickup = members.find((m) => m.assignmentType === 'pickup') ?? null
+    const delivery = members.find((m) => m.assignmentType === 'delivery') ?? null
+    const isTransfer = !!pickup && !!delivery && members.length >= 2
+    const primary = isTransfer
+      ? delivery ?? pickup ?? members[0]
+      : delivery ?? pickup ?? members[0]
+    orderGroups.push({
+      orderId,
+      isTransfer,
+      primary: primary!,
+      pickup,
+      delivery,
+      members,
+    })
+  })
+
+  const sortedGroups = orderGroups.sort((a, b) => {
+    const aSeq = a.primary.payrollSequence ?? a.primary.sequenceNumber ?? 0
+    const bSeq = b.primary.payrollSequence ?? b.primary.sequenceNumber ?? 0
     return aSeq - bSeq
   })
 
-  const orderIdCounts = new Map<number, number>()
-  truckload.orders.forEach((o) => {
-    orderIdCounts.set(o.orderId, (orderIdCounts.get(o.orderId) ?? 0) + 1)
-  })
-  const transferOrderIds = new Set<number>()
-  orderIdCounts.forEach((count, orderId) => {
-    if (count > 1) transferOrderIds.add(orderId)
-  })
+  // Primary order per group, in display order — what the QB sidebar
+  // iterates over. One QB block per visible order row.
+  const sortedPrimaries = sortedGroups.map((g) => g.primary)
 
-  async function handleToggleExclude(order: PayrollOrder, newValue: boolean) {
-    if (order.assignmentId === null) {
+  async function handleToggleExclude(group: OrderGroup, newValue: boolean) {
+    const assignmentIds = group.members
+      .map((m) => m.assignmentId)
+      .filter((id): id is number => id !== null)
+    if (assignmentIds.length === 0) {
       toast.error('Cannot edit this order — no assignment ID')
       return
     }
-    onOrderUpdate(order.orderId, { excludeFromLoadValue: newValue })
+    onOrderUpdate(group.orderId, { excludeFromLoadValue: newValue })
     try {
-      const response = await fetch(
-        `/api/truckloads/${truckload.id}/assignments/${order.assignmentId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ excludeFromLoadValue: newValue }),
-        }
+      // PATCH every assignment in the group so both halves of a transfer
+      // stay in sync. Run in parallel — server treats each as independent.
+      const results = await Promise.all(
+        assignmentIds.map((assignmentId) =>
+          fetch(
+            `/api/truckloads/${truckload.id}/assignments/${assignmentId}`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ excludeFromLoadValue: newValue }),
+            }
+          ).then((r) => r.json())
+        )
       )
-      const data = await response.json()
-      if (!data.success) throw new Error(data.error || 'Failed to update')
+      if (results.some((r) => !r?.success)) {
+        throw new Error('Failed to update')
+      }
     } catch (error) {
       console.error('Error updating exclude flag:', error)
       toast.error('Failed to update order')
-      onOrderUpdate(order.orderId, { excludeFromLoadValue: !newValue })
+      onOrderUpdate(group.orderId, { excludeFromLoadValue: !newValue })
     }
   }
 
@@ -516,26 +600,39 @@ export function OrdersList({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = sortedOrders.findIndex(
-      (o) =>
-        (o.assignmentId !== null ? String(o.assignmentId) : `order-${o.orderId}`) ===
-        active.id
-    )
-    const newIndex = sortedOrders.findIndex(
-      (o) =>
-        (o.assignmentId !== null ? String(o.assignmentId) : `order-${o.orderId}`) ===
-        over.id
-    )
+    function groupSortableId(g: OrderGroup) {
+      return g.primary.assignmentId !== null
+        ? String(g.primary.assignmentId)
+        : `order-${g.orderId}`
+    }
+
+    const oldIndex = sortedGroups.findIndex((g) => groupSortableId(g) === active.id)
+    const newIndex = sortedGroups.findIndex((g) => groupSortableId(g) === over.id)
     if (oldIndex === -1 || newIndex === -1) return
 
-    const reordered = arrayMove(sortedOrders, oldIndex, newIndex)
-    const reorderedWithSequence: PayrollOrder[] = reordered.map((o, i) => ({
+    const reorderedGroups = arrayMove(sortedGroups, oldIndex, newIndex)
+
+    // Flatten groups into individual assignments, keeping each transfer's
+    // pickup immediately followed by its delivery so the persisted
+    // sequence matches the visible row order. Sequence numbers run 1..N
+    // through the flat list.
+    const flatOrders: PayrollOrder[] = []
+    reorderedGroups.forEach((g) => {
+      if (g.isTransfer) {
+        if (g.pickup) flatOrders.push(g.pickup)
+        if (g.delivery) flatOrders.push(g.delivery)
+      } else {
+        flatOrders.push(...g.members)
+      }
+    })
+
+    const reorderedWithSequence: PayrollOrder[] = flatOrders.map((o, i) => ({
       ...o,
       payrollSequence: i + 1,
     }))
     onOrdersReordered(reorderedWithSequence)
 
-    const assignmentIds = reordered
+    const assignmentIds = flatOrders
       .map((o) => o.assignmentId)
       .filter((id): id is number => id !== null)
 
@@ -562,7 +659,7 @@ export function OrdersList({
     }
   }
 
-  if (sortedOrders.length === 0) {
+  if (sortedGroups.length === 0) {
     return (
       <Card className="p-6 text-center text-sm text-gray-400 italic">
         No orders on this load.
@@ -570,8 +667,12 @@ export function OrdersList({
     )
   }
 
-  const sortableIds = sortedOrders.map((o) =>
-    o.assignmentId !== null ? String(o.assignmentId) : `order-${o.orderId}`
+  // One sortable entry PER GROUP — transfers track as a single item so
+  // dragging moves both halves together.
+  const sortableIds = sortedGroups.map((g) =>
+    g.primary.assignmentId !== null
+      ? String(g.primary.assignmentId)
+      : `order-${g.orderId}`
   )
 
   return (
@@ -591,33 +692,45 @@ export function OrdersList({
           >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
               <table className="border-separate" style={{ borderSpacing: '0 6px' }}>
-                {sortedOrders.map((order, idx) => {
-                  // Show under each order: manual non-split adjustments AND
-                  // split-load entries that are tied to this specific order.
+                {sortedGroups.map((group, idx) => {
+                  // One row per ORDER, not per assignment — transfers
+                  // (same orderId with both pickup + delivery on this
+                  // load) collapse into a single visual row. Adjustments
+                  // are tied to orderId so they show once, not twice.
                   const orderAdjustments = truckload.adjustments.filter(
                     (a) =>
-                      a.orderId === order.orderId &&
+                      a.orderId === group.orderId &&
                       ((a.isManual && a.splitLoadId === null) || a.splitLoadId !== null)
                   )
-                  const rowKey = `${order.orderId}-${order.assignmentId ?? 'none'}`
+                  const rowKey = `${group.primary.orderId}-${group.primary.assignmentId ?? 'none'}`
                   return (
                     <SortableOrderTbody
-                      key={order.assignmentId ?? `order-${order.orderId}-${order.assignmentType}`}
+                      key={
+                        group.primary.assignmentId ??
+                        `order-${group.orderId}-${group.primary.assignmentType}`
+                      }
                       truckload={truckload}
-                      order={order}
+                      order={group.primary}
                       index={idx}
-                      isTransfer={transferOrderIds.has(order.orderId)}
+                      isTransfer={group.isTransfer}
                       driverName={driverName}
                       orderAdjustments={orderAdjustments}
                       allAdjustments={truckload.adjustments}
                       rowKey={rowKey}
                       registerTbody={registerTbody}
-                      onToggleExclude={(checked) => handleToggleExclude(order, checked)}
+                      onToggleExclude={(checked) => handleToggleExclude(group, checked)}
                       onAdjustmentsChange={onAdjustmentsChange}
                       onQuoteSaved={(newValue) =>
-                        onOrderUpdate(order.orderId, {
+                        onOrderUpdate(group.orderId, {
                           fullQuote: newValue,
                           freightQuote: newValue,
+                        })
+                      }
+                      onFreightSaved={(result) =>
+                        onOrderUpdate(group.orderId, {
+                          skidsData: result.skidsData,
+                          vinylData: result.vinylData,
+                          footage: result.footage,
                         })
                       }
                       onRefetch={onRefetch}
@@ -631,7 +744,7 @@ export function OrdersList({
 
         <QbSidebar
           truckload={truckload}
-          sortedOrders={sortedOrders}
+          sortedOrders={sortedPrimaries}
           qbByRowKey={qbByRowKey}
           surchargePercentage={fuelSurchargePercentage}
           allAdjustments={truckload.adjustments}
