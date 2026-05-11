@@ -199,9 +199,20 @@ const LOAD_TYPE_CONFIG = {
   paNy: { label: 'PA-NY', color: '#DDD6FE', textColor: '#5B21B6' },
 } as const;
 
+type StageFilterKey = 'all' | 'unassigned' | 'awaiting-pickup' | 'in-warehouse' | 'awaiting-delivery' | 'completed';
+
+const STAGE_FILTER_OPTIONS: { key: StageFilterKey; label: string }[] = [
+  { key: 'unassigned', label: 'Unassigned' },
+  { key: 'awaiting-pickup', label: 'Awaiting Pickup' },
+  { key: 'in-warehouse', label: 'In Warehouse' },
+  { key: 'awaiting-delivery', label: 'Awaiting Delivery' },
+  { key: 'completed', label: 'Completed' },
+];
+
 const MAP_STORAGE_KEYS = {
   filters: 'load-board-map-active-filters',
   viewToggles: 'load-board-map-view-toggles',
+  stageFilter: 'load-board-map-stage-filter',
 };
 
 const center = {
@@ -545,6 +556,7 @@ export default function LoadBoardMap() {
     completed: false,
   });
   const [activeFilters, setActiveFilters] = useState<Record<string, boolean>>({ ...DEFAULT_FILTERS });
+  const [stageFilter, setStageFilter] = useState<StageFilterKey>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -575,6 +587,10 @@ export default function LoadBoardMap() {
           setViewToggles(parsed);
         }
       }
+      const savedStage = localStorage.getItem(MAP_STORAGE_KEYS.stageFilter);
+      if (savedStage) {
+        setStageFilter(savedStage as StageFilterKey);
+      }
     } catch (e) {
       console.error('Error loading map preferences:', e);
     }
@@ -590,6 +606,11 @@ export default function LoadBoardMap() {
     if (!hasInitialized.current) return;
     try { localStorage.setItem(MAP_STORAGE_KEYS.viewToggles, JSON.stringify(viewToggles)); } catch {}
   }, [viewToggles]);
+
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+    try { localStorage.setItem(MAP_STORAGE_KEYS.stageFilter, stageFilter); } catch {}
+  }, [stageFilter]);
 
   // Debounce search term
   useEffect(() => {
@@ -1040,9 +1061,34 @@ export default function LoadBoardMap() {
     });
   };
 
-  // Combine all locations and apply client-side load type filters, then cluster
+  const getLocationStageKey = useCallback((loc: LoadLocation): Exclude<StageFilterKey, 'all'> => {
+    const pickupTruckload = loc.pickupAssignment
+      ? allTruckloads.find(t => t.id === loc.pickupAssignment!.truckloadId)
+      : null;
+    const isPickupCompleted = pickupTruckload?.isCompleted || false;
+
+    const deliveryTruckload = loc.deliveryAssignment
+      ? allTruckloads.find(t => t.id === loc.deliveryAssignment!.truckloadId)
+      : null;
+    const isDeliveryCompleted = deliveryTruckload?.isCompleted || false;
+
+    if (loc.deliveryAssignment && !isDeliveryCompleted) return 'awaiting-delivery';
+    if (!loc.pickupAssignment) return 'unassigned';
+    if (loc.pickupAssignment && !isPickupCompleted) return 'awaiting-pickup';
+    if (isPickupCompleted && !loc.deliveryAssignment) return 'in-warehouse';
+    return 'completed';
+  }, [allTruckloads]);
+
+  // Combine all locations and apply client-side load type + stage filters, then cluster
   const filteredLocations = useMemo(() => {
-    const allOrders = [...loadLocations, ...(viewToggles.completed ? completedLocations : [])];
+    let allOrders = [...loadLocations, ...(viewToggles.completed ? completedLocations : [])];
+
+    // Stage filter
+    if (stageFilter !== 'all') {
+      allOrders = allOrders.filter(loc => getLocationStageKey(loc) === stageFilter);
+    }
+
+    // Load type filters
     const hasActiveFilters = Object.values(activeFilters).some(v => v);
     if (!hasActiveFilters) return allOrders;
     return allOrders.filter(loc =>
@@ -1050,7 +1096,7 @@ export default function LoadBoardMap() {
         isActive && loc.filters[key as keyof OrderFilters]
       )
     );
-  }, [loadLocations, completedLocations, viewToggles.completed, activeFilters]);
+  }, [loadLocations, completedLocations, viewToggles.completed, activeFilters, stageFilter, getLocationStageKey]);
 
   // Calculate filter counts for the current set of locations
   const filterCounts = useMemo(() => {
@@ -1063,6 +1109,16 @@ export default function LoadBoardMap() {
     });
     return counts;
   }, [loadLocations, completedLocations, viewToggles.completed]);
+
+  // Calculate stage counts (based on pre-load-type-filter data)
+  const stageCounts = useMemo(() => {
+    const allOrders = [...loadLocations, ...(viewToggles.completed ? completedLocations : [])];
+    const counts: Record<string, number> = {};
+    for (const option of STAGE_FILTER_OPTIONS) {
+      counts[option.key] = allOrders.filter(loc => getLocationStageKey(loc) === option.key).length;
+    }
+    return counts;
+  }, [loadLocations, completedLocations, viewToggles.completed, getLocationStageKey]);
 
   // Update clustering
   useEffect(() => {
@@ -1239,6 +1295,43 @@ export default function LoadBoardMap() {
                 >
                   Completed
                 </Button>
+              </div>
+            </div>
+
+            {/* Stage Filter */}
+            <div className="flex items-center gap-1.5 bg-white rounded-md px-2 py-1 border border-gray-200">
+              <span className="text-xs font-medium text-gray-600">Stage:</span>
+              <div className="flex items-center gap-0.5">
+                {STAGE_FILTER_OPTIONS.map((option) => {
+                  const isActive = stageFilter === option.key;
+                  const count = stageCounts[option.key] || 0;
+                  return (
+                    <Button
+                      key={option.key}
+                      variant={isActive ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStageFilter(prev => prev === option.key ? 'all' : option.key)}
+                      className={`text-[10px] h-6 px-2 transition-all duration-200 ${
+                        isActive
+                          ? 'bg-gray-800 hover:bg-gray-900 text-white shadow-sm'
+                          : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
+                      }`}
+                    >
+                      <span className="flex items-center gap-0.5">
+                        <span>{option.label}</span>
+                        {count > 0 && (
+                          <span className={`inline-flex items-center justify-center w-3.5 h-3.5 text-[9px] rounded-full ${
+                            isActive
+                              ? 'bg-white text-gray-800'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}>
+                            {count}
+                          </span>
+                        )}
+                      </span>
+                    </Button>
+                  );
+                })}
               </div>
             </div>
 
