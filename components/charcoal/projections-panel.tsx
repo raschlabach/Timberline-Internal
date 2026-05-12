@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { CharcoalProjectedSkid } from '@/types/charcoal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Plus, Pencil, Trash2, TrendingUp } from 'lucide-react'
 import { ProjectionDialog } from './projection-dialog'
@@ -14,12 +13,11 @@ import { toast } from 'sonner'
 
 interface ProjectionsPanelProps {
   projections: CharcoalProjectedSkid[]
-  stdProj: number
-  wcProj: number
+  totalProj: number
   isOffice: boolean
 }
 
-export function ProjectionsPanel({ projections, stdProj, wcProj, isOffice }: ProjectionsPanelProps) {
+export function ProjectionsPanel({ projections, totalProj, isOffice }: ProjectionsPanelProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProjection, setEditingProjection] = useState<CharcoalProjectedSkid | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -55,7 +53,7 @@ export function ProjectionsPanel({ projections, stdProj, wcProj, isOffice }: Pro
                 <TrendingUp size={18} />
                 Projected Production
               </CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">Skids expected to be ready</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Raw charcoal skids expected to be ready</p>
             </div>
             {isOffice && (
               <Button size="sm" onClick={() => { setEditingProjection(null); setIsDialogOpen(true) }}>
@@ -65,15 +63,9 @@ export function ProjectionsPanel({ projections, stdProj, wcProj, isOffice }: Pro
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border p-3 text-center">
-              <div className="text-2xl font-bold">{stdProj}</div>
-              <div className="text-xs text-muted-foreground">Standard projected</div>
-            </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-center">
-              <div className="text-2xl font-bold text-amber-900">{wcProj}</div>
-              <div className="text-xs text-amber-700">Walnut Creek projected</div>
-            </div>
+          <div className="rounded-lg border p-3 text-center">
+            <div className="text-2xl font-bold">{totalProj}</div>
+            <div className="text-xs text-muted-foreground">Total projected skids</div>
           </div>
 
           {sortedDates.length === 0 ? (
@@ -86,11 +78,6 @@ export function ProjectionsPanel({ projections, stdProj, wcProj, isOffice }: Pro
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{safeFormatDate(date, 'MMM d')}</span>
                       <span>— {proj.count} skids</span>
-                      {proj.is_walnut_creek && (
-                        <Badge className="bg-amber-100 text-amber-900 border-amber-200 text-[10px] px-1.5 py-0">
-                          Walnut Creek
-                        </Badge>
-                      )}
                       {proj.notes && <span className="text-xs text-muted-foreground truncate max-w-[120px]">{proj.notes}</span>}
                     </div>
                     {isOffice && (

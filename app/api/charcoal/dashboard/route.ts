@@ -29,7 +29,7 @@ export async function GET() {
       query(`SELECT COUNT(*)::int AS count FROM charcoal_skids WHERE is_walnut_creek = FALSE`),
       query(`SELECT COUNT(*)::int AS count FROM charcoal_skids WHERE is_walnut_creek = TRUE`),
       query(
-        `SELECT id, count, ready_date, is_walnut_creek, notes, created_by_id, created_at, updated_at
+        `SELECT id, count, ready_date, notes, created_by_id, created_at, updated_at
          FROM charcoal_projected_skids
          WHERE count > 0
          ORDER BY ready_date ASC, created_at ASC`
@@ -49,15 +49,14 @@ export async function GET() {
     const wcInv = wcInvResult.rows[0]?.count ?? 0
     const projections = projectionsResult.rows
 
-    const stdProj = projections.filter(p => !p.is_walnut_creek).reduce((sum, p) => sum + p.count, 0)
-    const wcProj = projections.filter(p => p.is_walnut_creek).reduce((sum, p) => sum + p.count, 0)
+    const totalProj = projections.reduce((sum: number, p: any) => sum + p.count, 0)
 
     const allocation = computeAllocations(orders, stdInv, wcInv, projections)
 
     return NextResponse.json({
       orders,
       skids,
-      counters: { stdInv, wcInv, stdProj, wcProj },
+      counters: { stdInv, wcInv, totalProj },
       projections: projectionsResult.rows,
       allocation,
       lastSkid: lastSkidResult.rows[0] || null,

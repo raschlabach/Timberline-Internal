@@ -101,7 +101,7 @@ export function useDeleteSkid() {
 export function useCreateProjection() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { count: number; ready_date: string; is_walnut_creek: boolean; notes?: string }) =>
+    mutationFn: (data: { count: number; ready_date: string; notes?: string }) =>
       fetchJson('/api/charcoal/projected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['charcoal', 'dashboard'] }) },
   })
@@ -110,7 +110,7 @@ export function useCreateProjection() {
 export function useUpdateProjection() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; count?: number; ready_date?: string; is_walnut_creek?: boolean; notes?: string }) =>
+    mutationFn: ({ id, ...data }: { id: string; count?: number; ready_date?: string; notes?: string }) =>
       fetchJson(`/api/charcoal/projected/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['charcoal', 'dashboard'] }) },
   })

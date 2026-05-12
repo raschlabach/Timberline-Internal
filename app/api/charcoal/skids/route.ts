@@ -21,13 +21,12 @@ export async function POST(request: Request) {
       )
       const newSkid = skidResult.rows[0]
 
-      // Auto-decrement oldest matching projection
+      // Auto-decrement oldest projection (projections are type-agnostic, raw charcoal)
       const projResult = await client.query(
         `SELECT id, count FROM charcoal_projected_skids
-         WHERE is_walnut_creek = $1 AND count > 0
+         WHERE count > 0
          ORDER BY ready_date ASC, created_at ASC
-         LIMIT 1`,
-        [newSkid.is_walnut_creek]
+         LIMIT 1`
       )
 
       if (projResult.rows.length > 0) {

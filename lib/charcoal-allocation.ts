@@ -5,53 +5,47 @@ interface PoolProjection {
   readyDate: string
 }
 
-interface Pool {
-  inventory: number
-  projections: PoolProjection[]
-}
-
+/**
+ * Allocates inventory and projected production to orders in priority order.
+ * Inventory is split by WC/standard (skids are already bagged).
+ * Projections are a single shared pool (raw charcoal, not yet bagged as WC or std).
+ */
 export function computeAllocations(
   orders: CharcoalOrder[],
   stdInvCount: number,
   wcInvCount: number,
   projections: CharcoalProjectedSkid[]
 ): Record<string, CharcoalAllocation> {
-  const stdProjections: PoolProjection[] = projections
-    .filter(p => !p.is_walnut_creek)
+  const sharedProjections: PoolProjection[] = projections
     .sort((a, b) => a.ready_date.localeCompare(b.ready_date))
     .map(p => ({ count: p.count, readyDate: p.ready_date }))
 
-  const wcProjections: PoolProjection[] = projections
-    .filter(p => p.is_walnut_creek)
-    .sort((a, b) => a.ready_date.localeCompare(b.ready_date))
-    .map(p => ({ count: p.count, readyDate: p.ready_date }))
-
-  const pools = {
-    std: { inventory: stdInvCount, projections: stdProjections } as Pool,
-    wc: { inventory: wcInvCount, projections: wcProjections } as Pool,
-  }
+  let stdInv = stdInvCount
+  let wcInv = wcInvCount
 
   const allocation: Record<string, CharcoalAllocation> = {}
 
   for (const order of orders) {
-    const pool = order.customer_is_walnut_creek ? pools.wc : pools.std
+    const isWC = order.customer_is_walnut_creek
     let needed = order.quantity
 
-    const fromInventory = Math.min(needed, pool.inventory)
-    pool.inventory -= fromInventory
+    const invAvailable = isWC ? wcInv : stdInv
+    const fromInventory = Math.min(needed, invAvailable)
+    if (isWC) wcInv -= fromInventory
+    else stdInv -= fromInventory
     needed -= fromInventory
 
     const fromProjected: { count: number; readyDate: string }[] = []
     let i = 0
-    while (needed > 0 && i < pool.projections.length) {
-      const available = pool.projections[i].count
+    while (needed > 0 && i < sharedProjections.length) {
+      const available = sharedProjections[i].count
       const take = Math.min(needed, available)
       if (take > 0) {
-        fromProjected.push({ count: take, readyDate: pool.projections[i].readyDate })
-        pool.projections[i].count -= take
+        fromProjected.push({ count: take, readyDate: sharedProjections[i].readyDate })
+        sharedProjections[i].count -= take
         needed -= take
       }
-      if (pool.projections[i].count === 0) i++
+      if (sharedProjections[i].count === 0) i++
       else break
     }
 

@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useCreateProjection, useUpdateProjection } from './use-charcoal'
 import { CharcoalProjectedSkid } from '@/types/charcoal'
 import { toast } from 'sonner'
@@ -17,7 +16,6 @@ import { toast } from 'sonner'
 const projectionSchema = z.object({
   count: z.coerce.number().int().min(1, 'At least 1'),
   ready_date: z.string().min(1, 'Date is required'),
-  is_walnut_creek: z.boolean(),
   notes: z.string().optional(),
 })
 
@@ -34,21 +32,18 @@ export function ProjectionDialog({ isOpen, onClose, editingProjection }: Project
   const updateProjection = useUpdateProjection()
   const isEditing = !!editingProjection
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ProjectionFormValues>({
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ProjectionFormValues>({
     resolver: zodResolver(projectionSchema),
-    defaultValues: { count: 1, ready_date: '', is_walnut_creek: false, notes: '' },
+    defaultValues: { count: 1, ready_date: '', notes: '' },
   })
-
-  const isWC = watch('is_walnut_creek')
 
   useEffect(() => {
     if (editingProjection) {
       setValue('count', editingProjection.count)
-      setValue('ready_date', editingProjection.ready_date.split('T')[0])
-      setValue('is_walnut_creek', editingProjection.is_walnut_creek)
+      setValue('ready_date', String(editingProjection.ready_date).split('T')[0])
       setValue('notes', editingProjection.notes || '')
     } else {
-      reset({ count: 1, ready_date: '', is_walnut_creek: false, notes: '' })
+      reset({ count: 1, ready_date: '', notes: '' })
     }
   }, [editingProjection, setValue, reset])
 
@@ -59,7 +54,6 @@ export function ProjectionDialog({ isOpen, onClose, editingProjection }: Project
           id: editingProjection!.id,
           count: data.count,
           ready_date: data.ready_date,
-          is_walnut_creek: data.is_walnut_creek,
           notes: data.notes || undefined,
         })
         toast.success('Projection updated')
@@ -67,7 +61,6 @@ export function ProjectionDialog({ isOpen, onClose, editingProjection }: Project
         await createProjection.mutateAsync({
           count: data.count,
           ready_date: data.ready_date,
-          is_walnut_creek: data.is_walnut_creek,
           notes: data.notes || undefined,
         })
         toast.success('Projection added')
@@ -95,14 +88,6 @@ export function ProjectionDialog({ isOpen, onClose, editingProjection }: Project
             <Label htmlFor="ready_date">Ready date</Label>
             <Input id="ready_date" type="date" {...register('ready_date')} />
             {errors.ready_date && <p className="text-xs text-destructive">{errors.ready_date.message}</p>}
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="proj-wc"
-              checked={isWC}
-              onCheckedChange={(v) => setValue('is_walnut_creek', !!v)}
-            />
-            <Label htmlFor="proj-wc">Walnut Creek</Label>
           </div>
           <div className="space-y-2">
             <Label htmlFor="proj-notes">Notes</Label>

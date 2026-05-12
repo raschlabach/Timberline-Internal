@@ -47,8 +47,7 @@ export function CharcoalShippingSection() {
           />
           <ProjectionsPanel
             projections={data.projections}
-            stdProj={data.counters.stdProj}
-            wcProj={data.counters.wcProj}
+            totalProj={data.counters.totalProj}
             isOffice={false}
           />
         </div>

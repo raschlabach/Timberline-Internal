@@ -25,7 +25,6 @@ export interface CharcoalProjectedSkid {
   id: string
   count: number
   ready_date: string
-  is_walnut_creek: boolean
   notes: string | null
   created_by_id: string
   created_at: string
@@ -58,8 +57,7 @@ export interface CharcoalDashboardData {
   counters: {
     stdInv: number
     wcInv: number
-    stdProj: number
-    wcProj: number
+    totalProj: number
   }
   projections: CharcoalProjectedSkid[]
   allocation: Record<string, CharcoalAllocation>

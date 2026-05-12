@@ -9,7 +9,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (role !== 'office') return forbidden()
 
     const body = await request.json()
-    const { count, ready_date, is_walnut_creek, notes } = body
+    const { count, ready_date, notes } = body
 
     const sets: string[] = []
     const values: any[] = []
@@ -17,7 +17,6 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     if (count !== undefined) { sets.push(`count = $${idx++}`); values.push(count) }
     if (ready_date !== undefined) { sets.push(`ready_date = $${idx++}`); values.push(ready_date) }
-    if (is_walnut_creek !== undefined) { sets.push(`is_walnut_creek = $${idx++}`); values.push(is_walnut_creek) }
     if (notes !== undefined) { sets.push(`notes = $${idx++}`); values.push(notes || null) }
     sets.push(`updated_at = NOW()`)
 

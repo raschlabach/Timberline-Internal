@@ -35,12 +35,13 @@ interface OrdersListProps {
   isOffice: boolean
 }
 
-function SortableOrderCard({ order, allocation, isOffice, onEdit, onDelete }: {
+function SortableOrderCard({ order, allocation, isOffice, onEdit, onDelete, onComplete }: {
   order: CharcoalOrder
   allocation: CharcoalAllocation | undefined
   isOffice: boolean
   onEdit: () => void
   onDelete: () => void
+  onComplete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: order.id })
 
@@ -61,6 +62,7 @@ function SortableOrderCard({ order, allocation, isOffice, onEdit, onDelete }: {
         dragHandleProps={isOffice ? listeners : undefined}
         onEdit={onEdit}
         onDelete={onDelete}
+        onComplete={onComplete}
       />
     </div>
   )
@@ -70,8 +72,10 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false)
   const [editingOrder, setEditingOrder] = useState<CharcoalOrder | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [completingId, setCompletingId] = useState<string | null>(null)
 
   const deleteOrder = useDeleteOrder()
+  const updateOrder = useUpdateOrder()
   const reorderOrders = useReorderOrders()
 
   const [localOrders, setLocalOrders] = useState<CharcoalOrder[] | null>(null)
@@ -113,6 +117,17 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
     }
   }
 
+  async function handleComplete() {
+    if (!completingId) return
+    try {
+      await updateOrder.mutateAsync({ id: completingId, status: 'completed' })
+      toast.success('Order marked as completed')
+      setCompletingId(null)
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to complete order')
+    }
+  }
+
   return (
     <>
       <Card className="h-fit">
@@ -151,6 +166,7 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
                       isOffice={isOffice}
                       onEdit={() => { setEditingOrder(order); setIsOrderDialogOpen(true) }}
                       onDelete={() => setDeletingId(order.id)}
+                      onComplete={() => setCompletingId(order.id)}
                     />
                   ))}
                 </div>
@@ -179,6 +195,14 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
         title="Delete this order?"
         description="This order will be permanently removed."
         isPending={deleteOrder.isPending}
+      />
+      <ConfirmDeleteDialog
+        isOpen={!!completingId}
+        onClose={() => setCompletingId(null)}
+        onConfirm={handleComplete}
+        title="Complete this order?"
+        description="This order will be marked as completed and removed from the priority list."
+        isPending={updateOrder.isPending}
       />
     </>
   )
