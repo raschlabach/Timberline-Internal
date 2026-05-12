@@ -22,7 +22,7 @@ export async function GET() {
         `SELECT s.id, s.wrapped_at, s.wrapped_by_id, u.full_name AS wrapped_by_name,
                 s.is_walnut_creek, s.notes, s.created_at, s.updated_at
          FROM charcoal_skids s
-         LEFT JOIN users u ON u.id = s.wrapped_by_id
+         LEFT JOIN users u ON u.id = s.wrapped_by_id::int
          ORDER BY s.wrapped_at DESC
          LIMIT 25`
       ),
@@ -37,7 +37,7 @@ export async function GET() {
       query(
         `SELECT s.wrapped_at, u.full_name AS wrapped_by_name, s.is_walnut_creek
          FROM charcoal_skids s
-         LEFT JOIN users u ON u.id = s.wrapped_by_id
+         LEFT JOIN users u ON u.id = s.wrapped_by_id::int
          ORDER BY s.wrapped_at DESC
          LIMIT 1`
       ),
