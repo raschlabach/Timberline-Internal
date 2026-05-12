@@ -175,9 +175,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     const wb = XLSX.read(buffer, { type: 'buffer' })
 
-    // Check which week_labels already exist so we can detect new rows
+    // Check which week_labels already exist (only active/completed, not hidden)
     const existingImportsResult = await client.query(
-      `SELECT id, week_label, status FROM vinyl_tech_imports`
+      `SELECT id, week_label, status FROM vinyl_tech_imports WHERE status IN ('active', 'completed')`
     )
     const existingImportsByLabel = new Map<string, { id: number; status: string }>()
     for (const r of existingImportsResult.rows) {
