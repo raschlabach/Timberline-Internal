@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Plus, Pencil, Trash2, TrendingUp } from 'lucide-react'
-import { format } from 'date-fns'
 import { ProjectionDialog } from './projection-dialog'
+import { safeFormatDate } from './date-helpers'
 import { ConfirmDeleteDialog } from './confirm-delete-dialog'
 import { useDeleteProjection } from './use-charcoal'
 import { toast } from 'sonner'
@@ -37,7 +37,7 @@ export function ProjectionsPanel({ projections, stdProj, wcProj, isOffice }: Pro
   }
 
   const grouped = projections.reduce<Record<string, CharcoalProjectedSkid[]>>((acc, p) => {
-    const key = p.ready_date.split('T')[0]
+    const key = String(p.ready_date).split('T')[0]
     if (!acc[key]) acc[key] = []
     acc[key].push(p)
     return acc
@@ -84,7 +84,7 @@ export function ProjectionsPanel({ projections, stdProj, wcProj, isOffice }: Pro
                 grouped[date].map(proj => (
                   <div key={proj.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-sm group">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{format(new Date(date + 'T00:00:00'), 'MMM d')}</span>
+                      <span className="font-medium">{safeFormatDate(date, 'MMM d')}</span>
                       <span>— {proj.count} skids</span>
                       {proj.is_walnut_creek && (
                         <Badge className="bg-amber-100 text-amber-900 border-amber-200 text-[10px] px-1.5 py-0">

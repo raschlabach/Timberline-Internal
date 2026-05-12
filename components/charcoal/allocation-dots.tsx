@@ -2,7 +2,7 @@
 
 import { CharcoalAllocation } from '@/types/charcoal'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { format } from 'date-fns'
+import { safeFormatDate } from './date-helpers'
 
 interface AllocationDotsProps {
   quantity: number
@@ -15,7 +15,7 @@ export function AllocationDots({ quantity, allocation }: AllocationDotsProps) {
   const gray = Math.max(0, quantity - green - orangeTotal)
 
   const projectedLabel = allocation?.orangePieces
-    ?.map(p => `${p.count} by ${format(new Date(p.readyDate + 'T00:00:00'), 'MMM d')}`)
+    ?.map(p => `${p.count} by ${safeFormatDate(p.readyDate, 'MMM d')}`)
     .join(', ')
 
   return (

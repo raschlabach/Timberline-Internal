@@ -6,8 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AllocationDots } from './allocation-dots'
 import { GripVertical, Pencil, Trash2 } from 'lucide-react'
-import { format } from 'date-fns'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { safeFormatDate } from './date-helpers'
 
 interface OrderCardProps {
   order: CharcoalOrder
@@ -40,7 +40,7 @@ export function OrderCard({ order, allocation, isOffice, isDragging, dragHandleP
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">{order.quantity} skids</span>
             {order.due_date && (
-              <span>Due {format(new Date(order.due_date + 'T00:00:00'), 'MMM d')}</span>
+              <span>Due {safeFormatDate(order.due_date, 'MMM d')}</span>
             )}
           </div>
           {order.notes && (
