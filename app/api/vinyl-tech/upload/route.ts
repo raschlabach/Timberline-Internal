@@ -176,12 +176,20 @@ export async function POST(request: NextRequest) {
     const wb = XLSX.read(buffer, { type: 'buffer' })
 
     // Check which week_labels already exist so we can detect new rows
+    // Use label + date as the key since the same label (e.g. "WEEK OF 5-12") recurs every year
     const existingImportsResult = await client.query(
-      `SELECT id, week_label, status FROM vinyl_tech_imports`
+      `SELECT id, week_label, TO_CHAR(week_date, 'YYYY-MM-DD') as week_date, status FROM vinyl_tech_imports`
     )
+    const existingImportsByLabelDate = new Map<string, { id: number; status: string }>()
     const existingImportsByLabel = new Map<string, { id: number; status: string }>()
     for (const r of existingImportsResult.rows) {
-      existingImportsByLabel.set(r.week_label.trim().toLowerCase(), { id: r.id, status: r.status })
+      const label = r.week_label.trim().toLowerCase()
+      const dateKey = r.week_date || ''
+      existingImportsByLabelDate.set(`${label}||${dateKey}`, { id: r.id, status: r.status })
+      // Also keep a label-only map as fallback for imports without dates
+      if (!existingImportsByLabel.has(label)) {
+        existingImportsByLabel.set(label, { id: r.id, status: r.status })
+      }
     }
 
     // Load saved VT code → customer mappings
@@ -215,7 +223,10 @@ export async function POST(request: NextRequest) {
       if (parsed.rows.length === 0) continue
 
       const labelKey = sheetName.trim().toLowerCase()
-      const existing = existingImportsByLabel.get(labelKey)
+      const dateKey = parsed.weekDate ? parsed.weekDate.toISOString().split('T')[0] : ''
+      // Check label+date first (handles recurring sheet names like "WEEK OF 5-12" across years)
+      const existing = existingImportsByLabelDate.get(`${labelKey}||${dateKey}`)
+        || (!dateKey ? existingImportsByLabel.get(labelKey) : null)
 
       if (existing) {
         // Sheet already imported — check for new rows to add
