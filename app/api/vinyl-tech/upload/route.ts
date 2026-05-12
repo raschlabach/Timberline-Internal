@@ -31,6 +31,29 @@ function excelDateToJSDate(serial: number): Date | null {
   return new Date(utcDays * 86400 * 1000)
 }
 
+function detectColumnOffset(data: (string | number | null)[][]): number {
+  // Check the header row (row 11) to find where "Ship To" is
+  // Offset 0 = VT code in col A (0), Ship To in col B (1) — unshifted layout
+  // Offset 1 = VT code in col B (1), Ship To in col C (2) — shifted layout
+  if (data[11]) {
+    for (let c = 0; c < 5; c++) {
+      const val = data[11][c]
+      if (typeof val === 'string' && val.trim().toLowerCase().includes('ship to')) {
+        // Ship To found at column c, VT code is one column before it
+        return c - 1
+      }
+    }
+  }
+  // Fallback: check if row 12 col 0 looks like a VT code (starts with "VT")
+  if (data[12]) {
+    const col0 = data[12][0]
+    if (typeof col0 === 'string' && col0.trim().toUpperCase().startsWith('VT')) {
+      return 0
+    }
+  }
+  return 1
+}
+
 function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
   const data: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, {
     header: 1,
@@ -41,12 +64,15 @@ function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
   let weekDate: Date | null = null
   let sheetStatus = ''
 
+  const off = detectColumnOffset(data)
+
+  // Date and status positions shift with the layout
   if (data[5]) {
-    const dateVal = data[5][5]
+    const dateVal = data[5][off + 4]
     if (typeof dateVal === 'number') {
       weekDate = excelDateToJSDate(dateVal)
     }
-    const statusVal = data[5][8]
+    const statusVal = data[5][off + 7]
     if (typeof statusVal === 'string') {
       sheetStatus = statusVal.trim()
     }
@@ -59,25 +85,29 @@ function parseSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedSheet {
     const row = data[i]
     if (!row) continue
 
-    const colC = row[2]
-    if (typeof colC === 'string' && colC.trim().toLowerCase() === 'total') break
+    const shipToCol = row[off + 1]
+    if (typeof shipToCol === 'string' && shipToCol.trim().toLowerCase() === 'total') break
 
-    const vtCode = row[1]
-    const shipToName = row[2]
+    const vtCode = row[off]
+    const shipToName = row[off + 1]
 
     if (!shipToName || typeof shipToName !== 'string' || !shipToName.trim()) continue
 
-    const skid16ft = typeof row[3] === 'number' ? row[3] : 0
-    const skid12ft = typeof row[4] === 'number' ? row[4] : 0
-    const skid4x8 = typeof row[5] === 'number' ? row[5] : 0
-    const misc = typeof row[6] === 'number' ? row[6] : 0
-    const weight = typeof row[7] === 'number' ? row[7] : 0
-    const notesOnSkids = typeof row[8] === 'string' ? row[8].trim() : ''
-    const additionalNotes = typeof row[9] === 'string' ? row[9].trim() : ''
+    const c2 = row[off + 2], c3 = row[off + 3], c4 = row[off + 4]
+    const c5 = row[off + 5], c6 = row[off + 6], c7 = row[off + 7]
+    const c8 = row[off + 8], c9 = row[off + 9], c10 = row[off + 10]
+
+    const skid16ft = typeof c2 === 'number' ? c2 : 0
+    const skid12ft = typeof c3 === 'number' ? c3 : 0
+    const skid4x8 = typeof c4 === 'number' ? c4 : 0
+    const misc = typeof c5 === 'number' ? c5 : 0
+    const weight = typeof c6 === 'number' ? c6 : 0
+    const notesOnSkids = typeof c7 === 'string' ? c7.trim() : ''
+    const additionalNotes = typeof c8 === 'string' ? c8.trim() : ''
 
     const schedParts: string[] = []
-    if (typeof row[10] === 'string' && row[10].trim()) schedParts.push(row[10].trim())
-    if (typeof row[11] === 'string' && row[11].trim()) schedParts.push(row[11].trim())
+    if (typeof c9 === 'string' && c9.trim()) schedParts.push(c9.trim())
+    if (typeof c10 === 'string' && c10.trim()) schedParts.push(c10.trim())
     const scheduleNotes = schedParts.join(', ')
 
     totalWeight += weight

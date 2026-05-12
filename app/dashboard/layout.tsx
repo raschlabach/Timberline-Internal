@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye, PanelLeftClose, PanelLeftOpen, Lightbulb } from 'lucide-react'
+import { Truck, Users, Package, List, ArrowLeftRight, ClipboardList, Map, UserCog, LogOut, Calculator, FileText, DollarSign, Trees, FileBox, PackageCheck, Hammer, TrendingUp, Clock, BarChart3, CalendarClock, ArrowLeft, CalendarDays, FolderOpen, Boxes, Ship, FileSpreadsheet, Briefcase, Wrench, CalendarRange, FileBarChart, Settings, Fuel, Upload, Eye, PanelLeftClose, PanelLeftOpen, Lightbulb, Flame } from 'lucide-react'
 import { NotificationPanel } from '@/components/notifications/notification-panel'
 
 interface DashboardLayoutProps {
@@ -439,6 +439,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   theme="blue"
                 />
 
+                <div className="pt-3" />
+                <NavItem
+                  href="/dashboard/charcoal"
+                  icon={<Flame size={20} />}
+                  label="Charcoal"
+                  isActive={isActiveSubRoute('/dashboard/charcoal')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/charcoal/customers"
+                  icon={<Users size={16} />}
+                  label="Customers"
+                  isActive={isActiveRoute('/dashboard/charcoal/customers')}
+                  theme="blue"
+                />
+                <SubNavItem
+                  href="/dashboard/charcoal/history"
+                  icon={<CalendarDays size={16} />}
+                  label="History"
+                  isActive={isActiveRoute('/dashboard/charcoal/history')}
+                  theme="blue"
+                />
+
               </>
             )}
 
@@ -616,6 +639,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       icon={<Package size={20} />}
                       label="Misc Freight Report"
                       isActive={pathname?.startsWith('/dashboard/lumber/freight') || false}
+                      theme="emerald"
+                    />
+                    <div className="pt-3" />
+                    <NavItem
+                      href="/dashboard/charcoal"
+                      icon={<Flame size={20} />}
+                      label="Charcoal"
+                      isActive={isActiveSubRoute('/dashboard/charcoal')}
+                      theme="emerald"
+                    />
+                    <SubNavItem
+                      href="/dashboard/charcoal/history"
+                      icon={<CalendarDays size={16} />}
+                      label="History"
+                      isActive={isActiveRoute('/dashboard/charcoal/history')}
                       theme="emerald"
                     />
                   </>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { CharcoalShippingSection } from '@/components/charcoal/charcoal-shipping-section'
 import { InventoryGroup, InventoryLoadDetail, LumberLoadWithDetails, LumberPackWithDetails } from '@/types/lumber'
 import { Input } from '@/components/ui/input'
 import {
@@ -1482,6 +1483,10 @@ export default function OverviewPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {(session?.user?.role === 'shipping_station') && (
+        <CharcoalShippingSection />
+      )}
     </div>
   )
 }

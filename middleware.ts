@@ -30,6 +30,8 @@ const SHIPPING_STATION_ALLOWED_PATHS = [
   '/dashboard/lumber/trucking',
   '/dashboard/lumber/nw-shipping',
   '/dashboard/lumber/freight',
+  '/dashboard/charcoal',
+  '/dashboard/charcoal/history',
 ]
 
 // Pages that grain_operator role CAN access
