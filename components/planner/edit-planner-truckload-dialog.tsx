@@ -195,14 +195,11 @@ export function EditPlannerTruckloadDialog({
     }
   }
 
-  if (!truckload) return null
+  const truckloadId = truckload?.id ?? 0
 
-  const isDraft = truckload.status === 'draft'
-  const isNonDraft = !isDraft
-
-  // Print handlers
+  // Print handlers (hooks must be called unconditionally)
   const handleCoverPrint = useReactToPrint({
-    documentTitle: `Truckload-Sheet-${truckload.id}`,
+    documentTitle: `Truckload-Sheet-${truckloadId}`,
     pageStyle: `
       @page { size: letter; margin: 0.1in; }
       @media print {
@@ -211,11 +208,11 @@ export function EditPlannerTruckloadDialog({
       }
     `,
     contentRef: coverPrintRef,
-    onAfterPrint: () => recordPrint(truckload.id, 'truckload_sheet'),
+    onAfterPrint: () => recordPrint(truckloadId, 'truckload_sheet'),
   })
 
   const handlePickupPrint = useReactToPrint({
-    documentTitle: `Pickup-Sheet-${truckload.id}`,
+    documentTitle: `Pickup-Sheet-${truckloadId}`,
     pageStyle: `
       @page { size: letter; margin: 0.1in; }
       @media print {
@@ -224,11 +221,11 @@ export function EditPlannerTruckloadDialog({
       }
     `,
     contentRef: pickupPrintRef,
-    onAfterPrint: () => recordPrint(truckload.id, 'pickup_list'),
+    onAfterPrint: () => recordPrint(truckloadId, 'pickup_list'),
   })
 
   const handleLoadingPrint = useReactToPrint({
-    documentTitle: `Loading-Sheet-${truckload.id}`,
+    documentTitle: `Loading-Sheet-${truckloadId}`,
     pageStyle: `
       @page { size: letter; margin: 0.1in; }
       @media print {
@@ -237,8 +234,13 @@ export function EditPlannerTruckloadDialog({
       }
     `,
     contentRef: loadingPrintRef,
-    onAfterPrint: () => recordPrint(truckload.id, 'loading_sheet'),
+    onAfterPrint: () => recordPrint(truckloadId, 'loading_sheet'),
   })
+
+  if (!truckload) return null
+
+  const isDraft = truckload.status === 'draft'
+  const isNonDraft = !isDraft
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -487,6 +489,8 @@ export function EditPlannerTruckloadDialog({
 
   // Papers content
   function renderPapersContent() {
+    if (!truckload) return null
+
     if (isPapersLoading) {
       return (
         <div className="space-y-4 py-4">
@@ -604,6 +608,8 @@ export function EditPlannerTruckloadDialog({
 
   // Route map content
   function renderMapContent() {
+    if (!truckload) return null
+
     return (
       <div className="h-[65vh] w-full rounded-lg overflow-hidden border">
         <TruckloadMap truckloadId={truckload.id} />
