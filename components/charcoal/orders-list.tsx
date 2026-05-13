@@ -8,7 +8,7 @@ import { Plus, ClipboardList } from 'lucide-react'
 import { OrderCard } from './order-card'
 import { OrderDialog } from './order-dialog'
 import { ConfirmDeleteDialog } from './confirm-delete-dialog'
-import { useDeleteOrder, useReorderOrders, useUpdateOrder } from './use-charcoal'
+import { useDeleteOrder, useReorderOrders, useCompleteOrder } from './use-charcoal'
 import { toast } from 'sonner'
 
 import {
@@ -75,7 +75,7 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
   const [completingId, setCompletingId] = useState<string | null>(null)
 
   const deleteOrder = useDeleteOrder()
-  const updateOrder = useUpdateOrder()
+  const completeOrder = useCompleteOrder()
   const reorderOrders = useReorderOrders()
 
   const [localOrders, setLocalOrders] = useState<CharcoalOrder[] | null>(null)
@@ -120,8 +120,8 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
   async function handleComplete() {
     if (!completingId) return
     try {
-      await updateOrder.mutateAsync({ id: completingId, status: 'completed' })
-      toast.success('Order marked as completed')
+      await completeOrder.mutateAsync(completingId)
+      toast.success('Order completed — skids removed from inventory')
       setCompletingId(null)
     } catch (e: any) {
       toast.error(e.message || 'Failed to complete order')
@@ -201,8 +201,8 @@ export function OrdersList({ orders, allocation, isOffice }: OrdersListProps) {
         onClose={() => setCompletingId(null)}
         onConfirm={handleComplete}
         title="Complete this order?"
-        description="This order will be marked as completed and removed from the priority list."
-        isPending={updateOrder.isPending}
+        description="This will mark the order as completed and remove the matching skids from inventory."
+        isPending={completeOrder.isPending}
       />
     </>
   )

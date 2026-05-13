@@ -53,6 +53,15 @@ export function useUpdateOrder() {
   })
 }
 
+export function useCompleteOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      fetchJson(`/api/charcoal/orders/${id}/complete`, { method: 'POST' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['charcoal', 'dashboard'] }) },
+  })
+}
+
 export function useDeleteOrder() {
   const qc = useQueryClient()
   return useMutation({
