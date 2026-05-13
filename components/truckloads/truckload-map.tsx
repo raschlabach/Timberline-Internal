@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query"
 
 interface TruckloadMapProps {
   truckloadId: number
+  showOptimizedRoute?: boolean
 }
 
 interface TruckloadStop {
@@ -64,7 +65,7 @@ const options = {
 
 const TIMBERLINE_ADDRESS = "1350 County Road 108, Sugarcreek, OH 44681"
 
-export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
+export function TruckloadMap({ truckloadId, showOptimizedRoute = true }: TruckloadMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
@@ -304,17 +305,7 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
       travelMode: google.maps.TravelMode.DRIVING
     }
 
-    // Calculate optimized route
-    const optimizedRequest: google.maps.DirectionsRequest = {
-      origin: TIMBERLINE_ADDRESS, // Timberline Warehouse
-      destination: TIMBERLINE_ADDRESS, // Timberline Warehouse
-      waypoints: waypoints,
-      optimizeWaypoints: true, // Optimize for efficiency
-      travelMode: google.maps.TravelMode.DRIVING
-    }
-
     console.log('🚗 Current route request:', currentRequest)
-    console.log('🚗 Optimized route request:', optimizedRequest)
 
     // Get current route
     console.log('🔄 Requesting current route...')
@@ -322,14 +313,8 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
       console.log('📡 Current route response:', { status, hasResult: !!result })
       
       if (status === google.maps.DirectionsStatus.OK && result) {
-        console.log('✅ Current route calculated successfully:', result)
-        console.log('✅ Route has', result.routes.length, 'routes')
-        console.log('✅ First route has', result.routes[0]?.legs?.length, 'legs')
-        
         setCurrentRouteDirections(result)
-        console.log('✅ Current route directions state updated')
         
-        // Calculate total distance and duration for current route
         let totalDistance = 0
         let totalDuration = 0
         
@@ -338,54 +323,47 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
           if (leg.duration) totalDuration += leg.duration.value
         })
 
-        const routeInfo = {
+        setRouteInfo({
           totalDistance: `${(totalDistance / 1609.34).toFixed(1)} miles`,
           totalDuration: `${Math.round(totalDuration / 60)} minutes`
-        }
-        
-        console.log('📏 Current route metrics:', routeInfo)
-        setRouteInfo(routeInfo)
+        })
       } else {
         console.error('❌ Current route request failed:', status)
-        console.error('❌ Status details:', google.maps.DirectionsStatus[status])
       }
     })
 
-    // Get optimized route
-    console.log('🔄 Requesting optimized route...')
-    directionsService.route(optimizedRequest, (result, status) => {
-      console.log('📡 Optimized route response:', { status, hasResult: !!result })
-      
-      if (status === google.maps.DirectionsStatus.OK && result) {
-        console.log('✅ Optimized route calculated successfully:', result)
-        console.log('✅ Route has', result.routes.length, 'routes')
-        console.log('✅ First route has', result.routes[0]?.legs?.length, 'legs')
-        
-        setOptimizedRouteDirections(result)
-        console.log('✅ Optimized route directions state updated')
-        
-        // Calculate total distance and duration for optimized route
-        let totalDistance = 0
-        let totalDuration = 0
-        
-        result.routes[0].legs.forEach(leg => {
-          if (leg.distance) totalDistance += leg.distance.value
-          if (leg.duration) totalDuration += leg.duration.value
-        })
+    // Get optimized route (only when enabled)
+    if (showOptimizedRoute) {
+      const optimizedRequest: google.maps.DirectionsRequest = {
+        origin: TIMBERLINE_ADDRESS,
+        destination: TIMBERLINE_ADDRESS,
+        waypoints: waypoints,
+        optimizeWaypoints: true,
+        travelMode: google.maps.TravelMode.DRIVING
+      }
 
-        const optimizedRouteInfo = {
-          totalDistance: `${(totalDistance / 1609.34).toFixed(1)} miles`,
-          totalDuration: `${Math.round(totalDuration / 60)} minutes`
+      directionsService.route(optimizedRequest, (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setOptimizedRouteDirections(result)
+          
+          let totalDistance = 0
+          let totalDuration = 0
+          
+          result.routes[0].legs.forEach(leg => {
+            if (leg.distance) totalDistance += leg.distance.value
+            if (leg.duration) totalDuration += leg.duration.value
+          })
+
+          setOptimizedRouteInfo({
+            totalDistance: `${(totalDistance / 1609.34).toFixed(1)} miles`,
+            totalDuration: `${Math.round(totalDuration / 60)} minutes`
+          })
+        } else {
+          console.error('❌ Optimized route request failed:', status)
         }
-        
-        console.log('📏 Optimized route metrics:', optimizedRouteInfo)
-        setOptimizedRouteInfo(optimizedRouteInfo)
-      } else {
-        console.error('❌ Optimized route request failed:', status)
-        console.error('❌ Status details:', google.maps.DirectionsStatus[status])
-      }
-    })
-  }, [map, stops])
+      })
+    }
+  }, [map, stops, showOptimizedRoute])
 
   // Handle sequence number update
   const handleSequenceUpdate = async (stopId: number, newSequence: number) => {
@@ -674,14 +652,14 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
           />
         ) : null}
 
-        {/* Optimized Route (Gold) */}
-        {optimizedRouteDirections ? (
+        {/* Optimized Route (Gold) - only when enabled */}
+        {showOptimizedRoute && optimizedRouteDirections ? (
           <DirectionsRenderer
             directions={optimizedRouteDirections}
             options={{
               suppressMarkers: true,
               polylineOptions: {
-                strokeColor: '#FFEB3B', // Gold for optimized route
+                strokeColor: '#FFEB3B',
                 strokeWeight: 8,
                 strokeOpacity: 0.9,
                 zIndex: 2
@@ -695,13 +673,12 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
       </GoogleMap>
       
       {/* Route Metrics Below Map */}
-      {(routeInfo || optimizedRouteInfo) && (
+      {(routeInfo || (showOptimizedRoute && optimizedRouteInfo)) && (
         <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-4 border-t border-gray-200">
-          <div className="grid grid-cols-2 gap-6">
-            {/* Current Route Metrics */}
+          <div className={showOptimizedRoute && optimizedRouteInfo ? "grid grid-cols-2 gap-6" : ""}>
             {routeInfo && (
               <div className="space-y-2">
-                <h3 className="font-semibold text-gray-800 text-sm">Current Route</h3>
+                <h3 className="font-semibold text-gray-800 text-sm">{showOptimizedRoute ? 'Current Route' : 'Route'}</h3>
                 <div className="space-y-1 text-xs text-gray-600">
                   <p>Distance: <span className="font-medium text-gray-800">{routeInfo.totalDistance}</span></p>
                   <p>Duration: <span className="font-medium text-gray-800">{routeInfo.totalDuration}</span></p>
@@ -709,8 +686,7 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
               </div>
             )}
             
-            {/* Optimized Route Metrics */}
-            {optimizedRouteInfo && (
+            {showOptimizedRoute && optimizedRouteInfo && (
               <div className="space-y-2">
                 <h3 className="font-semibold text-gray-800 text-sm">Optimized Route</h3>
                 <div className="space-y-1 text-xs text-gray-600">
@@ -721,19 +697,20 @@ export function TruckloadMap({ truckloadId }: TruckloadMapProps) {
             )}
           </div>
           
-          {/* Route Legend */}
-          <div className="mt-4 pt-3 border-t border-gray-200">
-            <div className="flex items-center justify-center gap-6 text-xs text-gray-600">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <span>Current Route (Manual Order)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-                <span>Optimized Route</span>
+          {showOptimizedRoute && (
+            <div className="mt-4 pt-3 border-t border-gray-200">
+              <div className="flex items-center justify-center gap-6 text-xs text-gray-600">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span>Current Route (Manual Order)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                  <span>Optimized Route</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

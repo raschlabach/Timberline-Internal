@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from 'sonner'
-import { Rocket, Trash2, FileText, Map, Settings, Printer, Download } from 'lucide-react'
+import { Rocket, Trash2, FileText, Map, Settings, Printer, Download, List, ArrowUp, ArrowDown, Zap, AlertCircle, MessageSquare } from 'lucide-react'
+import { format } from 'date-fns'
 import { useReactToPrint } from 'react-to-print'
 import { TruckloadSheetContent } from '@/components/truckloads/truckload-sheet-content'
 import { PickupSheet } from '@/components/truckloads/pickup-sheet'
@@ -157,9 +158,9 @@ export function EditPlannerTruckloadDialog({
     }
   }, [truckload])
 
-  // Fetch papers data when the Papers tab is opened for non-draft truckloads
+  // Fetch data when Papers or Orders tab is opened for non-draft truckloads
   useEffect(() => {
-    if (activeTab === 'papers' && truckload && !isDraft && !papersLoaded) {
+    if ((activeTab === 'papers' || activeTab === 'orders') && truckload && truckload.status !== 'draft' && !papersLoaded) {
       fetchPapersData()
     }
   }, [activeTab, truckload])
@@ -606,13 +607,165 @@ export function EditPlannerTruckloadDialog({
     )
   }
 
+  // Orders list content (read-only view)
+  function renderOrdersContent() {
+    if (!truckload) return null
+
+    if (isPapersLoading) {
+      return (
+        <div className="space-y-2 py-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      )
+    }
+
+    if (papersError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-red-500">
+          <p>Error loading orders: {papersError}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={fetchPapersData}>
+            Retry
+          </Button>
+        </div>
+      )
+    }
+
+    if (stops.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+          <List className="h-10 w-10 mb-3 text-gray-300" />
+          <p className="text-sm">No orders assigned to this truckload yet.</p>
+        </div>
+      )
+    }
+
+    function parseDateLocal(dateStr: string): Date {
+      const parts = dateStr.split('-')
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+    }
+
+    const sortedStops = [...stops].sort((a, b) => b.sequence_number - a.sequence_number)
+
+    const pickupCount = stops.filter(s => s.assignment_type === 'pickup').length
+    const deliveryCount = stops.filter(s => s.assignment_type === 'delivery').length
+    const totalFootage = stops.reduce((sum, s) => sum + Number(s.footage || 0), 0)
+
+    return (
+      <div className="flex flex-col gap-3">
+        {/* Summary bar */}
+        <div className="flex items-center gap-3 text-sm border-b pb-3">
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+            {pickupCount} Pickup{pickupCount !== 1 ? 's' : ''}
+          </Badge>
+          <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
+            {deliveryCount} Deliver{deliveryCount !== 1 ? 'ies' : 'y'}
+          </Badge>
+          <span className="text-gray-500 ml-auto text-xs">
+            {totalFootage.toLocaleString()} ft² total
+          </span>
+        </div>
+
+        {/* Stops list */}
+        <div className="overflow-y-auto max-h-[60vh] space-y-1.5">
+          {sortedStops.map((stop) => {
+            const isPickup = stop.assignment_type === 'pickup'
+            const primaryCustomer = isPickup ? stop.pickup_customer : stop.delivery_customer
+            const secondaryCustomer = isPickup ? stop.delivery_customer : stop.pickup_customer
+
+            return (
+              <div
+                key={`${stop.id}-${stop.assignment_type}`}
+                className={`rounded-lg border p-2.5 relative ${isPickup ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-black'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    {/* Sequence + badge */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                      <span className={`text-xs font-bold ${isPickup ? 'text-red-600' : 'text-gray-900'}`}>
+                        #{stop.sequence_number}
+                      </span>
+                      <Badge
+                        variant={isPickup ? 'destructive' : 'default'}
+                        className={`text-[10px] h-4 px-1 ${!isPickup ? 'bg-black text-white hover:bg-black/90' : ''}`}
+                      >
+                        {isPickup ? (
+                          <><ArrowUp className="h-2.5 w-2.5 mr-0.5" />Pickup</>
+                        ) : (
+                          <><ArrowDown className="h-2.5 w-2.5 mr-0.5" />Delivery</>
+                        )}
+                      </Badge>
+                      {stop.is_transfer_order && (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1 bg-blue-50 text-blue-700 border-blue-200">
+                          Transfer
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Customer info */}
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-semibold truncate ${isPickup ? 'text-red-600' : 'text-gray-900'}`}>
+                        {primaryCustomer.name}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">{primaryCustomer.address}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {isPickup ? 'To' : 'From'}: {secondaryCustomer.name}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right side: freight + flags */}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      {stop.footage > 0 && (
+                        <span className={`font-medium ${isPickup ? 'text-red-600' : 'text-gray-800'}`}>
+                          {Math.round(stop.footage)} ft²
+                        </span>
+                      )}
+                      {stop.skids > 0 && (
+                        <span className="text-gray-600">{stop.skids}S</span>
+                      )}
+                      {stop.vinyl > 0 && (
+                        <span className="text-gray-600">{stop.vinyl}V</span>
+                      )}
+                      {stop.hand_bundles > 0 && (
+                        <span className="text-blue-600 font-medium">{stop.hand_bundles}HB</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {stop.pickup_date && (
+                        <span className="text-[10px] text-gray-400">
+                          {format(parseDateLocal(stop.pickup_date), 'MM/dd/yy')}
+                        </span>
+                      )}
+                      {stop.is_rush && <Zap className="h-3 w-3 text-yellow-500" />}
+                      {stop.needs_attention && <AlertCircle className="h-3 w-3 text-red-500" />}
+                      {stop.comments && <MessageSquare className="h-3 w-3 text-blue-500" />}
+                    </div>
+                  </div>
+                </div>
+
+                {stop.comments && (
+                  <div className="mt-1.5 text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 truncate">
+                    {stop.comments}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   // Route map content
   function renderMapContent() {
     if (!truckload) return null
 
     return (
       <div className="h-[65vh] w-full rounded-lg overflow-hidden border">
-        <TruckloadMap truckloadId={truckload.id} />
+        <TruckloadMap truckloadId={truckload.id} showOptimizedRoute={false} />
       </div>
     )
   }
@@ -660,6 +813,10 @@ export function EditPlannerTruckloadDialog({
               <Settings className="h-3.5 w-3.5" />
               Details
             </TabsTrigger>
+            <TabsTrigger value="orders" className="gap-1.5">
+              <List className="h-3.5 w-3.5" />
+              Orders
+            </TabsTrigger>
             <TabsTrigger value="papers" className="gap-1.5">
               <FileText className="h-3.5 w-3.5" />
               Papers
@@ -672,6 +829,10 @@ export function EditPlannerTruckloadDialog({
 
           <TabsContent value="details" className="mt-4 flex-1 overflow-y-auto">
             {renderDetailsForm()}
+          </TabsContent>
+
+          <TabsContent value="orders" className="mt-4 flex-1 overflow-y-auto">
+            {renderOrdersContent()}
           </TabsContent>
 
           <TabsContent value="papers" className="mt-4 flex-1 overflow-y-auto">
