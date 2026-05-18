@@ -17,8 +17,8 @@ export function computeAllocations(
   projections: CharcoalProjectedSkid[]
 ): Record<string, CharcoalAllocation> {
   const sharedProjections: PoolProjection[] = projections
-    .sort((a, b) => a.ready_date.localeCompare(b.ready_date))
-    .map(p => ({ count: p.count, readyDate: p.ready_date }))
+    .sort((a, b) => String(a.ready_date).localeCompare(String(b.ready_date)))
+    .map(p => ({ count: p.count, readyDate: String(p.ready_date).substring(0, 10) }))
 
   let stdInv = stdInvCount
   let wcInv = wcInvCount
